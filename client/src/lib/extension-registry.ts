@@ -28,6 +28,15 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
     ],
   },
   {
+    id: 'models-hide-disabled',
+    title: 'Hide disabled models',
+    summary: 'The chain opens without the models every provider has switched off, counted on the filter so nothing is silently missing. Kept per browser.',
+    settingsLocation: 'Models → Chat models → Hide disabled',
+    destinations: [
+      { kind: 'internal', label: 'Open chat models', href: '/models/chat' },
+    ],
+  },
+  {
     id: 'provider-model-access',
     title: 'Provider model access',
     summary: 'Choose which catalogue models each provider key may serve, with search and confirm-gated bulk enable/disable. Enabled models lead, then the most advanced — tier, rank, then the highest version within a family — and disabled ones are hidden by default.',

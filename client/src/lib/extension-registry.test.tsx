@@ -8,6 +8,7 @@ describe('Imperium extension registry', () => {
   it('keeps every feature addressable and links settings into the dashboard', () => {
     expect(IMPERIUM_EXTENSIONS.map(feature => feature.id)).toEqual([
       'provider-preference',
+      'models-hide-disabled',
       'provider-model-access',
       'provider-row-summary',
       'provider-account-limits',

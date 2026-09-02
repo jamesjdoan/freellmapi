@@ -9,6 +9,7 @@ The dashboard’s **Extensions** button is the quickest runtime index. It lists 
 | Feature | Dashboard path | What to do |
 | --- | --- | --- |
 | Provider preference ordering | **Models → Chat models → select a unified model** | In **Provider routing**, choose **Automatic** or **Preferred order**. In Preferred mode, use the up/down buttons. Changes save immediately. |
+| Hide disabled models | **Models → Chat models → Hide disabled** | On by default. Hides logical models whose every provider is switched off in the active chain, with the hidden count on the filter. Turn it off to see and re-enable them. Remembered per browser. |
 | Provider model access | **Keys → provider → key row → Models & account limits** | Hover or focus the key row and select the list/filter button. Tick the catalogue models that key may serve, or search by name or id and use **Enable shown** / **Disable shown** — both arm first and name the count (`Disable 3?`) before they act, and both apply only to the rows currently shown. Enabled models sort to the top, then the most advanced of the rest: capability tier, then per-provider rank, then the highest version within a family (`gemini-3.6-flash` above `gemini-3.5-flash`). Versions are never compared across vendors. **Hide disabled models** is on by default and hides the ones that were off when the dialog opened; the count beside it says how many. |
 | Provider row summary | **Keys → Providers** | Read each provider at a glance: `N/M models enabled` on its row, and one row instead of a disclosure when it holds a single key. Nothing to configure. |
 | Provider account limits | **Keys → provider → key row → Models & account limits** | Set credential-wide RPM, RPD or TPD. Blank inherits provider behaviour; zero disables that particular account-wide gate. |
@@ -107,6 +108,7 @@ The additive migration is `server/src/db/migrations/20260902_000002_provider_acc
 | Preferred ordering and eligibility | `server/src/services/router.ts` |
 | Key catalogue scope/account-limit UI | `client/src/components/keys/model-scope-dialog.tsx`, `client/src/components/keys/provider-list.tsx` |
 | Provider row summary and model counts | `client/src/components/keys/provider-list.tsx`, `client/src/lib/model-scope-selection.ts` |
+| Models page disabled filter | `client/src/pages/FallbackPage.tsx` |
 | Quota guidance UI/catalogue | `client/src/components/keys/quota-guidance-panel.tsx`, `server/src/data/quota-guidance.ts` |
 | Provider free-model copy | `client/src/lib/provider-model-details-export.ts`, `client/src/components/keys/provider-model-details-copy-action.tsx` |
 | Free catalogue copy | `client/src/pages/KeysPage.tsx`, `client/src/components/keys/free-catalog-copy-action.tsx`, `client/src/lib/provider-model-details-export.ts`, `client/src/lib/model-scope-selection.ts` |
