@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   MODEL_PICKER_MIN_MODELS,
+  modelFamilyAndVersion,
   orderScopeCandidates,
   resolveScopeUpdate,
   scopeCandidates,
@@ -207,5 +208,69 @@ describe('orderScopeCandidates', () => {
       model('small', { sizeLabel: 'Small' }),
     ], () => true)
     expect(rows.map(row => row.modelId)).toEqual(['small', 'live'])
+  })
+
+  it('leads with the highest version among tied siblings', () => {
+    const rows = orderScopeCandidates([
+      model('gemini-2.5-flash'),
+      model('gemini-3.6-flash'),
+      model('gemini-3.5-flash'),
+      model('gemini-3-flash'),
+    ], () => true)
+    expect(rows.map(row => row.modelId))
+      .toEqual(['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3-flash', 'gemini-2.5-flash'])
+  })
+
+  it('clusters families rather than comparing versions across vendors', () => {
+    const rows = orderScopeCandidates([
+      model('qwen3.6'),
+      model('glm-4.5'),
+      model('qwen3.9'),
+      model('glm-4.7'),
+    ], () => true)
+    // glm before qwen on family name; newest first inside each.
+    expect(rows.map(row => row.modelId)).toEqual(['glm-4.7', 'glm-4.5', 'qwen3.9', 'qwen3.6'])
+  })
+
+  it('still lets tier and rank outrank the version', () => {
+    const rows = orderScopeCandidates([
+      model('gemini-3.6-flash', { sizeLabel: 'Small' }),
+      model('gemini-2.5-flash', { sizeLabel: 'Frontier' }),
+    ], () => true)
+    expect(rows.map(row => row.modelId)).toEqual(['gemini-2.5-flash', 'gemini-3.6-flash'])
+  })
+})
+
+describe('modelFamilyAndVersion', () => {
+  it('reads the version that follows the family name', () => {
+    expect(modelFamilyAndVersion('gemini-3.5-flash')).toEqual({ family: 'gemini-flash', version: [3, 5] })
+    expect(modelFamilyAndVersion('google/gemini-2.5-flash-lite')).toEqual({ family: 'gemini-flash-lite', version: [2, 5] })
+    expect(modelFamilyAndVersion('glm-4.7-flash')).toEqual({ family: 'glm-flash', version: [4, 7] })
+  })
+
+  it('reads a version glued to the name', () => {
+    expect(modelFamilyAndVersion('qwen/qwen3.6-27b')).toEqual({ family: 'qwen', version: [3, 6] })
+    expect(modelFamilyAndVersion('gpt4')).toEqual({ family: 'gpt', version: [4] })
+  })
+
+  it('never mistakes a parameter count for a version', () => {
+    expect(modelFamilyAndVersion('openai/gpt-oss-120b')).toEqual({ family: 'gpt-oss', version: [] })
+    expect(modelFamilyAndVersion('meta/llama-3.3-70b-instruct'))
+      .toEqual({ family: 'llama-instruct', version: [3, 3] })
+    // `9b` is the parameter count and stays out of it; `v2` really is version 2.
+    expect(modelFamilyAndVersion('nvidia-nemotron-nano-9b-v2'))
+      .toEqual({ family: 'nvidia-nemotron-nano-v', version: [2] })
+    expect(modelFamilyAndVersion('nvidia-nemotron-nano-9b-v3').family)
+      .toBe(modelFamilyAndVersion('nvidia-nemotron-nano-9b-v2').family)
+  })
+
+  it('gives one family to siblings that differ only by version', () => {
+    const a = modelFamilyAndVersion('gemini-3.6-flash')
+    const b = modelFamilyAndVersion('gemini-2.5-flash')
+    expect(a.family).toBe(b.family)
+  })
+
+  it('keeps different vendors in different families', () => {
+    expect(modelFamilyAndVersion('glm-4.5').family).not.toBe(modelFamilyAndVersion('qwen3.6').family)
   })
 })

@@ -87,14 +87,69 @@ export function scopeCandidates(
 const CAPABILITY_TIER: Record<string, number> = { Frontier: 1, Large: 2, Medium: 3, Small: 4 }
 
 /**
+ * Split a model id into the family it belongs to and its version number.
+ *
+ * Only the FIRST version-looking token counts, because families put the version
+ * straight after the name (`gemini-3.5-flash`, `qwen3.6-27b`, `glm-4.7-flash`)
+ * while later numbers are parameter counts. A token ending in b/m/k is a size,
+ * never a version: `gpt-oss-120b` is one model, not version 120.
+ *
+ * The family is what remains once the version and size tokens are removed, so
+ * `gemini-3.5-flash` and `gemini-2.5-flash` share `gemini-flash` and can be
+ * compared. `glm-4.5` and `qwen3.6` cannot, and get different families —
+ * comparing 4.5 against 3.6 across vendors would be a fabricated ranking.
+ */
+export function modelFamilyAndVersion(modelId: string): { family: string; version: number[] } {
+  const withoutProvider = modelId.slice(modelId.lastIndexOf('/') + 1).toLowerCase()
+  const tokens = withoutProvider.split(/[^a-z0-9.]+/).filter(Boolean)
+  const version: number[] = []
+  const family: string[] = []
+  for (const token of tokens) {
+    // A size token: 120b, 27b, 22m, 8x7b-style suffixes.
+    if (/^\d+(?:\.\d+)*[bmk]$/.test(token)) continue
+    const bare = /^\d+(?:\.\d+)*$/.test(token) ? token : null
+    // `qwen3.6` and `gpt4` carry the version glued to the name.
+    const glued = bare ? null : /^([a-z][a-z-]*?)(\d+(?:\.\d+)*)$/.exec(token)
+    if (bare && version.length === 0) {
+      version.push(...bare.split('.').map(Number))
+      continue
+    }
+    if (glued && version.length === 0) {
+      version.push(...glued[2].split('.').map(Number))
+      family.push(glued[1])
+      continue
+    }
+    if (bare || glued) continue
+    family.push(token)
+  }
+  return { family: family.join('-'), version }
+}
+
+/** Higher version first; a model with no version sorts after one that has it. */
+function compareVersionDesc(left: number[], right: number[]): number {
+  if (left.length === 0 !== (right.length === 0)) return left.length === 0 ? 1 : -1
+  for (let i = 0; i < Math.max(left.length, right.length); i += 1) {
+    const diff = (right[i] ?? 0) - (left[i] ?? 0)
+    if (diff !== 0) return diff
+  }
+  return 0
+}
+
+/**
  * Order the scope picker: models this key already serves first, then the most
  * advanced of the rest.
  *
- * "Most advanced" is the app's own definition — capability tier, then
+ * "Most advanced" is the app's own definition first — capability tier, then
  * per-provider rank, exactly what `POST /api/fallback/sort/intelligence` does.
  * Nothing in the catalogue records a release date, so newest cannot be sorted
- * on directly; tier and rank are what separate a current frontier model from a
- * superseded small one.
+ * on directly.
+ *
+ * Where tier and rank tie, siblings of one family group together and the
+ * highest version leads: `gemini-3.6-flash` above `gemini-3.5-flash` above
+ * `gemini-2.5-flash`. Version is deliberately NOT compared across families,
+ * because GLM 4.5 is not a later release than Qwen 3.6 — the numbers belong to
+ * different vendors and comparing them would invent a ranking the catalogue
+ * does not support.
  *
  * `enabled` is read from the tick state as it stood when the dialog opened, and
  * held for the life of it. Re-sorting as boxes are ticked would move the row out
@@ -105,17 +160,24 @@ export function orderScopeCandidates(
   candidates: readonly ScopeCandidate[],
   enabled: (modelId: string) => boolean,
 ): ScopeCandidate[] {
-  const rankOf = (candidate: ScopeCandidate) => [
-    enabled(candidate.modelId) ? 0 : 1,
-    CAPABILITY_TIER[candidate.sizeLabel ?? ''] ?? 5,
-    Number.isFinite(candidate.intelligenceRank) ? candidate.intelligenceRank : Number.MAX_SAFE_INTEGER,
-  ]
-  return [...candidates].sort((left, right) => {
-    const a = rankOf(left)
-    const b = rankOf(right)
-    for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return a[i] - b[i]
-    return left.displayName.localeCompare(right.displayName)
-  })
+  const keyed = candidates.map(candidate => ({
+    candidate,
+    ...modelFamilyAndVersion(candidate.modelId),
+    numbers: [
+      enabled(candidate.modelId) ? 0 : 1,
+      CAPABILITY_TIER[candidate.sizeLabel ?? ''] ?? 5,
+      Number.isFinite(candidate.intelligenceRank) ? candidate.intelligenceRank : Number.MAX_SAFE_INTEGER,
+    ],
+  }))
+  return keyed.sort((left, right) => {
+    for (let i = 0; i < left.numbers.length; i += 1) {
+      if (left.numbers[i] !== right.numbers[i]) return left.numbers[i] - right.numbers[i]
+    }
+    if (left.family !== right.family) return left.family.localeCompare(right.family)
+    const byVersion = compareVersionDesc(left.version, right.version)
+    if (byVersion !== 0) return byVersion
+    return left.candidate.displayName.localeCompare(right.candidate.displayName)
+  }).map(entry => entry.candidate)
 }
 
 /**
