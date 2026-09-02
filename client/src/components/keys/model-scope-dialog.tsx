@@ -9,7 +9,10 @@ import { X } from 'lucide-react'
 import type { ApiKey, QuotaGuidanceCatalog, QuotaGuidanceLimits } from '../../../../shared/types'
 import type { FallbackEntry } from '@/lib/routing'
 import { scopeCandidates } from '@/lib/model-scope-selection'
-import { formatProviderModelDetails } from '@/lib/provider-model-details-export'
+import {
+  formatProviderModelDetails,
+  type FreeCatalogScope,
+} from '@/lib/provider-model-details-export'
 import { QuotaGuidancePanel } from './quota-guidance-panel'
 import { ProviderModelDetailsCopyAction } from './provider-model-details-copy-action'
 
@@ -99,10 +102,45 @@ export function ModelScopeDialog({
     ? catalogIds
     : catalogIds.filter(id => ids.includes(id))
 
-  const providerDetailsText = formatProviderModelDetails({
+  // Built on demand per scope inside the copy click, so unsaved limit edits in
+  // this dialog are included at copy time.
+  const exportModels = exportCandidates.map(model => {
+    const row = providerModelRows.find(candidate => candidate.modelId === model.modelId)
+    const limitDraft = row
+      ? modelLimitDrafts[row.modelDbId] ?? toDraft({
+        rpmLimit: row.rpmLimit,
+        rpdLimit: row.rpdLimit,
+        tpmLimit: row.tpmLimit ?? null,
+        tpdLimit: row.tpdLimit ?? null,
+      })
+      : null
+    return {
+      displayName: model.displayName,
+      modelId: model.modelId,
+      accessEnabled: apiKey.platform === 'custom'
+        ? (ids.length === 0 || ids.includes(model.modelId))
+        : selectedCatalogIds.includes(model.modelId),
+      routingEnabled: row?.enabled ?? apiKey.enabled,
+      sizeLabel: row?.sizeLabel || null,
+      contextWindow: row?.contextWindow ?? null,
+      supportsVision: row?.supportsVision ?? null,
+      supportsTools: row?.supportsTools ?? null,
+      monthlyAllowance: row?.monthlyTokenBudget || null,
+      limits: limitDraft ? {
+        rpmLimit: parsedLimit(limitDraft.rpmLimit),
+        rpdLimit: parsedLimit(limitDraft.rpdLimit),
+        tpmLimit: parsedLimit(limitDraft.tpmLimit),
+        tpdLimit: parsedLimit(limitDraft.tpdLimit),
+      } : { rpmLimit: null, rpdLimit: null, tpmLimit: null, tpdLimit: null },
+    }
+  })
+
+  const buildProviderDetailsText = (scope: FreeCatalogScope) => formatProviderModelDetails({
     providerName: quotaGuidance?.displayName ?? (apiKey.platform === 'custom' ? 'Custom provider' : apiKey.platform),
     platform: apiKey.platform,
     modelSource: catalogCandidates.length > 0 ? 'catalog' : 'live_discovery',
+    scope,
+    offeredModelCount: exportModels.length,
     accountLimits: {
       rpmLimit: parsedLimit(providerRpmLimit),
       rpdLimit: parsedLimit(providerRpdLimit),
@@ -110,36 +148,7 @@ export function ModelScopeDialog({
       tpdLimit: parsedLimit(providerTpdLimit),
     },
     guidance: quotaGuidance ?? null,
-    models: exportCandidates.map(model => {
-      const row = providerModelRows.find(candidate => candidate.modelId === model.modelId)
-      const limitDraft = row
-        ? modelLimitDrafts[row.modelDbId] ?? toDraft({
-          rpmLimit: row.rpmLimit,
-          rpdLimit: row.rpdLimit,
-          tpmLimit: row.tpmLimit ?? null,
-          tpdLimit: row.tpdLimit ?? null,
-        })
-        : null
-      return {
-        displayName: model.displayName,
-        modelId: model.modelId,
-        accessEnabled: apiKey.platform === 'custom'
-          ? (ids.length === 0 || ids.includes(model.modelId))
-          : selectedCatalogIds.includes(model.modelId),
-        routingEnabled: row?.enabled ?? apiKey.enabled,
-        sizeLabel: row?.sizeLabel || null,
-        contextWindow: row?.contextWindow ?? null,
-        supportsVision: row?.supportsVision ?? null,
-        supportsTools: row?.supportsTools ?? null,
-        monthlyAllowance: row?.monthlyTokenBudget || null,
-        limits: limitDraft ? {
-          rpmLimit: parsedLimit(limitDraft.rpmLimit),
-          rpdLimit: parsedLimit(limitDraft.rpdLimit),
-          tpmLimit: parsedLimit(limitDraft.tpmLimit),
-          tpdLimit: parsedLimit(limitDraft.tpdLimit),
-        } : { rpmLimit: null, rpdLimit: null, tpmLimit: null, tpdLimit: null },
-      }
-    }),
+    models: scope === 'selected' ? exportModels.filter(model => model.accessEnabled) : exportModels,
   })
 
   const suggestions = (apiKey.models ?? [])
@@ -213,7 +222,7 @@ export function ModelScopeDialog({
         <div className="flex items-center justify-between gap-3">
           <DialogTitle>{t('keys.modelScope')}</DialogTitle>
           <ProviderModelDetailsCopyAction
-            text={providerDetailsText}
+            buildText={buildProviderDetailsText}
             disabled={!catalogReady || exportCandidates.length === 0}
           />
         </div>

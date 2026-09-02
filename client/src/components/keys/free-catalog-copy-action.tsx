@@ -55,7 +55,7 @@ export function FreeCatalogCopyAction({
         <DropdownMenuGroup>
           <DropdownMenuLabel>Free models, every provider</DropdownMenuLabel>
           <DropdownMenuItem onClick={() => copy('all')}>All free models offered</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => copy('selected')}>Selected free models only</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => copy('selected')}>Enabled free models only</DropdownMenuItem>
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>

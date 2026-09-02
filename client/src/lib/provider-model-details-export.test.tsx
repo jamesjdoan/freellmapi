@@ -40,6 +40,8 @@ const input: ProviderModelDetailsExport = {
   providerName: 'Groq',
   platform: 'groq',
   modelSource: 'catalog',
+  scope: 'all',
+  offeredModelCount: 2,
   accountLimits: { rpmLimit: 20, rpdLimit: 500, tpmLimit: null, tpdLimit: null },
   guidance,
   models: [{
@@ -60,7 +62,9 @@ describe('provider model details export', () => {
   it('produces concise Markdown with provider, model, capability, limit, and evidence details', () => {
     const text = formatProviderModelDetails(input)
 
-    expect(text).toContain('# FreeLLMAPI provider review: Groq')
+    expect(text).toContain('# FreeLLMAPI free models — all: Groq')
+    expect(text).toContain('- Total: 1 free model')
+    expect(text).toContain('- Scope: every free model this provider offers, whatever its access state')
     expect(text).toContain('FreeLLMAPI free catalogue')
     expect(text).toContain('Provider account limits: RPM 20 · RPD 500')
     expect(text).toContain('**GPT-OSS 120B** — `openai/gpt-oss-120b`')
@@ -91,13 +95,21 @@ describe('provider model details export', () => {
     }
   })
 
+  it('names the enabled scope against what the provider offers', () => {
+    const text = formatProviderModelDetails({ ...input, scope: 'selected' })
+
+    expect(text).toContain('# FreeLLMAPI free models — enabled: Groq')
+    expect(text).toContain('- Total: 1 free model of 2 offered')
+    expect(text).toContain('- Scope: free models this key is enabled to serve')
+  })
+
   it('labels live-discovered models and renders a visible copy action', () => {
     const text = formatProviderModelDetails({ ...input, modelSource: 'live_discovery', guidance: null })
     expect(text).toContain('Live provider discovery; free-tier status requires verification')
 
-    const html = renderToStaticMarkup(<ProviderModelDetailsCopyAction text={text} />)
-    expect(html).toContain('Copy provider details')
-    expect(html).toContain('aria-label="Copy provider model details"')
+    const html = renderToStaticMarkup(<ProviderModelDetailsCopyAction buildText={() => text} />)
+    expect(html).toContain('Copy List')
+    expect(html).toContain(`aria-label="Copy list of this provider&#x27;s free models"`)
     expect(html).not.toContain(text)
   })
 })
@@ -202,14 +214,14 @@ describe('free catalogue export', () => {
 
   it('reports the selected scope against what is offered, and an empty result honestly', () => {
     const selected = formatFreeCatalogModels({ scope: 'selected', capturedAt: '2026-09-02', providers: providersFor('selected') })
-    expect(selected).toContain('# FreeLLMAPI free models — selected')
+    expect(selected).toContain('# FreeLLMAPI free models — enabled')
     expect(selected).toContain("- Total: 2 providers · 3 free models")
-    expect(selected).toContain("- Scope: free models this install's usable keys are scoped to serve, out of 3 offered")
+    expect(selected).toContain("- Scope: free models this install's usable keys are enabled to serve, out of 3 offered")
     expect(selected).toContain('- Free models: 1 of 1 offered')
 
     const empty = formatFreeCatalogModels({ scope: 'selected', capturedAt: '2026-09-02', providers: [] })
     expect(empty).toContain('- Total: 0 providers · 0 free models')
-    expect(empty).toContain('No free model is currently scoped to a usable key.')
+    expect(empty).toContain('No free model is currently enabled on a usable key.')
   })
 
   it('never emits credential or internal identity fields', () => {

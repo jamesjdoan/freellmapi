@@ -11,12 +11,18 @@ The dashboard’s **Extensions** button is the quickest runtime index. It lists 
 | Provider preference ordering | **Models → Chat models → select a unified model** | In **Provider routing**, choose **Automatic** or **Preferred order**. In Preferred mode, use the up/down buttons. Changes save immediately. |
 | Provider model access | **Keys → provider → key row → Models & account limits** | Hover or focus the key row and select the list/filter button. Tick the catalogue models that key may serve. |
 | Provider account limits | **Keys → provider → key row → Models & account limits** | Set credential-wide RPM, RPD or TPD. Blank inherits provider behaviour; zero disables that particular account-wide gate. |
-| Catalogue-wide copy | **Keys → Providers tab header** | Select **Copy List** — a page-level action, because it spans every provider rather than the key row it used to sit under. **All free models offered** takes every free catalogue model; **Selected free models only** takes those a usable key is scoped to serve. The export leads with the total, then each provider and its key count, then one model block per free model in the same shape **Copy provider details** uses. Custom relay endpoints are excluded because their free-tier status is unverified. Credentials, labels and internal IDs are never included. |
-| Provider review copy | **Keys → provider → key row → Models & account limits** | Select **Copy provider details** to copy a concise Markdown snapshot of the current free-model catalogue, access/routing state, capabilities, visible limits, guidance and evidence. Credentials, labels and internal IDs are excluded. |
+| Catalogue-wide copy | **Keys → Providers tab header** | Select **Copy List** — a page-level action, because it spans every provider rather than the key row it used to sit under. **All free models offered** takes every free catalogue model; **Enabled free models only** takes those a usable key is enabled to serve. Custom relay endpoints are excluded because their free-tier status is unverified. |
+| Provider free-model copy | **Keys → provider → key row → Models & account limits** | Select **Copy List** for one provider, with the same two scopes: **All free models offered** or **Enabled free models only** (the models this key is ticked for). Includes account limits, unsaved limit edits and published quota guidance. |
 | Quota-pool routing | Automatic; usage context at **Models → Chat models → Monthly token budget** | There is no separate quota-pool editor. The linked view shows monthly token-use context; quota-pool eligibility and enforcement are automatic. |
 | Extension inventory | Top navigation → **Extensions** | Review installed fork features and follow direct links to each settings area. |
 
 Provider-row controls are intentionally compact. On desktop they appear when the key row is hovered or keyboard-focused. The button’s accessible name and tooltip are **Models & account limits**.
+
+Both **Copy List** actions share one format, built by one renderer: the total
+first, then the provider and its counts, then one block per free model carrying
+access and routing state, capabilities, catalogue allowance and limits. Neither
+includes a credential, key label or internal identifier, and neither is sent
+anywhere by FreeLLMAPI.
 
 ## Provider preference semantics
 
@@ -98,7 +104,7 @@ The additive migration is `server/src/db/migrations/20260902_000002_provider_acc
 | Preferred ordering and eligibility | `server/src/services/router.ts` |
 | Key catalogue scope/account-limit UI | `client/src/components/keys/model-scope-dialog.tsx`, `client/src/components/keys/provider-list.tsx` |
 | Quota guidance UI/catalogue | `client/src/components/keys/quota-guidance-panel.tsx`, `server/src/data/quota-guidance.ts` |
-| Provider review copy | `client/src/lib/provider-model-details-export.ts`, `client/src/components/keys/provider-model-details-copy-action.tsx` |
+| Provider free-model copy | `client/src/lib/provider-model-details-export.ts`, `client/src/components/keys/provider-model-details-copy-action.tsx` |
 | Free catalogue copy | `client/src/pages/KeysPage.tsx`, `client/src/components/keys/free-catalog-copy-action.tsx`, `client/src/lib/provider-model-details-export.ts`, `client/src/lib/model-scope-selection.ts` |
 | Key update API/migration | `server/src/routes/keys.ts`, `server/src/db/migrations/20260902_000002_provider_account_limits.ts` |
 | Quota policy/observations | `server/src/services/provider-quota.ts`, `server/src/services/ratelimit.ts` |
@@ -113,7 +119,7 @@ The additive migration is `server/src/db/migrations/20260902_000002_provider_acc
 - Provider account limits: `server/src/__tests__/services/provider-minute-cap.test.ts` and `server/src/__tests__/services/ratelimit.test.ts`
 - Catalogue key scopes: `server/src/__tests__/routes/keys-model-scope.test.ts`
 - Quota guidance: `server/src/__tests__/routes/quota-guidance.test.ts` and `client/src/components/keys/quota-guidance-panel.test.tsx`
-- Provider review copy and credential exclusion: `client/src/lib/provider-model-details-export.test.tsx`
+- Provider free-model copy and credential exclusion: `client/src/lib/provider-model-details-export.test.tsx`
 - Free catalogue copy scopes, formatting and credential exclusion: `client/src/lib/provider-model-details-export.test.tsx`
 - Free catalogue copy menu behaviour: `client/src/components/keys/free-catalog-copy-action.render.test.tsx`
 - Cross-surface routing: OpenAI route tests plus `server/src/__tests__/routes/anthropic.test.ts`

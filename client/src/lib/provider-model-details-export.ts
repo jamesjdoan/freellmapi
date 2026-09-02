@@ -17,6 +17,10 @@ export interface ProviderModelDetailsExport {
   providerName: string
   platform: string
   modelSource: 'catalog' | 'live_discovery'
+  /** Which of this provider's free models the caller included. */
+  scope: FreeCatalogScope
+  /** Free models this provider offers, before the scope filter. */
+  offeredModelCount: number
   accountLimits: QuotaGuidanceLimits
   guidance: ProviderQuotaGuidance | null
   models: ProviderModelDetailsExportModel[]
@@ -138,9 +142,14 @@ export function formatProviderModelDetails(input: ProviderModelDetailsExport): s
     : 'Live provider discovery; free-tier status requires verification'
   const accountLimits = formatLimits(input.accountLimits) ?? 'not configured'
   const guidance = input.guidance
+  const enabledOnly = input.scope === 'selected'
   const lines = [
-    `# FreeLLMAPI provider review: ${inlineText(input.providerName)}`,
+    `# FreeLLMAPI free models — ${enabledOnly ? 'enabled' : 'all'}: ${inlineText(input.providerName)}`,
     '',
+    `- Total: ${number.format(input.models.length)} free model${input.models.length === 1 ? '' : 's'}${enabledOnly ? ` of ${number.format(input.offeredModelCount)} offered` : ''}`,
+    enabledOnly
+      ? '- Scope: free models this key is enabled to serve'
+      : '- Scope: every free model this provider offers, whatever its access state',
     `- Provider ID: \`${codeText(input.platform)}\``,
     `- Model source: ${source}`,
     `- Provider account limits: ${accountLimits}`,
@@ -195,11 +204,11 @@ export function formatFreeCatalogModels(input: FreeCatalogExport): string {
   const offeredCount = input.providers.reduce((total, provider) => total + provider.offeredModelCount, 0)
   const selected = input.scope === 'selected'
   const lines = [
-    `# FreeLLMAPI free models — ${selected ? 'selected' : 'all'}`,
+    `# FreeLLMAPI free models — ${selected ? 'enabled' : 'all'}`,
     '',
     `- Total: ${number.format(input.providers.length)} provider${input.providers.length === 1 ? '' : 's'} · ${number.format(modelCount)} free model${modelCount === 1 ? '' : 's'}`,
     selected
-      ? `- Scope: free models this install's usable keys are scoped to serve, out of ${number.format(offeredCount)} offered`
+      ? `- Scope: free models this install's usable keys are enabled to serve, out of ${number.format(offeredCount)} offered`
       : '- Scope: every free model these providers offer, whatever its access or routing state',
     '- Free basis: FreeLLMAPI free catalogue. Custom relay endpoints are excluded: their free status is unverified',
     `- Captured: ${input.capturedAt}`,
@@ -219,7 +228,7 @@ export function formatFreeCatalogModels(input: FreeCatalogExport): string {
 
   if (modelCount === 0) {
     lines.push('', selected
-      ? 'No free model is currently scoped to a usable key.'
+      ? 'No free model is currently enabled on a usable key.'
       : 'No free catalogue model is available.')
   }
 

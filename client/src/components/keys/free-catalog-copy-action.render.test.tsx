@@ -52,7 +52,7 @@ describe('free catalogue copy action', () => {
 
     expect(items.map(item => item.textContent?.trim())).toEqual([
       'All free models offered',
-      'Selected free models only',
+      'Enabled free models only',
     ])
     // The group label the crash was hiding in.
     expect(document.querySelector('[role=group]')?.textContent).toContain('Free models, every provider')
