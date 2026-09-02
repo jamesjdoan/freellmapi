@@ -20,6 +20,7 @@
 
 import type { FallbackEntry } from './routing'
 import type { FreeCatalogExportProvider, FreeCatalogScope } from './provider-model-details-export'
+import type { ApiKey } from '../../../shared/types'
 
 /** One row of the picker: a catalog model this key could be scoped to. */
 export interface ScopeCandidate {
@@ -73,14 +74,50 @@ export function scopeCandidates(
 }
 
 /**
- * Group the whole free catalogue by provider for the catalogue-wide copy
- * actions, from the same `['fallback']` list the dialog already holds.
+ * What a provider's usable keys are scoped to serve. `serveAll` covers the
+ * ordinary case of an unscoped key (#657: a NULL scope serves every model of
+ * its platform), which no id list can stand in for.
+ */
+export interface ProviderKeyAccess {
+  usableKeyCount: number
+  serveAll: boolean
+  selectedModelIds: ReadonlySet<string>
+}
+
+/**
+ * Which free models each provider's usable keys are scoped to serve, keyed by
+ * platform. A key counts as usable on the same terms the router and
+ * `/api/fallback`'s `keyCount` use: enabled, and healthy or unchecked. An
+ * invalid key grants no access, so it contributes no selection.
+ */
+export function providerKeyAccess(
+  keys: readonly ApiKey[],
+): Map<string, ProviderKeyAccess> {
+  const access = new Map<string, ProviderKeyAccess>()
+  for (const key of keys) {
+    if (!key.enabled || (key.status !== 'healthy' && key.status !== 'unknown')) continue
+    const existing = access.get(key.platform)
+    const entry = existing ?? { usableKeyCount: 0, serveAll: false, selectedModelIds: new Set<string>() }
+    entry.usableKeyCount += 1
+    // A NULL/absent scope serves everything; several keys union their scopes.
+    if (key.modelScope == null || key.modelScope.length === 0) entry.serveAll = true
+    else for (const modelId of key.modelScope) (entry.selectedModelIds as Set<string>).add(modelId)
+    if (!existing) access.set(key.platform, entry)
+  }
+  return access
+}
+
+/**
+ * Group the free catalogue by provider for the catalogue-wide copy actions,
+ * from the same `['fallback']` list the dialog already holds.
  *
  * `custom` rows and per-key relay rows are dropped: a relay endpoint serves
  * whatever its operator points it at, so the curated free catalogue cannot
- * vouch for it. `active` additionally keeps only what the router can use right
- * now — the model switch is on, the provider holds a usable key, and the
- * provider has not retired the model upstream.
+ * vouch for it being free.
+ *
+ * `selected` keeps only the models a usable key is scoped to serve, and drops
+ * providers left with none — that is the list of free models this install can
+ * actually reach. `all` keeps every offered model and every provider.
  *
  * Row order is the server's (fallback priority); providers come out in first
  * appearance order for the same reason `scopeCandidates` keeps it: the export
@@ -88,12 +125,13 @@ export function scopeCandidates(
  * within one provider collapse to their first occurrence.
  *
  * Credential-blind by construction: only catalogue facts are copied out, never
- * `keyId`, `keyLabel` or `modelDbId`.
+ * `keyId`, `keyLabel`, `maskedKey` or `modelDbId`.
  */
 export function freeCatalogProviders(
   entries: readonly FallbackEntry[],
   scope: FreeCatalogScope,
   providerName: (platform: string) => string,
+  access: ReadonlyMap<string, ProviderKeyAccess>,
 ): FreeCatalogExportProvider[] {
   const providers = new Map<string, FreeCatalogExportProvider>()
   const seen = new Set<string>()
@@ -103,21 +141,25 @@ export function freeCatalogProviders(
     const identity = `${entry.platform}\u0000${entry.modelId}`
     if (seen.has(identity)) continue
     seen.add(identity)
-    const usableKeyCount = entry.keyCount ?? 0
-    if (scope === 'active' && (!entry.enabled || usableKeyCount < 1 || entry.retiredUpstream)) continue
+    const keyAccess = access.get(entry.platform)
+    const accessEnabled = Boolean(keyAccess) && (keyAccess!.serveAll || keyAccess!.selectedModelIds.has(entry.modelId))
     let provider = providers.get(entry.platform)
     if (!provider) {
       provider = {
         providerName: providerName(entry.platform),
         platform: entry.platform,
-        usableKeyCount,
+        usableKeyCount: keyAccess?.usableKeyCount ?? 0,
+        offeredModelCount: 0,
         models: [],
       }
       providers.set(entry.platform, provider)
     }
+    provider.offeredModelCount += 1
+    if (scope === 'selected' && !accessEnabled) continue
     provider.models.push({
       displayName: entry.displayName || entry.modelId,
       modelId: entry.modelId,
+      accessEnabled,
       routingEnabled: entry.enabled,
       retiredUpstream: entry.retiredUpstream ?? false,
       sizeLabel: entry.sizeLabel || null,
@@ -133,7 +175,7 @@ export function freeCatalogProviders(
       },
     })
   }
-  return [...providers.values()]
+  return [...providers.values()].filter(provider => scope === 'all' || provider.models.length > 0)
 }
 
 /** Whether a just-added key on this platform is worth interrupting for. */

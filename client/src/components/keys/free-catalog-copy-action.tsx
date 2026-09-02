@@ -53,9 +53,9 @@ export function FreeCatalogCopyAction({
         {/* Base UI requires a Menu.Group parent for a group label; without it
             MenuGroupContext is missing and the whole page crashes on open. */}
         <DropdownMenuGroup>
-          <DropdownMenuLabel>Whole catalogue, every provider</DropdownMenuLabel>
-          <DropdownMenuItem onClick={() => copy('all')}>All providers and models</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => copy('active')}>Active providers and models</DropdownMenuItem>
+          <DropdownMenuLabel>Free models, every provider</DropdownMenuLabel>
+          <DropdownMenuItem onClick={() => copy('all')}>All free models offered</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => copy('selected')}>Selected free models only</DropdownMenuItem>
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>

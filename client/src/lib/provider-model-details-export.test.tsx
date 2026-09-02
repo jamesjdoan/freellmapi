@@ -1,12 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import type { ProviderQuotaGuidance } from '../../../shared/types'
+import type { ApiKey, ProviderQuotaGuidance } from '../../../shared/types'
 import {
   formatFreeCatalogModels,
   formatProviderModelDetails,
+  type FreeCatalogScope,
   type ProviderModelDetailsExport,
 } from './provider-model-details-export'
-import { freeCatalogProviders } from './model-scope-selection'
+import { freeCatalogProviders, providerKeyAccess } from './model-scope-selection'
 import type { FallbackEntry } from './routing'
 import { ProviderModelDetailsCopyAction } from '../components/keys/provider-model-details-copy-action'
 import { FreeCatalogCopyAction } from '../components/keys/free-catalog-copy-action'
@@ -139,64 +140,82 @@ const catalogue: FallbackEntry[] = [
 ]
 
 const names: Record<string, string> = { groq: 'Groq', cerebras: 'Cerebras' }
-const providersFor = (scope: 'all' | 'active') =>
-  freeCatalogProviders(catalogue, scope, platform => names[platform] ?? platform)
+
+// Groq: one unscoped usable key (serves everything) plus an invalid key that
+// must grant nothing. Cerebras: a usable key scoped to one model. Nvidia: an
+// invalid key only, so nothing there is reachable.
+const keys = [
+  { id: 1, platform: 'groq', enabled: true, status: 'healthy', modelScope: null, maskedKey: 'gsk_...0001', label: 'Groq main' },
+  { id: 2, platform: 'groq', enabled: true, status: 'invalid', modelScope: ['openai/gpt-oss-20b'], maskedKey: 'gsk_...0002', label: 'Groq dead' },
+  { id: 3, platform: 'cerebras', enabled: true, status: 'unknown', modelScope: ['qwen-3-coder'], maskedKey: 'csk-...0003', label: 'Cerebras' },
+  { id: 4, platform: 'nvidia', enabled: true, status: 'invalid', modelScope: null, maskedKey: 'nvapi-...0004', label: 'Nvidia' },
+] as unknown as ApiKey[]
+
+const access = providerKeyAccess(keys)
+const providersFor = (scope: FreeCatalogScope) =>
+  freeCatalogProviders(catalogue, scope, platform => names[platform] ?? platform, access)
 
 describe('free catalogue export', () => {
+  it('counts only usable keys and reads an unscoped key as serving everything', () => {
+    expect(access.get('groq')).toMatchObject({ usableKeyCount: 1, serveAll: true })
+    expect(access.get('cerebras')).toMatchObject({ usableKeyCount: 1, serveAll: false })
+    expect([...access.get('cerebras')!.selectedModelIds]).toEqual(['qwen-3-coder'])
+    expect(access.has('nvidia')).toBe(false)
+  })
+
   it('covers every provider once per model id and excludes unverifiable custom relays', () => {
     const providers = providersFor('all')
 
     expect(providers.map(provider => provider.platform)).toEqual(['groq', 'cerebras', 'nvidia'])
     expect(providers[0].models.map(model => model.modelId)).toEqual(['openai/gpt-oss-120b', 'moonshotai/kimi-k2'])
-    expect(providers[0].providerName).toBe('Groq')
+    expect(providers[0].offeredModelCount).toBe(2)
     expect(providers[2].providerName).toBe('nvidia')
   })
 
-  it('keeps only routable models for the active scope', () => {
-    const providers = providersFor('active')
+  it('keeps only key-scoped models for the selected scope and drops emptied providers', () => {
+    const providers = providersFor('selected')
 
-    expect(providers.map(provider => provider.platform)).toEqual(['groq'])
-    expect(providers[0].models.map(model => model.modelId)).toEqual(['openai/gpt-oss-120b'])
+    expect(providers.map(provider => provider.platform)).toEqual(['groq', 'cerebras'])
+    expect(providers[0].models.map(model => model.modelId)).toEqual(['openai/gpt-oss-120b', 'moonshotai/kimi-k2'])
+    expect(providers[1].models.map(model => model.modelId)).toEqual(['qwen-3-coder'])
   })
 
-  it('formats one line per model with counts, state and limits', () => {
-    const text = formatFreeCatalogModels({
-      scope: 'all',
-      capturedAt: '2026-09-02',
-      providers: providersFor('all'),
-    })
+  it('leads with the total, then each provider, then model blocks', () => {
+    const text = formatFreeCatalogModels({ scope: 'all', capturedAt: '2026-09-02', providers: providersFor('all') })
 
-    expect(text).toContain('# FreeLLMAPI free catalogue: all models')
-    expect(text).toContain('- Scope: every catalogue model, whatever its routing switch or key state')
-    expect(text).toContain('custom relay endpoints are excluded because their free status is unverified')
+    expect(text).toContain('# FreeLLMAPI free models — all')
+    expect(text).toContain('- Total: 3 providers · 4 free models')
+    expect(text).toContain('- Scope: every free model these providers offer, whatever its access or routing state')
+    expect(text).toContain('Custom relay endpoints are excluded: their free status is unverified')
     expect(text).toContain('- Captured: 2026-09-02')
-    expect(text).toContain('- Providers: 3 · Models: 4')
-    expect(text).toContain('## Groq — `groq` (2 usable keys · 2 models)')
-    expect(text).toContain('## Cerebras — `cerebras` (0 usable keys · 1 models)')
-    expect(text).toContain('**GPT-OSS 120B** — `openai/gpt-oss-120b` · routing enabled · Frontier · 131K context · Tools · No vision · allowance 6.0M/mo · RPM 30 · RPD 1,000')
-    expect(text).toContain('**Kimi K2** — `moonshotai/kimi-k2` · routing disabled')
-    expect(text).toContain('**Nemotron** — `nvidia/nemotron` · retired upstream')
+    expect(text).toContain('## Groq — `groq`\n- Free models: 2\n- Usable keys: 1')
+    expect(text).toContain('## Cerebras — `cerebras`\n- Free models: 1\n- Usable keys: 1')
+    // Same block shape as the single-provider export.
+    expect(text).toContain('### **GPT-OSS 120B** — `openai/gpt-oss-120b`')
+    expect(text).toContain('- Access enabled · Routing enabled')
+    expect(text).toContain('- Frontier · 131K context · Tools · No vision')
+    expect(text).toContain('- Catalogue allowance: 6.0M/mo')
+    expect(text).toContain('- Model limits: RPM 30 · RPD 1,000')
+    expect(text).toContain('- Access disabled · Routing disabled (retired upstream)')
     expect(text).not.toContain('Local Llama')
   })
 
-  it('states the active scope and reports an empty catalogue honestly', () => {
-    const active = formatFreeCatalogModels({ scope: 'active', capturedAt: '2026-09-02', providers: providersFor('active') })
-    expect(active).toContain('# FreeLLMAPI free catalogue: active models')
-    expect(active).toContain('- Scope: routing-enabled catalogue models whose provider holds a usable key')
+  it('reports the selected scope against what is offered, and an empty result honestly', () => {
+    const selected = formatFreeCatalogModels({ scope: 'selected', capturedAt: '2026-09-02', providers: providersFor('selected') })
+    expect(selected).toContain('# FreeLLMAPI free models — selected')
+    expect(selected).toContain("- Total: 2 providers · 3 free models")
+    expect(selected).toContain("- Scope: free models this install's usable keys are scoped to serve, out of 3 offered")
+    expect(selected).toContain('- Free models: 1 of 1 offered')
 
-    const empty = formatFreeCatalogModels({ scope: 'active', capturedAt: '2026-09-02', providers: [] })
-    expect(empty).toContain('- Providers: 0 · Models: 0')
-    expect(empty).toContain('No catalogue model matches this scope.')
+    const empty = formatFreeCatalogModels({ scope: 'selected', capturedAt: '2026-09-02', providers: [] })
+    expect(empty).toContain('- Total: 0 providers · 0 free models')
+    expect(empty).toContain('No free model is currently scoped to a usable key.')
   })
 
   it('never emits credential or internal identity fields', () => {
-    const text = formatFreeCatalogModels({
-      scope: 'all',
-      capturedAt: '2026-09-02',
-      providers: providersFor('all'),
-    })
+    const text = formatFreeCatalogModels({ scope: 'all', capturedAt: '2026-09-02', providers: providersFor('all') })
 
-    for (const forbidden of ['Ollama box', 'keyId', 'modelDbId', 'keyLabel']) {
+    for (const forbidden of ['Ollama box', 'Groq main', 'gsk_...0001', 'keyId', 'modelDbId', 'keyLabel']) {
       expect(text).not.toContain(forbidden)
     }
   })

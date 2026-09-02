@@ -51,11 +51,11 @@ describe('free catalogue copy action', () => {
     const { items } = await openMenu(() => 'ignored')
 
     expect(items.map(item => item.textContent?.trim())).toEqual([
-      'All providers and models',
-      'Active providers and models',
+      'All free models offered',
+      'Selected free models only',
     ])
     // The group label the crash was hiding in.
-    expect(document.querySelector('[role=group]')?.textContent).toContain('Whole catalogue, every provider')
+    expect(document.querySelector('[role=group]')?.textContent).toContain('Free models, every provider')
   })
 
   it('copies the scope the chosen item names', async () => {
@@ -68,6 +68,6 @@ describe('free catalogue copy action', () => {
     const { items } = await openMenu(scope => `export for ${scope}`)
     await act(async () => { items[1].click() })
 
-    expect(written).toEqual(['export for active'])
+    expect(written).toEqual(['export for selected'])
   })
 })

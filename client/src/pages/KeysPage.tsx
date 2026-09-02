@@ -20,7 +20,7 @@ import { AddKeyDialog } from '@/components/keys/add-key-dialog'
 import { ExportKeysDialog } from '@/components/keys/export-keys-dialog'
 import { AgentCompatibilitySection } from '@/components/keys/agent-compatibility-section'
 import { FreeCatalogCopyAction } from '@/components/keys/free-catalog-copy-action'
-import { freeCatalogProviders } from '@/lib/model-scope-selection'
+import { freeCatalogProviders, providerKeyAccess } from '@/lib/model-scope-selection'
 import {
   formatFreeCatalogModels,
   type FreeCatalogScope,
@@ -87,7 +87,8 @@ export default function KeysPage() {
   })
 
   // Formatted on demand inside the copy click, so a 300-model export costs
-  // nothing until it is asked for.
+  // nothing until it is asked for. `selected` is decided by what the usable
+  // keys are scoped to serve, which is why the keys list feeds in here.
   const buildFreeCatalogText = useCallback((scope: FreeCatalogScope) => formatFreeCatalogModels({
     scope,
     capturedAt: new Date().toISOString().slice(0, 10),
@@ -95,8 +96,9 @@ export default function KeysPage() {
       fallback,
       scope,
       platform => quotaCatalog?.providers.find(provider => provider.platform === platform)?.displayName ?? platform,
+      providerKeyAccess(keys),
     ),
-  }), [fallback, quotaCatalog])
+  }), [fallback, keys, quotaCatalog])
 
   return (
     <div>
