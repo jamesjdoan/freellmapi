@@ -4,6 +4,7 @@ import { apiFetch } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogPopup, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { ConfirmButton } from '@/components/confirm-button'
 import { useI18n } from '@/i18n'
 import { X } from 'lucide-react'
 import type { ApiKey, QuotaGuidanceCatalog, QuotaGuidanceLimits } from '../../../../shared/types'
@@ -54,6 +55,7 @@ export function ModelScopeDialog({
   // Mounted only while open, so state seeds from the row without reset effects.
   const [ids, setIds] = useState<string[]>(apiKey.modelScope ?? [])
   const [catalogTouched, setCatalogTouched] = useState(false)
+  const [modelQuery, setModelQuery] = useState('')
   const [draft, setDraft] = useState('')
   const [providerRpmLimit, setProviderRpmLimit] = useState(apiKey.providerRpmLimit?.toString() ?? '')
   const [providerRpdLimit, setProviderRpdLimit] = useState(apiKey.providerRpdLimit?.toString() ?? '')
@@ -150,6 +152,16 @@ export function ModelScopeDialog({
     ? orderedCandidates.filter(candidate => wasEnabled(candidate.modelId))
     : orderedCandidates
   const hiddenDisabledCount = orderedCandidates.length - visibleCandidates.length
+  // Search narrows what the list shows and, with it, what the bulk buttons act
+  // on. Matching the id as well as the name because a provider's display names
+  // are often near-identical while the ids are what `modelScope` stores.
+  const modelQueryText = modelQuery.trim().toLowerCase()
+  const shownCandidates = modelQueryText
+    ? visibleCandidates.filter(candidate =>
+      candidate.modelId.toLowerCase().includes(modelQueryText)
+      || candidate.displayName.toLowerCase().includes(modelQueryText))
+    : visibleCandidates
+  const shownSelectedCount = shownCandidates.filter(candidate => selectedCatalogIds.includes(candidate.modelId)).length
 
   // Built on demand per scope inside the copy click, so unsaved limit edits in
   // this dialog are included at copy time.
@@ -265,6 +277,21 @@ export function ModelScopeDialog({
     setIds([...selected])
   }
 
+  /**
+   * Tick or untick everything currently on screen — the search and the hide
+   * filter both narrow what that means, so the button acts on exactly the rows
+   * the operator can see and the count in its label says how many.
+   */
+  const setBulkSelection = (selected: boolean) => {
+    const next = new Set(selectedCatalogIds)
+    for (const candidate of shownCandidates) {
+      if (selected) next.add(candidate.modelId)
+      else next.delete(candidate.modelId)
+    }
+    setCatalogTouched(true)
+    setIds([...next])
+  }
+
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogPopup maxWidth="max-w-6xl">
@@ -305,8 +332,49 @@ export function ModelScopeDialog({
                 {hideDisabled && hiddenDisabledCount > 0 && <span>({hiddenDisabledCount})</span>}
               </label>
             </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                type="search"
+                value={modelQuery}
+                onChange={event => setModelQuery(event.target.value)}
+                placeholder="Search models by name or id…"
+                aria-label="Search models"
+                className="h-7 min-w-[200px] flex-1 text-xs"
+                spellCheck={false}
+              />
+              <span className="whitespace-nowrap text-[11px] tabular-nums text-muted-foreground">
+                {shownSelectedCount}/{shownCandidates.length} shown enabled
+              </span>
+              {/* Arming these is the point: one click could retick or wipe a
+                  whole provider's scope, and the confirm step is the dashboard's
+                  existing idiom for an action that big. Nothing reaches the API
+                  until Save either way. */}
+              <ConfirmButton
+                variant="outline"
+                size="xs"
+                confirmLabel={`Enable ${shownCandidates.length}?`}
+                onConfirm={() => setBulkSelection(true)}
+                disabled={shownCandidates.length === 0 || shownSelectedCount === shownCandidates.length}
+                title="Enable every model shown"
+              >
+                Enable shown
+              </ConfirmButton>
+              <ConfirmButton
+                variant="outline"
+                size="xs"
+                confirmLabel={`Disable ${shownCandidates.length}?`}
+                onConfirm={() => setBulkSelection(false)}
+                disabled={shownSelectedCount === 0}
+                title="Disable every model shown"
+              >
+                Disable shown
+              </ConfirmButton>
+            </div>
             <div className="max-h-[50vh] overflow-y-auto rounded-2xl border divide-y">
-              {visibleCandidates.map(model => (
+              {shownCandidates.length === 0 && (
+                <p className="px-3 py-4 text-xs text-muted-foreground">No model matches this search.</p>
+              )}
+              {shownCandidates.map(model => (
                 <div key={model.modelId} className={`px-3 py-2 text-xs ${selectedModelId === model.modelId ? 'bg-muted/40' : 'hover:bg-muted/20'}`}>
                   <div className="flex items-center gap-2">
                     <input

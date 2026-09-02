@@ -30,7 +30,7 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
   {
     id: 'provider-model-access',
     title: 'Provider model access',
-    summary: 'Choose which catalogue models each provider key may serve, preserving scarce capacity for useful models. Enabled models lead, then the most advanced — tier, rank, then the highest version within a family — and disabled ones are hidden by default.',
+    summary: 'Choose which catalogue models each provider key may serve, with search and confirm-gated bulk enable/disable. Enabled models lead, then the most advanced — tier, rank, then the highest version within a family — and disabled ones are hidden by default.',
     settingsLocation: 'Keys → provider key row → Models & account limits',
     destinations: [
       { kind: 'internal', label: 'Open provider keys', href: '/keys' },
