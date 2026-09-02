@@ -99,6 +99,7 @@ The additive migration is `server/src/db/migrations/20260902_000002_provider_acc
 | Key catalogue scope/account-limit UI | `client/src/components/keys/model-scope-dialog.tsx`, `client/src/components/keys/provider-list.tsx` |
 | Quota guidance UI/catalogue | `client/src/components/keys/quota-guidance-panel.tsx`, `server/src/data/quota-guidance.ts` |
 | Provider review copy | `client/src/lib/provider-model-details-export.ts`, `client/src/components/keys/provider-model-details-copy-action.tsx` |
+| Free catalogue copy | `client/src/lib/provider-model-details-export.ts`, `client/src/lib/model-scope-selection.ts`, `client/src/components/keys/free-catalog-copy-action.tsx` |
 | Key update API/migration | `server/src/routes/keys.ts`, `server/src/db/migrations/20260902_000002_provider_account_limits.ts` |
 | Quota policy/observations | `server/src/services/provider-quota.ts`, `server/src/services/ratelimit.ts` |
 | API-surface quota context | `server/src/routes/proxy.ts`, `server/src/routes/responses.ts`, `server/src/routes/anthropic.ts` |
@@ -113,6 +114,8 @@ The additive migration is `server/src/db/migrations/20260902_000002_provider_acc
 - Catalogue key scopes: `server/src/__tests__/routes/keys-model-scope.test.ts`
 - Quota guidance: `server/src/__tests__/routes/quota-guidance.test.ts` and `client/src/components/keys/quota-guidance-panel.test.tsx`
 - Provider review copy and credential exclusion: `client/src/lib/provider-model-details-export.test.tsx`
+- Free catalogue copy scopes, formatting and credential exclusion: `client/src/lib/provider-model-details-export.test.tsx`
+- Free catalogue copy menu behaviour: `client/src/components/keys/free-catalog-copy-action.render.test.tsx`
 - Cross-surface routing: OpenAI route tests plus `server/src/__tests__/routes/anthropic.test.ts`
 - Migration safety: `server/src/__tests__/db/migrate/roundtrip.test.ts`
 

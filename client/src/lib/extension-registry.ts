@@ -55,6 +55,15 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
     ],
   },
   {
+    id: 'free-catalogue-copy',
+    title: 'Free catalogue copy',
+    summary: 'Copy the whole free catalogue — every provider and model, or only the ones routing can use right now — as a credential-blind review snapshot.',
+    settingsLocation: 'Keys → provider key row → Models & account limits',
+    destinations: [
+      { kind: 'internal', label: 'Open provider keys', href: '/keys' },
+    ],
+  },
+  {
     id: 'quota-pool-routing',
     title: 'Quota-pool-aware routing',
     summary: 'Track shared, per-model, project, credit, unknown and local capacity without double-counting it.',

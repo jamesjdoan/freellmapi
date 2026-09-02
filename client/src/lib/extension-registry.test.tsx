@@ -11,6 +11,7 @@ describe('Imperium extension registry', () => {
       'provider-model-access',
       'provider-account-limits',
       'provider-quota-guidance',
+      'free-catalogue-copy',
       'quota-pool-routing',
       'separate-extension-branch',
     ])
