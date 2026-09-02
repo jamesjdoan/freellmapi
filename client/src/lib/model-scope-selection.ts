@@ -30,6 +30,11 @@ export interface ScopeCandidate {
   /** Catalog capability tier ('Frontier' | 'Large' | 'Medium' | 'Small'), or null. */
   sizeLabel: string | null
   contextWindow: number | null
+  /**
+   * Per-provider capability rank; lower is more capable. Paired with
+   * `sizeLabel` this is the catalogue's own advancement order.
+   */
+  intelligenceRank: number
 }
 
 /**
@@ -68,9 +73,49 @@ export function scopeCandidates(
       displayName: entry.displayName || entry.modelId,
       sizeLabel: entry.sizeLabel || null,
       contextWindow: entry.contextWindow ?? null,
+      intelligenceRank: entry.intelligenceRank,
     })
   }
   return candidates
+}
+
+/**
+ * Cross-provider capability tiers, in the order `POST /api/fallback/sort/
+ * intelligence` already uses (issue #135): `intelligence_rank` is per-provider,
+ * so the tier has to normalise before the rank breaks ties.
+ */
+const CAPABILITY_TIER: Record<string, number> = { Frontier: 1, Large: 2, Medium: 3, Small: 4 }
+
+/**
+ * Order the scope picker: models this key already serves first, then the most
+ * advanced of the rest.
+ *
+ * "Most advanced" is the app's own definition — capability tier, then
+ * per-provider rank, exactly what `POST /api/fallback/sort/intelligence` does.
+ * Nothing in the catalogue records a release date, so newest cannot be sorted
+ * on directly; tier and rank are what separate a current frontier model from a
+ * superseded small one.
+ *
+ * `enabled` is read from the tick state as it stood when the dialog opened, and
+ * held for the life of it. Re-sorting as boxes are ticked would move the row out
+ * from under the pointer mid-click, so the order is deliberately frozen while
+ * editing.
+ */
+export function orderScopeCandidates(
+  candidates: readonly ScopeCandidate[],
+  enabled: (modelId: string) => boolean,
+): ScopeCandidate[] {
+  const rankOf = (candidate: ScopeCandidate) => [
+    enabled(candidate.modelId) ? 0 : 1,
+    CAPABILITY_TIER[candidate.sizeLabel ?? ''] ?? 5,
+    Number.isFinite(candidate.intelligenceRank) ? candidate.intelligenceRank : Number.MAX_SAFE_INTEGER,
+  ]
+  return [...candidates].sort((left, right) => {
+    const a = rankOf(left)
+    const b = rankOf(right)
+    for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return a[i] - b[i]
+    return left.displayName.localeCompare(right.displayName)
+  })
 }
 
 /**

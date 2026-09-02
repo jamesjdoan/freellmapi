@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,11 @@ import { useI18n } from '@/i18n'
 import { X } from 'lucide-react'
 import type { ApiKey, QuotaGuidanceCatalog, QuotaGuidanceLimits } from '../../../../shared/types'
 import type { FallbackEntry } from '@/lib/routing'
-import { scopeCandidates } from '@/lib/model-scope-selection'
+import {
+  orderScopeCandidates,
+  scopeCandidates,
+  type ScopeCandidate,
+} from '@/lib/model-scope-selection'
 import {
   formatProviderModelDetails,
   type FreeCatalogScope,
@@ -17,6 +21,8 @@ import { QuotaGuidancePanel } from './quota-guidance-panel'
 import { ProviderModelDetailsCopyAction } from './provider-model-details-copy-action'
 
 type ModelLimitDraft = Record<keyof QuotaGuidanceLimits, string>
+
+const SCOPE_HIDE_DISABLED_KEY = 'imperium.modelScope.hideDisabled'
 
 function toDraft(limits: QuotaGuidanceLimits): ModelLimitDraft {
   return {
@@ -54,6 +60,16 @@ export function ModelScopeDialog({
   const [providerTpdLimit, setProviderTpdLimit] = useState(apiKey.providerTpdLimit?.toString() ?? '')
   const [modelLimitDrafts, setModelLimitDrafts] = useState<Record<number, ModelLimitDraft>>({})
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null)
+  // Most of a big provider catalogue is models the operator will never tick, and
+  // a retired or switched-off one cannot serve traffic at all, so they start out
+  // of the way. Remembered per browser, like the FreeLLM tab's own toggle.
+  const [hideDisabled, setHideDisabled] = useState(() => {
+    try {
+      return localStorage.getItem(SCOPE_HIDE_DISABLED_KEY) !== '0'
+    } catch {
+      return true
+    }
+  })
 
   const { data: fallback = [], isLoading: catalogLoading, isError: catalogError } = useQuery<FallbackEntry[]>({
     queryKey: ['fallback'],
@@ -75,12 +91,21 @@ export function ModelScopeDialog({
   })
   const quotaGuidance = quotaCatalog?.providers.find(provider => provider.platform === apiKey.platform)
   const selectedModelGuidance = quotaGuidance?.models.find(model => model.modelId === selectedModelId) ?? null
-  const liveCandidates = useMemo(() => {
+  const liveCandidates = useMemo<ScopeCandidate[]>(() => {
     if (apiKey.platform === 'custom' || catalogCandidates.length > 0) return []
     const seen = new Set<string>()
     return (apiKey.models ?? [])
       .filter(model => model.kind === 'chat' && model.modelId && !seen.has(model.modelId) && seen.add(model.modelId))
-      .map(model => ({ modelId: model.modelId, displayName: model.displayName || model.modelId }))
+      .map(model => ({
+        modelId: model.modelId,
+        displayName: model.displayName || model.modelId,
+        // Live discovery carries no catalogue tier or rank, so these rows sort
+        // after every ranked one rather than claiming a capability they have
+        // not been measured for.
+        sizeLabel: null,
+        contextWindow: null,
+        intelligenceRank: Number.MAX_SAFE_INTEGER,
+      }))
   }, [apiKey.models, apiKey.platform, catalogCandidates.length])
   // The curated FreeLLMAPI catalogue is authoritative. Live discovery is used
   // only when this provider has no catalogue rows at all (for example a newly
@@ -101,6 +126,30 @@ export function ModelScopeDialog({
   const selectedCatalogIds = !catalogTouched && (apiKey.modelScope === null || apiKey.modelScope === undefined)
     ? catalogIds
     : catalogIds.filter(id => ids.includes(id))
+
+  // The tick state as it stood when the dialog opened. Both the order and the
+  // hide filter read this, not the live selection: re-sorting or vanishing a row
+  // as its own box is clicked would move the target out from under the pointer.
+  // An unscoped key serves everything, so every model counts as enabled there.
+  const [enabledAtOpen] = useState(() => {
+    const scope = apiKey.modelScope
+    return scope == null ? null : new Set(scope)
+  })
+  const wasEnabled = useCallback(
+    (modelId: string) => enabledAtOpen === null || enabledAtOpen.has(modelId),
+    [enabledAtOpen],
+  )
+  const orderedCandidates = useMemo(
+    () => orderScopeCandidates(providerCandidates, wasEnabled),
+    [providerCandidates, wasEnabled],
+  )
+  // Display-only: the saved scope is computed from `catalogIds`, so a hidden row
+  // keeps whatever it had. Only models that were already off when the dialog
+  // opened are hidden, which is why unticking one never makes it disappear.
+  const visibleCandidates = hideDisabled
+    ? orderedCandidates.filter(candidate => wasEnabled(candidate.modelId))
+    : orderedCandidates
+  const hiddenDisabledCount = orderedCandidates.length - visibleCandidates.length
 
   // Built on demand per scope inside the copy click, so unsaved limit edits in
   // this dialog are included at copy time.
@@ -240,9 +289,24 @@ export function ModelScopeDialog({
             {catalogCandidates.length === 0 && (
               <p className="text-[11px] text-muted-foreground">{t('keys.liveModelsFallback')}</p>
             )}
-            <p className="text-[11px] text-muted-foreground">Model limits below apply to all keys for this provider. Account limits remain specific to this key.</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[11px] text-muted-foreground">Model limits below apply to all keys for this provider. Account limits remain specific to this key.</p>
+              <label className="flex items-center gap-1.5 whitespace-nowrap text-[11px] text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={hideDisabled}
+                  onChange={event => {
+                    setHideDisabled(event.target.checked)
+                    try { localStorage.setItem(SCOPE_HIDE_DISABLED_KEY, event.target.checked ? '1' : '0') } catch { /* ignore */ }
+                  }}
+                  className="size-3.5 accent-primary"
+                />
+                Hide disabled models
+                {hideDisabled && hiddenDisabledCount > 0 && <span>({hiddenDisabledCount})</span>}
+              </label>
+            </div>
             <div className="max-h-[50vh] overflow-y-auto rounded-2xl border divide-y">
-              {providerCandidates.map(model => (
+              {visibleCandidates.map(model => (
                 <div key={model.modelId} className={`px-3 py-2 text-xs ${selectedModelId === model.modelId ? 'bg-muted/40' : 'hover:bg-muted/20'}`}>
                   <div className="flex items-center gap-2">
                     <input

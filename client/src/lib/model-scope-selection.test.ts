@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   MODEL_PICKER_MIN_MODELS,
+  orderScopeCandidates,
   resolveScopeUpdate,
   scopeCandidates,
   shouldOfferModelPicker,
@@ -33,7 +34,13 @@ function entry(platform: string, modelId: string, extra: Partial<FallbackEntry> 
 }
 
 function candidates(...ids: string[]): ScopeCandidate[] {
-  return ids.map(modelId => ({ modelId, displayName: modelId, sizeLabel: null, contextWindow: null }))
+  return ids.map(modelId => ({
+    modelId,
+    displayName: modelId,
+    sizeLabel: null,
+    contextWindow: null,
+    intelligenceRank: 50,
+  }))
 }
 
 describe('scopeCandidates (#657 post-add picker)', () => {
@@ -53,6 +60,7 @@ describe('scopeCandidates (#657 post-add picker)', () => {
       displayName: 'Kimi K2',
       sizeLabel: 'Frontier',
       contextWindow: 262144,
+      intelligenceRank: 50,
     })
   })
 
@@ -136,5 +144,68 @@ describe('resolveScopeUpdate', () => {
 
   it('treats an empty catalog as nothing to save', () => {
     expect(resolveScopeUpdate([], new Set(['a']))).toEqual({ patch: false, reason: 'empty' })
+  })
+})
+
+describe('orderScopeCandidates', () => {
+  const model = (modelId: string, over: Partial<ScopeCandidate> = {}): ScopeCandidate => ({
+    modelId,
+    displayName: modelId,
+    sizeLabel: 'Medium',
+    contextWindow: null,
+    intelligenceRank: 50,
+    ...over,
+  })
+
+  it('puts enabled models above the rest, whatever their tier', () => {
+    const rows = orderScopeCandidates(
+      [model('frontier-unticked', { sizeLabel: 'Frontier' }), model('small-ticked', { sizeLabel: 'Small' })],
+      modelId => modelId === 'small-ticked',
+    )
+    expect(rows.map(row => row.modelId)).toEqual(['small-ticked', 'frontier-unticked'])
+  })
+
+  it('ranks the most advanced first inside one enabled group', () => {
+    const rows = orderScopeCandidates([
+      model('small', { sizeLabel: 'Small' }),
+      model('frontier', { sizeLabel: 'Frontier' }),
+      model('untiered', { sizeLabel: null }),
+      model('medium'),
+      model('large', { sizeLabel: 'Large' }),
+    ], () => true)
+    expect(rows.map(row => row.modelId)).toEqual(['frontier', 'large', 'medium', 'small', 'untiered'])
+  })
+
+  it('breaks a tier tie on per-provider rank, then name', () => {
+    const rows = orderScopeCandidates([
+      model('slower', { intelligenceRank: 90 }),
+      model('sharper', { intelligenceRank: 10 }),
+      model('b-tied', { intelligenceRank: 10 }),
+    ], () => true)
+    expect(rows.map(row => row.modelId)).toEqual(['b-tied', 'sharper', 'slower'])
+  })
+
+  it('keeps every unticked model below every ticked one', () => {
+    const rows = orderScopeCandidates([
+      model('frontier-off', { sizeLabel: 'Frontier', intelligenceRank: 1 }),
+      model('small-on', { sizeLabel: 'Small', intelligenceRank: 99 }),
+      model('large-off', { sizeLabel: 'Large', intelligenceRank: 2 }),
+      model('medium-on', { intelligenceRank: 40 }),
+    ], modelId => modelId.endsWith('-on'))
+    expect(rows.map(row => row.modelId)).toEqual(['medium-on', 'small-on', 'frontier-off', 'large-off'])
+  })
+
+  it('leaves the input array untouched', () => {
+    const input = [model('b'), model('a')]
+    orderScopeCandidates(input, () => true)
+    expect(input.map(row => row.modelId)).toEqual(['b', 'a'])
+  })
+
+  it('sorts unranked live-discovery rows after every ranked one', () => {
+    const rows = orderScopeCandidates([
+      model('live', { sizeLabel: null, intelligenceRank: Number.MAX_SAFE_INTEGER }),
+      model('small', { sizeLabel: 'Small' }),
+    ], () => true)
+    expect(rows.map(row => row.modelId)).toEqual(['small', 'live'])
   })
 })
