@@ -75,7 +75,7 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
   {
     id: 'free-catalogue-copy',
     title: 'Free catalogue copy',
-    summary: 'Copy the whole free catalogue — every provider and model, or only the ones a usable key is enabled to serve — as a credential-blind review snapshot, indexed by provider.',
+    summary: 'Copy List, on the Providers header for the whole catalogue and in a key\'s dialog for one provider: every provider and model, or only the ones a usable key is enabled to serve, as a credential-blind review snapshot indexed by provider.',
     settingsLocation: 'Keys → Providers → Copy List',
     destinations: [
       { kind: 'internal', label: 'Open provider keys', href: '/keys' },
