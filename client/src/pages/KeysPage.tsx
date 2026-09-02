@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,14 @@ import { ProviderChecklistSection } from '@/components/keys/provider-checklist-s
 import { AddKeyDialog } from '@/components/keys/add-key-dialog'
 import { ExportKeysDialog } from '@/components/keys/export-keys-dialog'
 import { AgentCompatibilitySection } from '@/components/keys/agent-compatibility-section'
+import { FreeCatalogCopyAction } from '@/components/keys/free-catalog-copy-action'
+import { freeCatalogProviders } from '@/lib/model-scope-selection'
+import {
+  formatFreeCatalogModels,
+  type FreeCatalogScope,
+} from '@/lib/provider-model-details-export'
+import type { FallbackEntry } from '@/lib/routing'
+import type { QuotaGuidanceCatalog } from '../../../shared/types'
 
 type KeysTab = 'providers' | 'quotaSignals' | 'apiKey' | 'anthropic' | 'agents'
 const KEYS_TABS: { id: KeysTab; labelKey: string }[] = [
@@ -65,6 +73,31 @@ export default function KeysPage() {
     },
   })
 
+  // The free-catalogue copy is provider-wide, so it belongs to the page rather
+  // than to any one key's dialog. Both queries are the same ones the list and
+  // the model-scope dialog already run, deduped by react-query.
+  const { data: fallback = [] } = useQuery<FallbackEntry[]>({
+    queryKey: ['fallback'],
+    queryFn: () => apiFetch('/api/fallback'),
+  })
+
+  const { data: quotaCatalog } = useQuery<QuotaGuidanceCatalog>({
+    queryKey: ['keys', 'quota-guidance'],
+    queryFn: () => apiFetch('/api/keys/quota-guidance'),
+  })
+
+  // Formatted on demand inside the copy click, so a 300-model export costs
+  // nothing until it is asked for.
+  const buildFreeCatalogText = useCallback((scope: FreeCatalogScope) => formatFreeCatalogModels({
+    scope,
+    capturedAt: new Date().toISOString().slice(0, 10),
+    providers: freeCatalogProviders(
+      fallback,
+      scope,
+      platform => quotaCatalog?.providers.find(provider => provider.platform === platform)?.displayName ?? platform,
+    ),
+  }), [fallback, quotaCatalog])
+
   return (
     <div>
       <PageHeader
@@ -82,6 +115,9 @@ export default function KeysPage() {
                 <Download className="size-3.5" />
                 {t('keys.export')}
               </Button>
+            )}
+            {tab === 'providers' && (
+              <FreeCatalogCopyAction buildText={buildFreeCatalogText} disabled={fallback.length === 0} />
             )}
             {tab === 'providers' && (
               <Button size="sm" onClick={() => openAddKey()}>

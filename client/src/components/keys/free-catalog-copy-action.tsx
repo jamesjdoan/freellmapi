@@ -12,11 +12,10 @@ import {
 import { copyText } from '@/lib/clipboard'
 import type { FreeCatalogScope } from '@/lib/provider-model-details-export'
 
-// One trigger, two choices. The neighbouring "Copy provider details" action
-// covers the provider whose key row opened this dialog; this one covers the
-// whole free catalogue, so the two scopes it can copy — everything, or only
-// what the router can use right now — belong behind a single control rather
-// than two more buttons in a dialog header that already has one.
+// One trigger, two choices, on the Keys page toolbar rather than inside a
+// provider's dialog: what it copies spans every provider, so scoping it to one
+// key's screen would misrepresent it. "Copy provider details" in the
+// model-scope dialog remains the single-provider action.
 export function FreeCatalogCopyAction({
   buildText,
   disabled = false,
@@ -50,9 +49,9 @@ export function FreeCatalogCopyAction({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
         {/* Base UI requires a Menu.Group parent for a group label; without it
-            MenuGroupContext is missing and the dialog crashes on open. */}
+            MenuGroupContext is missing and the whole page crashes on open. */}
         <DropdownMenuGroup>
-          <DropdownMenuLabel>Every provider, not just this one</DropdownMenuLabel>
+          <DropdownMenuLabel>Whole catalogue, every provider</DropdownMenuLabel>
           <DropdownMenuItem onClick={() => copy('all')}>All providers and models</DropdownMenuItem>
           <DropdownMenuItem onClick={() => copy('active')}>Active providers and models</DropdownMenuItem>
         </DropdownMenuGroup>

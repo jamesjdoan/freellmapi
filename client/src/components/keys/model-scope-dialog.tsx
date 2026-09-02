@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -8,15 +8,10 @@ import { useI18n } from '@/i18n'
 import { X } from 'lucide-react'
 import type { ApiKey, QuotaGuidanceCatalog, QuotaGuidanceLimits } from '../../../../shared/types'
 import type { FallbackEntry } from '@/lib/routing'
-import { freeCatalogProviders, scopeCandidates } from '@/lib/model-scope-selection'
-import {
-  formatFreeCatalogModels,
-  formatProviderModelDetails,
-  type FreeCatalogScope,
-} from '@/lib/provider-model-details-export'
+import { scopeCandidates } from '@/lib/model-scope-selection'
+import { formatProviderModelDetails } from '@/lib/provider-model-details-export'
 import { QuotaGuidancePanel } from './quota-guidance-panel'
 import { ProviderModelDetailsCopyAction } from './provider-model-details-copy-action'
-import { FreeCatalogCopyAction } from './free-catalog-copy-action'
 
 type ModelLimitDraft = Record<keyof QuotaGuidanceLimits, string>
 
@@ -147,18 +142,6 @@ export function ModelScopeDialog({
     }),
   })
 
-  // Catalogue-wide, so it reads the unfiltered `['fallback']` list rather than
-  // this key's platform slice. Built on demand inside the copy click.
-  const buildFreeCatalogText = useCallback((scope: FreeCatalogScope) => formatFreeCatalogModels({
-    scope,
-    capturedAt: new Date().toISOString().slice(0, 10),
-    providers: freeCatalogProviders(
-      fallback,
-      scope,
-      platform => quotaCatalog?.providers.find(provider => provider.platform === platform)?.displayName ?? platform,
-    ),
-  }), [fallback, quotaCatalog])
-
   const suggestions = (apiKey.models ?? [])
     .filter(m => m.kind === 'chat' && !ids.includes(m.modelId))
     .map(m => m.modelId)
@@ -229,13 +212,10 @@ export function ModelScopeDialog({
       <DialogPopup maxWidth="max-w-6xl">
         <div className="flex items-center justify-between gap-3">
           <DialogTitle>{t('keys.modelScope')}</DialogTitle>
-          <div className="flex items-center gap-2">
-            <ProviderModelDetailsCopyAction
-              text={providerDetailsText}
-              disabled={!catalogReady || exportCandidates.length === 0}
-            />
-            <FreeCatalogCopyAction buildText={buildFreeCatalogText} disabled={fallback.length === 0} />
-          </div>
+          <ProviderModelDetailsCopyAction
+            text={providerDetailsText}
+            disabled={!catalogReady || exportCandidates.length === 0}
+          />
         </div>
         <p className="mt-1 text-xs text-muted-foreground">{t('keys.modelScopeDesc')}</p>
         <code className="mt-2 block truncate font-mono text-[11px] text-muted-foreground">{apiKey.maskedKey}</code>

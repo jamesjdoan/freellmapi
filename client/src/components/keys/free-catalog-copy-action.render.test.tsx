@@ -55,7 +55,7 @@ describe('free catalogue copy action', () => {
       'Active providers and models',
     ])
     // The group label the crash was hiding in.
-    expect(document.querySelector('[role=group]')?.textContent).toContain('Every provider, not just this one')
+    expect(document.querySelector('[role=group]')?.textContent).toContain('Whole catalogue, every provider')
   })
 
   it('copies the scope the chosen item names', async () => {
