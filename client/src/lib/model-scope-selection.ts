@@ -19,6 +19,7 @@
 // Kept out of the component so both rules are unit-testable without rendering.
 
 import type { FallbackEntry } from './routing'
+import type { FreeCatalogExportProvider, FreeCatalogScope } from './provider-model-details-export'
 
 /** One row of the picker: a catalog model this key could be scoped to. */
 export interface ScopeCandidate {
@@ -69,6 +70,70 @@ export function scopeCandidates(
     })
   }
   return candidates
+}
+
+/**
+ * Group the whole free catalogue by provider for the catalogue-wide copy
+ * actions, from the same `['fallback']` list the dialog already holds.
+ *
+ * `custom` rows and per-key relay rows are dropped: a relay endpoint serves
+ * whatever its operator points it at, so the curated free catalogue cannot
+ * vouch for it. `active` additionally keeps only what the router can use right
+ * now — the model switch is on, the provider holds a usable key, and the
+ * provider has not retired the model upstream.
+ *
+ * Row order is the server's (fallback priority); providers come out in first
+ * appearance order for the same reason `scopeCandidates` keeps it: the export
+ * should read like the Models table, not invent a ranking. Duplicate model ids
+ * within one provider collapse to their first occurrence.
+ *
+ * Credential-blind by construction: only catalogue facts are copied out, never
+ * `keyId`, `keyLabel` or `modelDbId`.
+ */
+export function freeCatalogProviders(
+  entries: readonly FallbackEntry[],
+  scope: FreeCatalogScope,
+  providerName: (platform: string) => string,
+): FreeCatalogExportProvider[] {
+  const providers = new Map<string, FreeCatalogExportProvider>()
+  const seen = new Set<string>()
+  for (const entry of entries) {
+    if (!entry.platform || entry.platform === 'custom' || entry.source === 'custom') continue
+    if (!entry.modelId) continue
+    const identity = `${entry.platform}\u0000${entry.modelId}`
+    if (seen.has(identity)) continue
+    seen.add(identity)
+    const usableKeyCount = entry.keyCount ?? 0
+    if (scope === 'active' && (!entry.enabled || usableKeyCount < 1 || entry.retiredUpstream)) continue
+    let provider = providers.get(entry.platform)
+    if (!provider) {
+      provider = {
+        providerName: providerName(entry.platform),
+        platform: entry.platform,
+        usableKeyCount,
+        models: [],
+      }
+      providers.set(entry.platform, provider)
+    }
+    provider.models.push({
+      displayName: entry.displayName || entry.modelId,
+      modelId: entry.modelId,
+      routingEnabled: entry.enabled,
+      retiredUpstream: entry.retiredUpstream ?? false,
+      sizeLabel: entry.sizeLabel || null,
+      contextWindow: entry.contextWindow ?? null,
+      supportsVision: entry.supportsVision ?? null,
+      supportsTools: entry.supportsTools ?? null,
+      monthlyAllowance: entry.monthlyTokenBudget || null,
+      limits: {
+        rpmLimit: entry.rpmLimit ?? null,
+        rpdLimit: entry.rpdLimit ?? null,
+        tpmLimit: entry.tpmLimit ?? null,
+        tpdLimit: entry.tpdLimit ?? null,
+      },
+    })
+  }
+  return [...providers.values()]
 }
 
 /** Whether a just-added key on this platform is worth interrupting for. */

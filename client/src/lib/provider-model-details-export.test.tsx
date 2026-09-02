@@ -2,10 +2,14 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { ProviderQuotaGuidance } from '../../../shared/types'
 import {
+  formatFreeCatalogModels,
   formatProviderModelDetails,
   type ProviderModelDetailsExport,
 } from './provider-model-details-export'
+import { freeCatalogProviders } from './model-scope-selection'
+import type { FallbackEntry } from './routing'
 import { ProviderModelDetailsCopyAction } from '../components/keys/provider-model-details-copy-action'
+import { FreeCatalogCopyAction } from '../components/keys/free-catalog-copy-action'
 
 const guidance: ProviderQuotaGuidance = {
   platform: 'groq',
@@ -94,5 +98,114 @@ describe('provider model details export', () => {
     expect(html).toContain('Copy provider details')
     expect(html).toContain('aria-label="Copy provider model details"')
     expect(html).not.toContain(text)
+  })
+})
+
+function entry(over: Partial<FallbackEntry>): FallbackEntry {
+  return {
+    modelDbId: 1,
+    priority: 1,
+    effectivePriority: 1,
+    penalty: 0,
+    rateLimitHits: 0,
+    enabled: true,
+    platform: 'groq',
+    modelId: 'openai/gpt-oss-120b',
+    displayName: 'GPT-OSS 120B',
+    intelligenceRank: 1,
+    speedRank: 1,
+    sizeLabel: 'Frontier',
+    rpmLimit: 30,
+    rpdLimit: 1000,
+    tpmLimit: null,
+    tpdLimit: null,
+    monthlyTokenBudget: '6.0M/mo',
+    contextWindow: 131072,
+    supportsVision: false,
+    supportsTools: true,
+    source: 'catalog',
+    keyCount: 2,
+    ...over,
+  }
+}
+
+const catalogue: FallbackEntry[] = [
+  entry({}),
+  entry({ modelDbId: 2, modelId: 'moonshotai/kimi-k2', displayName: 'Kimi K2', enabled: false }),
+  entry({ modelDbId: 3, modelId: 'openai/gpt-oss-120b', displayName: 'Duplicate row' }),
+  entry({ modelDbId: 4, platform: 'cerebras', modelId: 'qwen-3-coder', displayName: 'Qwen 3 Coder', keyCount: 0, sizeLabel: 'Large', contextWindow: null, monthlyTokenBudget: '' }),
+  entry({ modelDbId: 5, platform: 'nvidia', modelId: 'nvidia/nemotron', displayName: 'Nemotron', retiredUpstream: true, retiredReason: 'end of life' }),
+  entry({ modelDbId: 6, platform: 'custom', modelId: 'local-llama', displayName: 'Local Llama', source: 'custom', keyLabel: 'Ollama box' }),
+]
+
+const names: Record<string, string> = { groq: 'Groq', cerebras: 'Cerebras' }
+const providersFor = (scope: 'all' | 'active') =>
+  freeCatalogProviders(catalogue, scope, platform => names[platform] ?? platform)
+
+describe('free catalogue export', () => {
+  it('covers every provider once per model id and excludes unverifiable custom relays', () => {
+    const providers = providersFor('all')
+
+    expect(providers.map(provider => provider.platform)).toEqual(['groq', 'cerebras', 'nvidia'])
+    expect(providers[0].models.map(model => model.modelId)).toEqual(['openai/gpt-oss-120b', 'moonshotai/kimi-k2'])
+    expect(providers[0].providerName).toBe('Groq')
+    expect(providers[2].providerName).toBe('nvidia')
+  })
+
+  it('keeps only routable models for the active scope', () => {
+    const providers = providersFor('active')
+
+    expect(providers.map(provider => provider.platform)).toEqual(['groq'])
+    expect(providers[0].models.map(model => model.modelId)).toEqual(['openai/gpt-oss-120b'])
+  })
+
+  it('formats one line per model with counts, state and limits', () => {
+    const text = formatFreeCatalogModels({
+      scope: 'all',
+      capturedAt: '2026-09-02',
+      providers: providersFor('all'),
+    })
+
+    expect(text).toContain('# FreeLLMAPI free catalogue: all models')
+    expect(text).toContain('- Scope: every catalogue model, whatever its routing switch or key state')
+    expect(text).toContain('custom relay endpoints are excluded because their free status is unverified')
+    expect(text).toContain('- Captured: 2026-09-02')
+    expect(text).toContain('- Providers: 3 · Models: 4')
+    expect(text).toContain('## Groq — `groq` (2 usable keys · 2 models)')
+    expect(text).toContain('## Cerebras — `cerebras` (0 usable keys · 1 models)')
+    expect(text).toContain('**GPT-OSS 120B** — `openai/gpt-oss-120b` · routing enabled · Frontier · 131K context · Tools · No vision · allowance 6.0M/mo · RPM 30 · RPD 1,000')
+    expect(text).toContain('**Kimi K2** — `moonshotai/kimi-k2` · routing disabled')
+    expect(text).toContain('**Nemotron** — `nvidia/nemotron` · retired upstream')
+    expect(text).not.toContain('Local Llama')
+  })
+
+  it('states the active scope and reports an empty catalogue honestly', () => {
+    const active = formatFreeCatalogModels({ scope: 'active', capturedAt: '2026-09-02', providers: providersFor('active') })
+    expect(active).toContain('# FreeLLMAPI free catalogue: active models')
+    expect(active).toContain('- Scope: routing-enabled catalogue models whose provider holds a usable key')
+
+    const empty = formatFreeCatalogModels({ scope: 'active', capturedAt: '2026-09-02', providers: [] })
+    expect(empty).toContain('- Providers: 0 · Models: 0')
+    expect(empty).toContain('No catalogue model matches this scope.')
+  })
+
+  it('never emits credential or internal identity fields', () => {
+    const text = formatFreeCatalogModels({
+      scope: 'all',
+      capturedAt: '2026-09-02',
+      providers: providersFor('all'),
+    })
+
+    for (const forbidden of ['Ollama box', 'keyId', 'modelDbId', 'keyLabel']) {
+      expect(text).not.toContain(forbidden)
+    }
+  })
+
+  it('renders one trigger offering both copy scopes', () => {
+    const html = renderToStaticMarkup(<FreeCatalogCopyAction buildText={() => 'unused'} />)
+
+    expect(html).toContain('Copy free catalogue')
+    expect(html).toContain('aria-label="Copy free catalogue models"')
+    expect(html).not.toContain('unused')
   })
 })
