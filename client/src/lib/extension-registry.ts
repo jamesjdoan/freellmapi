@@ -30,7 +30,7 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
   {
     id: 'provider-model-access',
     title: 'Provider model access',
-    summary: 'Choose which catalogue models each provider key may serve, preserving scarce capacity for useful models.',
+    summary: 'Choose which catalogue models each provider key may serve, preserving scarce capacity for useful models. Enabled models lead, then the most advanced — tier, rank, then the highest version within a family — and disabled ones are hidden by default.',
     settingsLocation: 'Keys → provider key row → Models & account limits',
     destinations: [
       { kind: 'internal', label: 'Open provider keys', href: '/keys' },
@@ -57,7 +57,7 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
   {
     id: 'free-catalogue-copy',
     title: 'Free catalogue copy',
-    summary: 'Copy the whole free catalogue — every provider and model, or only the ones routing can use right now — as a credential-blind review snapshot.',
+    summary: 'Copy the whole free catalogue — every provider and model, or only the ones a usable key is enabled to serve — as a credential-blind review snapshot, indexed by provider.',
     settingsLocation: 'Keys → Providers → Copy List',
     destinations: [
       { kind: 'internal', label: 'Open provider keys', href: '/keys' },
