@@ -192,17 +192,26 @@ export interface ProviderKeyAccess {
 }
 
 /**
- * Which free models each provider's usable keys are scoped to serve, keyed by
- * platform. A key counts as usable on the same terms the router and
- * `/api/fallback`'s `keyCount` use: enabled, and healthy or unchecked. An
- * invalid key grants no access, so it contributes no selection.
+ * Which models each provider's keys are scoped to serve, keyed by platform.
+ *
+ * `requireUsable` (the default) counts a key on the same terms the router and
+ * `/api/fallback`'s `keyCount` use — enabled, and healthy or unchecked — so an
+ * invalid key grants no access. That is the right question for an export that
+ * claims what routing can reach.
+ *
+ * Pass `false` to count every enabled key regardless of health. That is the
+ * right question for a summary of what the operator configured: the model-scope
+ * dialog does not grey out its ticks because a key failed its last check, so a
+ * count shown beside it must not either.
  */
 export function providerKeyAccess(
   keys: readonly ApiKey[],
+  { requireUsable = true }: { requireUsable?: boolean } = {},
 ): Map<string, ProviderKeyAccess> {
   const access = new Map<string, ProviderKeyAccess>()
   for (const key of keys) {
-    if (!key.enabled || (key.status !== 'healthy' && key.status !== 'unknown')) continue
+    if (!key.enabled) continue
+    if (requireUsable && key.status !== 'healthy' && key.status !== 'unknown') continue
     const existing = access.get(key.platform)
     const entry = existing ?? { usableKeyCount: 0, serveAll: false, selectedModelIds: new Set<string>() }
     entry.usableKeyCount += 1
@@ -212,6 +221,25 @@ export function providerKeyAccess(
     if (!existing) access.set(key.platform, entry)
   }
   return access
+}
+
+/** How many of a provider's catalogue models its keys are enabled to serve. */
+export function enabledModelCount(
+  entries: readonly FallbackEntry[],
+  platform: string,
+  access: ProviderKeyAccess | undefined,
+): { enabled: number; total: number } {
+  const seen = new Set<string>()
+  let total = 0
+  let enabled = 0
+  for (const entry of entries) {
+    if (entry.platform !== platform || entry.source === 'custom') continue
+    if (!entry.modelId || seen.has(entry.modelId)) continue
+    seen.add(entry.modelId)
+    total += 1
+    if (access && (access.serveAll || access.selectedModelIds.has(entry.modelId))) enabled += 1
+  }
+  return { enabled, total }
 }
 
 /**

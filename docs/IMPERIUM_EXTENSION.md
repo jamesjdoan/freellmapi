@@ -16,6 +16,8 @@ The dashboard’s **Extensions** button is the quickest runtime index. It lists 
 | Quota-pool routing | Automatic; usage context at **Models → Chat models → Monthly token budget** | There is no separate quota-pool editor. The linked view shows monthly token-use context; quota-pool eligibility and enforcement are automatic. |
 | Extension inventory | Top navigation → **Extensions** | Review installed fork features and follow direct links to each settings area. |
 
+A provider holding exactly one key is shown as a single row: its group header would repeat the same provider and its disclosure would have nothing to disclose, so the provider name, the `N/M models enabled` count and the provider menu move onto the key row itself. Two or more keys keep the group header, which carries the same count. The count is the models the provider's enabled keys are scoped to serve, out of the models it offers; several keys union their scopes, so one unscoped key reads as all of them.
+
 Provider-row controls are intentionally compact. On desktop they appear when the key row is hovered or keyboard-focused. The button’s accessible name and tooltip are **Models & account limits**.
 
 The page-level copy opens with a **Providers and their free models** index — one line per provider naming every model id it offers — so the provider/model pairing is answerable without reading the detail below. Both **Copy List** actions then share one format, built by one renderer: the total

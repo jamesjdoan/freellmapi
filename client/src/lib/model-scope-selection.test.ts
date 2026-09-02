@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   MODEL_PICKER_MIN_MODELS,
+  enabledModelCount,
   modelFamilyAndVersion,
+  providerKeyAccess,
   orderScopeCandidates,
   resolveScopeUpdate,
   scopeCandidates,
@@ -9,6 +11,7 @@ import {
   type ScopeCandidate,
 } from './model-scope-selection'
 import type { FallbackEntry } from './routing'
+import type { ApiKey } from '../../../shared/types'
 
 function entry(platform: string, modelId: string, extra: Partial<FallbackEntry> = {}): FallbackEntry {
   return {
@@ -272,5 +275,44 @@ describe('modelFamilyAndVersion', () => {
 
   it('keeps different vendors in different families', () => {
     expect(modelFamilyAndVersion('glm-4.5').family).not.toBe(modelFamilyAndVersion('qwen3.6').family)
+  })
+})
+
+describe('enabledModelCount', () => {
+  const rows = [
+    entry('groq', 'a'),
+    entry('groq', 'b'),
+    entry('groq', 'b'), // duplicate id, counted once
+    entry('groq', 'c'),
+    entry('cerebras', 'x'),
+    entry('groq', 'relay', { source: 'custom' }),
+  ]
+  const keyed = (over: Partial<ApiKey>) =>
+    [{ id: 1, platform: 'groq', enabled: true, status: 'healthy', modelScope: null, ...over }] as unknown as ApiKey[]
+
+  it('counts every catalogue model of the platform, once, excluding relays', () => {
+    const access = providerKeyAccess(keyed({})).get('groq')
+    expect(enabledModelCount(rows, 'groq', access)).toEqual({ enabled: 3, total: 3 })
+  })
+
+  it('counts only the scoped models when the key is scoped', () => {
+    const access = providerKeyAccess(keyed({ modelScope: ['a', 'c'] })).get('groq')
+    expect(enabledModelCount(rows, 'groq', access)).toEqual({ enabled: 2, total: 3 })
+  })
+
+  it('reports none enabled when the provider has no key at all', () => {
+    expect(enabledModelCount(rows, 'cerebras', undefined)).toEqual({ enabled: 0, total: 1 })
+  })
+
+  it('still counts an unhealthy key when health is not required', () => {
+    const keys = keyed({ status: 'invalid', modelScope: ['a'] })
+    expect(providerKeyAccess(keys).get('groq')).toBeUndefined()
+    const configured = providerKeyAccess(keys, { requireUsable: false }).get('groq')
+    expect(enabledModelCount(rows, 'groq', configured)).toEqual({ enabled: 1, total: 3 })
+  })
+
+  it('ignores a disabled key under either reading', () => {
+    const keys = keyed({ enabled: false })
+    expect(providerKeyAccess(keys, { requireUsable: false }).get('groq')).toBeUndefined()
   })
 })
