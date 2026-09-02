@@ -212,6 +212,18 @@ describe('free catalogue export', () => {
     expect(text).not.toContain('Local Llama')
   })
 
+  it('indexes every provider against the model ids it offers', () => {
+    const text = formatFreeCatalogModels({ scope: 'all', capturedAt: '2026-09-02', providers: providersFor('all') })
+    const index = text.slice(text.indexOf('## Providers and their free models'), text.indexOf('## Groq'))
+
+    expect(index).toContain('- **Groq** (`groq`) — 2 free models: `openai/gpt-oss-120b`, `moonshotai/kimi-k2`')
+    expect(index).toContain('- **Cerebras** (`cerebras`) — 1 free model: `qwen-3-coder`')
+    expect(index).toContain('- **nvidia** (`nvidia`) — 1 free model: `nvidia/nemotron`')
+    // Every provider in the export is indexed, so the pairing is answerable
+    // without reading the detail sections.
+    expect(index.match(/^- \*\*/gm)).toHaveLength(providersFor('all').length)
+  })
+
   it('reports the selected scope against what is offered, and an empty result honestly', () => {
     const selected = formatFreeCatalogModels({ scope: 'selected', capturedAt: '2026-09-02', providers: providersFor('selected') })
     expect(selected).toContain('# FreeLLMAPI free models — enabled')

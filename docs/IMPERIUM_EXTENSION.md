@@ -18,7 +18,7 @@ The dashboard’s **Extensions** button is the quickest runtime index. It lists 
 
 Provider-row controls are intentionally compact. On desktop they appear when the key row is hovered or keyboard-focused. The button’s accessible name and tooltip are **Models & account limits**.
 
-Both **Copy List** actions share one format, built by one renderer: the total
+The page-level copy opens with a **Providers and their free models** index — one line per provider naming every model id it offers — so the provider/model pairing is answerable without reading the detail below. Both **Copy List** actions then share one format, built by one renderer: the total
 first, then the provider and its counts, then one block per free model carrying
 access and routing state, capabilities, catalogue allowance and limits. Neither
 includes a credential, key label or internal identifier, and neither is sent
