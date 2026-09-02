@@ -204,8 +204,8 @@ describe('free catalogue export', () => {
   it('renders one trigger offering both copy scopes', () => {
     const html = renderToStaticMarkup(<FreeCatalogCopyAction buildText={() => 'unused'} />)
 
-    expect(html).toContain('Copy free catalogue')
-    expect(html).toContain('aria-label="Copy free catalogue models"')
+    expect(html).toContain('Copy List')
+    expect(html).toContain('aria-label="Copy list of free catalogue models"')
     expect(html).not.toContain('unused')
   })
 })

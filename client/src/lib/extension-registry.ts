@@ -58,7 +58,7 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
     id: 'free-catalogue-copy',
     title: 'Free catalogue copy',
     summary: 'Copy the whole free catalogue — every provider and model, or only the ones routing can use right now — as a credential-blind review snapshot.',
-    settingsLocation: 'Keys → Providers → Copy free catalogue',
+    settingsLocation: 'Keys → Providers → Copy List',
     destinations: [
       { kind: 'internal', label: 'Open provider keys', href: '/keys' },
     ],

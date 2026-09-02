@@ -41,10 +41,12 @@ export function FreeCatalogCopyAction({
       <DropdownMenuTrigger
         className={buttonVariants({ variant: 'outline', size: 'sm' })}
         disabled={disabled}
-        aria-label="Copy free catalogue models"
+        // WCAG 2.5.3: the accessible name has to contain the visible text, so
+        // this stays "Copy list …" rather than describing the catalogue alone.
+        aria-label="Copy list of free catalogue models"
       >
         {status === 'copied' ? <Check className="size-3.5" /> : status === 'failed' ? <TriangleAlert className="size-3.5" /> : <Copy className="size-3.5" />}
-        {status === 'copied' ? 'Copied' : status === 'failed' ? 'Copy failed' : 'Copy free catalogue'}
+        {status === 'copied' ? 'Copied' : status === 'failed' ? 'Copy failed' : 'Copy List'}
         <ChevronDown className="size-3.5" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
