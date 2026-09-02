@@ -6,9 +6,27 @@ import { Dialog, DialogPopup, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { useI18n } from '@/i18n'
 import { X } from 'lucide-react'
-import type { ApiKey } from '../../../../shared/types'
+import type { ApiKey, QuotaGuidanceCatalog, QuotaGuidanceLimits } from '../../../../shared/types'
 import type { FallbackEntry } from '@/lib/routing'
 import { scopeCandidates } from '@/lib/model-scope-selection'
+import { formatProviderModelDetails } from '@/lib/provider-model-details-export'
+import { QuotaGuidancePanel } from './quota-guidance-panel'
+import { ProviderModelDetailsCopyAction } from './provider-model-details-copy-action'
+
+type ModelLimitDraft = Record<keyof QuotaGuidanceLimits, string>
+
+function toDraft(limits: QuotaGuidanceLimits): ModelLimitDraft {
+  return {
+    rpmLimit: limits.rpmLimit?.toString() ?? '',
+    rpdLimit: limits.rpdLimit?.toString() ?? '',
+    tpmLimit: limits.tpmLimit?.toString() ?? '',
+    tpdLimit: limits.tpdLimit?.toString() ?? '',
+  }
+}
+
+function parsedLimit(value: string): number | null {
+  return value === '' ? null : Number(value)
+}
 
 // #657: relay stations hand out keys that only serve one model group; a key
 // scoped here is skipped by the router for every model outside its list. A
@@ -31,6 +49,8 @@ export function ModelScopeDialog({
   const [providerRpmLimit, setProviderRpmLimit] = useState(apiKey.providerRpmLimit?.toString() ?? '')
   const [providerRpdLimit, setProviderRpdLimit] = useState(apiKey.providerRpdLimit?.toString() ?? '')
   const [providerTpdLimit, setProviderTpdLimit] = useState(apiKey.providerTpdLimit?.toString() ?? '')
+  const [modelLimitDrafts, setModelLimitDrafts] = useState<Record<number, ModelLimitDraft>>({})
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null)
 
   const { data: fallback = [], isLoading: catalogLoading, isError: catalogError } = useQuery<FallbackEntry[]>({
     queryKey: ['fallback'],
@@ -41,6 +61,17 @@ export function ModelScopeDialog({
     () => scopeCandidates(fallback, apiKey.platform),
     [fallback, apiKey.platform],
   )
+  const providerModelRows = useMemo(() => {
+    const seen = new Set<string>()
+    return fallback.filter(row => row.platform === apiKey.platform && !seen.has(row.modelId) && seen.add(row.modelId))
+  }, [fallback, apiKey.platform])
+  const { data: quotaCatalog } = useQuery<QuotaGuidanceCatalog>({
+    queryKey: ['keys', 'quota-guidance'],
+    queryFn: () => apiFetch('/api/keys/quota-guidance'),
+    enabled: apiKey.platform !== 'custom',
+  })
+  const quotaGuidance = quotaCatalog?.providers.find(provider => provider.platform === apiKey.platform)
+  const selectedModelGuidance = quotaGuidance?.models.find(model => model.modelId === selectedModelId) ?? null
   const liveCandidates = useMemo(() => {
     if (apiKey.platform === 'custom' || catalogCandidates.length > 0) return []
     const seen = new Set<string>()
@@ -52,11 +83,64 @@ export function ModelScopeDialog({
   // only when this provider has no catalogue rows at all (for example a newly
   // added SambaNova-compatible endpoint).
   const providerCandidates = catalogCandidates.length > 0 ? catalogCandidates : liveCandidates
+  const exportCandidates = useMemo(() => {
+    if (apiKey.platform !== 'custom') return providerCandidates
+    const seen = new Set<string>()
+    return [
+      ...(apiKey.models ?? [])
+        .filter(model => model.kind === 'chat')
+        .map(model => ({ modelId: model.modelId, displayName: model.displayName || model.modelId })),
+      ...ids.map(modelId => ({ modelId, displayName: modelId })),
+    ].filter(model => model.modelId && !seen.has(model.modelId) && seen.add(model.modelId))
+  }, [apiKey.models, apiKey.platform, ids, providerCandidates])
   const catalogIds = providerCandidates.map(candidate => candidate.modelId)
   const catalogReady = apiKey.platform === 'custom' || (!catalogLoading && !catalogError)
   const selectedCatalogIds = !catalogTouched && (apiKey.modelScope === null || apiKey.modelScope === undefined)
     ? catalogIds
     : catalogIds.filter(id => ids.includes(id))
+
+  const providerDetailsText = formatProviderModelDetails({
+    providerName: quotaGuidance?.displayName ?? (apiKey.platform === 'custom' ? 'Custom provider' : apiKey.platform),
+    platform: apiKey.platform,
+    modelSource: catalogCandidates.length > 0 ? 'catalog' : 'live_discovery',
+    accountLimits: {
+      rpmLimit: parsedLimit(providerRpmLimit),
+      rpdLimit: parsedLimit(providerRpdLimit),
+      tpmLimit: null,
+      tpdLimit: parsedLimit(providerTpdLimit),
+    },
+    guidance: quotaGuidance ?? null,
+    models: exportCandidates.map(model => {
+      const row = providerModelRows.find(candidate => candidate.modelId === model.modelId)
+      const limitDraft = row
+        ? modelLimitDrafts[row.modelDbId] ?? toDraft({
+          rpmLimit: row.rpmLimit,
+          rpdLimit: row.rpdLimit,
+          tpmLimit: row.tpmLimit ?? null,
+          tpdLimit: row.tpdLimit ?? null,
+        })
+        : null
+      return {
+        displayName: model.displayName,
+        modelId: model.modelId,
+        accessEnabled: apiKey.platform === 'custom'
+          ? (ids.length === 0 || ids.includes(model.modelId))
+          : selectedCatalogIds.includes(model.modelId),
+        routingEnabled: row?.enabled ?? apiKey.enabled,
+        sizeLabel: row?.sizeLabel || null,
+        contextWindow: row?.contextWindow ?? null,
+        supportsVision: row?.supportsVision ?? null,
+        supportsTools: row?.supportsTools ?? null,
+        monthlyAllowance: row?.monthlyTokenBudget || null,
+        limits: limitDraft ? {
+          rpmLimit: parsedLimit(limitDraft.rpmLimit),
+          rpdLimit: parsedLimit(limitDraft.rpdLimit),
+          tpmLimit: parsedLimit(limitDraft.tpmLimit),
+          tpdLimit: parsedLimit(limitDraft.tpdLimit),
+        } : { rpmLimit: null, rpdLimit: null, tpmLimit: null, tpdLimit: null },
+      }
+    }),
+  })
 
   const suggestions = (apiKey.models ?? [])
     .filter(m => m.kind === 'chat' && !ids.includes(m.modelId))
@@ -67,6 +151,8 @@ export function ModelScopeDialog({
       apiFetch(`/api/keys/${apiKey.id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['keys'] })
+      queryClient.invalidateQueries({ queryKey: ['fallback'] })
+      queryClient.invalidateQueries({ queryKey: ['models'] })
       onOpenChange(false)
     },
   })
@@ -87,11 +173,29 @@ export function ModelScopeDialog({
     const modelScope = apiKey.platform === 'custom'
       ? (next.length > 0 ? next : null)
       : (selectedCatalogIds.length === catalogIds.length ? null : selectedCatalogIds)
+    const changedModelLimits = providerModelRows.flatMap(model => {
+      const draft = modelLimitDrafts[model.modelDbId] ?? toDraft({
+        rpmLimit: model.rpmLimit,
+        rpdLimit: model.rpdLimit,
+        tpmLimit: model.tpmLimit ?? null,
+        tpdLimit: model.tpdLimit ?? null,
+      })
+      const next = {
+        rpmLimit: parsedLimit(draft.rpmLimit),
+        rpdLimit: parsedLimit(draft.rpdLimit),
+        tpmLimit: parsedLimit(draft.tpmLimit),
+        tpdLimit: parsedLimit(draft.tpdLimit),
+      }
+      if (next.rpmLimit === model.rpmLimit && next.rpdLimit === model.rpdLimit
+        && next.tpmLimit === (model.tpmLimit ?? null) && next.tpdLimit === (model.tpdLimit ?? null)) return []
+      return [{ modelDbId: model.modelDbId, ...next }]
+    })
     save.mutate({
       modelScope,
       providerRpmLimit: providerRpmLimit === '' ? null : Number(providerRpmLimit),
       providerRpdLimit: providerRpdLimit === '' ? null : Number(providerRpdLimit),
       providerTpdLimit: providerTpdLimit === '' ? null : Number(providerTpdLimit),
+      ...(changedModelLimits.length > 0 ? { modelLimits: changedModelLimits } : {}),
     })
   }
 
@@ -105,12 +209,19 @@ export function ModelScopeDialog({
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogPopup maxWidth="max-w-md">
-        <DialogTitle>{t('keys.modelScope')}</DialogTitle>
+      <DialogPopup maxWidth="max-w-6xl">
+        <div className="flex items-center justify-between gap-3">
+          <DialogTitle>{t('keys.modelScope')}</DialogTitle>
+          <ProviderModelDetailsCopyAction
+            text={providerDetailsText}
+            disabled={!catalogReady || exportCandidates.length === 0}
+          />
+        </div>
         <p className="mt-1 text-xs text-muted-foreground">{t('keys.modelScopeDesc')}</p>
         <code className="mt-2 block truncate font-mono text-[11px] text-muted-foreground">{apiKey.maskedKey}</code>
 
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(300px,2fr)]">
+          <div className="space-y-3">
           {apiKey.platform !== 'custom' && catalogLoading ? (
             <p className="text-xs text-muted-foreground">{t('auth.loading')}</p>
           ) : apiKey.platform !== 'custom' && catalogError ? (
@@ -120,18 +231,55 @@ export function ModelScopeDialog({
             {catalogCandidates.length === 0 && (
               <p className="text-[11px] text-muted-foreground">{t('keys.liveModelsFallback')}</p>
             )}
-            <div className="max-h-[42vh] overflow-y-auto rounded-2xl border divide-y">
+            <p className="text-[11px] text-muted-foreground">Model limits below apply to all keys for this provider. Account limits remain specific to this key.</p>
+            <div className="max-h-[50vh] overflow-y-auto rounded-2xl border divide-y">
               {providerCandidates.map(model => (
-                <label key={model.modelId} className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs hover:bg-muted/30">
-                  <input
-                    type="checkbox"
-                    checked={selectedCatalogIds.includes(model.modelId)}
-                    onChange={() => toggleCatalogModel(model.modelId)}
-                    className="size-4 accent-primary"
-                  />
-                  <span className="min-w-0 flex-1 truncate" title={model.modelId}>{model.displayName}</span>
-                  <code className="max-w-[190px] truncate text-[10px] text-muted-foreground">{model.modelId}</code>
-                </label>
+                <div key={model.modelId} className={`px-3 py-2 text-xs ${selectedModelId === model.modelId ? 'bg-muted/40' : 'hover:bg-muted/20'}`}>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedCatalogIds.includes(model.modelId)}
+                      onChange={() => toggleCatalogModel(model.modelId)}
+                      className="size-4 accent-primary"
+                      aria-label={`Enable ${model.displayName}`}
+                    />
+                    <button type="button" onClick={() => setSelectedModelId(model.modelId)} className="min-w-0 flex-1 text-left">
+                      <span className="block truncate font-medium" title={model.modelId}>{model.displayName}</span>
+                      <code className="block truncate text-[10px] text-muted-foreground">{model.modelId}</code>
+                    </button>
+                  </div>
+                  {(() => {
+                    const row = providerModelRows.find(candidate => candidate.modelId === model.modelId)
+                    if (!row) return null
+                    const draft = modelLimitDrafts[row.modelDbId] ?? toDraft({
+                      rpmLimit: row.rpmLimit,
+                      rpdLimit: row.rpdLimit,
+                      tpmLimit: row.tpmLimit ?? null,
+                      tpdLimit: row.tpdLimit ?? null,
+                    })
+                    return (
+                      <div className="mt-2 grid grid-cols-4 gap-1.5 pl-6">
+                        {(['rpmLimit', 'rpdLimit', 'tpmLimit', 'tpdLimit'] as const).map(field => (
+                          <label key={field} className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                            {field.replace('Limit', '').toUpperCase()}
+                            <Input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={draft[field]}
+                              onFocus={() => setSelectedModelId(model.modelId)}
+                              onChange={event => setModelLimitDrafts(previous => ({
+                                ...previous,
+                                [row.modelDbId]: { ...draft, [field]: event.target.value },
+                              }))}
+                              className="mt-1 h-7 px-1.5 text-[10px]"
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    )
+                  })()}
+                </div>
               ))}
             </div>
             </>
@@ -224,6 +372,31 @@ export function ModelScopeDialog({
             <Button type="button" size="sm" onClick={submit} disabled={save.isPending || !catalogReady || (apiKey.platform !== 'custom' && catalogIds.length > 0 && selectedCatalogIds.length === 0)}>
               {save.isPending ? t('common.saving') : t('common.save')}
             </Button>
+          </div>
+          </div>
+
+          <div>
+            {quotaGuidance ? (
+              <QuotaGuidancePanel
+                guidance={quotaGuidance}
+                modelGuidance={selectedModelGuidance}
+                selectedModelId={selectedModelId}
+                onUseLimits={limits => {
+                  setProviderRpmLimit(limits.rpmLimit?.toString() ?? '')
+                  setProviderRpdLimit(limits.rpdLimit?.toString() ?? '')
+                  setProviderTpdLimit(limits.tpdLimit?.toString() ?? '')
+                }}
+                onUseModelLimits={limits => {
+                  const row = providerModelRows.find(model => model.modelId === selectedModelId)
+                  if (!row) return
+                  setModelLimitDrafts(previous => ({ ...previous, [row.modelDbId]: toDraft(limits) }))
+                }}
+              />
+            ) : apiKey.platform !== 'custom' ? (
+              <div className="rounded-2xl border border-dashed p-4 text-xs text-muted-foreground">
+                Quota guidance not researched for this provider.
+              </div>
+            ) : null}
           </div>
         </div>
       </DialogPopup>

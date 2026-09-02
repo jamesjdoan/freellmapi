@@ -39,15 +39,16 @@ describe('Keys API — model scope', () => {
   });
 
   beforeEach(() => {
+    getDb().prepare("DELETE FROM models WHERE platform = 'custom'").run();
     getDb().prepare('DELETE FROM api_keys').run();
   });
 
-  function insertKey(): number {
+  function insertKey(platform = 'groq'): number {
     const { encrypted, iv, authTag } = encrypt('sk-test');
     const result = getDb().prepare(`
       INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, status, enabled)
-      VALUES ('groq', 'test', ?, ?, ?, 'healthy', 1)
-    `).run(encrypted, iv, authTag);
+      VALUES (?, 'test', ?, ?, ?, 'healthy', 1)
+    `).run(platform, encrypted, iv, authTag);
     return Number(result.lastInsertRowid);
   }
 
@@ -125,6 +126,67 @@ describe('Keys API — model scope', () => {
     });
     expect(clear.status).toBe(200);
     expect(clear.body).toMatchObject({ providerRpmLimit: null, providerRpdLimit: 0, providerTpdLimit: null });
+  });
+
+  it('atomically updates provider-model limits through the key settings boundary', async () => {
+    const id = insertKey();
+    const model = getDb().prepare("SELECT id FROM models WHERE platform = 'groq' AND model_id = 'openai/gpt-oss-120b'").get() as { id: number };
+
+    const patch = await request(app, 'PATCH', `/api/keys/${id}`, {
+      providerRpdLimit: 900,
+      modelLimits: [{
+        modelDbId: model.id,
+        rpmLimit: 30,
+        rpdLimit: 1000,
+        tpmLimit: 8000,
+        tpdLimit: 200000,
+      }],
+    });
+
+    expect(patch.status).toBe(200);
+    expect(patch.body.modelLimits).toEqual([{ modelDbId: model.id, rpmLimit: 30, rpdLimit: 1000, tpmLimit: 8000, tpdLimit: 200000 }]);
+    expect(getDb().prepare('SELECT rpm_limit, rpd_limit, tpm_limit, tpd_limit FROM models WHERE id = ?').get(model.id)).toEqual({
+      rpm_limit: 30,
+      rpd_limit: 1000,
+      tpm_limit: 8000,
+      tpd_limit: 200000,
+    });
+    const overrides = getDb().prepare("SELECT overrides_json FROM model_overrides WHERE platform = 'groq' AND model_id = 'openai/gpt-oss-120b'").get() as { overrides_json: string };
+    expect(JSON.parse(overrides.overrides_json)).toMatchObject({ rpmLimit: 30, rpdLimit: 1000, tpmLimit: 8000, tpdLimit: 200000 });
+  });
+
+  it('rejects cross-provider model-limit edits without partially saving the key', async () => {
+    const id = insertKey();
+    const google = getDb().prepare("SELECT id FROM models WHERE platform = 'google' LIMIT 1").get() as { id: number };
+
+    const patch = await request(app, 'PATCH', `/api/keys/${id}`, {
+      providerRpdLimit: 123,
+      modelLimits: [{ modelDbId: google.id, rpmLimit: 1 }],
+    });
+
+    expect(patch.status).toBe(400);
+    expect(getDb().prepare('SELECT provider_rpd_limit FROM api_keys WHERE id = ?').get(id)).toEqual({ provider_rpd_limit: null });
+  });
+
+  it('rejects model-limit edits across custom endpoint identities', async () => {
+    const requestingKey = insertKey('custom');
+    const owningKey = insertKey('custom');
+    const model = getDb().prepare(`
+      INSERT INTO models (
+        platform, model_id, display_name, intelligence_rank, speed_rank,
+        key_id, source, endpoint_scope, rpm_limit
+      )
+      VALUES ('custom', 'private-model', 'Private model', 50, 50, ?, 'custom', 'http://other-endpoint.test/v1', 12)
+    `).run(owningKey);
+
+    const patch = await request(app, 'PATCH', `/api/keys/${requestingKey}`, {
+      providerRpdLimit: 123,
+      modelLimits: [{ modelDbId: Number(model.lastInsertRowid), rpmLimit: 1 }],
+    });
+
+    expect(patch.status).toBe(400);
+    expect(getDb().prepare('SELECT provider_rpd_limit FROM api_keys WHERE id = ?').get(requestingKey)).toEqual({ provider_rpd_limit: null });
+    expect(getDb().prepare('SELECT rpm_limit FROM models WHERE id = ?').get(Number(model.lastInsertRowid))).toEqual({ rpm_limit: 12 });
   });
 
   it('rejects malformed payloads', async () => {

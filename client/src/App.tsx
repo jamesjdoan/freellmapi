@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, NavLink, Link, useLocation, useNavigate } from 'react-router-dom'
 import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ChevronDown, KeyRound, LogOut, Menu, MoreHorizontal, Search, Settings, Sparkles } from 'lucide-react'
+import { Blocks, ChevronDown, KeyRound, LogOut, Menu, MoreHorizontal, Search, Settings, Sparkles } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -18,6 +18,7 @@ import { AuthGate, ChangeCredentialsModal } from '@/components/auth-gate'
 import { CommandPalette } from '@/components/command-palette'
 import { openCommandPalette } from '@/components/command-palette-state'
 import { ErrorBoundary } from '@/components/error-boundary'
+import { ExtensionsDialog } from '@/components/extensions-dialog'
 import { SettingsDialog } from '@/components/settings-dialog'
 import { Toaster } from '@/components/toaster'
 import { UpdateReminder } from '@/components/update-reminder'
@@ -217,6 +218,7 @@ function Navbar() {
   const location = useLocation()
   const navigate = useNavigate()
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [extensionsOpen, setExtensionsOpen] = useState(false)
   const [credentialsMode, setCredentialsMode] = useState<'password' | 'email' | null>(null)
   const { data: premium, licensed, isLoading: premiumLoading, isError: premiumError } = usePremium()
   const showUpgrade = Boolean(premium) && !licensed && !premiumLoading && !premiumError
@@ -275,6 +277,15 @@ function Navbar() {
             className="ms-auto hidden items-center gap-1 md:flex"
             style={isDesktopApp ? ({ WebkitAppRegion: 'no-drag' } as React.CSSProperties) : undefined}
           >
+            <button
+              type="button"
+              onClick={() => setExtensionsOpen(true)}
+              className={buttonVariants({ variant: 'ghost', size: 'sm' })}
+              aria-label="Extensions"
+            >
+              <Blocks className="size-3.5" />
+              Extensions
+            </button>
             <button
               type="button"
               onClick={openCommandPalette}
@@ -346,6 +357,11 @@ function Navbar() {
                   })}
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setExtensionsOpen(true)}>
+                  <Blocks />
+                  Extensions
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <AccountMenuItems
                   showUpgrade={showUpgrade}
                   upgradeLabel={t('nav.upgrade')}
@@ -363,6 +379,7 @@ function Navbar() {
           </div>
         </div>
       </header>
+      <ExtensionsDialog open={extensionsOpen} onOpenChange={setExtensionsOpen} />
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       {credentialsMode && (
         <ChangeCredentialsModal mode={credentialsMode} onClose={() => setCredentialsMode(null)} />

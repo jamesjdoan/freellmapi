@@ -22,6 +22,8 @@ import { recordCustomModelTombstone } from '../services/custom-model-tombstone.j
 import type { Db } from '../db/types.js';
 import { parseModelScope } from '../lib/model-scope.js';
 import { KEY_PROXY_URL_ERROR, KEY_PROXY_URL_MAX, decryptProxyUrl, encryptProxyUrl, isValidKeyProxyUrl, maskProxyUrl } from '../lib/key-proxy.js';
+import { isCatalogManagedModel, upsertModelOverrides } from '../services/model-state.js';
+import { QUOTA_GUIDANCE_CATALOG } from '../data/quota-guidance.js';
 
 export const keysRouter = Router();
 
@@ -79,8 +81,19 @@ const updateKeySchema = z.object({
   providerRpmLimit: z.number().int().min(0).nullable().optional(),
   providerRpdLimit: z.number().int().min(0).nullable().optional(),
   providerTpdLimit: z.number().int().min(0).nullable().optional(),
+  modelLimits: z.array(z.object({
+    modelDbId: z.number().int().positive(),
+    rpmLimit: z.number().int().positive().nullable().optional(),
+    rpdLimit: z.number().int().positive().nullable().optional(),
+    tpmLimit: z.number().int().positive().nullable().optional(),
+    tpdLimit: z.number().int().positive().nullable().optional(),
+  }).strict().refine(value => value.rpmLimit !== undefined || value.rpdLimit !== undefined
+    || value.tpmLimit !== undefined || value.tpdLimit !== undefined, {
+    message: 'At least one model limit must be provided',
+  })).min(1).max(500).optional(),
 }).refine(data => data.enabled !== undefined || data.label !== undefined || data.modelScope !== undefined || data.proxyUrl !== undefined
-  || data.providerRpmLimit !== undefined || data.providerRpdLimit !== undefined || data.providerTpdLimit !== undefined, {
+  || data.providerRpmLimit !== undefined || data.providerRpdLimit !== undefined || data.providerTpdLimit !== undefined
+  || data.modelLimits !== undefined, {
   message: 'At least one key setting must be provided',
 });
 
@@ -347,6 +360,12 @@ keysRouter.get('/', (_req: Request, res: Response) => {
   });
 
   res.json(keys);
+});
+
+// Version-controlled, source-linked extension guidance. It contains no key or
+// account secrets and remains separate from configured limits and live usage.
+keysRouter.get('/quota-guidance', (_req: Request, res: Response) => {
+  res.json(QUOTA_GUIDANCE_CATALOG);
 });
 
 // Clear every active cooldown for one key. An escalated cooldown can bench a key
@@ -1519,7 +1538,7 @@ keysRouter.patch('/:id', (req: Request, res: Response) => {
     return;
   }
 
-  const { enabled, label, modelScope, proxyUrl, providerRpmLimit, providerRpdLimit, providerTpdLimit } = parsed.data;
+  const { enabled, label, modelScope, proxyUrl, providerRpmLimit, providerRpdLimit, providerTpdLimit, modelLimits } = parsed.data;
   const updates: string[] = [];
   const values: (string | number | null)[] = [];
 
@@ -1555,15 +1574,56 @@ keysRouter.patch('/:id', (req: Request, res: Response) => {
     }
   }
 
-  values.push(id);
-
   const db = getDb();
-  const result = db.prepare(`UPDATE api_keys SET ${updates.join(', ')} WHERE id = ?`).run(...values);
-
-  if (result.changes === 0) {
+  const keyRow = db.prepare('SELECT id, platform FROM api_keys WHERE id = ?').get(id) as { id: number; platform: string } | undefined;
+  if (!keyRow) {
     res.status(404).json({ error: { message: 'Key not found' } });
     return;
   }
+
+  const requestedModelIds = [...new Set((modelLimits ?? []).map(entry => entry.modelDbId))];
+  if (requestedModelIds.length !== (modelLimits ?? []).length) {
+    res.status(400).json({ error: { message: 'Duplicate modelDbId in modelLimits' } });
+    return;
+  }
+  const modelRows = requestedModelIds.length === 0 ? [] : db.prepare(`
+    SELECT id, platform, model_id, key_id, source
+      FROM models
+     WHERE id IN (${requestedModelIds.map(() => '?').join(', ')})
+  `).all(...requestedModelIds) as Array<{ id: number; platform: string; model_id: string; key_id: number | null; source: string }>;
+  if (modelRows.length !== requestedModelIds.length || modelRows.some(row =>
+    row.platform !== keyRow.platform || (row.source === 'custom' && row.key_id !== keyRow.id))) {
+    res.status(400).json({ error: { message: 'Every model limit must belong to the key provider' } });
+    return;
+  }
+
+  const rowById = new Map(modelRows.map(row => [row.id, row]));
+  const apply = db.transaction(() => {
+    if (updates.length > 0) {
+      db.prepare(`UPDATE api_keys SET ${updates.join(', ')} WHERE id = ?`).run(...values, id);
+    }
+    for (const entry of modelLimits ?? []) {
+      const assignments: string[] = [];
+      const modelValues: Array<number | null> = [];
+      const override: Record<string, number | null> = {};
+      for (const [field, column] of [
+        ['rpmLimit', 'rpm_limit'],
+        ['rpdLimit', 'rpd_limit'],
+        ['tpmLimit', 'tpm_limit'],
+        ['tpdLimit', 'tpd_limit'],
+      ] as const) {
+        const value = entry[field];
+        if (value === undefined) continue;
+        assignments.push(`${column} = ?`);
+        modelValues.push(value);
+        override[field] = value;
+      }
+      db.prepare(`UPDATE models SET ${assignments.join(', ')} WHERE id = ?`).run(...modelValues, entry.modelDbId);
+      const row = rowById.get(entry.modelDbId)!;
+      if (isCatalogManagedModel(row)) upsertModelOverrides(db, row.platform, row.model_id, override);
+    }
+  });
+  apply();
 
   const response: Record<string, unknown> = { success: true };
   if (enabled !== undefined) response.enabled = enabled;
@@ -1573,5 +1633,6 @@ keysRouter.patch('/:id', (req: Request, res: Response) => {
   if (providerRpmLimit !== undefined) response.providerRpmLimit = providerRpmLimit;
   if (providerRpdLimit !== undefined) response.providerRpdLimit = providerRpdLimit;
   if (providerTpdLimit !== undefined) response.providerTpdLimit = providerTpdLimit;
+  if (modelLimits !== undefined) response.modelLimits = modelLimits;
   res.json(response);
 });

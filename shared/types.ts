@@ -304,6 +304,75 @@ export interface ApiKeyCreate {
   label?: string;
 }
 
+// ---- Extension quota guidance ----
+
+export type QuotaGuidanceScope = 'model' | 'account' | 'project' | 'shared_pool' | 'unmetered';
+export type QuotaGuidanceStatus = 'verified' | 'uncertain' | 'contradictory' | 'superseded';
+export type QuotaGuidanceAccess = 'available' | 'payment_required' | 'unmetered' | 'unknown';
+export type QuotaGuidanceMetric = 'requests' | 'tokens' | 'credits' | 'concurrency' | 'compute';
+export type QuotaGuidancePeriod = 'minute' | 'day' | 'month' | 'rolling_window' | 'provider_defined' | 'none';
+export type QuotaGuidanceSourceKind = 'authenticated_observation' | 'official_documentation' | 'official_announcement' | 'secondary';
+
+export interface QuotaGuidanceLimits {
+  rpmLimit: number | null;
+  rpdLimit: number | null;
+  tpmLimit: number | null;
+  tpdLimit: number | null;
+}
+
+export interface QuotaGuidanceFact {
+  metric: QuotaGuidanceMetric;
+  amount: number | string | null;
+  period: QuotaGuidancePeriod;
+  label: string;
+  applicability: 'enforceable' | 'reference_only';
+}
+
+export interface QuotaGuidanceSource {
+  kind: QuotaGuidanceSourceKind;
+  title: string;
+  url: string;
+  checkedAt: string;
+}
+
+export interface QuotaGuidanceAdvisory {
+  kind: 'research_needed' | 'model_changed' | 'billing_required' | 'provider_retired';
+  message: string;
+  replacementModelId?: string;
+}
+
+export interface ModelQuotaGuidance {
+  modelId: string;
+  scope: QuotaGuidanceScope;
+  status: QuotaGuidanceStatus;
+  summary: string;
+  recommendedLimits: QuotaGuidanceLimits | null;
+  facts: QuotaGuidanceFact[];
+  advisory: QuotaGuidanceAdvisory | null;
+}
+
+export interface ProviderQuotaGuidance {
+  platform: Platform;
+  displayName: string;
+  scope: QuotaGuidanceScope;
+  status: QuotaGuidanceStatus;
+  currentAccess: QuotaGuidanceAccess;
+  summary: string;
+  verifiedAt: string;
+  reviewAfter: string;
+  recommendedLimits: QuotaGuidanceLimits | null;
+  facts: QuotaGuidanceFact[];
+  sources: QuotaGuidanceSource[];
+  models: ModelQuotaGuidance[];
+  advisory: QuotaGuidanceAdvisory | null;
+}
+
+export interface QuotaGuidanceCatalog {
+  version: string;
+  updatedAt: string;
+  providers: ProviderQuotaGuidance[];
+}
+
 // ---- Fallback Config ----
 
 export interface FallbackEntry {
