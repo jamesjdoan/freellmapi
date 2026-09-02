@@ -37,6 +37,15 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
     ],
   },
   {
+    id: 'provider-row-summary',
+    title: 'Provider row summary',
+    summary: 'Read each provider at a glance: how many of its models its keys are enabled to serve, and a single row instead of a disclosure when it holds only one key.',
+    settingsLocation: 'Keys → Providers',
+    destinations: [
+      { kind: 'internal', label: 'Open provider keys', href: '/keys' },
+    ],
+  },
+  {
     id: 'provider-account-limits',
     title: 'Provider account limits',
     summary: 'Set credential-wide RPM, RPD and TPD gates independently from model-specific catalogue limits.',

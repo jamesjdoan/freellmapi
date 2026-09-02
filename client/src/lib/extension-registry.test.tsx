@@ -9,6 +9,7 @@ describe('Imperium extension registry', () => {
     expect(IMPERIUM_EXTENSIONS.map(feature => feature.id)).toEqual([
       'provider-preference',
       'provider-model-access',
+      'provider-row-summary',
       'provider-account-limits',
       'provider-quota-guidance',
       'free-catalogue-copy',

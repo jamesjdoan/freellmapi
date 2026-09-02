@@ -10,6 +10,7 @@ The dashboard’s **Extensions** button is the quickest runtime index. It lists 
 | --- | --- | --- |
 | Provider preference ordering | **Models → Chat models → select a unified model** | In **Provider routing**, choose **Automatic** or **Preferred order**. In Preferred mode, use the up/down buttons. Changes save immediately. |
 | Provider model access | **Keys → provider → key row → Models & account limits** | Hover or focus the key row and select the list/filter button. Tick the catalogue models that key may serve. Enabled models sort to the top, then the most advanced of the rest: capability tier, then per-provider rank, then the highest version within a family (`gemini-3.6-flash` above `gemini-3.5-flash`). Versions are never compared across vendors. **Hide disabled models** is on by default and hides the ones that were off when the dialog opened; the count beside it says how many. |
+| Provider row summary | **Keys → Providers** | Read each provider at a glance: `N/M models enabled` on its row, and one row instead of a disclosure when it holds a single key. Nothing to configure. |
 | Provider account limits | **Keys → provider → key row → Models & account limits** | Set credential-wide RPM, RPD or TPD. Blank inherits provider behaviour; zero disables that particular account-wide gate. |
 | Catalogue-wide copy | **Keys → Providers tab header** | Select **Copy List** — a page-level action, because it spans every provider rather than the key row it used to sit under. **All free models offered** takes every free catalogue model; **Enabled free models only** takes those a usable key is enabled to serve. Custom relay endpoints are excluded because their free-tier status is unverified. |
 | Provider free-model copy | **Keys → provider → key row → Models & account limits** | Select **Copy List** for one provider, with the same two scopes: **All free models offered** or **Enabled free models only** (the models this key is ticked for). Includes account limits, unsaved limit edits and published quota guidance. |
@@ -105,6 +106,7 @@ The additive migration is `server/src/db/migrations/20260902_000002_provider_acc
 | Preference persistence/group identity | `server/src/routes/settings.ts`, `server/src/services/model-groups.ts` |
 | Preferred ordering and eligibility | `server/src/services/router.ts` |
 | Key catalogue scope/account-limit UI | `client/src/components/keys/model-scope-dialog.tsx`, `client/src/components/keys/provider-list.tsx` |
+| Provider row summary and model counts | `client/src/components/keys/provider-list.tsx`, `client/src/lib/model-scope-selection.ts` |
 | Quota guidance UI/catalogue | `client/src/components/keys/quota-guidance-panel.tsx`, `server/src/data/quota-guidance.ts` |
 | Provider free-model copy | `client/src/lib/provider-model-details-export.ts`, `client/src/components/keys/provider-model-details-copy-action.tsx` |
 | Free catalogue copy | `client/src/pages/KeysPage.tsx`, `client/src/components/keys/free-catalog-copy-action.tsx`, `client/src/lib/provider-model-details-export.ts`, `client/src/lib/model-scope-selection.ts` |
@@ -122,6 +124,7 @@ The additive migration is `server/src/db/migrations/20260902_000002_provider_acc
 - Catalogue key scopes: `server/src/__tests__/routes/keys-model-scope.test.ts`
 - Quota guidance: `server/src/__tests__/routes/quota-guidance.test.ts` and `client/src/components/keys/quota-guidance-panel.test.tsx`
 - Provider free-model copy and credential exclusion: `client/src/lib/provider-model-details-export.test.tsx`
+- Scope ordering, key access and model counts: `client/src/lib/model-scope-selection.test.ts`
 - Free catalogue copy scopes, formatting and credential exclusion: `client/src/lib/provider-model-details-export.test.tsx`
 - Free catalogue copy menu behaviour: `client/src/components/keys/free-catalog-copy-action.render.test.tsx`
 - Cross-surface routing: OpenAI route tests plus `server/src/__tests__/routes/anthropic.test.ts`
