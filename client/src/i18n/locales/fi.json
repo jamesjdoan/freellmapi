@@ -554,6 +554,8 @@
     "ollamaKeyRequired": "API-avain vaaditaan",
     "claudeAliases": "Claude Coden löytämisaliakset",
     "claudeAliasesHint": "Julkaise claude/<model>-aliakset, jotta yhdyskäytävän mallivalitsin voi listata katalogin.",
+    "mcpServer": "MCP-palvelin",
+    "mcpServerHint": "Julkaisee /mcp-päätepisteen agenttiasiakkaille. Uusissa asennuksissa se on aluksi pois päältä.",
     "urlTokensTitle": "Peruutettavat URL-tokenit",
     "urlTokensDesc": "Vain otsikottomille asiakkaille. URL-tokenit voivat vuotaa historiaan ja lokeihin, joten peruuta ne, kun niitä ei enää tarvita.",
     "urlTokenLabel": "Tokenin nimi",
@@ -724,7 +726,10 @@
     "ttft": "TTFT",
     "requestsByAgent": "Pyynnöt agenteittain",
     "sortBy": "Lajittele: {column}",
-    "sortHint": "Lajittelu koskee vain ladattuja {count} riviä"
+    "sortHint": "Lajittelu koskee vain ladattuja {count} riviä",
+    "cacheHitRate": "Välimuistin osumaprosentti",
+    "cacheSavedTokens": "{tokens} tokenia säästetty",
+    "cacheHitRateHint": "{hits} osumaa vs. {misses} ohitusta palvelimen käynnistyksestä · {requests} palveluntarjoajan kutsua vältetty"
   },
   "logs": {
     "title": "Lokit",

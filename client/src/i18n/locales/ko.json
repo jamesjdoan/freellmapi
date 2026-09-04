@@ -554,6 +554,8 @@
     "ollamaKeyRequired": "API 키 필요",
     "claudeAliases": "Claude Code 검색 별칭",
     "claudeAliasesHint": "claude/<model> 별칭을 노출하여 게이트웨이 모델 선택기가 카탈로그를 나열할 수 있게 합니다.",
+    "mcpServer": "MCP 서버",
+    "mcpServerHint": "에이전트 클라이언트에 /mcp 엔드포인트를 노출합니다. 새로 설치하면 기본값은 꺼짐입니다.",
     "urlTokensTitle": "취소 가능한 URL 토큰",
     "urlTokensDesc": "헤더를 쓸 수 없는 클라이언트 전용입니다. URL 토큰은 기록과 로그에 유출될 수 있으므로 더 이상 필요하지 않으면 취소하세요.",
     "urlTokenLabel": "토큰 라벨",
@@ -724,7 +726,10 @@
     "ttft": "TTFT",
     "requestsByAgent": "에이전트별 요청",
     "sortBy": "{column} 기준 정렬",
-    "sortHint": "정렬은 불러온 {count}개 행에만 적용됩니다"
+    "sortHint": "정렬은 불러온 {count}개 행에만 적용됩니다",
+    "cacheHitRate": "캐시 적중률",
+    "cacheSavedTokens": "{tokens} 토큰 절약",
+    "cacheHitRateHint": "서버 시작 이후 적중 {hits}회, 실패 {misses}회 · 제공자 호출 {requests}회 절약"
   },
   "logs": {
     "title": "로그",

@@ -554,6 +554,8 @@
     "ollamaKeyRequired": "Vyžaduje sa API kľúč",
     "claudeAliases": "Aliasy zisťovania Claude Code",
     "claudeAliasesHint": "Sprístupnite aliasy claude/<model>, aby výber modelov brány mohol zobraziť katalóg.",
+    "mcpServer": "Server MCP",
+    "mcpServerHint": "Sprístupní endpoint /mcp agentným klientom. Nové inštalácie začínajú vypnuté.",
     "urlTokensTitle": "Odvolateľné URL tokeny",
     "urlTokensDesc": "Iba pre klientov bez hlavičiek. URL tokeny môžu uniknúť do histórie a logov, preto ich odvolajte, keď už nie sú potrebné.",
     "urlTokenLabel": "Označenie tokenu",
@@ -724,7 +726,10 @@
     "ttft": "TTFT",
     "requestsByAgent": "Požiadavky podľa agenta",
     "sortBy": "Zoradiť podľa: {column}",
-    "sortHint": "Zoradenie sa vzťahuje na {count} načítaných riadkov"
+    "sortHint": "Zoradenie sa vzťahuje na {count} načítaných riadkov",
+    "cacheHitRate": "Úspešnosť vyrovnávacej pamäte",
+    "cacheSavedTokens": "Ušetrených {tokens} tokenov",
+    "cacheHitRateHint": "{hits} zásahov oproti {misses} minutiam od spustenia servera · ušetrených {requests} volaní poskytovateľa"
   },
   "logs": {
     "title": "Logy",

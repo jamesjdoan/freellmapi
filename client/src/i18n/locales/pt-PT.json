@@ -554,6 +554,8 @@
     "ollamaKeyRequired": "Chave de API obrigatória",
     "claudeAliases": "Aliases de descoberta do Claude Code",
     "claudeAliasesHint": "Exponha aliases claude/<model> para que o seletor de modelos do gateway possa listar o catálogo.",
+    "mcpServer": "Servidor MCP",
+    "mcpServerHint": "Expõe o ponto final /mcp aos clientes de agente. As instalações novas começam desligadas.",
     "urlTokensTitle": "Tokens de URL revogáveis",
     "urlTokensDesc": "Apenas para clientes sem cabeçalhos. Os tokens de URL podem ser expostos no histórico e nos registos, por isso revogue-os quando já não forem necessários.",
     "urlTokenLabel": "Etiqueta do token",
@@ -724,7 +726,10 @@
     "ttft": "TTFT",
     "requestsByAgent": "Pedidos por agente",
     "sortBy": "Ordenar por {column}",
-    "sortHint": "A ordenação aplica-se às {count} linhas carregadas"
+    "sortHint": "A ordenação aplica-se às {count} linhas carregadas",
+    "cacheHitRate": "Taxa de acerto da cache",
+    "cacheSavedTokens": "{tokens} tokens poupados",
+    "cacheHitRateHint": "{hits} acertos contra {misses} falhas desde o arranque do servidor · {requests} chamadas ao fornecedor evitadas"
   },
   "logs": {
     "title": "Registos",

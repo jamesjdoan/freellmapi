@@ -554,6 +554,8 @@
     "ollamaKeyRequired": "Kailangan ng API key",
     "claudeAliases": "Mga discovery alias ng Claude Code",
     "claudeAliasesHint": "Ilantad ang mga claude/<model> na alias para mailista ng model picker ng gateway ang catalog.",
+    "mcpServer": "MCP server",
+    "mcpServerHint": "Ilalantad ang /mcp endpoint para sa mga agent client. Naka-off ito sa mga bagong install.",
     "urlTokensTitle": "Mga nare-revoke na URL token",
     "urlTokensDesc": "Para lamang sa mga client na walang header. Maaaring tumagas ang mga URL token sa history at mga log, kaya i-revoke ang mga ito kapag hindi na kailangan.",
     "urlTokenLabel": "Label ng token",
@@ -724,7 +726,10 @@
     "ttft": "TTFT",
     "requestsByAgent": "Mga kahilingan ayon sa agent",
     "sortBy": "Ayusin ayon sa {column}",
-    "sortHint": "Ang pag-aayos ay para lamang sa {count} na-load na row"
+    "sortHint": "Ang pag-aayos ay para lamang sa {count} na-load na row",
+    "cacheHitRate": "Cache hit rate",
+    "cacheSavedTokens": "{tokens} token ang natipid",
+    "cacheHitRateHint": "{hits} hit laban sa {misses} miss mula nang magsimula ang server · {requests} tawag sa provider ang naiwasan"
   },
   "logs": {
     "title": "Mga Log",

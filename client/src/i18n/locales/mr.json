@@ -554,6 +554,8 @@
     "ollamaKeyRequired": "API की आवश्यक",
     "claudeAliases": "Claude Code शोध उपनावे",
     "claudeAliasesHint": "गेटवे मॉडेल निवडकर्ता कॅटलॉग सूचीबद्ध करू शकेल यासाठी claude/<model> उपनावे उघड करा.",
+    "mcpServer": "MCP सर्व्हर",
+    "mcpServerHint": "एजंट क्लायंटसाठी /mcp एंडपॉइंट उघडते. नवीन इंस्टॉलेशनमध्ये ते बंद असते.",
     "urlTokensTitle": "रद्द करण्यायोग्य URL टोकन",
     "urlTokensDesc": "फक्त हेडर-रहित क्लायंटसाठी. URL टोकन इतिहास आणि लॉगमध्ये गळती होऊ शकतात, म्हणून गरज नसताना ती रद्द करा.",
     "urlTokenLabel": "टोकन लेबल",
@@ -724,7 +726,10 @@
     "ttft": "TTFT",
     "requestsByAgent": "एजंटनुसार विनंत्या",
     "sortBy": "{column} नुसार क्रमवारी लावा",
-    "sortHint": "क्रमवारी फक्त लोड केलेल्या {count} ओळींना लागू होते"
+    "sortHint": "क्रमवारी फक्त लोड केलेल्या {count} ओळींना लागू होते",
+    "cacheHitRate": "कॅशे हिट दर",
+    "cacheSavedTokens": "{tokens} टोकन वाचले",
+    "cacheHitRateHint": "सर्व्हर सुरू झाल्यापासून {hits} हिट विरुद्ध {misses} मिस · {requests} पुरवठादार कॉल टाळले"
   },
   "logs": {
     "title": "लॉग",
