@@ -5,9 +5,12 @@ import { getDb } from '../db/index.js';
 import { hasProvider } from '../providers/index.js';
 import { deleteUnusedCustomEndpointKey } from '../lib/custom-provider-cleanup.js';
 import {
+  acknowledgeUpstreamRetirement,
   isCatalogManagedModel,
+  listUnreconciledRetirements,
   overriddenFieldNames,
   recordCatalogModelTombstone,
+  reinstateUpstreamRetiredCatalogModel,
   upsertModelOverrides,
   type ModelOverridePatch,
 } from '../services/model-state.js';
@@ -72,6 +75,33 @@ function fetchModelRow(id: number): ModelRow | undefined {
     .prepare('SELECT id, platform, model_id, key_id, source FROM models WHERE id = ?')
     .get(id) as ModelRow | undefined;
 }
+
+// Retirements this server made from a provider's own refusal that the published
+// catalogue keeps contradicting. They stay listed until the operator settles the
+// disagreement one way or the other: `POST .../ignore` keeps the retirement, and
+// re-enabling routing (PATCH /:id with fallbackEnabled) overrides it.
+modelsRouter.get('/retirements', (_req: Request, res: Response) => {
+  res.json({ retirements: listUnreconciledRetirements(getDb()) });
+});
+
+const ignoreRetirementSchema = z.object({
+  platform: z.string().min(1).max(60),
+  modelId: z.string().min(1).max(200),
+}).strict();
+
+modelsRouter.post('/retirements/ignore', (req: Request, res: Response) => {
+  const parsed = ignoreRetirementSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
+    return;
+  }
+  const { platform, modelId } = parsed.data;
+  if (!acknowledgeUpstreamRetirement(getDb(), platform, modelId)) {
+    res.status(404).json({ error: { message: `No upstream retirement for ${platform}/${modelId}` } });
+    return;
+  }
+  res.json({ success: true, platform, modelId });
+});
 
 modelsRouter.delete('/custom/:id', (req: Request, res: Response) => {
   const id = Number(req.params.id);
@@ -169,6 +199,12 @@ modelsRouter.patch('/:id', (req: Request, res: Response) => {
         db.prepare('UPDATE profile_models SET enabled = ? WHERE profile_id = ? AND model_db_id = ?')
           .run(next, activeProfileId, id);
       }
+      // Turning routing back on for a model the provider retired is the operator
+      // overriding that verdict — the one act that lifts an upstream retirement
+      // (#634). Without this the tombstone outlived the switch and every later
+      // 410 was swallowed as "already retired", so the model could never be
+      // auto-retired again either.
+      if (next === 1) reinstateUpstreamRetiredCatalogModel(db, row.platform, row.model_id);
     }
   });
   applyUpdate();

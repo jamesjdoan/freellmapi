@@ -91,6 +91,15 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
     ],
   },
   {
+    id: 'retirement-reconciliation',
+    title: 'Retired-model reconciliation',
+    summary: 'A provider that refuses a model outright wins over the catalogue that still advertises it, so routing stays off across syncs and reboots. Each disagreement is listed until you keep the retirement or re-enable the model anyway.',
+    settingsLocation: 'Models → Chat models → retired-model notice',
+    destinations: [
+      { kind: 'internal', label: 'Open chat models', href: '/models/chat' },
+    ],
+  },
+  {
     id: 'separate-extension-branch',
     title: 'Separate extension branch',
     summary: 'Imperium changes stay on their own fork branch and are rebased onto upstream releases instead of merged into upstream main.',

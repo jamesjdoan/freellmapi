@@ -11,7 +11,7 @@ import {
   applyModelOverrides,
   deleteTombstonedCatalogModels,
   isCatalogModelTombstoned,
-  reinstateUpstreamRetiredCatalogModel,
+  noteCatalogRelistedRetiredModel,
 } from './model-state.js';
 import { ensureAllModelsInProfiles } from './profile-models.js';
 
@@ -395,9 +395,11 @@ function applyCatalogInner(db: Db, catalog: Catalog): NonNullable<SyncResult['co
       }
       if (isCatalogModelTombstoned(db, 'chat', m.platform, m.modelId)) continue;
       // A model auto-retired from a 410/end-of-life response (#634) is disabled,
-      // not deleted. A catalog that STILL lists it — and lists it enabled — is
-      // newer evidence than that one provider response, so lift the retirement.
-      if (m.enabled) reinstateUpstreamRetiredCatalogModel(db, m.platform, m.modelId);
+      // not deleted. The catalogue listing it as enabled is NOT newer evidence —
+      // it is generated from the provider roster that goes on advertising
+      // retired models — so the retirement stands and the disagreement is
+      // recorded for the operator to settle.
+      if (m.enabled) noteCatalogRelistedRetiredModel(db, m.platform, m.modelId);
       inCatalog.add(`${m.platform}:${m.modelId}`);
 
       const row = selectModel.get(m.platform, m.modelId) as

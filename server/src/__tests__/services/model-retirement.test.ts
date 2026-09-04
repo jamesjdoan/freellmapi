@@ -229,16 +229,26 @@ describe('catalog sync vs. upstream retirement (#634)', () => {
     } as unknown as Parameters<typeof applyCatalog>[1];
   }
 
-  it('re-enables an auto-retired model when a later catalog still lists it', () => {
+  // Superseded contract: a catalogue that still lists a retired model used to
+  // lift the retirement here. It is the same provider roster that reported the
+  // model gone, republished, so it now records a disagreement and leaves the
+  // retirement standing. Reinstatement is the operator's call — see
+  // services/eol-reinstatement.test.ts.
+  it('keeps the retirement and records the disagreement when a later catalog still lists it', () => {
     resetModelRetirementObservations();
     const id = seedModel('eol-test-relisted');
     noteModelRetirementSignal(routeFor(id, 'eol-test-relisted'), NVIDIA_EOL, {});
     expect(isRoutable(id)).toBe(false);
 
     applyCatalog(getDb(), catalogWith('eol-test-relisted', true));
+    applyCatalog(getDb(), catalogWith('eol-test-relisted', true));
 
-    expect(isRoutable(id)).toBe(true);
-    expect(getCatalogModelTombstone(getDb(), 'chat', PLATFORM, 'eol-test-relisted')).toBeUndefined();
+    expect(isRoutable(id)).toBe(false);
+    const tombstone = getCatalogModelTombstone(getDb(), 'chat', PLATFORM, 'eol-test-relisted');
+    expect(tombstone?.source).toBe('upstream_eol');
+    expect(tombstone?.relistCount).toBe(2);
+    expect(tombstone?.relistedAt).not.toBeNull();
+    // The row survives so the dashboard can show the disagreement.
     expect(getDb().prepare('SELECT id FROM models WHERE platform = ? AND model_id = ?')
       .get(PLATFORM, 'eol-test-relisted')).toBeDefined();
   });

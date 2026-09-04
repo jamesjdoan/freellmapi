@@ -86,14 +86,26 @@ export function isCatalogManagedModel(row: { platform: string; key_id?: number |
 //   'upstream_eol' — the provider reported it permanently gone (410 / end of
 //                   life, issue #634). The row SURVIVES and is only disabled,
 //                   so the dashboard can show "retired upstream" instead of
-//                   silently losing the model, and so a later catalog that
-//                   still lists it can lift the retirement.
+//                   silently losing the model.
+//
+// An upstream retirement is FIRST-HAND: this server asked the provider and the
+// provider refused. The published catalogue is second-hand — it is built from
+// the same `/models` roster that goes on advertising retired models — so a
+// catalogue that still lists the model does not overturn it. That disagreement
+// is recorded (`relistedAt` / `relistCount`) and surfaced until the operator
+// settles it: acknowledge to leave the retirement standing, or re-enable
+// routing to lift it. Nothing else lifts a retirement.
 export type CatalogTombstoneSource = 'user' | 'upstream_eol';
 
 export interface CatalogModelTombstone {
   source: CatalogTombstoneSource;
   reason: string | null;
   createdAt: string;
+  /** Last time a synced catalogue re-listed this retired model as enabled. */
+  relistedAt: string | null;
+  relistCount: number;
+  /** Set when the operator read the disagreement and kept the retirement. */
+  acknowledgedAt: string | null;
 }
 
 export function getCatalogModelTombstone(
@@ -103,21 +115,35 @@ export function getCatalogModelTombstone(
   modelId: string,
 ): CatalogModelTombstone | undefined {
   const row = db
-    .prepare('SELECT source, reason, created_at FROM catalog_model_tombstones WHERE kind = ? AND platform = ? AND model_id = ?')
-    .get(kind, platform, modelId) as { source: string; reason: string | null; created_at: string } | undefined;
+    .prepare(`
+      SELECT source, reason, created_at, relisted_at, relist_count, acknowledged_at
+        FROM catalog_model_tombstones
+       WHERE kind = ? AND platform = ? AND model_id = ?
+    `)
+    .get(kind, platform, modelId) as {
+      source: string;
+      reason: string | null;
+      created_at: string;
+      relisted_at: string | null;
+      relist_count: number | null;
+      acknowledged_at: string | null;
+    } | undefined;
   if (!row) return undefined;
   return {
     source: row.source === 'upstream_eol' ? 'upstream_eol' : 'user',
     reason: row.reason ?? null,
     createdAt: row.created_at,
+    relistedAt: row.relisted_at ?? null,
+    relistCount: row.relist_count ?? 0,
+    acknowledgedAt: row.acknowledged_at ?? null,
   };
 }
 
 /**
  * True only for models the USER deleted — the "keep it deleted" contract every
  * caller here means. An upstream-retirement tombstone deliberately does NOT
- * count: those models stay in the catalog's write path so a refreshed catalog
- * can reinstate them (see reinstateUpstreamRetiredCatalogModel).
+ * count: the row stays in the catalog's write path so its metadata keeps
+ * tracking the catalogue while routing stays off.
  */
 export function isCatalogModelTombstoned(
   db: Db,
@@ -177,9 +203,111 @@ export function retireCatalogModelUpstream(
 }
 
 /**
- * Lift an upstream retirement: a catalog that still lists the model — and lists
- * it enabled — is newer and better evidence than one provider's 404. Returns
- * true when a retirement was actually lifted.
+ * Record that a synced catalogue still lists a model this server has retired.
+ *
+ * This used to LIFT the retirement, on the reasoning that a fresh catalogue
+ * outranks one provider response. It does not: the catalogue is generated from
+ * the provider rosters that keep advertising retired models, so every sync
+ * republished the same stale claim and un-retired the model, which then 410'd
+ * again on the next request. Observed on this deployment against
+ * nvidia/openai/gpt-oss-120b (410 "end of life") and google/gemini-2.5-flash
+ * (404 "no longer available to new users"), both of which had to be pinned off
+ * by hand.
+ *
+ * So the first-hand refusal stands and the disagreement is logged for the
+ * operator. Returns true when a disagreement was recorded.
+ */
+export function noteCatalogRelistedRetiredModel(
+  db: Db,
+  platform: string,
+  modelId: string,
+): boolean {
+  if (getCatalogModelTombstone(db, 'chat', platform, modelId)?.source !== 'upstream_eol') return false;
+  db.prepare(`
+    UPDATE catalog_model_tombstones
+       SET relisted_at = datetime('now'), relist_count = relist_count + 1
+     WHERE kind = 'chat' AND platform = ? AND model_id = ?
+  `).run(platform, modelId);
+  return true;
+}
+
+/**
+ * Settle a disagreement by keeping the retirement: the model stays off and
+ * stops being listed as unreconciled. Re-listing does NOT resurface it — the
+ * operator has already ruled on this provider verdict, and the catalogue
+ * republishes its claim twice a day. A fresh retirement (after an explicit
+ * re-enable) starts with a clean row and can be raised again.
+ */
+export function acknowledgeUpstreamRetirement(
+  db: Db,
+  platform: string,
+  modelId: string,
+): boolean {
+  if (getCatalogModelTombstone(db, 'chat', platform, modelId)?.source !== 'upstream_eol') return false;
+  db.prepare(`
+    UPDATE catalog_model_tombstones
+       SET acknowledged_at = datetime('now')
+     WHERE kind = 'chat' AND platform = ? AND model_id = ?
+  `).run(platform, modelId);
+  return true;
+}
+
+export interface UnreconciledRetirement {
+  modelDbId: number | null;
+  platform: string;
+  modelId: string;
+  displayName: string | null;
+  reason: string | null;
+  retiredAt: string;
+  relistedAt: string | null;
+  relistCount: number;
+}
+
+/**
+ * Retirements the catalogue keeps contradicting and the operator has not ruled
+ * on. `models` is LEFT-joined: a catalogue can drop the model entirely while
+ * the tombstone remains, and that row is still worth showing — it is the case
+ * where provider and catalogue have finally agreed the model is gone.
+ */
+export function listUnreconciledRetirements(db: Db): UnreconciledRetirement[] {
+  const rows = db.prepare(`
+    SELECT t.platform, t.model_id, t.reason, t.created_at, t.relisted_at, t.relist_count,
+           m.id AS model_db_id, m.display_name
+      FROM catalog_model_tombstones t
+      LEFT JOIN models m ON m.platform = t.platform AND m.model_id = t.model_id
+     WHERE t.kind = 'chat'
+       AND t.source = 'upstream_eol'
+       AND t.acknowledged_at IS NULL
+       AND t.relisted_at IS NOT NULL
+     ORDER BY t.relisted_at DESC
+  `).all() as {
+    platform: string;
+    model_id: string;
+    reason: string | null;
+    created_at: string;
+    relisted_at: string | null;
+    relist_count: number | null;
+    model_db_id: number | null;
+    display_name: string | null;
+  }[];
+  return rows.map(row => ({
+    modelDbId: row.model_db_id ?? null,
+    platform: row.platform,
+    modelId: row.model_id,
+    displayName: row.display_name ?? null,
+    reason: row.reason ?? null,
+    retiredAt: row.created_at,
+    relistedAt: row.relisted_at ?? null,
+    relistCount: row.relist_count ?? 0,
+  }));
+}
+
+/**
+ * Lift an upstream retirement. The ONLY caller is the operator re-enabling
+ * routing from the dashboard: they have seen the provider's wording and
+ * disagree. Clearing the tombstone also clears the reconciliation state, so a
+ * later refusal can retire the model again from scratch. Returns true when a
+ * retirement was actually lifted.
  */
 export function reinstateUpstreamRetiredCatalogModel(
   db: Db,

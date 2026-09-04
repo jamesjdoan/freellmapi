@@ -37,6 +37,7 @@ import { Button } from '@/components/ui/button'
 import { CustomWeightsPopover } from '@/components/custom-weights-popover'
 import { EmptyState } from '@/components/empty-state'
 import { GettingStarted } from '@/components/getting-started'
+import { RetirementReconciliation } from '@/components/retirement-reconciliation'
 import { GroupHeaderCells, ModelTableHead, SortableGroupRow } from '@/components/model-table'
 import { TableSkeleton } from '@/components/ui/skeleton'
 import { TokenUsageBar } from '@/components/token-usage-bar'
@@ -479,6 +480,11 @@ export default function FallbackPage() {
         <ChainManager />
 
         <PenaltyInspector />
+
+        {/* Independent of the table's own loading state: a retirement the
+            catalogue keeps contradicting is worth showing even while the
+            chain is still being fetched. */}
+        <RetirementReconciliation />
 
         {/* Unified routing / fallback table */}
         {isLoading ? (
