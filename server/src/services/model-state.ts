@@ -232,6 +232,43 @@ export function noteCatalogRelistedRetiredModel(
 }
 
 /**
+ * Close out disagreements the catalogue has stopped making.
+ *
+ * `listedByCatalog` holds every `platform:modelId` the just-applied catalogue
+ * shipped. A retired model missing from it means the catalogue has finally
+ * dropped the model too: provider and catalogue agree, there is nothing left
+ * for the operator to rule on, and the entry should leave the list by itself
+ * rather than sitting there until someone clears it by hand.
+ *
+ * Only the reconciliation state is reset. The tombstone and the retirement
+ * stand — the model is still gone, and it is still gone for the reason the
+ * provider gave.
+ *
+ * Returns the number of disagreements closed.
+ */
+export function clearReconciledRetirements(
+  db: Db,
+  listedByCatalog: ReadonlySet<string>,
+): number {
+  const open = db.prepare(`
+    SELECT platform, model_id FROM catalog_model_tombstones
+     WHERE kind = 'chat' AND source = 'upstream_eol' AND relisted_at IS NOT NULL
+  `).all() as { platform: string; model_id: string }[];
+  const clear = db.prepare(`
+    UPDATE catalog_model_tombstones
+       SET relisted_at = NULL, relist_count = 0, acknowledged_at = NULL
+     WHERE kind = 'chat' AND platform = ? AND model_id = ?
+  `);
+  let closed = 0;
+  for (const row of open) {
+    if (listedByCatalog.has(`${row.platform}:${row.model_id}`)) continue;
+    clear.run(row.platform, row.model_id);
+    closed++;
+  }
+  return closed;
+}
+
+/**
  * Settle a disagreement by keeping the retirement: the model stays off and
  * stops being listed as unreconciled. Re-listing does NOT resurface it — the
  * operator has already ruled on this provider verdict, and the catalogue

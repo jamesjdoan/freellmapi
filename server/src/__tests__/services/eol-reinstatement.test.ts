@@ -229,3 +229,47 @@ describe('decisions already taken stay reviewable', () => {
     expect(status).toBe(404);
   });
 });
+
+// The other way a disagreement ends: not by ruling on it, but by the catalogue
+// coming round. Once it stops listing the model there are two agreeing verdicts
+// and nothing to decide, so the entry must leave the list on its own instead of
+// accumulating as an archive nobody can clear from the dashboard.
+describe('a disagreement the catalogue drops closes itself', () => {
+  it('clears the disagreement once the catalogue stops listing the model', async () => {
+    resetModelRetirementObservations();
+    const id = seedModel('eol-agreed');
+    noteModelRetirementSignal({ modelDbId: id, platform: PLATFORM, modelId: 'eol-agreed' }, EOL_410, {});
+    applyCatalog(getDb(), catalogWith('eol-agreed', true));
+
+    const raised = await request(app, 'GET', '/api/models/retirements');
+    expect(raised.body.retirements.some((r: { modelId: string }) => r.modelId === 'eol-agreed')).toBe(true);
+
+    // A later catalogue ships other models but no longer this one.
+    applyCatalog(getDb(), catalogWith('eol-something-else', true));
+
+    const settled = await request(app, 'GET', '/api/models/retirements');
+    expect(settled.body.retirements.some((r: { modelId: string }) => r.modelId === 'eol-agreed')).toBe(false);
+    expect(settled.body.acknowledged.some((r: { modelId: string }) => r.modelId === 'eol-agreed')).toBe(false);
+
+    // The verdict itself stands: still tombstoned, still not routable.
+    const tombstone = getCatalogModelTombstone(getDb(), 'chat', PLATFORM, 'eol-agreed');
+    expect(tombstone?.source).toBe('upstream_eol');
+    expect(tombstone?.relistedAt).toBeNull();
+    expect(tombstone?.relistCount).toBe(0);
+    expect(isRoutable(id)).toBe(false);
+  });
+
+  it('leaves a live disagreement alone', async () => {
+    resetModelRetirementObservations();
+    const id = seedModel('eol-still-arguing');
+    noteModelRetirementSignal({ modelDbId: id, platform: PLATFORM, modelId: 'eol-still-arguing' }, EOL_410, {});
+    applyCatalog(getDb(), catalogWith('eol-still-arguing', true));
+    applyCatalog(getDb(), catalogWith('eol-still-arguing', true));
+
+    const list = await request(app, 'GET', '/api/models/retirements');
+    const entry = list.body.retirements.find((r: { modelId: string }) => r.modelId === 'eol-still-arguing');
+    expect(entry).toBeDefined();
+    expect(entry.relistCount).toBeGreaterThanOrEqual(1);
+    expect(isRoutable(id)).toBe(false);
+  });
+});

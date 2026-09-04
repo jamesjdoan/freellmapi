@@ -9,6 +9,7 @@ import type { Scheduler } from '../lib/scheduler.js';
 import {
   applyAllModelOverrides,
   applyModelOverrides,
+  clearReconciledRetirements,
   deleteTombstonedCatalogModels,
   isCatalogModelTombstoned,
   noteCatalogRelistedRetiredModel,
@@ -582,6 +583,12 @@ function applyCatalogInner(db: Db, catalog: Catalog): NonNullable<SyncResult['co
         counts.removed++;
       }
     }
+
+    // A retirement the catalogue has stopped contradicting needs no ruling:
+    // provider and catalogue now agree the model is gone, so close the
+    // disagreement out instead of leaving it on the operator's list forever.
+    // Runs after the prune, on the same `inCatalog` set the prune used.
+    clearReconciledRetirements(db, inCatalog);
 
     // Remove media models the catalog no longer lists (own table, no
     // fallback_config). Deliberately an ALLOWLIST of the two modalities that
