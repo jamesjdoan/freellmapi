@@ -174,3 +174,58 @@ describe('the operator can still lift a retirement explicitly', () => {
       .get(PLATFORM, 'eol-user-deleted')).toBeUndefined();
   });
 });
+
+// Pressing "Keep retired" used to be the end of the trail: the disagreement
+// left the notice and the only remaining sign was a badge on the model's own
+// table row, behind the Hide-disabled filter. A settled decision has to stay
+// reviewable, and reversible.
+describe('decisions already taken stay reviewable', () => {
+  it('moves an acknowledged retirement out of the notice and into the settled list', async () => {
+    resetModelRetirementObservations();
+    const id = seedModel('eol-settled');
+    noteModelRetirementSignal({ modelDbId: id, platform: PLATFORM, modelId: 'eol-settled' }, EOL_410, {});
+    applyCatalog(getDb(), catalogWith('eol-settled', true));
+
+    const raised = await request(app, 'GET', '/api/models/retirements');
+    expect(raised.body.retirements.some((r: { modelId: string }) => r.modelId === 'eol-settled')).toBe(true);
+
+    const kept = await request(app, 'POST', '/api/models/retirements/ignore', {
+      platform: PLATFORM, modelId: 'eol-settled',
+    });
+    expect(kept.status).toBe(200);
+
+    const settled = await request(app, 'GET', '/api/models/retirements');
+    expect(settled.body.retirements.some((r: { modelId: string }) => r.modelId === 'eol-settled')).toBe(false);
+    const entry = settled.body.acknowledged.find((r: { modelId: string }) => r.modelId === 'eol-settled');
+    expect(entry).toBeDefined();
+    expect(entry.acknowledgedAt).not.toBeNull();
+    // Settling the argument must not route to a model the provider refuses.
+    expect(isRoutable(id)).toBe(false);
+  });
+
+  it('reopens the question on undo, without touching the retirement', async () => {
+    resetModelRetirementObservations();
+    const id = seedModel('eol-reopened');
+    noteModelRetirementSignal({ modelDbId: id, platform: PLATFORM, modelId: 'eol-reopened' }, EOL_410, {});
+    applyCatalog(getDb(), catalogWith('eol-reopened', true));
+    await request(app, 'POST', '/api/models/retirements/ignore', { platform: PLATFORM, modelId: 'eol-reopened' });
+
+    const undone = await request(app, 'POST', '/api/models/retirements/unignore', {
+      platform: PLATFORM, modelId: 'eol-reopened',
+    });
+    expect(undone.status).toBe(200);
+
+    const reopened = await request(app, 'GET', '/api/models/retirements');
+    expect(reopened.body.retirements.some((r: { modelId: string }) => r.modelId === 'eol-reopened')).toBe(true);
+    expect(reopened.body.acknowledged.some((r: { modelId: string }) => r.modelId === 'eol-reopened')).toBe(false);
+    expect(isRoutable(id)).toBe(false);
+    expect(getCatalogModelTombstone(getDb(), 'chat', PLATFORM, 'eol-reopened')?.source).toBe('upstream_eol');
+  });
+
+  it('404s when there is no upstream retirement to settle', async () => {
+    const { status } = await request(app, 'POST', '/api/models/retirements/ignore', {
+      platform: PLATFORM, modelId: 'eol-never-retired',
+    });
+    expect(status).toBe(404);
+  });
+});

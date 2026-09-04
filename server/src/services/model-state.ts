@@ -252,6 +252,26 @@ export function acknowledgeUpstreamRetirement(
   return true;
 }
 
+/**
+ * Undo an acknowledgement, putting the disagreement back on the unreconciled
+ * list. The retirement itself is untouched — this only reopens the question,
+ * so a decision made in a hurry is reversible without having to route to a
+ * model the provider refuses.
+ */
+export function unacknowledgeUpstreamRetirement(
+  db: Db,
+  platform: string,
+  modelId: string,
+): boolean {
+  if (getCatalogModelTombstone(db, 'chat', platform, modelId)?.source !== 'upstream_eol') return false;
+  db.prepare(`
+    UPDATE catalog_model_tombstones
+       SET acknowledged_at = NULL
+     WHERE kind = 'chat' AND platform = ? AND model_id = ?
+  `).run(platform, modelId);
+  return true;
+}
+
 export interface UnreconciledRetirement {
   modelDbId: number | null;
   platform: string;
@@ -261,23 +281,30 @@ export interface UnreconciledRetirement {
   retiredAt: string;
   relistedAt: string | null;
   relistCount: number;
+  acknowledgedAt: string | null;
 }
 
 /**
- * Retirements the catalogue keeps contradicting and the operator has not ruled
- * on. `models` is LEFT-joined: a catalogue can drop the model entirely while
- * the tombstone remains, and that row is still worth showing — it is the case
+ * Upstream retirements the catalogue has contradicted, split by whether the
+ * operator has ruled on them: `pending` drives the notice, `acknowledged` is
+ * the audit trail of decisions already taken (kept out of the notice, but
+ * reviewable and undoable).
+ *
+ * `models` is LEFT-joined: a catalogue can drop the model entirely while the
+ * tombstone remains, and that row is still worth listing — it is the case
  * where provider and catalogue have finally agreed the model is gone.
  */
-export function listUnreconciledRetirements(db: Db): UnreconciledRetirement[] {
+export function listRetirementDisagreements(db: Db): {
+  pending: UnreconciledRetirement[];
+  acknowledged: UnreconciledRetirement[];
+} {
   const rows = db.prepare(`
     SELECT t.platform, t.model_id, t.reason, t.created_at, t.relisted_at, t.relist_count,
-           m.id AS model_db_id, m.display_name
+           t.acknowledged_at, m.id AS model_db_id, m.display_name
       FROM catalog_model_tombstones t
       LEFT JOIN models m ON m.platform = t.platform AND m.model_id = t.model_id
      WHERE t.kind = 'chat'
        AND t.source = 'upstream_eol'
-       AND t.acknowledged_at IS NULL
        AND t.relisted_at IS NOT NULL
      ORDER BY t.relisted_at DESC
   `).all() as {
@@ -287,10 +314,11 @@ export function listUnreconciledRetirements(db: Db): UnreconciledRetirement[] {
     created_at: string;
     relisted_at: string | null;
     relist_count: number | null;
+    acknowledged_at: string | null;
     model_db_id: number | null;
     display_name: string | null;
   }[];
-  return rows.map(row => ({
+  const mapped = rows.map(row => ({
     modelDbId: row.model_db_id ?? null,
     platform: row.platform,
     modelId: row.model_id,
@@ -299,7 +327,12 @@ export function listUnreconciledRetirements(db: Db): UnreconciledRetirement[] {
     retiredAt: row.created_at,
     relistedAt: row.relisted_at ?? null,
     relistCount: row.relist_count ?? 0,
+    acknowledgedAt: row.acknowledged_at ?? null,
   }));
+  return {
+    pending: mapped.filter(item => item.acknowledgedAt == null),
+    acknowledged: mapped.filter(item => item.acknowledgedAt != null),
+  };
 }
 
 /**

@@ -4,13 +4,15 @@ import { z } from 'zod';
 import { getDb } from '../db/index.js';
 import { hasProvider } from '../providers/index.js';
 import { deleteUnusedCustomEndpointKey } from '../lib/custom-provider-cleanup.js';
+import type { Db } from '../db/types.js';
 import {
   acknowledgeUpstreamRetirement,
   isCatalogManagedModel,
-  listUnreconciledRetirements,
+  listRetirementDisagreements,
   overriddenFieldNames,
   recordCatalogModelTombstone,
   reinstateUpstreamRetiredCatalogModel,
+  unacknowledgeUpstreamRetirement,
   upsertModelOverrides,
   type ModelOverridePatch,
 } from '../services/model-state.js';
@@ -77,31 +79,41 @@ function fetchModelRow(id: number): ModelRow | undefined {
 }
 
 // Retirements this server made from a provider's own refusal that the published
-// catalogue keeps contradicting. They stay listed until the operator settles the
-// disagreement one way or the other: `POST .../ignore` keeps the retirement, and
-// re-enabling routing (PATCH /:id with fallbackEnabled) overrides it.
+// catalogue keeps contradicting. `pending` is what the dashboard asks about;
+// `acknowledged` is the record of disagreements already settled, so a decision
+// can be reviewed and reopened later. Settling: `POST .../ignore` keeps the
+// retirement, `POST .../unignore` reopens the question, and re-enabling routing
+// (PATCH /:id with fallbackEnabled) overrides the provider outright.
 modelsRouter.get('/retirements', (_req: Request, res: Response) => {
-  res.json({ retirements: listUnreconciledRetirements(getDb()) });
+  const { pending, acknowledged } = listRetirementDisagreements(getDb());
+  res.json({ retirements: pending, acknowledged });
 });
 
-const ignoreRetirementSchema = z.object({
+const retirementRefSchema = z.object({
   platform: z.string().min(1).max(60),
   modelId: z.string().min(1).max(200),
 }).strict();
 
-modelsRouter.post('/retirements/ignore', (req: Request, res: Response) => {
-  const parsed = ignoreRetirementSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
-    return;
-  }
-  const { platform, modelId } = parsed.data;
-  if (!acknowledgeUpstreamRetirement(getDb(), platform, modelId)) {
-    res.status(404).json({ error: { message: `No upstream retirement for ${platform}/${modelId}` } });
-    return;
-  }
-  res.json({ success: true, platform, modelId });
-});
+function settleRetirement(
+  settle: (db: Db, platform: string, modelId: string) => boolean,
+) {
+  return (req: Request, res: Response): void => {
+    const parsed = retirementRefSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
+      return;
+    }
+    const { platform, modelId } = parsed.data;
+    if (!settle(getDb(), platform, modelId)) {
+      res.status(404).json({ error: { message: `No upstream retirement for ${platform}/${modelId}` } });
+      return;
+    }
+    res.json({ success: true, platform, modelId });
+  };
+}
+
+modelsRouter.post('/retirements/ignore', settleRetirement(acknowledgeUpstreamRetirement));
+modelsRouter.post('/retirements/unignore', settleRetirement(unacknowledgeUpstreamRetirement));
 
 modelsRouter.delete('/custom/:id', (req: Request, res: Response) => {
   const id = Number(req.params.id);

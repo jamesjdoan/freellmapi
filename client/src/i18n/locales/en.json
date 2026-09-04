@@ -204,6 +204,8 @@
     "retirementConflictRelisted": "Re-listed by {count} catalogue sync(s) since the provider refused it",
     "retirementConflictKeep": "Keep retired",
     "retirementConflictReinstate": "Re-enable anyway",
+    "retirementKeptCount": "{count} kept retired",
+    "retirementKeptUndo": "Undo",
     "penalty": "−{value} penalty",
     "obs": "{count} obs",
     "tokPerMonth": "{count} tok/mo",
