@@ -9,7 +9,7 @@ import type {
   ChatToolChoice,
   ChatContentBlock,
 } from '@freellmapi/shared/types.js';
-import { routeRequest, resolveModelGroupCandidates, resolveStickyPreference, routingReserveTokens, type RouteResult, type ChainRow } from '../services/router.js';
+import { routeRequest, resolveRoutingChain, resolveModelGroupCandidates, resolveStickyPreference, routingReserveTokens, type RouteResult, type ResolvedChain, type ChainRow } from '../services/router.js';
 import { getSetting, getUnifiedApiKey } from '../db/index.js';
 import { contentToString } from '../lib/content.js';
 import { resolveTaskType } from '../lib/task-type.js';
@@ -30,6 +30,17 @@ import type { ReasoningEffort } from '../lib/sampling-params.js';
 import { buildModelListing } from '../services/model-listing.js';
 import { compressRequest, formatCompressionHeader } from '../services/compression/pipeline.js';
 import { normalizeMessageImages } from '../lib/image-normalize.js';
+
+const AUTO_MODEL_ID = 'auto';
+
+// `auto` and `auto:<profile>` select a routing CHAIN, not a model. Mirrors the
+// identical private helper in proxy.ts and responses.ts.
+function isAutoModel(modelId: string | undefined): boolean {
+  if (!modelId) return true;
+  const lower = modelId.toLowerCase();
+  return lower === AUTO_MODEL_ID || lower.startsWith(`${AUTO_MODEL_ID}:`);
+}
+
 
 // Anthropic-compatible Messages API (`POST /v1/messages`). This is a thin
 // translation layer over the SAME router/fallback/analytics machinery the
@@ -529,6 +540,24 @@ anthropicRouter.post('/messages', async (req: Request, res: Response) => {
   // haiku/default → auto | a pinned catalog model). A concrete catalog id pins
   // directly. `pinned` drives the analytics requested-model label.
   const resolved = resolveAnthropicModel(routedModel);
+
+  // routeRequest() falls back to getActiveChain() when no chain is passed
+  // (router.ts). `auto:<profile>` produces no groupChain — that is only for
+  // model-group pins — so without this the alias was silently discarded and
+  // /v1/messages routed on the ACTIVE profile instead of the one named.
+  // /v1/chat/completions already does this (proxy.ts).
+  // Non-throwing on purpose: resolveRoutingChain() raises a 400 for an unknown
+  // profile name, and this handler has no try/catch around it — that would turn
+  // a previously-served request into a 500. Falling back to undefined preserves
+  // the old behaviour for a bad alias while fixing the good ones.
+  let resolvedChain: ResolvedChain | undefined;
+  if (isAutoModel(routedModel)) {
+    try {
+      resolvedChain = resolveRoutingChain(routedModel);
+    } catch {
+      resolvedChain = undefined;
+    }
+  }
   const pinnedModelId = resolved.pinned ? (body.model ?? null) : null;
 
   // Session affinity: Claude Code stamps every request in a session with
@@ -617,7 +646,7 @@ anthropicRouter.post('/messages', async (req: Request, res: Response) => {
     route: () => {
       // Task-type routing (#1127): same header/derivation as /chat/completions.
       const taskType = resolveTaskType(req, tools, messages);
-      return routeRequest(estimatedTotal, state.skipKeys.size > 0 ? state.skipKeys : undefined, preferredModel, hasImage, wantsTools, state.skipModels.size > 0 ? state.skipModels : undefined, groupChain, false, state.skipPlatforms.size > 0 ? state.skipPlatforms : undefined, outputReserve, taskType);
+      return routeRequest(estimatedTotal, state.skipKeys.size > 0 ? state.skipKeys : undefined, preferredModel, hasImage, wantsTools, state.skipModels.size > 0 ? state.skipModels : undefined, groupChain ?? resolvedChain?.chain, false, state.skipPlatforms.size > 0 ? state.skipPlatforms : undefined, outputReserve, taskType);
     },
     dispatch: async (route, attempt, dispatchCtx) => {
       if (stream) {
