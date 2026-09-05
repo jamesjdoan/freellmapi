@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { initDb, getDb } from '../../db/index.js';
-import { getQuotaForecast } from '../../services/quota-forecast.js';
+import { getQuotaForecast, getProviderQuotaOverview, invalidateQuotaInference } from '../../services/quota-forecast.js';
 
 function insertState(row: {
   platform: string;
@@ -115,5 +115,67 @@ describe('quota-forecast: daily balance aggregation (#1104)', () => {
 
     const forecast = getQuotaForecast();
     expect(forecast).toHaveLength(0);
+  });
+});
+
+// The overview is where inference reaches an operator, so the row has to carry
+// it — and has to keep it separate from anything measured.
+describe('provider overview: inferred windows', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare('DELETE FROM requests').run();
+    getDb().prepare('DELETE FROM api_keys').run();
+    invalidateQuotaInference();
+  });
+
+  function enableKey(platform: string): void {
+    getDb().prepare(`
+      INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, status, enabled)
+      VALUES (?, 'k', 'x', 'x', 'x', 'active', 1)
+    `).run(platform);
+  }
+
+  function seedRefusalsAndRecovery(platform: string, recoverySeconds: number[]): void {
+    const insert = getDb().prepare(`
+      INSERT INTO requests (platform, model_id, status, input_tokens, output_tokens, latency_ms, error, created_at)
+      VALUES (?, 'm', ?, 0, 0, 0, ?, ?)
+    `);
+    let at = Date.UTC(2026, 0, 1);
+    const iso = (ms: number) => new Date(ms).toISOString().replace('T', ' ').replace('Z', '');
+    for (const recovery of recoverySeconds) {
+      insert.run(platform, 'error', 'HTTP 429 rate limited', iso(at));
+      at += recovery * 1000;
+      insert.run(platform, 'success', null, iso(at));
+      at += 3_600_000;
+    }
+  }
+
+  it('surfaces a behavioural estimate for a provider that publishes nothing', () => {
+    enableKey('opencode');
+    seedRefusalsAndRecovery('opencode', [5, 8, 11, 14]);
+    const row = getProviderQuotaOverview().find(r => r.platform === 'opencode');
+    expect(row).toBeDefined();
+    expect(row!.inferred.map(w => w.period)).toContain('minute');
+    // The estimate must not be mistaken for a measurement: the pool stays
+    // unmetered and the balance stays unknown.
+    expect(row!.metered).toBe(false);
+    expect(row!.limit).toBeNull();
+    expect(row!.remaining).toBeNull();
+  });
+
+  it('carries the sample count so a thin estimate can be discounted', () => {
+    enableKey('opencode');
+    seedRefusalsAndRecovery('opencode', [5, 8, 11]);
+    const row = getProviderQuotaOverview().find(r => r.platform === 'opencode');
+    expect(row!.inferred[0]!.samples).toBe(3);
+    // Capped below anything published, whatever the sample count.
+    expect(row!.inferred[0]!.confidence).toBeLessThanOrEqual(0.5);
+  });
+
+  it('stays empty when behaviour says nothing', () => {
+    enableKey('ollama');
+    const row = getProviderQuotaOverview().find(r => r.platform === 'ollama');
+    expect(row!.inferred).toEqual([]);
   });
 });

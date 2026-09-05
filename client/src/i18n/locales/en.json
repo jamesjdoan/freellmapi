@@ -857,7 +857,14 @@
     "colMetric": "Metric",
     "colScope": "Scope",
     "colSource": "Source",
-    "locallyCounted": "(counted locally)"
+    "locallyCounted": "(counted locally)",
+    "colWindow": "Window",
+    "inferredWindow": "~{period} (est. from {samples})",
+    "period_minute": "per minute",
+    "period_hour": "hourly",
+    "period_day": "daily",
+    "period_week": "weekly",
+    "period_month": "monthly"
   },
   "logs": {
     "title": "Logs",
