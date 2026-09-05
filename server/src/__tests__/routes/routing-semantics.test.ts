@@ -9,6 +9,8 @@ import {
   routeRequest,
   setRoutingStrategy,
   setKeySelectionStrategy,
+  getAutorouteDisabledPlatforms,
+  setAutorouteDisabledPlatforms,
 } from '../../services/router.js';
 import { recordQuotaObservation } from '../../services/provider-quota.js';
 import { mintDashboardToken, isGatedApiPath } from '../helpers/auth.js';
@@ -226,6 +228,73 @@ describe('routing semantics', () => {
     const routed = routeRequest(100, undefined, undefined, false, false, undefined, groupChain);
     expect(routed.modelDbId).toBe(disabledId);
     expect(routed.modelId).toBe('direct-only-model');
+  });
+});
+
+// ── W1: provider-wide autoroute policy (ADR ARCH-20260905, F1) ──────────────
+// Measured before this existed: 39 auto-routed Hugging Face requests, 30 of
+// them served, on a provider the operator had ruled out of automatic selection.
+// The per-model chain flags could not express that — catalog sync adds new rows
+// enabled, so the provider leaked back in on the next sync.
+describe('provider-wide autoroute exclusion (W1)', () => {
+  beforeEach(() => {
+    const db = getDb();
+    db.prepare('DELETE FROM fallback_config').run();
+    db.prepare('DELETE FROM profile_models').run();
+    db.prepare('DELETE FROM models').run();
+  });
+
+  it('never auto-selects an excluded provider, even ranked first', () => {
+    addKey('huggingface');
+    addKey('groq');
+    // Priority 1 = the head of a 'priority' chain, so only the policy can stop it.
+    addSyntheticModel('hf-top-ranked', 1, true, 'huggingface');
+    const groqId = addSyntheticModel('groq-second', 2, true, 'groq');
+
+    const routed = routeRequest(100);
+    routed.release?.();
+    expect(routed.platform).toBe('groq');
+    expect(routed.modelDbId).toBe(groqId);
+  });
+
+  it('still serves an excluded provider on an explicit model request', () => {
+    addKey('huggingface');
+    const hfId = addSyntheticModel('hf-direct', 1, true, 'huggingface');
+
+    const groupChain = resolveModelGroupCandidates([hfId]);
+    const routed = routeRequest(100, undefined, undefined, false, false, undefined, groupChain);
+    routed.release?.();
+    expect(routed.modelDbId).toBe(hfId);
+  });
+
+  it('holds on the global-sort chain, which spans the whole catalog', () => {
+    addKey('huggingface');
+    addKey('groq');
+    // No chain rows at all: getChainByGlobalSort defaults unlisted models IN,
+    // which is how a freshly synced provider model reaches autoroute.
+    const db = getDb();
+    addSyntheticModel('hf-catalog-only', 1, true, 'huggingface');
+    addSyntheticModel('groq-catalog-only', 2, true, 'groq');
+    db.prepare('DELETE FROM fallback_config').run();
+    db.prepare('DELETE FROM profile_models').run();
+
+    const resolved = resolveRoutingChain('auto:smart');
+    expect(resolved.chain.some(row => row.platform === 'huggingface')).toBe(false);
+    expect(resolved.chain.some(row => row.platform === 'groq')).toBe(true);
+  });
+
+  it('is operator-settable — clearing the list lets the provider route again', () => {
+    addKey('huggingface');
+    const hfId = addSyntheticModel('hf-reinstated', 1, true, 'huggingface');
+
+    setAutorouteDisabledPlatforms([]);
+    const routed = routeRequest(100);
+    routed.release?.();
+    expect(routed.modelDbId).toBe(hfId);
+  });
+
+  it('defaults to excluding huggingface and sambanova', () => {
+    expect(getAutorouteDisabledPlatforms()).toEqual(['huggingface', 'sambanova']);
   });
 });
 
