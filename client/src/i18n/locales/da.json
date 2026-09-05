@@ -554,6 +554,8 @@
     "ollamaKeyRequired": "API-nøgle påkrævet",
     "claudeAliases": "Claude Code-opdagelsesaliasser",
     "claudeAliasesHint": "Eksponér claude/<model>-aliasser, så gatewayens modelvælger kan vise kataloget.",
+    "mcpServer": "MCP-server",
+    "mcpServerHint": "Eksponerer /mcp-endpointet for agentklienter. Nye installationer starter slået fra.",
     "urlTokensTitle": "Tilbagekaldelige URL-tokens",
     "urlTokensDesc": "Kun til klienter uden headers. URL-tokens kan lække til historik og logs, så tilbagekald dem, når de ikke længere er nødvendige.",
     "urlTokenLabel": "Token-etiket",
@@ -724,7 +726,10 @@
     "ttft": "TTFT",
     "requestsByAgent": "Anmodninger pr. agent",
     "sortBy": "Sortér efter {column}",
-    "sortHint": "Sorteringen gælder de {count} indlæste rækker"
+    "sortHint": "Sorteringen gælder de {count} indlæste rækker",
+    "cacheHitRate": "Cache-hitrate",
+    "cacheSavedTokens": "{tokens} tokens sparet",
+    "cacheHitRateHint": "{hits} hits mod {misses} misses siden serveren startede · {requests} udbyderkald undgået"
   },
   "logs": {
     "title": "Log",

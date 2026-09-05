@@ -558,6 +558,8 @@
     "ollamaKeyRequired": "需要 API 金鑰",
     "claudeAliases": "Claude Code 探索別名",
     "claudeAliasesHint": "公開 claude/<model> 別名，讓閘道的模型選擇器能列出目錄。",
+    "mcpServer": "MCP 伺服器",
+    "mcpServerHint": "向代理客戶端開放 /mcp 端點。新安裝預設關閉。",
     "urlTokensTitle": "可撤銷的 URL Token",
     "urlTokensDesc": "僅供無法傳送標頭的用戶端使用。URL Token 可能外洩到歷史記錄和日誌中，不再需要時請撤銷。",
     "urlTokenLabel": "Token 標籤",
@@ -724,7 +726,10 @@
     "ttft": "首字延遲",
     "requestsByAgent": "按代理程式統計的請求",
     "sortBy": "依{column}排序",
-    "sortHint": "排序僅套用於已載入的 {count} 列"
+    "sortHint": "排序僅套用於已載入的 {count} 列",
+    "cacheHitRate": "快取命中率",
+    "cacheSavedTokens": "已節省 {tokens} Token",
+    "cacheHitRateHint": "自伺服器啟動以來命中 {hits} 次、未命中 {misses} 次 · 省下 {requests} 次供應商呼叫"
   },
   "logs": {
     "title": "日誌",

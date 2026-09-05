@@ -2,6 +2,16 @@
 
 Doc revision history for `docs/architecture/`, seeded from commits touching architecture-relevant code.
 
+## 2026-09-05 — Quota Ledger & Shadow Routing
+
+- **docs(architecture): add quota ledger and shadow routing deep-dive** — added `docs/architecture/07-quota-ledger-and-shadow-routing.md` covering quota clock, quota policy table, quota-aware routing, raw header capture, and the four migrations (20260905_000001..000004). Also updated `OVERVIEW.md` to include the new deep-dive.
+
+
+## 2026-09-05 — Quota Ledger & Shadow Routing
+
+- **docs(architecture): add quota ledger and shadow routing deep-dive** — added  covering quota clock, quota policy table, quota-aware routing, raw header capture, and the four migrations (20260905_000001..000004). Also updated  to include the new deep-dive.
+
+
 ## 2026-08-25
 
 - **docs(architecture): deduplicate `architecture.md` vs `architecture/OVERVIEW.md` intros, clarify `docs/README.md` vs `docs/OVERVIEW.md`** — root `architecture.md` is now the high-level index (what the system is, two-paragraph summary, request-flow diagram, limitations and ToS) with a `See [OVERVIEW.md](OVERVIEW.md) for deep-dives` bridge and no duplicated provider/routing summaries (removed the deep-dive reference table and the Routing/Operational detail sections — those live in `01`/`02` deep-dives); `architecture/OVERVIEW.md` is now the domain scope (Scope + File Index + How deep-dives fit, high-level index cross-link); `docs/README.md` clarified as the user entry point (getting started) vs `docs/OVERVIEW.md` as the domain index (full file map) and verified no dangling `api.md`/`clients.md`/`compression.md` links (`rg "api\.md|clients\.md|compression\.md" docs --glob '!CHANGELOG.md'` — only numbered `01-*.md` hits remain).

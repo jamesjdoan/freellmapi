@@ -554,6 +554,8 @@
     "ollamaKeyRequired": "Wymagany klucz API",
     "claudeAliases": "Aliasy wykrywania Claude Code",
     "claudeAliasesHint": "Udostępnij aliasy claude/<model>, aby selektor modeli bramy mógł wyświetlić katalog.",
+    "mcpServer": "Serwer MCP",
+    "mcpServerHint": "Udostępnia punkt końcowy /mcp klientom agentowym. Nowe instalacje startują z wyłączonym.",
     "urlTokensTitle": "Odwoływalne tokeny URL",
     "urlTokensDesc": "Tylko dla klientów bez nagłówków. Tokeny URL mogą wyciec do historii i logów, więc odwołuj je, gdy nie są już potrzebne.",
     "urlTokenLabel": "Etykieta tokenu",
@@ -724,7 +726,10 @@
     "ttft": "TTFT",
     "requestsByAgent": "Żądania według agenta",
     "sortBy": "Sortuj według: {column}",
-    "sortHint": "Sortowanie dotyczy {count} załadowanych wierszy"
+    "sortHint": "Sortowanie dotyczy {count} załadowanych wierszy",
+    "cacheHitRate": "Współczynnik trafień pamięci podręcznej",
+    "cacheSavedTokens": "Zaoszczędzono {tokens} tokenów",
+    "cacheHitRateHint": "{hits} trafień wobec {misses} chybień od startu serwera · uniknięto {requests} wywołań dostawcy"
   },
   "logs": {
     "title": "Logi",

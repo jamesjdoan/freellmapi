@@ -554,6 +554,8 @@
     "ollamaKeyRequired": "Ufunguo wa API unahitajika",
     "claudeAliases": "Lakabu za ugunduzi za Claude Code",
     "claudeAliasesHint": "Onyesha lakabu za claude/<model> ili kichaguzi cha miundo cha lango kiweze kuorodhesha katalogi.",
+    "mcpServer": "Seva ya MCP",
+    "mcpServerHint": "Hufungua kiungo /mcp kwa wateja wa mawakala. Usakinishaji mpya huanza ukiwa umezimwa.",
     "urlTokensTitle": "Tokeni za URL zinazoweza kubatilishwa",
     "urlTokensDesc": "Kwa wateja wasio na vichwa pekee. Tokeni za URL zinaweza kuvuja kwenye historia na kumbukumbu, kwa hivyo zibatilishe zisipohitajika tena.",
     "urlTokenLabel": "Lebo ya tokeni",
@@ -724,7 +726,10 @@
     "ttft": "TTFT",
     "requestsByAgent": "Maombi kwa kila wakala",
     "sortBy": "Panga kwa {column}",
-    "sortHint": "Upangaji unatumika kwa safu {count} zilizopakiwa"
+    "sortHint": "Upangaji unatumika kwa safu {count} zilizopakiwa",
+    "cacheHitRate": "Kiwango cha mafanikio ya akiba",
+    "cacheSavedTokens": "Tokeni {tokens} zimehifadhiwa",
+    "cacheHitRateHint": "Mafanikio {hits} dhidi ya makosa {misses} tangu seva ianze · miito {requests} kwa mtoa huduma imeepukwa"
   },
   "logs": {
     "title": "Kumbukumbu",

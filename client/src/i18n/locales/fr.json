@@ -554,6 +554,8 @@
     "ollamaKeyRequired": "Clé API requise",
     "claudeAliases": "Alias de découverte Claude Code",
     "claudeAliasesHint": "Exposez des alias claude/<model> pour que le sélecteur de modèles de la passerelle puisse lister le catalogue.",
+    "mcpServer": "Serveur MCP",
+    "mcpServerHint": "Expose le point de terminaison /mcp aux clients agents. Désactivé au départ sur les nouvelles installations.",
     "urlTokensTitle": "Tokens d'URL révocables",
     "urlTokensDesc": "Réservé aux clients sans en-têtes. Les tokens d'URL peuvent fuiter dans l'historique et les journaux ; révoquez-les dès qu'ils ne sont plus nécessaires.",
     "urlTokenLabel": "Libellé du token",
@@ -724,7 +726,10 @@
     "ttft": "TTFT",
     "requestsByAgent": "Requêtes par agent",
     "sortBy": "Trier par {column}",
-    "sortHint": "Le tri s'applique aux {count} lignes chargées"
+    "sortHint": "Le tri s'applique aux {count} lignes chargées",
+    "cacheHitRate": "Taux de succès du cache",
+    "cacheSavedTokens": "{tokens} jetons économisés",
+    "cacheHitRateHint": "{hits} succès contre {misses} échecs depuis le démarrage du serveur · {requests} appels au fournisseur évités"
   },
   "logs": {
     "title": "Journaux",

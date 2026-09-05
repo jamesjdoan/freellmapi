@@ -554,6 +554,8 @@
     "ollamaKeyRequired": "A nilo bọtini API",
     "claudeAliases": "Awọn inagijẹ wiwa Claude Code",
     "claudeAliasesHint": "Fi awọn inagijẹ claude/<model> han ki oluyan awoṣe ẹnu-ọna le ṣe atokọ katalogu naa.",
+    "mcpServer": "Olupin MCP",
+    "mcpServerHint": "Ó ń ṣí ojú-òpin /mcp fún àwọn oníbàárà aṣojú. Àwọn fifi-sori tuntun máa ń bẹ̀rẹ̀ ní pípa.",
     "urlTokensTitle": "Awọn tokini URL ti a le fagile",
     "urlTokensDesc": "Fun awọn alabara ti ko ni akọsori nikan. Awọn tokini URL le jo sinu itan-akọọlẹ ati awọn akọsilẹ, nitorinaa fagile wọn nigbati wọn ko ba nilo mọ.",
     "urlTokenLabel": "Aami tokini",
@@ -724,7 +726,10 @@
     "ttft": "TTFT",
     "requestsByAgent": "Awọn ibeere nipasẹ aṣoju",
     "sortBy": "Ṣètò nípa {column}",
-    "sortHint": "Ìṣètò kan àwọn ìlà {count} tí a ti gbé sókè nìkan"
+    "sortHint": "Ìṣètò kan àwọn ìlà {count} tí a ti gbé sókè nìkan",
+    "cacheHitRate": "Ìwọ̀n àṣeyọrí kaṣe",
+    "cacheSavedTokens": "A ṣàfipamọ́ token {tokens}",
+    "cacheHitRateHint": "{hits} àṣeyọrí sí {misses} àìní láti ìgbà tí sáfà bẹ̀rẹ̀ · {requests} ìpè olùpèsè ni a yẹ̀ sílẹ̀"
   },
   "logs": {
     "title": "Àkọọlẹ",

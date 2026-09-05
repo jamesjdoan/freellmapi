@@ -2,6 +2,16 @@
 
 Doc revision history for `docs/api/`, seeded from API-relevant commits.
 
+## 2026-09-05 — Quota API
+
+- **docs(api): document the `/api/quota` endpoints** — added reference for quota policy CRUD (`GET /policies`, `PUT /policies`, `DELETE /policies/:id`), quota state (`GET /state`), forecast (`GET /forecast`), shadow (`GET /shadow`), decisions (`GET /decisions`), mode (`GET /mode`, `PUT /mode`), and reservation (`GET /reservation`, `PUT /reservation`) in `docs/api/OVERVIEW.md`.
+
+
+## 2026-09-03
+
+- **docs(api): document the task-type routing header** — added `X-FreeLLM-Task-Type: code|chat|auto` (#1127) to the per-request headers section, with the weight shift it applies and the strategies that ignore it.
+- **docs(api): document the task-weight-share setting** — added `GET/PUT /api/settings/task-weight-share` (#1127), the operator knob for how much weight the task-type bias moves.
+
 ## 2026-08-25
 
 - **docs(api): document video platforms, free-tier budget, and backups APIs** — expanded `POST /v1/videos/generations` with the bounded pollinations/huggingface surface (5-minute timeout, fal queue); added `GET /api/free-tier` (pool-deduped monthly budget) and `GET /api/backups` (DUMP_FORMAT=1, sha256 key fingerprint) endpoint reference.

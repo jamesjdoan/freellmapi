@@ -554,6 +554,8 @@
     "ollamaKeyRequired": "API-nøkkel kreves",
     "claudeAliases": "Oppdagingsaliaser for Claude Code",
     "claudeAliasesHint": "Eksponer claude/<model>-aliaser slik at gatewayens modellvelger kan liste opp katalogen.",
+    "mcpServer": "MCP-server",
+    "mcpServerHint": "Eksponerer /mcp-endepunktet for agentklienter. Nye installasjoner starter avslått.",
     "urlTokensTitle": "Tilbakekallbare URL-tokener",
     "urlTokensDesc": "Kun for klienter uten headere. URL-tokener kan lekke inn i historikk og logger, så tilbakekall dem når de ikke lenger trengs.",
     "urlTokenLabel": "Tokenetikett",
@@ -724,7 +726,10 @@
     "ttft": "TTFT",
     "requestsByAgent": "Forespørsler per agent",
     "sortBy": "Sorter etter {column}",
-    "sortHint": "Sorteringen gjelder de {count} innlastede radene"
+    "sortHint": "Sorteringen gjelder de {count} innlastede radene",
+    "cacheHitRate": "Cache-treffrate",
+    "cacheSavedTokens": "{tokens} tokens spart",
+    "cacheHitRateHint": "{hits} treff mot {misses} bom siden serveren startet · {requests} leverandørkall unngått"
   },
   "logs": {
     "title": "Logg",

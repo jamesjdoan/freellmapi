@@ -291,6 +291,9 @@ function consumeSkipBenchExemption(route: RouteResult, err: any): boolean {
  * Callers add the just-failed key to skipKeys via this function (do not pre-add).
  */
 export function recordRetryableFailure(route: RouteResult, err: any, state: FallbackState, now: number = Date.now()): boolean {
+  // Meter before any of the skip/bench bookkeeping: whether this attempt spent
+  // provider quota is independent of what we decide to do about it (F9).
+  recordFailedAttemptUsage(route, err);
   // `skipModelForRequest: true` = the failure is MODEL behavior, not key
   // state (ignored response_format, JSON truncated at max_tokens): a sibling
   // key would reproduce it exactly, so rule out the whole model for this
@@ -375,6 +378,43 @@ export function recordAuthFailure(route: RouteResult, state: FallbackState): voi
   state.skipKeys.add(`${route.platform}:${route.modelId}:${route.keyId}`);
   setCooldown(route.platform, route.modelId, route.keyId, AUTH_FAILURE_COOLDOWN_MS);
   triggerKeyRevalidation(route.platform, route.keyId);
+}
+
+/**
+ * Failure classes where the provider almost certainly counted the call against
+ * our allowance: the request was accepted and the model ran, we just didn't get
+ * a usable answer back (ADR ARCH-20260905, F9).
+ *
+ * Everything else is a refusal BEFORE generation — 401/402/403/404 and 400-shape
+ * validation errors consume nothing, and 429 / daily-exhaustion are the provider
+ * telling us its own counter is already full, which the cooldown ladder handles.
+ * Counting a refusal would bench us on quota we never spent.
+ *
+ * `error` (unclassified) is deliberately excluded: an unknown failure is not
+ * evidence of consumption, and inflating the counter on a guess trades an
+ * optimistic bias for an arbitrary one.
+ */
+const QUOTA_CONSUMING_ERROR_CLASSES: Partial<Record<AttemptErrorClass, true>> = {
+  empty_completion: true,
+  format_ignored: true,
+  invalid_tool_arguments: true,
+  timeout: true,
+  upstream_error: true,
+};
+
+/**
+ * Count a failed attempt against the model+key rate-limit windows when the
+ * provider will have counted it too. Without this the local view of remaining
+ * quota reads high exactly when a provider is under pressure, because only
+ * successes were ever metered (F9).
+ *
+ * Requests only, never tokens: on a failure we do not know what the provider
+ * billed — a timeout may have generated hundreds of tokens or none — and an
+ * invented number would be indistinguishable from a measured one downstream.
+ */
+function recordFailedAttemptUsage(route: RouteResult, err: unknown): void {
+  if (!QUOTA_CONSUMING_ERROR_CLASSES[classifyAttemptError(err)]) return;
+  recordRequest(route.platform, route.modelId, route.keyId);
 }
 
 /**

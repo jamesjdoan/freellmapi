@@ -554,6 +554,8 @@
     "ollamaKeyRequired": "נדרש מפתח API",
     "claudeAliases": "כינויי גילוי של Claude Code",
     "claudeAliasesHint": "חשוף כינויי claude/<model> כדי שבורר המודלים של השער יוכל להציג את הקטלוג.",
+    "mcpServer": "שרת MCP",
+    "mcpServerHint": "חושף את נקודת הקצה /mcp ללקוחות סוכנים. התקנות חדשות מתחילות כשהוא כבוי.",
     "urlTokensTitle": "טוקני URL ניתנים לביטול",
     "urlTokensDesc": "ללקוחות ללא כותרות בלבד. טוקני URL עלולים לדלוף להיסטוריה וליומנים, לכן בטל אותם כשאינם נחוצים עוד.",
     "urlTokenLabel": "תווית טוקן",
@@ -724,7 +726,10 @@
     "ttft": "TTFT",
     "requestsByAgent": "בקשות לפי סוכן",
     "sortBy": "מיון לפי {column}",
-    "sortHint": "המיון חל על {count} השורות שנטענו בלבד"
+    "sortHint": "המיון חל על {count} השורות שנטענו בלבד",
+    "cacheHitRate": "שיעור פגיעות במטמון",
+    "cacheSavedTokens": "נחסכו {tokens} טוקנים",
+    "cacheHitRateHint": "{hits} פגיעות מול {misses} החטאות מאז הפעלת השרת · נחסכו {requests} קריאות לספק"
   },
   "logs": {
     "title": "יומן",

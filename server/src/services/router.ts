@@ -14,6 +14,8 @@ import {
   releaseLease,
   getSoonestCooldownExpiry,
   modelWindowUsedFraction,
+  countRequestsInWindow,
+  countTokensInWindow,
 } from './ratelimit.js';
 import {
   BANDIT_PRESETS, DEFAULT_STRATEGY, type RoutingStrategy, type RoutingWeights,
@@ -21,7 +23,7 @@ import {
   reliabilityPosterior, expectedReliability, sampleBeta,
   speedScore, intelligenceScore, intelligenceComposite, headroomFactor, rateWindowHeadroomFactor,
   rateLimitFactor, combineScore,
-  peakAdjustedWeights, isValidPeakHour, isValidTimezone,
+  peakAdjustedWeights, taskAdjustedWeights, TASK_WEIGHT_SHARE, isValidPeakHour, isValidTimezone,
   DEFAULT_PEAK_HOURS, type PeakHoursConfig,
   observedSpeedRank, TIMEOUT_LATENCY_CAP_MS,
   type HeadroomThresholds,
@@ -38,6 +40,8 @@ import { isDegraded } from './degradation.js';
 import { modelStatsKey, endpointScopeForBaseUrl } from '../lib/endpoint-scope.js';
 import { parseModelScope, scopeAllows } from '../lib/model-scope.js';
 import { getKeyQuotaHeadroom, inferQuotaPoolKey, isQuotaPoolAvailable, resolveQuotaPolicy } from './provider-quota.js';
+import { normalizeGroupKey } from './model-groups.js';
+import { getQuotaRoutingMode, evaluateShadowDecision, recordRoutingDecision, type QuotaRoutingMode, type QuotaCandidate } from './quota-routing.js';
 import type { BaseProvider } from '../providers/base.js';
 import type { Platform } from '@freellmapi/shared/types.js';
 import type { Db } from '../db/types.js';
@@ -389,6 +393,33 @@ export function setHeadroomThresholds(rampStart?: number | null, floor?: number 
   apply(HEADROOM_FLOOR_KEY, floor);
 }
 
+// ── Task-type weight share (persisted) ─────────────────────────────────────
+// #1127 follow-up: the bandit bias applied for a declared/derived task type
+// moves `share` of one axis onto the other (code: speed → intelligence; chat:
+// the reverse). The default matches the scoring.ts constant; operators can
+// tune it 0..1 (0 = bias disabled) without a code change. Absent/invalid
+// values fall back to the constant so existing installs are untouched.
+export const TASK_WEIGHT_SHARE_KEY = 'routing_task_weight_share';
+
+export function getTaskWeightShare(): number {
+  const raw = getSetting(TASK_WEIGHT_SHARE_KEY);
+  if (raw === undefined || raw.trim() === '') return TASK_WEIGHT_SHARE;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 && n <= 1 ? n : TASK_WEIGHT_SHARE;
+}
+
+// null clears back to the default; a value outside 0..1 throws.
+export function setTaskWeightShare(value: number | null): void {
+  if (value === null) {
+    getDb().prepare('DELETE FROM settings WHERE key = ?').run(TASK_WEIGHT_SHARE_KEY);
+    return;
+  }
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    throw new Error(`Invalid value ${value} for ${TASK_WEIGHT_SHARE_KEY} (must be 0..1)`);
+  }
+  setSetting(TASK_WEIGHT_SHARE_KEY, String(value));
+}
+
 /** Chance per request that an unmeasured model gets tried first when the
  *  exploration toggle is on. The bandit's Thompson sampling already explores
  *  automatically; this guarantees a floor so models with no reliability/speed
@@ -411,6 +442,40 @@ export function setRoutingStrategy(strategy: RoutingStrategy): void {
     throw new Error(`Unknown routing strategy: ${strategy}`);
   }
   setSetting(STRATEGY_KEY, strategy);
+}
+
+// ── Provider-wide autoroute policy (persisted, ADR ARCH-20260905 W1) ────────
+// `fallback_config.enabled` / `profile_models.enabled` already exclude a model
+// from auto routing while leaving explicit invocation working — but per model,
+// per chain. A provider the operator has ruled out of automatic selection
+// needs that to hold for models it does not have yet: catalog sync adds rows
+// enabled, and a new profile starts from the catalog, so a per-row flag leaks
+// the provider back into autoroute the next time either happens.
+//
+// Measured before this existed: 39 auto-routed Hugging Face requests, 30 of
+// them served, on a provider the operator had ruled out.
+//
+// This gate applies to AUTO routing only. Group and explicit-model routing
+// build their candidates through resolveModelGroupCandidates, which never
+// consults the active chain, so a listed provider stays manually usable.
+const AUTOROUTE_DISABLED_PLATFORMS_KEY = 'routing_autoroute_disabled_platforms';
+
+// SambaNova is already unroutable by a separate route — it is absent from
+// PLATFORMS (routes/keys.ts), so no key can be added for it — but naming it
+// here states the policy rather than relying on that side effect holding.
+const DEFAULT_AUTOROUTE_DISABLED_PLATFORMS = ['huggingface', 'sambanova'];
+
+export function getAutorouteDisabledPlatforms(): string[] {
+  const raw = getSetting(AUTOROUTE_DISABLED_PLATFORMS_KEY);
+  if (raw === undefined) return [...DEFAULT_AUTOROUTE_DISABLED_PLATFORMS];
+  // An explicitly empty value means "no provider is excluded" — distinct from
+  // never having been set, which takes the default above.
+  return raw.split(',').map(p => p.trim().toLowerCase()).filter(p => p.length > 0);
+}
+
+export function setAutorouteDisabledPlatforms(platforms: string[]): void {
+  const normalized = [...new Set(platforms.map(p => p.trim().toLowerCase()).filter(p => p.length > 0))];
+  setSetting(AUTOROUTE_DISABLED_PLATFORMS_KEY, normalized.join(','));
 }
 
 // ── Exploration toggle (persisted) ─────────────────────────────────────────
@@ -1027,13 +1092,14 @@ function scoreChainEntry(
  * faithful reflection of the user's picked strategy, not a re-sampled draw each
  * request. Priority mode is deterministic either way.
  */
-function orderChain(chain: ChainRow[], strategy: RoutingStrategy, sampled = true): ChainRow[] {
+function orderChain(chain: ChainRow[], strategy: RoutingStrategy, sampled = true, task?: 'code' | 'chat'): ChainRow[] {
   // Tier first, always: it is the one ordering input that score must not be able
   // to override (see ChainRow.match_tier). Zero for every chain built anywhere
   // else, so this is a no-op outside slug-fallback resolution.
   const tier = (e: ChainRow) => e.match_tier ?? 0;
   const preference = (e: ChainRow) => e.provider_preference_rank ?? 0;
-  const weights = weightsFor(strategy);
+  // `let`, not `const`: the peak-hours adjustment reassigns this below.
+  let weights = weightsFor(strategy);
   if (!weights) {
     // Legacy priority mode: manual chain order + the 429/failure penalty,
     // ascending.
@@ -1068,6 +1134,17 @@ function orderChain(chain: ChainRow[], strategy: RoutingStrategy, sampled = true
       .map(({ e, i }, rank) => ({ e, i, eff: rank + 1 + getPenalty(e.model_db_id) }))
       .sort((a, b) => tier(a.e) - tier(b.e) || preference(a.e) - preference(b.e) || a.eff - b.eff || a.e.priority - b.e.priority || a.i - b.i)
       .map(x => x.e);
+  }
+
+  // Task-type bias (#1127): a client-declared/derived task type moves part of
+  // one axis onto the other (code: speed → intelligence; chat: the reverse).
+  // Applied AFTER the peak-hours adjustment, on the same weights the rest of
+  // the chain scores with; opt-in, so absent a signal the preset stands.
+  // `fastest`, `reliable` and `custom` are exempt (see TASK_EXEMPT_STRATEGIES),
+  // and the share is operator-tunable via settings (0 disables the bias).
+  if (task) {
+    const adjusted = taskAdjustedWeights(weights, task, strategy, getTaskWeightShare());
+    weights = adjusted.adjusted ? adjusted.weights : weights;
   }
 
   const composites = chain.map(e => intelligenceComposite(e.size_label, e.intelligence_rank));
@@ -1114,6 +1191,14 @@ const GLOBAL_SORT_ALIASES: Record<string, string> = {
   balanced: 'balanced',
 };
 
+/** Drop providers the operator has excluded from automatic selection. Applied
+ *  to the auto chain only — see AUTOROUTE_DISABLED_PLATFORMS_KEY. */
+function withoutAutorouteDisabled(rows: ChainRow[]): ChainRow[] {
+  const excluded = getAutorouteDisabledPlatforms();
+  if (excluded.length === 0) return rows;
+  return rows.filter(row => !excluded.includes(row.platform.toLowerCase()));
+}
+
 /**
  * The chain auto-routing walks.
  *
@@ -1123,8 +1208,15 @@ const GLOBAL_SORT_ALIASES: Record<string, string> = {
  * the entire catalog instead, while the same chain addressed by name
  * (`auto:<name>`) correctly refused. `fallback_config` is the chain only for an
  * install with no profile at all.
+ *
+ * Providers excluded from autoroute are dropped here, which is what makes the
+ * exclusion hold for models the catalog has not synced yet.
  */
 function getActiveChain(db: Db): ChainRow[] {
+  return withoutAutorouteDisabled(getActiveChainRows(db));
+}
+
+function getActiveChainRows(db: Db): ChainRow[] {
   const profileId = getActiveProfileId(db);
   if (profileId != null) {
     return db.prepare(`
@@ -1156,7 +1248,8 @@ function getChainByProfileName(db: Db, name: string): ChainRow[] | null {
   const profile = db.prepare("SELECT id FROM profiles WHERE LOWER(name) = ?").get(name.toLowerCase()) as { id: number } | undefined;
   if (!profile) return null;
 
-  return db.prepare(`
+  // `auto:<name>` is still automatic selection, so the provider policy applies.
+  return withoutAutorouteDisabled(db.prepare(`
     SELECT pm.model_db_id, pm.priority, pm.enabled,
            m.platform, m.model_id, m.display_name, m.intelligence_rank,
            m.size_label, m.monthly_token_budget,
@@ -1166,7 +1259,7 @@ function getChainByProfileName(db: Db, name: string): ChainRow[] | null {
     JOIN models m ON m.id = pm.model_db_id AND m.enabled = 1
     WHERE pm.profile_id = ?
     ORDER BY pm.priority ASC
-  `).all(profile.id) as ChainRow[];
+  `).all(profile.id) as ChainRow[]);
 }
 
 function getChainByGlobalSort(db: Db, globalAxis: string): ChainRow[] {
@@ -1189,6 +1282,9 @@ function getChainByGlobalSort(db: Db, globalAxis: string): ChainRow[] {
     ${profileId != null ? 'LEFT JOIN profile_models pm ON pm.profile_id = ? AND pm.model_db_id = m.id' : ''}
     WHERE m.enabled = 1 AND ${chainEnabled}
   `).all(...(profileId != null ? [profileId] : [])) as ChainRow[];
+  // This sort spans the whole catalog — rows with no chain entry default to in
+  // — so it is the path a newly synced provider model reaches autoroute by.
+  const allowed = withoutAutorouteDisabled(allEnabled);
 
   const strategyMap: Record<string, RoutingStrategy> = {
     'smart': 'smartest',
@@ -1199,7 +1295,7 @@ function getChainByGlobalSort(db: Db, globalAxis: string): ChainRow[] {
   };
   const strat = strategyMap[globalAxis] || 'balanced';
   
-  return orderChain(allEnabled, strat);
+  return orderChain(allowed, strat);
 }
 
 /**
@@ -1315,14 +1411,23 @@ const UNKNOWN_QUOTA_HEADROOM = 0.5;
  * Whether remaining-quota weighting is meaningful for this chain entry: the
  * operator asked for it AND the platform meters its keys separately.
  *
- * An account-scoped pool ('<platform>::account') is ONE budget every key of the
- * account draws down, so "which key has more left" has no answer — every key
- * reports the same number, and reordering on it would only churn the rotation
- * for nothing (#919).
+ * An account-scoped pool is ONE budget every key of the account draws down, so
+ * "which key has more left" has no answer — every key reports the same number,
+ * and reordering on it would only churn the rotation for nothing (#919).
+ *
+ * Scope is asked for directly rather than pattern-matched off the pool-key
+ * string: the key is a label whose shape is going to change (ADR
+ * ARCH-20260905, F8), and a routing rule must not move with it.
  */
 function quotaWeightingApplies(entry: ChainRow): boolean {
   if (getKeySelectionStrategy() !== 'least-remaining') return false;
-  return resolveQuotaPolicy(entry.platform as Platform, entry.model_id).accounting === 'metered';
+  // Both sides of this merge guarded the same call for different reasons, and
+  // both are needed. Ranking keys by remaining quota is meaningless when the
+  // pool is not metered at all (nothing to rank on), AND when the pool is
+  // account-scoped (every key reports the same number, so reordering only
+  // churns the rotation — #919).
+  const policy = resolveQuotaPolicy(entry.platform as Platform, entry.model_id);
+  return policy.accounting === 'metered' && policy.scope !== 'account';
 }
 
 /**
@@ -1555,6 +1660,18 @@ export function hasOtherUsableKey(modelDbId: number, excludingKeyId: number, ski
     return true;
   }
   return false;
+}
+
+/**
+ * Can ANY key serve this model right now? The same gates hasOtherUsableKey
+ * applies — scope (#657), per-key cooldown, and the provider/model rate and
+ * token windows — with no key excluded. /v1/models uses it to tell a `ready`
+ * model from an `exhausted` one (#1100), so the listing cannot claim a model
+ * the router would immediately skip.
+ */
+export function hasUsableKeyForModel(modelDbId: number): boolean {
+  // Key ids are AUTOINCREMENT and start at 1, so -1 excludes nothing.
+  return hasOtherUsableKey(modelDbId, -1);
 }
 
 /**
@@ -1905,7 +2022,90 @@ export function resolveFusionCandidate(modelId: string): FusionCandidate | null 
   return null;
 }
 
-export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, preferredModelDbId?: number, requireVision = false, requireTools = false, skipModels?: Set<number>, prefetchedChain?: ChainRow[], requireStructured = false, skipPlatforms?: Set<string>, exactOutputReserve = 0): RouteResult {
+/**
+ * Record what quota-aware scoring would have preferred among the providers
+ * serving the SAME logical model as the route just chosen (ADR W3).
+ *
+ * Peers are found by normalized group key, so "GPT-OSS 120B (Groq)" and
+ * "GPT-OSS 120B (NV)" are recognised as one logical model while "Command R+"
+ * stays distinct from "Command R". Fewer than two peers means there was no
+ * provider choice to make and nothing is recorded.
+ *
+ * Entirely side-effect-free with respect to routing: it receives the decided
+ * route, returns nothing, and cannot throw into the caller.
+ *
+ * The peer list is computed synchronously — it is in-memory work over a chain
+ * the caller already holds — but the quota reads and the insert are deferred
+ * past the current turn of the event loop. Selection must add minimal latency,
+ * and this is measurement: it has no reason to run before the caller gets its
+ * route. Deferring also means a slow or locked database delays a log write
+ * rather than a request.
+ */
+function noteShadowRoutingDecision(route: RouteResult, servingChain: ChainRow[]): void {
+  try {
+    const mode = getQuotaRoutingMode();
+    if (mode === 'off') return;
+
+    const chosen = servingChain.find(e => e.model_db_id === route.modelDbId);
+    if (!chosen) return;
+    const groupKey = normalizeGroupKey(chosen.display_name);
+    const peers = servingChain
+      .filter(e => normalizeGroupKey(e.display_name) === groupKey)
+      .map(e => ({
+        platform: e.platform,
+        modelId: e.model_id,
+        displayName: e.display_name,
+        // For a relay this is the only thing distinguishing two peers that
+        // both report platform 'custom' and the same model id.
+        endpointScope: e.endpoint_scope ?? '',
+      }));
+    if (peers.length < 2) return;
+
+    const platform = route.platform;
+    const modelId = route.modelId;
+    const endpointScope = route.endpointScope ?? '';
+    setImmediate(() => evaluateAndRecordShadow(peers, platform, modelId, endpointScope, mode));
+  } catch {
+    // Quota awareness is an enhancement, never a reason a request fails.
+  }
+}
+
+function evaluateAndRecordShadow(
+  peers: QuotaCandidate[],
+  actualPlatform: string,
+  actualModelId: string,
+  actualEndpointScope: string,
+  mode: QuotaRoutingMode,
+): void {
+  try {
+    const decision = evaluateShadowDecision(peers, (platform, modelId, quota) => {
+      // Reuse the limiter's own counters rather than a second accounting of the
+      // same events: whatever the gates believe has been spent is what the
+      // comparison should be judged against.
+      const windowMs = quota.window.periodStartMs == null
+        ? null
+        : Math.max(1, Date.now() - quota.window.periodStartMs);
+      if (windowMs == null) return null;
+      return quota.metric === 'requests'
+        ? countRequestsInWindow(platform, modelId, windowMs)
+        : countTokensInWindow(platform, modelId, windowMs);
+    });
+    if (!decision) return;
+
+    recordRoutingDecision({
+      logicalModel: decision.logicalModel,
+      mode,
+      actualPlatform,
+      actualModelId,
+      actualEndpointScope,
+      decision,
+    });
+  } catch {
+    // Quota awareness is an enhancement, never a reason a request fails.
+  }
+}
+
+export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, preferredModelDbId?: number, requireVision = false, requireTools = false, skipModels?: Set<number>, prefetchedChain?: ChainRow[], requireStructured = false, skipPlatforms?: Set<string>, exactOutputReserve = 0, task?: 'code' | 'chat'): RouteResult {
   const db = getDb();
 
   const strategy = getRoutingStrategy();
@@ -1913,7 +2113,7 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
 
   const chain = (prefetchedChain ?? getActiveChain(db)).filter(e => e.enabled);
 
-  const sortedChain = orderChain(chain, strategy);
+  const sortedChain = orderChain(chain, strategy, true, task);
 
   // Exploration toggle (#685/#707 follow-up): when enabled, give a model with
   // no reliability/speed samples a guaranteed chance to be tried, so it stops
@@ -2079,7 +2279,14 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
     // can serve right now — in which case we fall through to the next model in
     // the sorted chain for THIS request (no explicit penalty needed).
     const route = selectKeyForModel(entry, estimatedTokens, skipKeys, diag);
-    if (route) return route;
+    if (route) {
+      // Shadow only (W3): the route above is already decided and is returned
+      // untouched whatever this concludes. It runs after selection precisely so
+      // it CANNOT influence it — there is no code path from here back into the
+      // choice, and every failure inside is swallowed.
+      noteShadowRoutingDecision(route, servingChain);
+      return route;
+    }
   }
 
   throw new RouteError(summarizeExhaustion(diag, getSoonestCooldownExpiry()), 429, diag);

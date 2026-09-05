@@ -554,6 +554,8 @@
     "ollamaKeyRequired": "API kaliti talab qilinadi",
     "claudeAliases": "Claude Code aniqlash taxalluslari",
     "claudeAliasesHint": "Shlyuz model tanlagichi katalogni ro'yxatlashi uchun claude/<model> taxalluslarini oching.",
+    "mcpServer": "MCP serveri",
+    "mcpServerHint": "Agent mijozlari uchun /mcp yakuniy nuqtasini ochadi. Yangi o‘rnatishlarda u o‘chiq bo‘ladi.",
     "urlTokensTitle": "Bekor qilinadigan URL tokenlari",
     "urlTokensDesc": "Faqat sarlavhasiz mijozlar uchun. URL tokenlari tarix va jurnallarga sizib chiqishi mumkin, shuning uchun kerak bo'lmaganda ularni bekor qiling.",
     "urlTokenLabel": "Token yorlig'i",
@@ -724,7 +726,10 @@
     "ttft": "TTFT",
     "requestsByAgent": "Agent bo'yicha so'rovlar",
     "sortBy": "{column} bo‘yicha saralash",
-    "sortHint": "Saralash faqat yuklangan {count} ta qatorga qo‘llanadi"
+    "sortHint": "Saralash faqat yuklangan {count} ta qatorga qo‘llanadi",
+    "cacheHitRate": "Kesh muvaffaqiyat darajasi",
+    "cacheSavedTokens": "{tokens} token tejaldi",
+    "cacheHitRateHint": "Server ishga tushganidan beri {hits} muvaffaqiyat, {misses} o‘tkazib yuborish · {requests} ta provayder so‘rovi tejaldi"
   },
   "logs": {
     "title": "Jurnal",

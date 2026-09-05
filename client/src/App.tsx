@@ -39,6 +39,7 @@ import AudioPage from '@/pages/AudioPage'
 import MediaDetailPage from '@/pages/MediaDetailPage'
 import EmbeddingDetailPage from '@/pages/EmbeddingDetailPage'
 import AnalyticsPage from '@/pages/AnalyticsPage'
+import QuotaPage from '@/pages/QuotaPage'
 import LogsPage from '@/pages/LogsPage'
 import PremiumPage from '@/pages/PremiumPage'
 import NotFoundPage from '@/pages/NotFoundPage'
@@ -71,6 +72,7 @@ const navItems = [
   { to: '/keys', labelKey: 'nav.keys' },
   { to: '/agents', labelKey: 'nav.agents' },
   { to: '/analytics', labelKey: 'nav.analytics' },
+  { to: "/quota", labelKey: "nav.quota" },
   { to: '/premium', labelKey: 'nav.premium' },
 ]
 
@@ -475,6 +477,7 @@ function App() {
                       <Route path="/agents" element={<AgentsPage />} />
                       <Route path="/fallback" element={<Navigate to="/models/chat" replace />} />
                       <Route path="/analytics" element={<AnalyticsPage />} />
+                      <Route path="/quota" element={<QuotaPage />} />
                       <Route path="/logs" element={<LogsPage />} />
                       <Route path="/premium" element={<PremiumPage />} />
                       <Route path="/test" element={<Navigate to="/playground" replace />} />
