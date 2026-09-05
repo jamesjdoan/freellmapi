@@ -7,6 +7,7 @@ import {
 } from './ratelimit.js';
 import {
   resolveQuotaWindow,
+  parseStoredUtc,
   DAY_MS,
   MINUTE_MS,
   type QuotaPeriod,
@@ -82,6 +83,14 @@ export interface EffectiveQuota {
   metric: QuotaPolicyMetric;
   scope: QuotaPolicyScope;
   limit: number;
+  /**
+   * What the PROVIDER said is left, when it said anything. Only ever set from a
+   * measured source. A provider-reported window has no period start, so there
+   * is no span to count local usage over — without this the highest-confidence
+   * source we have was silently skipped by every consumer that works from
+   * "usage counted since period start".
+   */
+  reportedRemaining: number | null;
   period: QuotaPeriod;
   window: QuotaWindow;
   source: EffectiveQuotaSource;
@@ -265,6 +274,7 @@ interface ModelLimitRow {
 interface ObservationRow {
   metric: string;
   limit_value: number | null;
+  remaining_value: number | null;
   reset_at: string | null;
   confidence: number;
 }
@@ -307,10 +317,11 @@ export function resolveEffectiveQuotas(
     source: EffectiveQuotaSource,
     confidence: number,
     subjectModelId: string | null,
+    reportedRemaining: number | null = null,
   ): void => {
     if (!Number.isFinite(limit) || limit <= 0) return;
     considerCandidate(best, {
-      platform, modelId: subjectModelId, endpointScope, metric, scope, limit,
+      platform, modelId: subjectModelId, endpointScope, metric, scope, limit, reportedRemaining,
       period, window: resolveQuotaWindow(period, now), source, confidence,
     });
   };
@@ -355,7 +366,11 @@ export function resolveEffectiveQuotas(
     // A policy naming an endpoint applies only to that endpoint. One naming
     // none applies to all of them, which is what every pre-existing row means.
     .filter(policy => policy.endpointScope == null || policy.endpointScope === endpointScope)
-    .sort((a, b) => policySpecificity(b) - policySpecificity(a));
+    // Specificity first, then `priority` descending. The tie is real, not
+    // theoretical: axisKey is (metric, period), so two policies differing only
+    // by `scope` claim the same axis at equal specificity — and without a
+    // tiebreak the winner would be whatever order SQLite happened to return.
+    .sort((a, b) => policySpecificity(b) - policySpecificity(a) || b.priority - a.priority);
   for (const policy of applicable) {
     add(
       policy.metric, policy.scope, policy.limit, periodForPolicy(policy),
@@ -367,20 +382,25 @@ export function resolveEffectiveQuotas(
   // The observation carries the provider's own reset instant; that beats any
   // period we could model, so it is expressed as a provider_reported window.
   const observations = db.prepare(`
-    SELECT metric, limit_value, reset_at, confidence
+    SELECT metric, limit_value, remaining_value, reset_at, confidence
       FROM provider_quota_state
      WHERE platform = ? AND limit_value IS NOT NULL AND source IN ('header', 'quota_api')
   `).all(platform) as ObservationRow[];
   for (const obs of observations) {
     if (obs.limit_value == null) continue;
     const metric: QuotaPolicyMetric = obs.metric === 'tokens' ? 'total_tokens' : 'requests';
-    const resetMs = obs.reset_at ? Date.parse(obs.reset_at) : NaN;
-    // Without a reset the provider has told us a size but not a window; keep
-    // the number and inherit the period from whatever else claims this axis.
+    // Same zone-less-UTC trap as the forecast: Date.parse would read this as
+    // local time and shift every provider-reported reset by the host offset.
+    const resetMs = parseStoredUtc(obs.reset_at) ?? NaN;
+    // Without a reset the provider has told us a size but not a window. Inherit
+    // the period from whatever already claims this METRIC, whichever period
+    // that is — looking only for a rolling-day axis missed an operator policy
+    // written as calendar_day, and the two then coexisted as separate axes.
+    const sameMetric = [...best.values()].find(q => q.metric === metric);
     const period: QuotaPeriod = Number.isFinite(resetMs)
       ? { kind: 'provider_reported', resetAtMs: resetMs }
-      : (best.get(axisKey(metric, { kind: 'rolling', windowMs: DAY_MS }))?.period ?? { kind: 'rolling', windowMs: DAY_MS });
-    add(metric, 'provider_account', obs.limit_value, period, 'provider_header', obs.confidence, null);
+      : (sameMetric?.period ?? { kind: 'rolling', windowMs: DAY_MS });
+    add(metric, 'provider_account', obs.limit_value, period, 'provider_header', obs.confidence, null, obs.remaining_value);
   }
 
   return [...best.values()];

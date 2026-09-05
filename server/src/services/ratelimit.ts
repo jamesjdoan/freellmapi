@@ -239,17 +239,23 @@ function recordUsage(
 // staleness is invisible here while the query count collapses to roughly one
 // per model per burst. This feeds a recorded comparison, never a gate — the
 // hard checks below still read live counts.
+//
+// Keyed on the Db handle like the other memos: reconnecting (tests, a restore)
+// hands back a different object, and a count from the previous database must
+// not survive into the next one.
 const SHADOW_COUNT_TTL_MS = 5_000;
-const shadowCountCache = new Map<string, { at: number; value: number }>();
+const shadowCountCache = new Map<string, { db: unknown; at: number; value: number }>();
 
 function countAcrossKeys(platform: string, modelId: string, kind: 'request' | 'tokens', windowMs: number, now: number): number {
   // Bucket the window so a continuously-sliding width does not defeat the cache.
   const bucket = Math.round(windowMs / 1000);
   const cacheKey = `${platform}:${modelId}:${kind}:${bucket}`;
-  const hit = shadowCountCache.get(cacheKey);
-  if (hit && now - hit.at < SHADOW_COUNT_TTL_MS) return hit.value;
+  let handle: unknown;
 
   const value = withDb(db => {
+    handle = db;
+    const hit = shadowCountCache.get(cacheKey);
+    if (hit && hit.db === db && now - hit.at < SHADOW_COUNT_TTL_MS) return hit.value;
     const row = db.prepare(`
       SELECT COUNT(*) AS requests, COALESCE(SUM(tokens), 0) AS tokens
         FROM rate_limit_usage
@@ -261,7 +267,7 @@ function countAcrossKeys(platform: string, modelId: string, kind: 'request' | 't
     return kind === 'request' ? row.requests : row.tokens;
   }) ?? 0;
 
-  shadowCountCache.set(cacheKey, { at: now, value });
+  if (handle !== undefined) shadowCountCache.set(cacheKey, { db: handle, at: now, value });
   return value;
 }
 
