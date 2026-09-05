@@ -2,6 +2,11 @@
 
 Doc revision history for `docs/api/`, seeded from API-relevant commits.
 
+## 2026-09-05 — Quota API
+
+- **docs(api): document the `/api/quota` endpoints** — added reference for quota policy CRUD (`GET /policies`, `PUT /policies`, `DELETE /policies/:id`), quota state (`GET /state`), forecast (`GET /forecast`), shadow (`GET /shadow`), decisions (`GET /decisions`), mode (`GET /mode`, `PUT /mode`), and reservation (`GET /reservation`, `PUT /reservation`) in `docs/api/OVERVIEW.md`.
+
+
 ## 2026-09-03
 
 - **docs(api): document the task-type routing header** — added `X-FreeLLM-Task-Type: code|chat|auto` (#1127) to the per-request headers section, with the weight shift it applies and the strategies that ignore it.

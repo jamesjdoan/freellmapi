@@ -247,7 +247,9 @@ describe('provider-quota: parse from response headers (shared parseRetryAfterMs)
   // documented duration form ("2m59.56s") produced no reset_at AND left no
   // trace of what arrived — making "the provider omits it" indistinguishable
   // from "we could not read it". The raw value must survive the parse failure.
-  it('retains a reset header the parser cannot read', () => {
+  // ADR ARCH-20260905, F3: the reset parser now handles duration strings, so Groq's
+  // documented duration form ("2m59.56s") is parsed and retained in rawJson.
+  it('parses a duration reset header and retains the raw value', () => {
     const resp = new Response(null, {
       status: 200,
       headers: {
@@ -259,9 +261,14 @@ describe('provider-quota: parse from response headers (shared parseRetryAfterMs)
     const obs = parseQuotaObservationsFromResponse(resp, { platform: 'groq', keyId: 1 });
     const requests = obs.find(o => o.metric === 'requests');
     expect(requests).toBeDefined();
-    // Still unparsed — this test does not claim we understand the format.
-    expect(requests!.resetAt).toBeNull();
-    // ...but the evidence is now recoverable from the log.
+    // Now parsed: resetAt should be set to approximately now + 2m59.56s.
+    const resetAt = requests!.resetAt;
+    expect(resetAt).not.toBeNull();
+    const resetDate = new Date(resetAt);
+    const now = Date.now();
+    const expected = now + 2 * 60 * 1000 + 59.56 * 1000; // 2 minutes, 59.56 seconds in ms
+    expect(Math.abs(resetDate.getTime() - expected)).toBeLessThan(2000); // within 2 seconds
+    // The raw value is still retained for auditing.
     expect(requests!.rawJson).toBeTruthy();
     expect(JSON.parse(requests!.rawJson!)['x-ratelimit-reset-requests']).toBe('2m59.56s');
   });
@@ -323,6 +330,74 @@ describe('provider-quota: parse from response headers (shared parseRetryAfterMs)
     const resp = new Response(null, { status: 200, headers: { 'content-type': 'application/json' } });
     expect(parseQuotaObservationsFromResponse(resp, { platform: 'custom', keyId: 1 })).toHaveLength(0);
   });
+  // The reset grammar is one pure function, so it is exercised as a table
+  // rather than as one 20-line Response per case: same coverage, and a new
+  // accepted form is one row instead of a copied block.
+  const RESET_CASES: { header: string; expectedMs: number | null }[] = [
+    { header: '2m59.56s', expectedMs: 179_560 },
+    { header: '59.56s', expectedMs: 59_560 },
+    { header: '1h2m3s', expectedMs: 3_723_000 },
+    { header: '750ms', expectedMs: 750 },
+    { header: '1m', expectedMs: 60_000 },
+    { header: '45s', expectedMs: 45_000 },
+    // Existing numeric behaviour, unchanged: a bare number is seconds from now.
+    { header: '30', expectedMs: 30_000 },
+    // Anything it cannot read with certainty stays null. A wrong reset silently
+    // corrupts pacing; a null one is already handled and observable.
+    { header: 'soon', expectedMs: null },
+    { header: '2 minutes', expectedMs: null },
+    { header: '-5s', expectedMs: null },
+    { header: '', expectedMs: null },
+  ];
+
+  it.each(RESET_CASES)('reads reset header $header', ({ header, expectedMs }) => {
+    const before = Date.now();
+    const resp = new Response(null, {
+      status: 200,
+      headers: { 'x-ratelimit-limit-requests': '1000', 'x-ratelimit-reset-requests': header },
+    });
+    const requests = parseQuotaObservationsFromResponse(resp, { platform: 'groq', keyId: 1 })
+      .find(o => o.metric === 'requests');
+    expect(requests).toBeDefined();
+
+    if (expectedMs === null) {
+      expect(requests!.resetAt).toBeNull();
+      return;
+    }
+    expect(requests!.resetAt).not.toBeNull();
+    const offset = Date.parse(requests!.resetAt!) - before;
+    expect(offset).toBeGreaterThanOrEqual(expectedMs - 50);
+    expect(offset).toBeLessThanOrEqual(expectedMs + 1000);
+  });
+
+  it('retains the raw reset value whether or not it parsed', () => {
+    const resp = new Response(null, {
+      status: 200,
+      headers: {
+        'x-ratelimit-limit-requests': '1000',
+        'x-ratelimit-remaining-requests': '999',
+        'x-ratelimit-reset-requests': '2m59.56s',
+      },
+    });
+    const requests = parseQuotaObservationsFromResponse(resp, { platform: 'groq', keyId: 1 })
+      .find(o => o.metric === 'requests');
+    // Retention is the property that makes parsing safe to attempt at all: a
+    // wrong grammar stays auditable against what the provider actually sent.
+    expect(JSON.parse(requests!.rawJson!)['x-ratelimit-reset-requests']).toBe('2m59.56s');
+  });
+
+  it('still reads an epoch-seconds reset as an absolute instant', () => {
+    const epochSeconds = Math.floor((Date.now() + 3_600_000) / 1000);
+    const resp = new Response(null, {
+      status: 200,
+      headers: { 'x-ratelimit-limit-requests': '1000', 'x-ratelimit-reset-requests': String(epochSeconds) },
+    });
+    const requests = parseQuotaObservationsFromResponse(resp, { platform: 'groq', keyId: 1 })
+      .find(o => o.metric === 'requests');
+    expect(Date.parse(requests!.resetAt!)).toBe(epochSeconds * 1000);
+  });
+
+
 });
 
 describe('provider-quota: reset_at replenishment on read (#453)', () => {

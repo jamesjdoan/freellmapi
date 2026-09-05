@@ -152,9 +152,14 @@ export function scoreQuotaCandidate(
 ): Pick<ScoredCandidate, 'score' | 'headroom' | 'paceDelta'> {
   let worstHeadroom: number | null = null;
   let bindingPace: number | null = null;
-
   for (const quota of quotas) {
-    const consumed = used(quota);
+    // A provider that reported its own remaining beats any local count, and is
+    // often the ONLY usable figure: a provider_reported window has no period
+    // start, so there is no span to count usage over. Skipping those meant the
+    // highest-confidence source we have was ignored entirely.
+    const consumed = quota.reportedRemaining != null
+      ? quota.limit - quota.reportedRemaining
+      : used(quota);
     if (consumed == null || quota.limit <= 0) continue;
     const headroom = Math.max(0, Math.min(1, 1 - consumed / quota.limit));
     if (worstHeadroom == null || headroom < worstHeadroom) {

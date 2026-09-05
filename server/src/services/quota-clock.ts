@@ -25,6 +25,25 @@ export const MINUTE_MS = 60_000;
 export const HOUR_MS = 3_600_000;
 export const DAY_MS = 86_400_000;
 
+/**
+ * Parse a timestamp as written by `toSqliteUtc` — `YYYY-MM-DD HH:MM:SS[.mmm]`,
+ * a UTC instant with no zone marker.
+ *
+ * `new Date()` and `Date.parse()` read that shape as LOCAL time, so on a UTC+10
+ * host every stored reset came back ten hours early and anything less than ten
+ * hours away read as already-past. Found on a dashboard showing "—" for a reset
+ * two hours out. Values that already carry a zone (ISO with `Z` or an offset)
+ * are passed through untouched.
+ */
+export function parseStoredUtc(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  const bare = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(trimmed);
+  const ms = Date.parse(bare ? `${trimmed.replace(' ', 'T')}Z` : trimmed);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+
 export type QuotaPeriod =
   /** Fixed-width lookback: the window is always [now - windowMs, now]. This is
    *  what the per-model RPM/RPD/TPM/TPD gates enforce today. */

@@ -1,5 +1,6 @@
 import type { QuotaObservationView } from './provider-quota.js';
 import { getQuotaStateForKeys } from './provider-quota.js';
+import { parseStoredUtc } from './quota-clock.js';
 
 // Daily free-tier balance forecast (#1104). Free tiers reset on a per-account
 // window (usually UTC midnight) and the only way to know how much headroom is
@@ -46,9 +47,13 @@ export interface QuotaForecastEntry {
 }
 
 function secondsUntilReset(resetAt: string | null): number | null {
-  if (!resetAt) return null;
-  const ms = new Date(resetAt).getTime() - Date.now();
-  if (Number.isNaN(ms) || ms <= 0) return null;
+  // parseStoredUtc, not `new Date()`: reset_at is stored as a zone-less UTC
+  // string, which `new Date()` reads as local time. On a UTC+10 host that made
+  // every reset under ten hours away look like it had already passed.
+  const at = parseStoredUtc(resetAt);
+  if (at == null) return null;
+  const ms = at - Date.now();
+  if (ms <= 0) return null;
   return Math.floor(ms / 1000);
 }
 

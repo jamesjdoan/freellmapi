@@ -98,6 +98,32 @@ function parseHeaderNumber(raw: string | null): number | null {
 }
 
 function parseResetAtFromHeader(raw: string | null, now = Date.now()): string | null {
+  if (!raw) return null;
+
+  // First, try to parse as a duration string (e.g., "2m59.56s", "59.56s", "1h2m3s", "750ms", "1m", "45s").
+  // This is safe because the raw value is retained (see captureRawHeaders), so any parsing error is auditable.
+  const durationRegex = /^(\d+(?:\.\d+)?(ms|h|m|s))+$/;
+  if (durationRegex.test(raw)) {
+    const timePartRegex = /(\d+(?:\.\d+)?)(ms|h|m|s)/g;
+    let totalMs = 0;
+    let match;
+    while ((match = timePartRegex.exec(raw)) !== null) {
+      const value = parseFloat(match[1]);
+      const unit = match[2];
+      let ms;
+      switch (unit) {
+        case 'h': ms = value * 3600 * 1000; break;
+        case 'm': ms = value * 60 * 1000; break;
+        case 's': ms = value * 1000; break;
+        case 'ms': ms = value; break;
+        default: return null; // Should not happen due to outer regex
+      }
+      totalMs += ms;
+    }
+    return new Date(now + totalMs).toISOString();
+  }
+
+  // Fall back to existing numeric parsing.
   const parsed = parseHeaderNumber(raw);
   if (parsed === null) return null;
   if (parsed > 1_000_000_000_000) return new Date(parsed).toISOString();
@@ -732,7 +758,13 @@ export function getQuotaStateForKeys(): QuotaObservationView[] {
       latest.endpoint AS endpoint,
       latest.status_code AS statusCode,
       latest.retry_after_ms AS retryAfterMs,
-      latest.raw_json AS rawJson,
+      -- raw_json is deliberately NOT projected. It is a verbatim slice of the
+      -- provider's response headers, kept so a parse failure stays auditable in
+      -- the DB — but this view is served straight to the dashboard by
+      -- routes/health.ts, and raw upstream headers are not something to hand a
+      -- client by default. The capture filters (whitelist + deny-list) reduce
+      -- the risk at write time; not serving it removes the egress path.
+      NULL AS rawJson,
       latest.created_at AS createdAt
     FROM provider_quota_state pqs
     LEFT JOIN api_keys k ON k.id = pqs.key_id
