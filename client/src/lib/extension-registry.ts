@@ -91,6 +91,15 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
     ],
   },
   {
+    id: 'quota-capacity-dashboard',
+    title: 'Quota and capacity dashboard',
+    summary: 'One page for every provider: pools the provider measures itself, allowances counted locally against a known limit, and windows estimated from refill and recovery behaviour where nothing is published. Carries each number source so an estimate is never read as a measurement.',
+    settingsLocation: 'Quota (navigation) → Provider overview, Reset timeline, Shadow routing',
+    destinations: [
+      { kind: 'internal', label: 'Open quota dashboard', href: '/quota' },
+    ],
+  },
+  {
     id: 'separate-extension-branch',
     title: 'Separate extension branch',
     summary: 'Imperium changes stay on their own fork branch and are rebased onto upstream releases instead of merged into upstream main.',
