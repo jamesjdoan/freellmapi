@@ -242,6 +242,63 @@ describe('provider-quota: parse from response headers (shared parseRetryAfterMs)
       quotaPoolKey: 'radeon::daily-free', limit: 10, remaining: 7.5,
     });
   });
+
+  // ADR ARCH-20260905, F3: the reset parser takes numerics only, so Groq's
+  // documented duration form ("2m59.56s") produced no reset_at AND left no
+  // trace of what arrived — making "the provider omits it" indistinguishable
+  // from "we could not read it". The raw value must survive the parse failure.
+  it('retains a reset header the parser cannot read', () => {
+    const resp = new Response(null, {
+      status: 200,
+      headers: {
+        'x-ratelimit-limit-requests': '1000',
+        'x-ratelimit-remaining-requests': '999',
+        'x-ratelimit-reset-requests': '2m59.56s',
+      },
+    });
+    const obs = parseQuotaObservationsFromResponse(resp, { platform: 'groq', keyId: 1 });
+    const requests = obs.find(o => o.metric === 'requests');
+    expect(requests).toBeDefined();
+    // Still unparsed — this test does not claim we understand the format.
+    expect(requests!.resetAt).toBeNull();
+    // ...but the evidence is now recoverable from the log.
+    expect(requests!.rawJson).toBeTruthy();
+    expect(JSON.parse(requests!.rawJson!)['x-ratelimit-reset-requests']).toBe('2m59.56s');
+  });
+
+  // A platform with no HEADER_SPECS entry currently records "no quota headers
+  // exposed" on every 200. That claim is only checkable if the quota-shaped
+  // headers the provider DID send are captured.
+  it('discovers quota-shaped headers on a platform with no spec', () => {
+    const resp = new Response(null, {
+      status: 200,
+      headers: { 'x-nvidia-quota-remaining': '37', 'content-type': 'application/json' },
+    });
+    const obs = parseQuotaObservationsFromResponse(resp, { platform: 'nvidia', keyId: 1 });
+    const probe = obs.find(o => o.source === 'probe');
+    expect(probe).toBeDefined();
+    const raw = JSON.parse(probe!.rawJson!);
+    expect(raw['x-nvidia-quota-remaining']).toBe('37');
+    // Non-quota headers are not swept up.
+    expect(raw['content-type']).toBeUndefined();
+  });
+
+  it('never captures credential-bearing headers', () => {
+    const resp = new Response(null, {
+      status: 429,
+      headers: {
+        'retry-after': '30',
+        'set-cookie': 'session=super-secret-value',
+        'x-ratelimit-reset-token': 'quota-shaped-but-a-token',
+      },
+    });
+    const obs = parseQuotaObservationsFromResponse(resp, { platform: 'groq', keyId: 1 });
+    const serialized = JSON.stringify(obs);
+    expect(serialized).not.toContain('super-secret-value');
+    expect(serialized).not.toContain('quota-shaped-but-a-token');
+    // The legitimate signal still lands.
+    expect(obs.some(o => o.retryAfterMs === 30_000)).toBe(true);
+  });
 });
 
 describe('provider-quota: reset_at replenishment on read (#453)', () => {

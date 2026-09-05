@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { getDb } from '../db/index.js';
+import type { Db } from '../db/types.js';
 // Single shared Retry-After parser (was duplicated here and in providers/base.ts).
 import { parseRetryAfterMs } from '../providers/base.js';
 import type {
@@ -259,7 +260,22 @@ const HEADER_SPECS: Partial<Record<Platform, HeaderSpec[]>> = {
   ],
 };
 
-function extractContext(opts: Pick<QuotaObservationInput, 'platform' | 'modelId' | 'quotaPoolKey' | 'keyId' | 'providerAccountId' | 'endpoint'> = {}) {
+/** The subject an observation is attributed to: which account, key, model and
+ *  pool the numbers belong to. Named because it is the contract every
+ *  observation builder consumes, and (ADR ARCH-20260905, F8) the shape that
+ *  changes when quota gains a per-model subject. */
+export interface QuotaObservationSubject {
+  platform: Platform;
+  keyId: number;
+  providerAccountId: string | null;
+  modelId: string | null;
+  quotaPoolKey: string;
+  endpoint: string | null;
+}
+
+function extractContext(
+  opts: Pick<QuotaObservationInput, 'platform' | 'modelId' | 'quotaPoolKey' | 'keyId' | 'providerAccountId' | 'endpoint'> = {},
+): QuotaObservationSubject | null {
   const context = getQuotaObservationContext();
   const platform = opts.platform ?? context?.platform;
   if (!platform) return null;
@@ -273,19 +289,74 @@ function extractContext(opts: Pick<QuotaObservationInput, 'platform' | 'modelId'
   };
 }
 
+// ── Raw header capture (ADR ARCH-20260905, F3/F10) ──────────────────────────
+// `parseResetAtFromHeader` accepts only numerics, so a provider that states its
+// reset as a duration ("2m59.56s") has that value silently dropped — and until
+// now nothing retained the original, which made "the provider omits it" and
+// "our parser rejected it" indistinguishable after the fact. Capture the raw
+// values so the question is answerable from the log instead of from a live
+// packet capture.
+//
+// Whitelist + pattern, never a full header dump: a blind snapshot can carry
+// Set-Cookie or similar, and telemetry must not hold credential material.
+// The deny-list wins over the pattern, so a quota-shaped header that names a
+// token is still refused.
+const RAW_CAPTURE_PATTERN = /ratelimit|rate-limit|quota|retry|reset|remaining|credit/i;
+const RAW_CAPTURE_DENY = /authorization|cookie|token|secret|api-?key|bearer|session|password|signature/i;
+/** Defensive ceiling. Real header sets are a few hundred bytes; anything larger
+ *  is a provider doing something unexpected and is not worth persisting. */
+const RAW_CAPTURE_MAX_CHARS = 2048;
+
+function captureRawHeaders(headers: Headers | undefined, explicit: (string | undefined)[]): string | null {
+  if (!headers) return null;
+  const captured: Record<string, string> = {};
+  const take = (name: string, value: string | null | undefined) => {
+    if (value === null || value === undefined) return;
+    const lower = name.toLowerCase();
+    if (RAW_CAPTURE_DENY.test(lower)) return;
+    captured[lower] = value;
+  };
+
+  // The headers this observation was actually derived from, present or not —
+  // an absent one is itself the finding, so it is recorded as null below.
+  for (const name of explicit) {
+    if (!name) continue;
+    const lower = name.toLowerCase();
+    if (RAW_CAPTURE_DENY.test(lower)) continue;
+    captured[lower] = headers.get?.(name) ?? '';
+  }
+
+  // Discovery: anything quota-shaped the provider sent that we have no spec
+  // for. This is how the header names for platforms with no HEADER_SPECS entry
+  // get found, rather than guessed.
+  headers.forEach?.((value, name) => {
+    if (!RAW_CAPTURE_PATTERN.test(name)) return;
+    take(name, value);
+  });
+
+  if (Object.keys(captured).length === 0) return null;
+  const json = JSON.stringify(captured);
+  return json.length > RAW_CAPTURE_MAX_CHARS ? json.slice(0, RAW_CAPTURE_MAX_CHARS) : json;
+}
+
 function maybeAddObservation(
   observations: QuotaObservationInput[],
-  base: NonNullable<ReturnType<typeof extractContext>>,
+  base: QuotaObservationSubject,
   metric: QuotaMetric,
   limitRaw: string | null,
   remainingRaw: string | null | undefined,
   resetRaw: string | null | undefined,
   strategy: QuotaResetStrategy,
+  rawJson: string | null,
 ): void {
   const limit = parseHeaderNumber(limitRaw);
   const remaining = parseHeaderNumber(remainingRaw ?? null);
   const resetAt = parseResetAtFromHeader(resetRaw ?? null);
-  if (limit === null && remaining === null && resetAt === null) return;
+  // A reset the parser could not read is still evidence: keep the observation
+  // when the raw header was present, so the unparsed value reaches the log
+  // instead of vanishing with the response (F3).
+  const unparsedReset = resetAt === null && (resetRaw ?? null) !== null;
+  if (limit === null && remaining === null && resetAt === null && !unparsedReset) return;
   observations.push({
     ...base,
     metric,
@@ -295,6 +366,8 @@ function maybeAddObservation(
     resetStrategy: strategy,
     source: 'header',
     confidence: 1,
+    notes: unparsedReset ? 'reset header present but unparsed' : null,
+    rawJson,
   });
 }
 
@@ -313,9 +386,19 @@ export function parseQuotaObservationsFromResponse(
   const get = (name: string) => headers?.get?.(name) ?? null;
   const observations: QuotaObservationInput[] = [];
   const specs = HEADER_SPECS[base.platform];
+  // Every header name this platform is known to use, so the discovery capture
+  // below records them as explicitly absent rather than merely unmentioned.
+  const specNames = (specs ?? []).flatMap(spec => [spec.limit, spec.remaining, spec.reset]);
   if (specs) {
     for (const spec of specs) {
-      maybeAddObservation(observations, base, spec.metric, get(spec.limit), spec.remaining ? get(spec.remaining) : null, spec.reset ? get(spec.reset) : null, spec.strategy ?? 'provider_reported');
+      maybeAddObservation(
+        observations, base, spec.metric,
+        get(spec.limit),
+        spec.remaining ? get(spec.remaining) : null,
+        spec.reset ? get(spec.reset) : null,
+        spec.strategy ?? 'provider_reported',
+        captureRawHeaders(headers, [spec.limit, spec.remaining, spec.reset]),
+      );
     }
   }
 
@@ -332,6 +415,8 @@ export function parseQuotaObservationsFromResponse(
       source: response.status === 429 ? 'header' : 'error_body',
       confidence: response.status === 429 ? 1 : 0.8,
       notes: `retry-after=${retryAfterMs}ms`,
+      statusCode: response.status,
+      rawJson: captureRawHeaders(headers, ['retry-after', 'x-ratelimit-limit-requests']),
     });
   }
 
@@ -347,10 +432,16 @@ export function parseQuotaObservationsFromResponse(
       source: 'error_body',
       confidence: 0.55,
       notes: response.status === 402 ? 'upstream payment/credit exhaustion' : 'rate limited',
+      statusCode: response.status,
+      rawJson: captureRawHeaders(headers, ['retry-after', 'x-ratelimit-limit-requests', 'x-ratelimit-reset-requests', ...specNames]),
     });
   }
 
   if (observations.length === 0 && isSharedPool(base.platform) && response.status === 200) {
+    // "No quota headers exposed" is a claim about a platform we have no spec
+    // for. The discovery capture is what turns that claim into a checkable
+    // record of what the provider actually sent (F3).
+    const discovered = captureRawHeaders(headers, []);
     observations.push({
       ...base,
       metric: 'requests',
@@ -360,7 +451,9 @@ export function parseQuotaObservationsFromResponse(
       resetStrategy: 'unknown',
       source: 'probe',
       confidence: 0.1,
-      notes: 'no quota headers exposed',
+      notes: discovered ? 'unrecognised quota-shaped headers present' : 'no quota headers exposed',
+      statusCode: response.status,
+      rawJson: discovered,
     });
   }
 
@@ -501,7 +594,7 @@ export function recordQuotaObservationsFromResponse(
 // unknown when the limit isn't known — `= limit_value` yields NULL in that case)
 // and drop the stale reset_at so the row stops reading as exhausted and this
 // fix-up doesn't recur. Runs on read; a new observation re-populates reset_at.
-function normalizeExpiredQuotaState(db: ReturnType<typeof getDb>): void {
+function normalizeExpiredQuotaState(db: Db): void {
   db.prepare(`
     UPDATE provider_quota_state
        SET remaining_value = limit_value,
