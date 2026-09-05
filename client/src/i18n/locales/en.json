@@ -864,7 +864,21 @@
     "period_hour": "hourly",
     "period_day": "daily",
     "period_week": "weekly",
-    "period_month": "monthly"
+    "period_month": "monthly",
+    "burnTitle": "Limit discovery",
+    "burnCaveat": "Spends this provider’s free allowance until it refuses, to find out what the allowance is. The allowance does not come back until the provider’s own reset. Capped at 120 requests or 3 minutes per run; finds the tightest limit, then times the refusal to identify which one it was.",
+    "burnStart": "Run test",
+    "burnStartConfirm": "Burn quota",
+    "burnCancel": "Stop",
+    "burnCancelConfirm": "Stop now",
+    "colBurnSent": "Sent",
+    "colBurnCeiling": "Ceiling",
+    "colAction": "",
+    "burnPhase_burning": "Burning",
+    "burnPhase_recovering": "Awaiting reset",
+    "burnPhase_complete": "Complete",
+    "burnPhase_cancelled": "Stopped",
+    "burnPhase_failed": "Failed"
   },
   "logs": {
     "title": "Logs",

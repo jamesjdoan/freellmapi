@@ -37,6 +37,7 @@ import * as quotaPolicy from '../migrations/20260905_000001_quota_policy.js';
 import * as routingDecision from '../migrations/20260905_000002_routing_decision.js';
 import * as routingDecisionEndpoint from '../migrations/20260905_000003_routing_decision_endpoint.js';
 import * as quotaPolicyEndpoint from '../migrations/20260905_000004_quota_policy_endpoint.js';
+import * as quotaBurnRun from '../migrations/20260906_000001_quota_burn_run.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -86,6 +87,7 @@ export const QUOTA_POLICY_FILENAME = '20260905_000001_quota_policy.ts';
 export const ROUTING_DECISION_FILENAME = '20260905_000002_routing_decision.ts';
 export const ROUTING_DECISION_ENDPOINT_FILENAME = '20260905_000003_routing_decision_endpoint.ts';
 export const QUOTA_POLICY_ENDPOINT_FILENAME = '20260905_000004_quota_policy_endpoint.ts';
+export const QUOTA_BURN_RUN_FILENAME = '20260906_000001_quota_burn_run.ts';
 
 export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: LEGACY_BASELINE_FILENAME, module: legacyBaseline },
@@ -126,4 +128,5 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: ROUTING_DECISION_FILENAME, module: routingDecision },
   { filename: ROUTING_DECISION_ENDPOINT_FILENAME, module: routingDecisionEndpoint },
   { filename: QUOTA_POLICY_ENDPOINT_FILENAME, module: quotaPolicyEndpoint },
+  { filename: QUOTA_BURN_RUN_FILENAME, module: quotaBurnRun },
 ];

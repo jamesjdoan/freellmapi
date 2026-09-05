@@ -147,9 +147,13 @@ export function inferWindowsFromRecovery(platform: string): InferredWindow[] {
   interface RequestRow { created_at: string; status: string; error: string | null }
   let rows: RequestRow[];
   try {
+    // Burn-test traffic is excluded. A burn run reaches the limit on purpose
+    // and records its own recovery on the run row, so folding it in here would
+    // let a deliberate experiment masquerade as organic evidence — and one
+    // burn's exhaustion would dominate the estimate for everything else.
     rows = getDb().prepare(`
       SELECT created_at, status, error FROM requests
-       WHERE platform = ? ORDER BY created_at
+       WHERE platform = ? AND request_type <> 'burn_test' ORDER BY created_at
     `).all(platform) as RequestRow[];
   } catch {
     return [];
