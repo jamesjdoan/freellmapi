@@ -13,6 +13,7 @@
     "test:migrations": "vitest run --pool=forks --fileParallelism=false src/__tests__/db/migrate/roundtrip.test.ts",
     "lint": "eslint .",
     "export-catalog": "tsx src/scripts/export-catalog.ts",
+    "quota:harness": "tsx src/scripts/quota-shadow-harness.ts",
     "rotate-encryption-key": "tsx src/scripts/rotate-encryption-key.ts",
     "db:migration:up": "tsx src/db/migrate/cli.ts up",
     "db:migration:down": "tsx src/db/migrate/cli.ts down",
