@@ -7,6 +7,7 @@ import {
   resolveEffectiveQuotas,
 } from '../services/quota-policy.js';
 import { getQuotaForecast, getProviderQuotaOverview } from '../services/quota-forecast.js';
+import { listBurnRuns, startBurnRun, cancelBurnRun, BurnStartError, BURN_LIMITS } from '../services/quota-burn.js';
 import {
   getQuotaRoutingMode,
   setQuotaRoutingMode,
@@ -198,4 +199,62 @@ quotaRouter.put('/reservation', (req: Request, res: Response) => {
  */
 quotaRouter.get('/providers', (_req: Request, res: Response) => {
   res.json({ providers: getProviderQuotaOverview() });
+});
+
+/**
+ * Deliberate limit discovery. A burn run spends a provider's allowance until it
+ * refuses, because for most of the catalogue there is no published number and
+ * reaching the limit is the only way to learn it.
+ *
+ * POST is gated behind an explicit confirmation in the UI: this consumes a real
+ * free allowance that does not come back until the provider's own reset.
+ */
+quotaRouter.get('/burn', (req: Request, res: Response) => {
+  const platform = typeof req.query.platform === 'string' ? req.query.platform : undefined;
+  res.json({ runs: listBurnRuns(platform), limits: BURN_LIMITS });
+});
+
+quotaRouter.post('/burn', (req: Request, res: Response) => {
+  const parsed = z.object({
+    platform: z.string().min(1),
+    model: z.string().min(1).nullable().default(null),
+    maxRequests: z.number().int().min(1).max(BURN_LIMITS.maxRequests),
+    maxSeconds: z.number().int().min(5).max(BURN_LIMITS.maxSeconds),
+    maxPeriod: z.enum(['day', 'week', 'month']).default('day'),
+    /** Pacing. Flat out finds the per-minute cap; spacing requests under a
+     *  known one is how a longer window is reached instead. */
+    intervalMs: z.number().int().min(0).max(60_000).default(0),
+    /** The confirmation itself, not decoration: an accidental POST must not be
+     *  able to spend an allowance. */
+    confirm: z.literal(true),
+  }).strict().safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: 'platform, maxRequests, maxSeconds and confirm: true are required' } });
+    return;
+  }
+  try {
+    res.json({
+      run: startBurnRun({
+        platform: parsed.data.platform,
+        modelId: parsed.data.model,
+        maxRequests: parsed.data.maxRequests,
+        maxSeconds: parsed.data.maxSeconds,
+        maxPeriod: parsed.data.maxPeriod,
+        intervalMs: parsed.data.intervalMs,
+      }),
+    });
+  } catch (err: any) {
+    const status = err instanceof BurnStartError ? err.status : 500;
+    res.status(status).json({ error: { message: String(err?.message ?? err) } });
+  }
+});
+
+quotaRouter.post('/burn/:id/cancel', (req: Request, res: Response) => {
+  const id = String(req.params.id ?? '');
+  const run = id ? cancelBurnRun(id) : null;
+  if (!run) {
+    res.status(404).json({ error: { message: 'No such burn run' } });
+    return;
+  }
+  res.json({ run });
 });

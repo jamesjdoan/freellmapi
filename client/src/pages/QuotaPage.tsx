@@ -1,14 +1,26 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { Clock, FileText, Server, Shield } from 'lucide-react';
+import { Clock, FileText, Flame, Server, Shield } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { useI18n } from '@/i18n';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { ConfirmButton } from '@/components/confirm-button';
 import { formatSqliteUtcToLocalTime } from '@/lib/utils';
 
 // Define interfaces based on API contracts
+interface BurnRun {
+  id: string;
+  platform: string;
+  modelId: string;
+  phase: 'burning' | 'recovering' | 'complete' | 'cancelled' | 'failed';
+  requestsSent: number;
+  requestsSucceeded: number;
+  refusedAt: string | null;
+  observedPeriod: string | null;
+}
+
 interface InferredWindow {
   period: string;
   method: string;
@@ -162,6 +174,38 @@ export default function QuotaPage() {
   });
 
   const providers = providerData.providers;
+
+  // Burn runs: the experiment record per provider. Polled while one is live so
+  // the count climbs in view; the newest run per platform is the one shown.
+  const queryClient = useQueryClient();
+  const { data: burnData = { runs: [] as BurnRun[] } } = useQuery({
+    queryKey: ['quota', 'burn'],
+    queryFn: () => apiFetch<{ runs: BurnRun[] }>('/api/quota/burn'),
+    refetchInterval: (query) =>
+      query.state.data?.runs.some(r => r.phase === 'burning') ? 2000 : false,
+  });
+  const runsByPlatform = new Map<string, BurnRun>();
+  for (const run of burnData.runs) if (!runsByPlatform.has(run.platform)) runsByPlatform.set(run.platform, run);
+
+  // The overview is one row per POOL; a burn run is per PLATFORM, and only one
+  // may be live at a time. Listing Groq's three pools as three buttons offered
+  // two clicks that could only ever 409.
+  const burnPlatforms = [...new Set(providers.map(p => p.platform))];
+
+  const invalidateBurn = () => { void queryClient.invalidateQueries({ queryKey: ['quota', 'burn'] }); };
+  const startBurn = useMutation({
+    // The caps travel with the request: the server clamps them, and stating
+    // them here is what the confirmation is consenting to.
+    mutationFn: (platform: string) => apiFetch('/api/quota/burn', {
+      method: 'POST',
+      body: JSON.stringify({ platform, maxRequests: 120, maxSeconds: 180, maxPeriod: 'day', confirm: true }),
+    }),
+    onSuccess: invalidateBurn,
+  });
+  const cancelBurn = useMutation({
+    mutationFn: (id: string) => apiFetch(`/api/quota/burn/${id}/cancel`, { method: 'POST' }),
+    onSuccess: invalidateBurn,
+  });
   // Soonest first: the panel exists to answer "which allowance renews next".
   const resets = forecastData.forecast
     .filter(e => e.reset_at != null && e.seconds_until_reset != null && e.seconds_until_reset > 0)
@@ -344,6 +388,69 @@ export default function QuotaPage() {
             </TableBody>
           </Table>
         </PanelState>
+      </Panel>
+
+      <Panel icon={Flame} title={t('quota.burnTitle')}>
+        <p className="text-xs text-muted-foreground">{t('quota.burnCaveat')}</p>
+        {startBurn.error ? (
+          // A rejected start (no usable key, one already running) has to be
+          // visible: a button that silently does nothing reads as broken.
+          <p className="text-sm text-destructive">{(startBurn.error as Error).message}</p>
+        ) : null}
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t('quota.colProvider')}</TableHead>
+              <TableHead className="text-right">{t('quota.colBurnSent')}</TableHead>
+              <TableHead className="text-right">{t('quota.colBurnCeiling')}</TableHead>
+              <TableHead>{t('quota.colWindow')}</TableHead>
+              <TableHead>{t('quota.colStatus')}</TableHead>
+              <TableHead className="text-right">{t('quota.colAction')}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {burnPlatforms.map(platform => {
+              const run = runsByPlatform.get(platform) ?? null;
+              const active = run?.phase === 'burning' || run?.phase === 'recovering';
+              return (
+                <TableRow key={`burn:${platform}`}>
+                  <TableCell className="font-medium">{platform}</TableCell>
+                  <TableCell className="text-right">{run ? run.requestsSent : '—'}</TableCell>
+                  {/* The ceiling is only known when the provider actually
+                      refused; a run that stopped at its own cap has not
+                      discovered anything and says so. */}
+                  <TableCell className="text-right">
+                    {run?.refusedAt ? run.requestsSucceeded : '—'}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {run?.observedPeriod ? t(`quota.period_${run.observedPeriod}`) : '—'}
+                  </TableCell>
+                  <TableCell>
+                    {run
+                      ? <Badge variant={run.phase === 'failed' ? 'destructive' : active ? 'secondary' : 'outline'}>
+                          {t(`quota.burnPhase_${run.phase}`)}
+                        </Badge>
+                      : <span className="text-sm text-muted-foreground">—</span>}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {active
+                      ? <ConfirmButton onConfirm={() => cancelBurn.mutate(run!.id)} confirmLabel={t('quota.burnCancelConfirm')}>
+                          {t('quota.burnCancel')}
+                        </ConfirmButton>
+                      : <ConfirmButton
+                          onConfirm={() => startBurn.mutate(platform)}
+                          confirmLabel={t('quota.burnStartConfirm')}
+                          armedClassName="text-destructive"
+                          disabled={startBurn.isPending}
+                        >
+                          {t('quota.burnStart')}
+                        </ConfirmButton>}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
       </Panel>
     </div>
   );

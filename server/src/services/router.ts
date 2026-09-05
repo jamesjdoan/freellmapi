@@ -809,7 +809,11 @@ export function refreshStatsCache(db: Db, force = false): void {
       SUM(CASE WHEN ${IS_TIMEOUT_SQL} THEN 1 ELSE 0 END) AS timeouts,
       SUM(CASE WHEN ${IS_TIMEOUT_SQL} THEN MIN(MAX(latency_ms, 0), ${TIMEOUT_LATENCY_CAP_MS}) ELSE 0 END) AS timeout_lat
     FROM requests
-    WHERE created_at >= ? AND status <> 'canceled'
+    -- Burn-test traffic is excluded: a deliberate 429 storm says nothing about
+    -- how reliable or fast a provider is, and left in it would demote the very
+    -- provider the operator was measuring. Its usage still counts against
+    -- quota (rate_limit_usage), which is a different question.
+    WHERE created_at >= ? AND status <> 'canceled' AND request_type <> 'burn_test'
     GROUP BY platform, model_id, key_id, age_days
   `).all(since) as Array<{
     platform: string; model_id: string; key_id: number | null; age_days: number; total: number; successes: number;
