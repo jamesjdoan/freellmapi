@@ -435,6 +435,40 @@ export function setRoutingStrategy(strategy: RoutingStrategy): void {
   setSetting(STRATEGY_KEY, strategy);
 }
 
+// ── Provider-wide autoroute policy (persisted, ADR ARCH-20260905 W1) ────────
+// `fallback_config.enabled` / `profile_models.enabled` already exclude a model
+// from auto routing while leaving explicit invocation working — but per model,
+// per chain. A provider the operator has ruled out of automatic selection
+// needs that to hold for models it does not have yet: catalog sync adds rows
+// enabled, and a new profile starts from the catalog, so a per-row flag leaks
+// the provider back into autoroute the next time either happens.
+//
+// Measured before this existed: 39 auto-routed Hugging Face requests, 30 of
+// them served, on a provider the operator had ruled out.
+//
+// This gate applies to AUTO routing only. Group and explicit-model routing
+// build their candidates through resolveModelGroupCandidates, which never
+// consults the active chain, so a listed provider stays manually usable.
+const AUTOROUTE_DISABLED_PLATFORMS_KEY = 'routing_autoroute_disabled_platforms';
+
+// SambaNova is already unroutable by a separate route — it is absent from
+// PLATFORMS (routes/keys.ts), so no key can be added for it — but naming it
+// here states the policy rather than relying on that side effect holding.
+const DEFAULT_AUTOROUTE_DISABLED_PLATFORMS = ['huggingface', 'sambanova'];
+
+export function getAutorouteDisabledPlatforms(): string[] {
+  const raw = getSetting(AUTOROUTE_DISABLED_PLATFORMS_KEY);
+  if (raw === undefined) return [...DEFAULT_AUTOROUTE_DISABLED_PLATFORMS];
+  // An explicitly empty value means "no provider is excluded" — distinct from
+  // never having been set, which takes the default above.
+  return raw.split(',').map(p => p.trim().toLowerCase()).filter(p => p.length > 0);
+}
+
+export function setAutorouteDisabledPlatforms(platforms: string[]): void {
+  const normalized = [...new Set(platforms.map(p => p.trim().toLowerCase()).filter(p => p.length > 0))];
+  setSetting(AUTOROUTE_DISABLED_PLATFORMS_KEY, normalized.join(','));
+}
+
 // ── Exploration toggle (persisted) ─────────────────────────────────────────
 // Off by default: existing routing behavior unchanged. When on, routeRequest
 // gives unmeasured models a guaranteed chance to be tried (EXPLORE_CHANCE) so
@@ -1146,6 +1180,14 @@ const GLOBAL_SORT_ALIASES: Record<string, string> = {
   balanced: 'balanced',
 };
 
+/** Drop providers the operator has excluded from automatic selection. Applied
+ *  to the auto chain only — see AUTOROUTE_DISABLED_PLATFORMS_KEY. */
+function withoutAutorouteDisabled(rows: ChainRow[]): ChainRow[] {
+  const excluded = getAutorouteDisabledPlatforms();
+  if (excluded.length === 0) return rows;
+  return rows.filter(row => !excluded.includes(row.platform.toLowerCase()));
+}
+
 /**
  * The chain auto-routing walks.
  *
@@ -1155,8 +1197,15 @@ const GLOBAL_SORT_ALIASES: Record<string, string> = {
  * the entire catalog instead, while the same chain addressed by name
  * (`auto:<name>`) correctly refused. `fallback_config` is the chain only for an
  * install with no profile at all.
+ *
+ * Providers excluded from autoroute are dropped here, which is what makes the
+ * exclusion hold for models the catalog has not synced yet.
  */
 function getActiveChain(db: Db): ChainRow[] {
+  return withoutAutorouteDisabled(getActiveChainRows(db));
+}
+
+function getActiveChainRows(db: Db): ChainRow[] {
   const profileId = getActiveProfileId(db);
   if (profileId != null) {
     return db.prepare(`
@@ -1188,7 +1237,8 @@ function getChainByProfileName(db: Db, name: string): ChainRow[] | null {
   const profile = db.prepare("SELECT id FROM profiles WHERE LOWER(name) = ?").get(name.toLowerCase()) as { id: number } | undefined;
   if (!profile) return null;
 
-  return db.prepare(`
+  // `auto:<name>` is still automatic selection, so the provider policy applies.
+  return withoutAutorouteDisabled(db.prepare(`
     SELECT pm.model_db_id, pm.priority, pm.enabled,
            m.platform, m.model_id, m.display_name, m.intelligence_rank,
            m.size_label, m.monthly_token_budget,
@@ -1198,7 +1248,7 @@ function getChainByProfileName(db: Db, name: string): ChainRow[] | null {
     JOIN models m ON m.id = pm.model_db_id AND m.enabled = 1
     WHERE pm.profile_id = ?
     ORDER BY pm.priority ASC
-  `).all(profile.id) as ChainRow[];
+  `).all(profile.id) as ChainRow[]);
 }
 
 function getChainByGlobalSort(db: Db, globalAxis: string): ChainRow[] {
@@ -1221,6 +1271,9 @@ function getChainByGlobalSort(db: Db, globalAxis: string): ChainRow[] {
     ${profileId != null ? 'LEFT JOIN profile_models pm ON pm.profile_id = ? AND pm.model_db_id = m.id' : ''}
     WHERE m.enabled = 1 AND ${chainEnabled}
   `).all(...(profileId != null ? [profileId] : [])) as ChainRow[];
+  // This sort spans the whole catalog — rows with no chain entry default to in
+  // — so it is the path a newly synced provider model reaches autoroute by.
+  const allowed = withoutAutorouteDisabled(allEnabled);
 
   const strategyMap: Record<string, RoutingStrategy> = {
     'smart': 'smartest',
@@ -1231,7 +1284,7 @@ function getChainByGlobalSort(db: Db, globalAxis: string): ChainRow[] {
   };
   const strat = strategyMap[globalAxis] || 'balanced';
   
-  return orderChain(allEnabled, strat);
+  return orderChain(allowed, strat);
 }
 
 /**
