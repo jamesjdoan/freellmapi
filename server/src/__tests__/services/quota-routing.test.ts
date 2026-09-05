@@ -192,7 +192,16 @@ describe('shadow mode never alters selection', () => {
     setRoutingStrategy('priority');
   });
 
-  it('serves the incumbent choice even when quota scoring prefers the other provider', () => {
+  // The shadow write is deferred past the current turn so it adds no latency
+  // to selection. Tests wait for that turn rather than pretending it is
+  // synchronous — the wait IS the behaviour under test.
+
+  const settled = (): Promise<void> => {
+    const { promise, resolve } = Promise.withResolvers<void>();
+    setImmediate(resolve);
+    return promise;
+  };
+  it('serves the incumbent choice even when quota scoring prefers the other provider', async () => {
     const groqKey = addKey('groq');
     addKey('nvidia');
     addPeer('groq', 'shared', 1);    // priority 1 — the incumbent's pick
@@ -207,6 +216,12 @@ describe('shadow mode never alters selection', () => {
     const routed = routeRequest(100);
     routed.release?.();
 
+    // Selection must not pay for measurement: nothing is written yet.
+    const before = getDb().prepare('SELECT COUNT(*) AS n FROM routing_decision').get() as { n: number };
+    expect(before.n).toBe(0);
+
+    await settled();
+
     // Shadow disagreed and was ignored — that is the contract.
     expect(routed.platform).toBe('groq');
 
@@ -217,7 +232,7 @@ describe('shadow mode never alters selection', () => {
     expect(row?.agreed).toBe(0);
   });
 
-  it('picks the same route with the mode off as with it on', () => {
+  it('picks the same route with the mode off as with it on', async () => {
     const groqKey = addKey('groq');
     addKey('nvidia');
     addPeer('groq', 'shared', 1);
@@ -231,6 +246,7 @@ describe('shadow mode never alters selection', () => {
     setQuotaRoutingMode('shadow');
     const withShadow = routeRequest(100);
     withShadow.release?.();
+    await settled();
 
     expect(withShadow.platform).toBe(withOff.platform);
     expect(withShadow.modelDbId).toBe(withOff.modelDbId);
@@ -238,7 +254,7 @@ describe('shadow mode never alters selection', () => {
     expect(getShadowAgreementStats(0).total).toBe(1);
   });
 
-  it('still routes when the quota service throws', () => {
+  it('still routes when the quota service throws', async () => {
     addKey('groq');
     addPeer('groq', 'shared', 1);
     addPeer('nvidia', 'shared', 2);

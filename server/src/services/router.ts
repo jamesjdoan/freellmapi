@@ -41,7 +41,7 @@ import { modelStatsKey, endpointScopeForBaseUrl } from '../lib/endpoint-scope.js
 import { parseModelScope, scopeAllows } from '../lib/model-scope.js';
 import { getKeyQuotaHeadroom, inferQuotaPoolKey, isAccountScopedPool } from './provider-quota.js';
 import { normalizeGroupKey } from './model-groups.js';
-import { getQuotaRoutingMode, evaluateShadowDecision, recordRoutingDecision } from './quota-routing.js';
+import { getQuotaRoutingMode, evaluateShadowDecision, recordRoutingDecision, type QuotaRoutingMode } from './quota-routing.js';
 import type { BaseProvider } from '../providers/base.js';
 import type { Platform } from '@freellmapi/shared/types.js';
 import type { Db } from '../db/types.js';
@@ -1999,6 +1999,13 @@ export function resolveFusionCandidate(modelId: string): FusionCandidate | null 
  *
  * Entirely side-effect-free with respect to routing: it receives the decided
  * route, returns nothing, and cannot throw into the caller.
+ *
+ * The peer list is computed synchronously — it is in-memory work over a chain
+ * the caller already holds — but the quota reads and the insert are deferred
+ * past the current turn of the event loop. Selection must add minimal latency,
+ * and this is measurement: it has no reason to run before the caller gets its
+ * route. Deferring also means a slow or locked database delays a log write
+ * rather than a request.
  */
 function noteShadowRoutingDecision(route: RouteResult, servingChain: ChainRow[]): void {
   try {
@@ -2011,7 +2018,23 @@ function noteShadowRoutingDecision(route: RouteResult, servingChain: ChainRow[])
     const peers = servingChain
       .filter(e => normalizeGroupKey(e.display_name) === groupKey)
       .map(e => ({ platform: e.platform, modelId: e.model_id, displayName: e.display_name }));
+    if (peers.length < 2) return;
 
+    const platform = route.platform;
+    const modelId = route.modelId;
+    setImmediate(() => evaluateAndRecordShadow(peers, platform, modelId, mode));
+  } catch {
+    // Quota awareness is an enhancement, never a reason a request fails.
+  }
+}
+
+function evaluateAndRecordShadow(
+  peers: { platform: string; modelId: string; displayName: string }[],
+  actualPlatform: string,
+  actualModelId: string,
+  mode: QuotaRoutingMode,
+): void {
+  try {
     const decision = evaluateShadowDecision(peers, (platform, modelId, quota) => {
       // Reuse the limiter's own counters rather than a second accounting of the
       // same events: whatever the gates believe has been spent is what the
@@ -2029,8 +2052,8 @@ function noteShadowRoutingDecision(route: RouteResult, servingChain: ChainRow[])
     recordRoutingDecision({
       logicalModel: decision.logicalModel,
       mode,
-      actualPlatform: route.platform,
-      actualModelId: route.modelId,
+      actualPlatform,
+      actualModelId,
       decision,
     });
   } catch {

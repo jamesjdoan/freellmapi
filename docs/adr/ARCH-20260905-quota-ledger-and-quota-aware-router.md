@@ -278,7 +278,15 @@ learned observations, and never allowed to outrank a live provider reading.
     mode**, not for W2: switching `canMakeRequest` from rolling-24h to policy windows changes
     what gets rejected, live, on every model. Running the one irreversible enforcement change
     before the observation layer inverts the point of shadow. It now sits at the W3→W4 boundary.
-- **W3 — shadow decision ledger.** Validates arithmetic and divergence only.
+- **W3 — shadow decision ledger.** ✅ 2026-09-05. `routing_decision` + `quota_routing_mode`
+  (defaults to `shadow`, never `active`). Validates arithmetic and divergence only — the
+  preferred provider never ran, so the ledger cannot show it would have done better.
+  Scoring is one defensible signal (headroom on the binding axis), not a weighted blend:
+  with no shadow data yet, tuned constants would be false precision. Pacing is recorded
+  per candidate so the weighting can be settled from data at W4.
+  The evaluation is deferred past the routing turn (`setImmediate`) and policy reads are
+  memoised for 5s, so selection pays nothing for measurement — pinned by a test asserting
+  the ledger is still empty when `routeRequest` returns.
 - **W4 — bounded canary**, then active mode and the full dashboard.
 
 ## Status
