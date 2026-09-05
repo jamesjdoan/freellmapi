@@ -299,6 +299,30 @@ describe('provider-quota: parse from response headers (shared parseRetryAfterMs)
     // The legitimate signal still lands.
     expect(obs.some(o => o.retryAfterMs === 30_000)).toBe(true);
   });
+
+  // Found by driving real traffic through a stub relay: discovery capture was
+  // gated on isSharedPool, which is a question about POOLING, so a platform
+  // outside that list could return textbook x-ratelimit-* headers and we
+  // recorded nothing whatsoever.
+  it('captures quota headers from a platform that is not a shared pool', () => {
+    const resp = new Response(null, {
+      status: 200,
+      headers: {
+        'x-ratelimit-limit-requests': '1000',
+        'x-ratelimit-remaining-requests': '997',
+        'x-ratelimit-reset-requests': '2m59.56s',
+      },
+    });
+    const obs = parseQuotaObservationsFromResponse(resp, { platform: 'custom', keyId: 1 });
+    expect(obs).toHaveLength(1);
+    expect(obs[0]!.notes).toMatch(/unrecognised quota-shaped headers/);
+    expect(JSON.parse(obs[0]!.rawJson!)['x-ratelimit-reset-requests']).toBe('2m59.56s');
+  });
+
+  it('stays silent for an unpooled platform that reports nothing', () => {
+    const resp = new Response(null, { status: 200, headers: { 'content-type': 'application/json' } });
+    expect(parseQuotaObservationsFromResponse(resp, { platform: 'custom', keyId: 1 })).toHaveLength(0);
+  });
 });
 
 describe('provider-quota: reset_at replenishment on read (#453)', () => {

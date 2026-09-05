@@ -440,24 +440,33 @@ export function parseQuotaObservationsFromResponse(
     });
   }
 
-  if (observations.length === 0 && isSharedPool(base.platform) && response.status === 200) {
-    // "No quota headers exposed" is a claim about a platform we have no spec
-    // for. The discovery capture is what turns that claim into a checkable
-    // record of what the provider actually sent (F3).
+  if (observations.length === 0 && response.status === 200) {
+    // Two different questions were being answered by one condition. Recording a
+    // synthetic "we called it and nothing was reported" row is about POOLING —
+    // it only means something for a platform whose models share one account
+    // budget. Capturing quota-shaped headers we have no spec for is about
+    // DISCOVERY, and applies to every platform.
+    //
+    // Gating both on isSharedPool meant a relay or a platform outside that list
+    // could return textbook x-ratelimit-* headers and we would record nothing
+    // at all — found by driving real traffic through a stub provider that sent
+    // exactly those headers (F3).
     const discovered = captureRawHeaders(headers, []);
-    observations.push({
-      ...base,
-      metric: 'requests',
-      limit: null,
-      remaining: null,
-      resetAt: null,
-      resetStrategy: 'unknown',
-      source: 'probe',
-      confidence: 0.1,
-      notes: discovered ? 'unrecognised quota-shaped headers present' : 'no quota headers exposed',
-      statusCode: response.status,
-      rawJson: discovered,
-    });
+    if (discovered || isSharedPool(base.platform)) {
+      observations.push({
+        ...base,
+        metric: 'requests',
+        limit: null,
+        remaining: null,
+        resetAt: null,
+        resetStrategy: 'unknown',
+        source: 'probe',
+        confidence: 0.1,
+        notes: discovered ? 'unrecognised quota-shaped headers present' : 'no quota headers exposed',
+        statusCode: response.status,
+        rawJson: discovered,
+      });
+    }
   }
 
   return observations;
