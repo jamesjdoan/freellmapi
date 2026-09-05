@@ -9,6 +9,7 @@ import {
   getShadowAgreementStats,
   scoreQuotaCandidate,
   DEFAULT_QUOTA_ROUTING_MODE,
+  UNKNOWN_HEADROOM,
 } from '../../services/quota-routing.js';
 import { upsertQuotaPolicy } from '../../services/quota-policy.js';
 import { routeRequest, setRoutingStrategy } from '../../services/router.js';
@@ -107,12 +108,30 @@ describe('quota candidate scoring', () => {
     expect(scored.headroom).toBeCloseTo(0.1, 3);
   });
 
-  it('reports no opinion rather than zero when usage is unknown', () => {
-    expect(scoreQuotaCandidate([quota(100, 1000)], () => null, Date.now()).score).toBeNull();
+  // Changed deliberately: this used to return null, which dropped the candidate
+  // from the ranking and let the only metered provider win by default — even at
+  // 10% of a 50-request pool. Unmetered is neutral, not unrankable.
+  it('scores an unmetered candidate neutrally instead of excluding it', () => {
+    const scored = scoreQuotaCandidate([quota(100, 1000)], () => null, Date.now());
+    expect(scored.score).toBe(UNKNOWN_HEADROOM);
+    // ...but it does not claim to know the headroom it never measured.
+    expect(scored.headroom).toBeNull();
   });
 
-  it('distinguishes exhausted (0) from unknown (null)', () => {
-    expect(scoreQuotaCandidate([quota(100, 1000)], () => 100, Date.now()).score).toBe(0);
+  it('ranks a known-exhausted pool below an unmetered one', () => {
+    const exhausted = scoreQuotaCandidate([quota(100, 1000)], () => 100, Date.now());
+    const unmetered = scoreQuotaCandidate([quota(100, 1000)], () => null, Date.now());
+    expect(exhausted.score).toBe(0);
+    expect(unmetered.score!).toBeGreaterThan(exhausted.score!);
+  });
+
+  it('applies the reservation weight to hold a scarce pool back', () => {
+    const plain = scoreQuotaCandidate([quota(100, 1000)], () => 50, Date.now());
+    const held = scoreQuotaCandidate([quota(100, 1000)], () => 50, Date.now(), 0.3);
+    expect(plain.score).toBeCloseTo(0.5, 3);
+    expect(held.score).toBeCloseTo(0.15, 3);
+    // The weight changes the ranking, never the reported measurement.
+    expect(held.headroom).toBeCloseTo(0.5, 3);
   });
 });
 
@@ -137,7 +156,7 @@ describe('shadow decision', () => {
     expect(decision?.logicalModel).toBe('shared model');
   });
 
-  it('records no preference when no candidate has a quota signal', () => {
+  it('still picks when nothing is metered, and says so', () => {
     // Platforms with no policy, no catalog row and no shipped env cap. Real
     // platforms would not do: NVIDIA ships a 40 RPM default and OpenRouter a
     // 1000/day one, so both DO have a signal even at zero usage.
@@ -146,8 +165,13 @@ describe('shadow decision', () => {
       { platform: 'unmetered-b', modelId: 'shared', displayName: 'Shared Model (B)' },
     ];
     const decision = evaluateShadowDecision(unknownPeers, () => 0);
-    expect(decision?.preferred).toBeNull();
-    expect(decision?.reason).toMatch(/no quota signal/);
+
+    // All neutral, so one is chosen and the reason refuses to imply headroom
+    // was measured — the alternative was excluding both and letting any
+    // metered rival win by default however little it had left.
+    expect(decision?.preferred).not.toBeNull();
+    expect(decision?.reason).toMatch(/no published limit/);
+    expect(decision?.candidates.every(c => c.headroom === null)).toBe(true);
   });
 });
 
