@@ -208,3 +208,87 @@ export function getShadowAgreementStats(sinceMs?: number): ShadowAgreementStats 
     return { total: 0, agreed: 0, agreementRate: null, byLogicalModel: [] };
   }
 }
+
+export interface RoutingDecisionRow {
+  id: number;
+  createdAt: string;
+  logicalModel: string;
+  mode: string;
+  actualPlatform: string;
+  actualModelId: string;
+  shadowPlatform: string | null;
+  shadowModelId: string | null;
+  agreed: boolean;
+  reason: string | null;
+  candidates: unknown;
+}
+
+export interface RoutingDecisionQuery {
+  /** Only decisions where the two routers differed — the rows worth reading. */
+  disagreedOnly?: boolean;
+  logicalModel?: string;
+  sinceMs?: number;
+  limit?: number;
+}
+
+interface RawDecisionRow {
+  id: number;
+  created_at_ms: number;
+  logical_model: string;
+  mode: string;
+  actual_platform: string;
+  actual_model_id: string;
+  shadow_platform: string | null;
+  shadow_model_id: string | null;
+  agreed: number;
+  reason: string | null;
+  candidates_json: string | null;
+}
+
+/** Recent routing decisions, newest first. Read-only inspection of the shadow
+ *  ledger; returns [] rather than throwing when the table is unreachable. */
+export function listRoutingDecisions(query: RoutingDecisionQuery = {}): RoutingDecisionRow[] {
+  try {
+    const db = getDb();
+    const limit = Math.min(Math.max(query.limit ?? 100, 1), 500);
+    const since = query.sinceMs ?? 0;
+    const clauses = ['created_at_ms >= ?'];
+    const params: (string | number)[] = [since];
+    if (query.disagreedOnly) clauses.push('agreed = 0');
+    if (query.logicalModel) { clauses.push('logical_model = ?'); params.push(query.logicalModel); }
+
+    const rows = db.prepare(`
+      SELECT id, created_at_ms, logical_model, mode, actual_platform, actual_model_id,
+             shadow_platform, shadow_model_id, agreed, reason, candidates_json
+        FROM routing_decision
+       WHERE ${clauses.join(' AND ')}
+       ORDER BY created_at_ms DESC, id DESC
+       LIMIT ?
+    `).all(...params, limit) as RawDecisionRow[];
+
+    return rows.map(row => ({
+      id: row.id,
+      createdAt: new Date(row.created_at_ms).toISOString(),
+      logicalModel: row.logical_model,
+      mode: row.mode,
+      actualPlatform: row.actual_platform,
+      actualModelId: row.actual_model_id,
+      shadowPlatform: row.shadow_platform,
+      shadowModelId: row.shadow_model_id,
+      agreed: row.agreed === 1,
+      reason: row.reason,
+      // Stored as JSON text; a malformed blob must not take the endpoint down.
+      candidates: row.candidates_json ? safeParse(row.candidates_json) : null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function safeParse(json: string): unknown {
+  try {
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}

@@ -6,6 +6,13 @@ import {
   deleteQuotaPolicy,
   resolveEffectiveQuotas,
 } from '../services/quota-policy.js';
+import {
+  getQuotaRoutingMode,
+  setQuotaRoutingMode,
+  getShadowAgreementStats,
+  listRoutingDecisions,
+  type QuotaRoutingMode,
+} from '../services/quota-routing.js';
 import { getQuotaForecast } from '../services/quota-forecast.js';
 
 // Quota policy + effective-state API (ADR ARCH-20260905, W2).
@@ -108,4 +115,51 @@ quotaRouter.get('/state', (req: Request, res: Response) => {
  *  policies so a caller can compare what we were told against what we declared. */
 quotaRouter.get('/forecast', (_req: Request, res: Response) => {
   res.json({ forecast: getQuotaForecast() });
+});
+
+/**
+ * Shadow-mode summary: how often quota-aware scoring would have chosen
+ * differently. This can only report DIVERGENCE — the provider it preferred
+ * never ran, so nothing here says the other choice would have been better.
+ * That needs the bounded canary, not a longer shadow.
+ */
+quotaRouter.get('/shadow', (req: Request, res: Response) => {
+  const days = Number(req.query.days);
+  const since = Number.isFinite(days) && days > 0 ? Date.now() - days * 86_400_000 : undefined;
+  res.json({ mode: getQuotaRoutingMode(), stats: getShadowAgreementStats(since) });
+});
+
+/** Routing decision history. `disagreed=1` narrows it to the rows worth
+ *  reading — the ones where the two routers differed. */
+quotaRouter.get('/decisions', (req: Request, res: Response) => {
+  const days = Number(req.query.days);
+  const limit = Number(req.query.limit);
+  res.json({
+    decisions: listRoutingDecisions({
+      disagreedOnly: req.query.disagreed === '1' || req.query.disagreed === 'true',
+      logicalModel: typeof req.query.model === 'string' ? req.query.model : undefined,
+      sinceMs: Number.isFinite(days) && days > 0 ? Date.now() - days * 86_400_000 : undefined,
+      limit: Number.isFinite(limit) ? limit : undefined,
+    }),
+  });
+});
+
+quotaRouter.get('/mode', (_req: Request, res: Response) => {
+  res.json({ mode: getQuotaRoutingMode() });
+});
+
+/**
+ * Switch off → shadow → active. `active` is reachable only by an explicit call
+ * here: it is never a default and never reached by upgrade, because the whole
+ * point of the sequence is that the operator decides when quota data starts
+ * steering real traffic.
+ */
+quotaRouter.put('/mode', (req: Request, res: Response) => {
+  const parsed = z.object({ mode: z.enum(['off', 'shadow', 'active']) }).strict().safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: 'mode must be one of: off, shadow, active' } });
+    return;
+  }
+  setQuotaRoutingMode(parsed.data.mode as QuotaRoutingMode);
+  res.json({ mode: getQuotaRoutingMode() });
 });
