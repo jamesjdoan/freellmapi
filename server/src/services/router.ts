@@ -37,7 +37,7 @@ import { customEndpointKeyIds } from './custom-endpoint.js';
 import { isDegraded } from './degradation.js';
 import { modelStatsKey, endpointScopeForBaseUrl } from '../lib/endpoint-scope.js';
 import { parseModelScope, scopeAllows } from '../lib/model-scope.js';
-import { getKeyQuotaHeadroom, inferQuotaPoolKey } from './provider-quota.js';
+import { getKeyQuotaHeadroom, inferQuotaPoolKey, isAccountScopedPool } from './provider-quota.js';
 import type { BaseProvider } from '../providers/base.js';
 import type { Platform } from '@freellmapi/shared/types.js';
 import type { Db } from '../db/types.js';
@@ -1347,14 +1347,17 @@ const UNKNOWN_QUOTA_HEADROOM = 0.5;
  * Whether remaining-quota weighting is meaningful for this chain entry: the
  * operator asked for it AND the platform meters its keys separately.
  *
- * An account-scoped pool ('<platform>::account') is ONE budget every key of the
- * account draws down, so "which key has more left" has no answer — every key
- * reports the same number, and reordering on it would only churn the rotation
- * for nothing (#919).
+ * An account-scoped pool is ONE budget every key of the account draws down, so
+ * "which key has more left" has no answer — every key reports the same number,
+ * and reordering on it would only churn the rotation for nothing (#919).
+ *
+ * Scope is asked for directly rather than pattern-matched off the pool-key
+ * string: the key is a label whose shape is going to change (ADR
+ * ARCH-20260905, F8), and a routing rule must not move with it.
  */
 function quotaWeightingApplies(entry: ChainRow): boolean {
   if (getKeySelectionStrategy() !== 'least-remaining') return false;
-  return !inferQuotaPoolKey(entry.platform as Platform, entry.model_id).endsWith('::account');
+  return !isAccountScopedPool(entry.platform as Platform, entry.model_id);
 }
 
 /**
