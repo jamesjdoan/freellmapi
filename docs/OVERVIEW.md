@@ -16,6 +16,8 @@ For getting started as a user, see [README.md](README.md) (the user entry point)
 | [clients/01-agent-clients.md](clients/01-agent-clients.md) | Clients & coding agents: OpenAI-compatible clients, setup recipes for Claude Code / Codex CLI / Cline / Continue / Aider / opencode / Cursor, MCP server, autocomplete, Context Handoff. |
 | [compression/01-compression-pipeline.md](compression/01-compression-pipeline.md) | Prompt compression: request-side modes, safeguards, per-request controls, custom tool-output filters, statistics, and preview APIs. |
 | [architecture.md](architecture.md) | Architecture & internals (high-level index): how the router works, routing and operational details, what is not supported, limitations, and the provider Terms-of-Service review. |
+| [IMPERIUM_EXTENSION.md](IMPERIUM_EXTENSION.md) | Imperium fork extension: exact dashboard paths, routing/quota semantics, API and storage ownership, implementation/test map, and separate-branch maintenance workflow. |
+| [providers/04-quota-guidance.md](providers/04-quota-guidance.md) | Extension quota-guidance catalogue: provenance, freshness, advisory states, supported application fields and the Codex refresh workflow. |
 | [architecture/](architecture/OVERVIEW.md) | Architecture deep-dives: bandit routing & scoring, quota & cooldown engine, streaming pipeline, degraded mode & failover, catalog sync, observability; see its own [OVERVIEW.md](architecture/OVERVIEW.md). |
 | [i18n/01-translating.md](i18n/01-translating.md) | Translating: rules for locale files, the validator, and the settled zh-CN terminology table. |
 | [index.html](index.html) | Static website asset (not a doc): redirect page to freellmapi.co. |

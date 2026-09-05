@@ -12,6 +12,8 @@ This is the user entry point — start here to install the gateway, call the Ope
 - **[Prompt compression](compression/01-compression-pipeline.md)** — request-side modes, safeguards, per-request controls, custom tool-output filters, statistics, and preview APIs.
 - **[Fetch Relay](fetch-relay.md)** — route provider HTTP requests through a user-controlled, streaming application-layer relay.
 - **[Architecture & internals](architecture.md)** — how the router works, routing and operational details, what's not supported, honest limitations, and the provider Terms-of-Service review.
+- **[Imperium extension](IMPERIUM_EXTENSION.md)** — where the fork's provider-order, provider model-access, account-limit and quota-pool controls live; implementation map and maintenance boundary.
+- **[Provider quota guidance](providers/04-quota-guidance.md)** — sourced free-tier facts, freshness rules, safe limit application and the Codex research-refresh workflow carried by the extension branch.
 
 ## More
 

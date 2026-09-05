@@ -33,13 +33,13 @@ import { applyModelWeightOverride, getModelWeightOverrides } from './model-weigh
 import { modelsWithOverriddenField } from './model-state.js';
 import { parseBudget } from '../lib/budget.js';
 import { platformDropsResponseFormat } from '../lib/sampling-params.js';
-import { isUnifyEnabled, getModelGroups, resolveRequestedIdForDispatch } from './model-groups.js';
+import { isUnifyEnabled, getModelGroups, resolveRequestedIdForDispatch, getProviderPreferences, routingMemberId } from './model-groups.js';
 import { getActiveProfileId } from './profile-models.js';
 import { customEndpointKeyIds } from './custom-endpoint.js';
 import { isDegraded } from './degradation.js';
 import { modelStatsKey, endpointScopeForBaseUrl } from '../lib/endpoint-scope.js';
 import { parseModelScope, scopeAllows } from '../lib/model-scope.js';
-import { getKeyQuotaHeadroom, inferQuotaPoolKey, isAccountScopedPool } from './provider-quota.js';
+import { getKeyQuotaHeadroom, inferQuotaPoolKey, isQuotaPoolAvailable, resolveQuotaPolicy } from './provider-quota.js';
 import { normalizeGroupKey } from './model-groups.js';
 import { getQuotaRoutingMode, evaluateShadowDecision, recordRoutingDecision, type QuotaRoutingMode, type QuotaCandidate } from './quota-routing.js';
 import type { BaseProvider } from '../providers/base.js';
@@ -103,7 +103,7 @@ export function summarizeExhaustion(
     else if (l.includes('no tool-calling support')) bump('model lacks tool-calling');
     else if (l.includes('drops response_format')) bump('platform cannot honor response_format');
     else if (/ruled out|already-failed/.test(l)) bump('failed earlier this request');
-    else if (/cooldown|rpm|rpd|tpm|tpd|provider-daily-cap/.test(l)) bump('rate-limited or on cooldown');
+    else if (/cooldown|rpm|rpd|tpm|tpd|provider-daily-cap|quota-exhausted/.test(l)) bump('rate-limited or on cooldown');
     else bump('unavailable');
   }
   // Most actionable buckets first.
@@ -176,6 +176,8 @@ export interface ChainRow {
    * answering on score alone would be a silent substitution (#651).
    */
   match_tier?: number;
+  /** Explicit per-unified-model order. Absent means preserve automatic routing. */
+  provider_preference_rank?: number;
 }
 
 export interface RouteResult {
@@ -199,6 +201,9 @@ export interface RouteResult {
    * to ONE relay instead of every relay serving the same model id.
    */
   endpointScope: string;
+  /** Raw custom-provider base URL for quota locality classification. Never
+   * exposed to clients; empty for built-in providers. */
+  providerBaseUrl?: string;
   /**
    * This key's own proxy URL, already decrypted, '' when it has none (#590).
    *
@@ -804,7 +809,11 @@ export function refreshStatsCache(db: Db, force = false): void {
       SUM(CASE WHEN ${IS_TIMEOUT_SQL} THEN 1 ELSE 0 END) AS timeouts,
       SUM(CASE WHEN ${IS_TIMEOUT_SQL} THEN MIN(MAX(latency_ms, 0), ${TIMEOUT_LATENCY_CAP_MS}) ELSE 0 END) AS timeout_lat
     FROM requests
-    WHERE created_at >= ? AND status <> 'canceled'
+    -- Burn-test traffic is excluded: a deliberate 429 storm says nothing about
+    -- how reliable or fast a provider is, and left in it would demote the very
+    -- provider the operator was measuring. Its usage still counts against
+    -- quota (rate_limit_usage), which is a different question.
+    WHERE created_at >= ? AND status <> 'canceled' AND request_type <> 'burn_test'
     GROUP BY platform, model_id, key_id, age_days
   `).all(since) as Array<{
     platform: string; model_id: string; key_id: number | null; age_days: number; total: number; successes: number;
@@ -1092,6 +1101,8 @@ function orderChain(chain: ChainRow[], strategy: RoutingStrategy, sampled = true
   // to override (see ChainRow.match_tier). Zero for every chain built anywhere
   // else, so this is a no-op outside slug-fallback resolution.
   const tier = (e: ChainRow) => e.match_tier ?? 0;
+  const preference = (e: ChainRow) => e.provider_preference_rank ?? 0;
+  // `let`, not `const`: the peak-hours adjustment reassigns this below.
   let weights = weightsFor(strategy);
   if (!weights) {
     // Legacy priority mode: manual chain order + the 429/failure penalty,
@@ -1125,7 +1136,7 @@ function orderChain(chain: ChainRow[], strategy: RoutingStrategy, sampled = true
       .map((e, i) => ({ e, i }))
       .sort((a, b) => a.e.priority - b.e.priority || a.i - b.i)
       .map(({ e, i }, rank) => ({ e, i, eff: rank + 1 + getPenalty(e.model_db_id) }))
-      .sort((a, b) => tier(a.e) - tier(b.e) || a.eff - b.eff || a.e.priority - b.e.priority || a.i - b.i)
+      .sort((a, b) => tier(a.e) - tier(b.e) || preference(a.e) - preference(b.e) || a.eff - b.eff || a.e.priority - b.e.priority || a.i - b.i)
       .map(x => x.e);
   }
 
@@ -1150,7 +1161,7 @@ function orderChain(chain: ChainRow[], strategy: RoutingStrategy, sampled = true
     .map(e => ({ e, s: scoreChainEntry(e, weights, intelMin, intelMax, sampled, keyCounts, headroomCfg).score }))
     // Higher score first WITHIN a tier; manual priority breaks ties so the chain
     // still matters.
-    .sort((a, b) => tier(a.e) - tier(b.e) || b.s - a.s || a.e.priority - b.e.priority)
+    .sort((a, b) => tier(a.e) - tier(b.e) || preference(a.e) - preference(b.e) || b.s - a.s || a.e.priority - b.e.priority)
     .map(x => x.e);
 }
 
@@ -1414,7 +1425,13 @@ const UNKNOWN_QUOTA_HEADROOM = 0.5;
  */
 function quotaWeightingApplies(entry: ChainRow): boolean {
   if (getKeySelectionStrategy() !== 'least-remaining') return false;
-  return !isAccountScopedPool(entry.platform as Platform, entry.model_id);
+  // Both sides of this merge guarded the same call for different reasons, and
+  // both are needed. Ranking keys by remaining quota is meaningless when the
+  // pool is not metered at all (nothing to rank on), AND when the pool is
+  // account-scoped (every key reports the same number, so reordering only
+  // churns the rotation — #919).
+  const policy = resolveQuotaPolicy(entry.platform as Platform, entry.model_id);
+  return policy.accounting === 'metered' && policy.scope !== 'account';
 }
 
 /**
@@ -1430,7 +1447,8 @@ function quotaWeightingApplies(entry: ChainRow): boolean {
  * walk that follows.
  */
 function orderKeysByRemainingQuota(entry: ChainRow, ordered: KeyRow[]): KeyRow[] {
-  const headroom = getKeyQuotaHeadroom(entry.platform as Platform);
+  const poolKey = inferQuotaPoolKey(entry.platform as Platform, entry.model_id);
+  const headroom = getKeyQuotaHeadroom(entry.platform as Platform, poolKey);
   if (headroom.size === 0) return ordered;
   // Hoisted out of the comparator: sort calls it O(n log n) times, and the
   // lookup below must not re-derive anything per comparison.
@@ -1528,6 +1546,7 @@ function selectKeyForModel(entry: ChainRow, estimatedTokens: number, skipKeys?: 
     if (skipKeys?.has(skipId)) { note('already-failed-this-request'); continue; }
 
     if (isOnCooldown(entry.platform, entry.model_id, key.id)) { note('cooldown'); continue; }
+    if (!isQuotaPoolAvailable(entry.platform as Platform, key.id, entry.model_id, key.base_url)) { note('observed-quota-exhausted'); continue; }
     if (!canUseProvider(entry.platform, key.id)) { note('provider-daily-cap'); continue; }
     // Account-wide per-minute budget, checked before the per-model gates: a model
     // with a NULL rpm_limit would otherwise sail past them and spend a budget its
@@ -1572,6 +1591,7 @@ function selectKeyForModel(entry: ChainRow, estimatedTokens: number, skipKeys?: 
       platform: entry.platform,
       displayName: entry.display_name,
       endpointScope: entry.endpoint_scope ?? '',
+      providerBaseUrl: entry.platform === 'custom' ? (key.base_url ?? '') : '',
       rpdLimit: limits.rpd,
       tpdLimit: limits.tpd,
       release: () => releaseLease(leaseId),
@@ -1615,8 +1635,8 @@ export function hasOtherUsableKey(modelDbId: number, excludingKeyId: number, ski
 
   const limits = { rpm: m.rpm_limit, rpd: m.rpd_limit, tpm: m.tpm_limit, tpd: m.tpd_limit };
   const keys = db.prepare(
-    "SELECT id, model_scope_json FROM api_keys WHERE platform = ? AND enabled = 1 AND status IN ('healthy', 'unknown')"
-  ).all(m.platform) as { id: number; model_scope_json: string | null }[];
+    "SELECT id, model_scope_json, base_url FROM api_keys WHERE platform = ? AND enabled = 1 AND status IN ('healthy', 'unknown')"
+  ).all(m.platform) as { id: number; model_scope_json: string | null; base_url: string | null }[];
 
   // Keys of the model's own custom endpoint (#212, #619); a key belonging to a
   // DIFFERENT endpoint cannot serve it, so it doesn't count as an alternative.
@@ -1632,6 +1652,7 @@ export function hasOtherUsableKey(modelDbId: number, excludingKeyId: number, ski
     if (!scopeAllows(parseModelScope(k.model_scope_json), m.model_id)) continue;
     if (skipKeys?.has(`${m.platform}:${m.model_id}:${k.id}`)) continue;
     if (isOnCooldown(m.platform, m.model_id, k.id)) continue;
+    if (!isQuotaPoolAvailable(m.platform as Platform, k.id, m.model_id, k.base_url)) continue;
     if (!canUseProvider(m.platform, k.id)) continue;
     if (!canUseProviderMinute(m.platform, k.id)) continue;
     if (!canMakeRequest(m.platform, m.model_id, k.id, limits)) continue;
@@ -1830,6 +1851,23 @@ export function resolveModelGroupCandidates(
     if (!row) continue;
     row.match_tier = demotedDbIds?.has(id) ? 1 : 0;
     rows.push(row);
+  }
+
+  // Preferences are attached to the rows so routeRequest's second orderChain
+  // pass cannot discard them. Each group is independent; unlisted/new members
+  // follow explicitly listed members, then retain the normal automatic order.
+  const preferences = getProviderPreferences().groups;
+  const memberIdSet = new Set(memberDbIds);
+  for (const group of getModelGroups()) {
+    const configured = preferences[group.groupKey];
+    if (!configured || configured.mode !== 'preferred') continue;
+    const rank = new Map(configured.memberOrder.map((id, index) => [id, index]));
+    const fallbackRank = configured.memberOrder.length;
+    for (const member of group.members) {
+      if (!memberIdSet.has(member.model_db_id)) continue;
+      const row = rows.find(candidate => candidate.model_db_id === member.model_db_id);
+      if (row) row.provider_preference_rank = rank.get(routingMemberId(member)) ?? fallbackRank;
+    }
   }
   return orderChain(rows, strategy);
 }
@@ -2102,7 +2140,9 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
     // bandit draw, so it would stay under EXPLORE_MIN_SAMPLES forever and become
     // a perpetual probe target — the explicit ban outranks exploration.
     const overrides = getModelWeightOverrides();
+    const preferredRank = sortedChain[0]?.provider_preference_rank;
     const unmeasured = sortedChain.filter(e => {
+      if (preferredRank !== undefined && e.provider_preference_rank !== preferredRank) return false;
       if (overrides.get(e.model_id) === 0) return false;
       const stats = statsCache?.get(modelStatsKey(e.platform, e.model_id, e.endpoint_scope));
       if ((stats?.successes ?? 0) + (stats?.failures ?? 0) >= EXPLORE_MIN_SAMPLES) return false;

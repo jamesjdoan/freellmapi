@@ -235,6 +235,16 @@ The shared loop (`lib/fallback-loop.ts`) drives every surface (`/v1/chat/complet
 
 When enabled, logical models (e.g. `glm-4.7`) collapse multiple providers into one `/v1/models` entry. Routing **strictly fails over within the group** — never to a different model. `match_tier = 1` on slug-resolved members prevents silent substitution.
 
+### Preferred provider order (Imperium extension)
+
+Each unified group may opt into a persisted `preferred` member order through **Models → Chat models → model details → Provider routing**. Absent or invalid preference data means `automatic` and preserves the normal scoring order.
+
+In preferred mode, `resolveModelGroupCandidates()` attaches `provider_preference_rank` to each member before `orderChain()`. Preference rank sorts ahead of the normal score inside the existing `match_tier`; unlisted or newly catalogued members follow the saved members and retain their normal relative order. Exploration is restricted to the currently preferred rank so it cannot jump a lower-ranked provider ahead of the explicit choice.
+
+The order is soft. `selectKeyForModel()` still rejects disabled keys, model-scope mismatches, cooldowns, account/model rate gates and exact known-exhausted quota pools. The shared fallback loop continues after the same failover-eligible upstream errors as automatic mode.
+
+Persistence uses the versioned `model_provider_preferences` settings value exposed as `providerPreferences` by `GET/PUT /api/settings/unify`. Stable member identities include endpoint qualification for colliding custom relays.
+
 ---
 
 ## 12. Strategy Presets

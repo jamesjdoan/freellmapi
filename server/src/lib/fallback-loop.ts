@@ -50,6 +50,11 @@ import { sanitizeProviderErrorMessage, summarizeAttemptError } from './error-red
 import { checkKeyHealth, markKeyHealthyFromRequest } from '../services/health.js';
 import { noteModelRetirementSignal } from '../services/model-retirement.js';
 import { getSetting } from '../db/index.js';
+import type { Platform } from '@freellmapi/shared/types.js';
+import { recordLearnedCeiling, resolveQuotaPolicy } from '../services/provider-quota.js';
+import { resolveEffectiveQuotas } from '../services/quota-policy.js';
+import { DAY_MS } from '../services/quota-clock.js';
+import { countPlatformUsageInWindow } from '../services/ratelimit.js';
 import { newBreaker, recordBreakerFailure } from './guardrails.js';
 import { getRequestTrace, newRequestTrace, runWithRequestTrace, type AttemptOutcome, type AttemptTraceRecord, type RequestTrace } from './attempt-trace.js';
 import { logRequest, persistRequestAttempts } from './request-log.js';
@@ -294,6 +299,7 @@ export function recordRetryableFailure(route: RouteResult, err: any, state: Fall
   // Meter before any of the skip/bench bookkeeping: whether this attempt spent
   // provider quota is independent of what we decide to do about it (F9).
   recordFailedAttemptUsage(route, err);
+  noteLearnedCeiling(route, err);
   // `skipModelForRequest: true` = the failure is MODEL behavior, not key
   // state (ignored response_format, JSON truncated at max_tokens): a sibling
   // key would reproduce it exactly, so rule out the whole model for this
@@ -1286,4 +1292,34 @@ async function runFallbackLoopAttempts(hooks: FallbackHooks, trace: RequestTrace
     exhaustedRetryError(lastError, maxRetries, { attempts }),
     { attempts, timedOut: false },
   );
+}
+
+/**
+ * When a provider refuses on quota and publishes no limit, the only evidence of
+ * a ceiling is where it started saying no. Record how much this account had
+ * spent on the platform at that moment (ADR: "learn cooldown/reset state from
+ * 429s where authoritative data is unavailable").
+ *
+ * Only when nothing better exists — if the platform already has a stated limit
+ * from any source, an inferred one adds noise, not information. Requests only:
+ * a refusal is a statement about the request that was rejected, and attributing
+ * it to a token ceiling would be a guess on top of a guess.
+ */
+function noteLearnedCeiling(route: RouteResult, err: unknown): void {
+  try {
+    const cls = classifyAttemptError(err);
+    if (cls !== 'rate_limited' && cls !== 'daily_quota_exhausted') return;
+    if (resolveEffectiveQuotas(route.platform, route.modelId)
+      .some(q => q.metric === 'requests' && q.source !== 'learned_429')) return;
+
+    recordLearnedCeiling({
+      platform: route.platform as Platform,
+      keyId: route.keyId,
+      modelId: route.modelId,
+      quotaPoolKey: resolveQuotaPolicy(route.platform as Platform, route.modelId).poolKey,
+      observedRequests: countPlatformUsageInWindow(route.platform, 'request', DAY_MS),
+    });
+  } catch {
+    // Best-effort inference; never a reason a request fails.
+  }
 }

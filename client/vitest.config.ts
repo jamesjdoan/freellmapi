@@ -23,8 +23,14 @@
 //     at import time with "webidl.util.markAsUncloneable is not a function".
 //     jsdom 27 has no undici dependency at all.
 import { defineConfig } from 'vitest/config'
+import { fileURLToPath } from 'node:url'
 
 export default defineConfig({
+  // Keep production-component tests on the same source alias as Vite without
+  // loading the React and Tailwind plugins from vite.config.ts.
+  resolve: {
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+  },
   // esbuild only reads the *nearest* tsconfig.json, and ours is a solution
   // file (`files: []` + project references), so `jsx: react-jsx` from
   // tsconfig.app.json never reaches it. Say it here instead.

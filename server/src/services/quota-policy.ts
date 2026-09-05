@@ -1,5 +1,6 @@
 import { getDb } from '../db/index.js';
 import type { Db } from '../db/types.js';
+import { getLearnedCeiling } from './provider-quota.js';
 import {
   getProviderDailyRequestCap,
   getProviderMinuteRequestCap,
@@ -40,8 +41,7 @@ export type QuotaPolicySource = 'operator' | 'catalog' | 'documentation' | 'prov
 /** Where an effective limit came from, ordered by how much it should be
  *  trusted. `provider_header` is a measurement; everything below it is a
  *  declaration. */
-export type EffectiveQuotaSource = 'provider_header' | 'operator' | 'documentation' | 'provider_api' | 'catalog' | 'provider_cap_env';
-
+export type EffectiveQuotaSource = 'provider_header' | 'operator' | 'documentation' | 'provider_api' | 'catalog' | 'provider_cap_env' | 'learned_429';
 const SOURCE_RANK: Record<EffectiveQuotaSource, number> = {
   provider_header: 100,
   provider_api: 80,
@@ -49,6 +49,9 @@ const SOURCE_RANK: Record<EffectiveQuotaSource, number> = {
   documentation: 40,
   catalog: 20,
   provider_cap_env: 10,
+  // Lowest of all: a ceiling inferred from being refused is weaker than a
+  // number anyone actually stated, including a shipped default.
+  learned_429: 5,
 };
 
 export interface QuotaPolicy {
@@ -340,6 +343,12 @@ export function resolveEffectiveQuotas(
   const dailyTokens = getProviderDailyTokenCap(platform);
   if (dailyTokens != null) {
     add('total_tokens', 'provider_account', dailyTokens, { kind: 'calendar_day', timezone: 'UTC' }, 'provider_cap_env', 0.5, null);
+  }
+
+  // ── 5. Learned ceiling (weakest: inferred from a refusal, never stated) ──
+  const learned = getLearnedCeiling(platform as never);
+  if (learned) {
+    add('requests', 'provider_account', learned.limit, { kind: 'calendar_day', timezone: 'UTC' }, 'learned_429', 0.3, null);
   }
 
   // ── 3. Catalog limits (per model, rolling — the semantics the gates use) ──

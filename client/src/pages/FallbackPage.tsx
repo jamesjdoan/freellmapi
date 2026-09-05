@@ -59,6 +59,8 @@ const STRATEGIES: { key: RoutingStrategy; tKey: string }[] = [
   { key: 'custom', tKey: 'custom' },
 ]
 
+const MODELS_HIDE_DISABLED_KEY = 'imperium.models.hideDisabled'
+
 // Minimum-context filter buckets for the Models page toolbar. `key` is the token
 // threshold (0 = no filter); numeric labels are not localized (they're numbers).
 const CTX_BUCKETS: { key: number; label?: string; tKey?: string }[] = [
@@ -105,6 +107,17 @@ export default function FallbackPage() {
   const [filterVision, setFilterVision] = useState(false)
   const [filterTools, setFilterTools] = useState(false)
   const [minContext, setMinContext] = useState(0)
+  // Most catalogues are mostly off, so the chain reads better without them.
+  // Remembered per browser, like the Keys page's own hide toggle. A group counts
+  // as disabled only when EVERY member is off: one live provider is enough to
+  // keep a logical model in the chain, and hiding it would misstate the chain.
+  const [hideDisabled, setHideDisabled] = useState(() => {
+    try {
+      return localStorage.getItem(MODELS_HIDE_DISABLED_KEY) !== '0'
+    } catch {
+      return true
+    }
+  })
 
   // The table edits the ACTIVE chain, so it is part of this query's identity
   // (#1021): keyed on 'fallback' alone, switching chains in the manager below
@@ -239,12 +252,17 @@ export default function FallbackPage() {
   const query = search.trim().toLowerCase()
   const filtersActive = query !== '' || filterVision || filterTools || minContext > 0
   const visibleGroups = useMemo(() => orderedGroups.filter(g => {
+    if (hideDisabled && !g.members.some(m => m.enabled)) return false
     if (filterVision && !g.members.some(m => m.supportsVision)) return false
     if (filterTools && !g.members.some(m => m.supportsTools)) return false
     if (minContext > 0 && groupMaxContext(g.members) < minContext) return false
     if (query && !groupMatchesQuery(g, query)) return false
     return true
-  }), [orderedGroups, filterVision, filterTools, minContext, query])
+  }), [orderedGroups, hideDisabled, filterVision, filterTools, minContext, query])
+  const hiddenDisabledCount = useMemo(
+    () => orderedGroups.filter(g => !g.members.some(m => m.enabled)).length,
+    [orderedGroups],
+  )
   const draggable = isManual && !filtersActive
 
   // Progressive rendering: grow the row budget whenever the sentinel below the
@@ -500,6 +518,19 @@ export default function FallbackPage() {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setHideDisabled(v => {
+                    const next = !v
+                    try { localStorage.setItem(MODELS_HIDE_DISABLED_KEY, next ? '1' : '0') } catch { /* ignore */ }
+                    return next
+                  })}
+                  aria-pressed={hideDisabled}
+                  title="Hide logical models whose every provider is switched off"
+                  className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${hideDisabled ? 'bg-foreground text-background border-foreground font-medium' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                >
+                  Hide disabled
+                  {hideDisabled && hiddenDisabledCount > 0 && <span className="ml-1 tabular-nums">({hiddenDisabledCount})</span>}
+                </button>
                 <button
                   onClick={() => setFilterVision(v => !v)}
                   aria-pressed={filterVision}

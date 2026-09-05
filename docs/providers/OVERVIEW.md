@@ -13,6 +13,7 @@ The authoritative sources are [`shared/types.ts`](../../shared/types.ts) (the `P
 | [01-supported-platforms.md](01-supported-platforms.md) | One row per platform declared in `shared/types.ts`: auth model (keyed/keyless), adapter class (native/OpenAI-compatible), and integration notes. Explicit counts for every grouping. |
 | [02-quotas-and-cooldowns.md](02-quotas-and-cooldowns.md) | RPM/RPD and TPM/TPD window accounting, concurrency leases and opt-in caps, the cooldown ladder and its provenance classes, probe-based early recovery, back-off parsed from `Retry-After` headers and error bodies (#798), and why health checks must not burn metered quota (#882). |
 | [03-adding-a-new-provider.md](03-adding-a-new-provider.md) | Contributor walkthrough: extending the `Platform` union, choosing an adapter, registration options (timeouts, keyless, extra headers), key-validation semantics, catalog seeding policy, and the tests a new provider is expected to ship. |
+| [04-quota-guidance.md](04-quota-guidance.md) | Imperium extension catalogue for dated, source-linked free-tier guidance; evidence precedence, safe application and the reviewed Codex refresh workflow. |
 
 ## Conventions
 

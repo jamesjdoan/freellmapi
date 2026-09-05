@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -20,6 +20,8 @@ import {
 import { ChevronDown, CircleAlert, Copy, ExternalLink, KeyRound, ListFilter, ListPlus, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Trash2, Zap } from 'lucide-react'
 import type { ApiKey, ApiKeyModel } from '../../../../shared/types'
 import { formatSqliteUtcToLocalTime } from '@/lib/utils'
+import type { FallbackEntry } from '@/lib/routing'
+import { enabledModelCount, providerKeyAccess } from '@/lib/model-scope-selection'
 import { useI18n } from '@/i18n'
 import { toast } from '@/lib/toast'
 import {
@@ -87,6 +89,17 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
     queryKey: ['proxy-url'],
     queryFn: () => apiFetch('/api/settings/proxy'),
   })
+
+  // The catalogue, for the "N/M models enabled" summary on each provider row.
+  // Same query the model-scope dialog runs, deduped by react-query.
+  const { data: fallback = [] } = useQuery<FallbackEntry[]>({
+    queryKey: ['fallback'],
+    queryFn: () => apiFetch('/api/fallback'),
+  })
+  // Health deliberately ignored here: this summarises what the operator ticked,
+  // and the dialog those ticks live in does not grey them out for a failed
+  // check either.
+  const scopeAccess = useMemo(() => providerKeyAccess(keys, { requireUsable: false }), [keys])
   const bypassPlatforms = proxyData?.bypassPlatforms ?? []
   const proxyEnabled = proxyData?.enabled ?? true
 
@@ -385,9 +398,15 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
             // #787: once a selection exists in this group the checkboxes stay
             // visible, so the rest of the selection can be built without hunting.
             const groupHasSelection = group.keys.some(k => selectedKeyIds.has(k.id))
+            // One key means the group header and the key row carry the same
+            // provider: the header is pure duplication and the disclosure has
+            // nothing to disclose. Collapse to the key row and inline the
+            // provider's own name and menu on it.
+            const single = group.keys.length === 1
+            const models = enabledModelCount(fallback, group.value, scopeAccess.get(group.value))
             return (
               <div key={group.value}>
-                <div className="flex items-center gap-2 pb-2">
+                <div className={`flex items-center gap-2 pb-2 ${single ? 'hidden' : ''}`}>
                   <Switch
                     checked={group.keys.some(k => k.enabled)}
                     onCheckedChange={(checked) =>
@@ -417,6 +436,11 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
                         </span>
                       )}
                     </span>
+                    {models.total > 0 && (
+                      <Badge variant="secondary" className="tabular-nums text-[10px] font-normal text-muted-foreground">
+                        {`${models.enabled}/${models.total} models enabled`}
+                      </Badge>
+                    )}
                   </button>
                   {(group.url || proxyEnabled) && (
                     <DropdownMenu>
@@ -499,7 +523,7 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
                   )
                 })()}
 
-                {expanded && (
+                {(expanded || single) && (
                   <div className="rounded-2xl border divide-y bg-card overflow-hidden">
                     {group.keys.map(k => {
                       const status = statusOf(k)
@@ -550,6 +574,18 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
                               aria-label={t('keys.enable')}
                             />
                             <span className={`size-1.5 rounded-full flex-shrink-0 ${statusDot[status] ?? statusDot.unknown}`} />
+                            {/* The collapsed single-key row carries the provider
+                                itself, since its header is hidden above. */}
+                            {single && (
+                              <>
+                                <h3 className="text-sm font-medium flex-shrink-0">{group.label}</h3>
+                                {models.total > 0 && (
+                                  <Badge variant="secondary" className="tabular-nums text-[10px] font-normal text-muted-foreground flex-shrink-0">
+                                    {`${models.enabled}/${models.total} models enabled`}
+                                  </Badge>
+                                )}
+                              </>
+                            )}
                             {hasCustomModels && (
                               <Button
                                 type="button"
@@ -606,6 +642,11 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
                                 title={k.modelScope!.join(', ')}
                               >
                                 {t(k.modelScope!.length === 1 ? 'keys.modelScopeBadgeOne' : 'keys.modelScopeBadgeOther', { count: k.modelScope!.length })}
+                              </Badge>
+                            )}
+                            {(k.providerRpmLimit != null || k.providerRpdLimit != null || k.providerTpdLimit != null) && (
+                              <Badge variant="secondary" className="text-[10px] text-muted-foreground">
+                                {t('keys.accountLimits')}
                               </Badge>
                             )}
                             <div className="flex-1" />
@@ -679,12 +720,12 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
                               {/* Deliberately secondary (#657): a small hover-cluster affordance,
                                   not a first-fold control. */}
                               {!k.keyless && (
-                                <Tooltip text={t('keys.modelScope')}>
+                                <Tooltip text={t('keys.modelsAndAccountLimits')}>
                                   <Button
                                     variant="ghost"
                                     size="icon-xs"
                                     onClick={() => setScopeKeyId(k.id)}
-                                    aria-label={t('keys.modelScope')}
+                                    aria-label={t('keys.modelsAndAccountLimits')}
                                   >
                                     <ListFilter className="size-3" />
                                   </Button>
@@ -715,6 +756,37 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
                                 <Trash2 className="size-3" />
                               </ConfirmButton>
                             </div>
+                            {/* Provider-level actions, which the hidden header
+                                would otherwise take with it. Outside the
+                                hover-reveal group: they belong to the provider,
+                                not the key. */}
+                            {single && (group.url || proxyEnabled) && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger
+                                  className={buttonVariants({ variant: 'ghost', size: 'icon-xs' })}
+                                  aria-label={t('keys.providerActions')}
+                                >
+                                  <MoreHorizontal />
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-52">
+                                  {group.url && (
+                                    <DropdownMenuItem onClick={() => window.open(group.url, '_blank', 'noopener,noreferrer')}>
+                                      {t('keys.getApiKey')}
+                                      <ExternalLink className="ml-auto size-3.5" />
+                                    </DropdownMenuItem>
+                                  )}
+                                  {proxyEnabled && (
+                                    <DropdownMenuCheckboxItem
+                                      checked={!bypassPlatforms.includes(group.value)}
+                                      onCheckedChange={() => toggleBypass.mutate(group.value)}
+                                      closeOnClick={false}
+                                    >
+                                      {t('keys.routeViaProxy')}
+                                    </DropdownMenuCheckboxItem>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
                           </div>
                           {lastHealthError && (
                             <div className="flex items-start gap-2 px-4 pb-3 pl-8 text-xs text-destructive" role="status">
