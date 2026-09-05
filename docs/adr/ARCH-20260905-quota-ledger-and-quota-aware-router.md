@@ -263,8 +263,15 @@ learned observations, and never allowed to outrank a live provider reading.
   - ✅ Raw reset retention + `status_code` (F3, F4, F10) — 2026-09-05.
   - ⬜ Duration parsing (F3) — deliberately deferred until a live capture shows the real
     format. Parsing a guessed format is what produced F3 in the first place.
-  - ⏸ Subject identity (F8) — held. See the 2026-09-05 amendment: likely a pool-key correction
-    rather than a migration, and blocked on the first live capture proving which pooling is real.
+  - ⏸ Subject identity (F8) — **partly closed 2026-09-05.** The defect turned out to have three
+    instances, not one, and two are now fixed: the routing ledger gained
+    `actual_endpoint`/`shadow_endpoint` (migration `000003`) after a live run showed two relays
+    recording identical rows with a vacuously-true `agreed`; and `quota_policy` gained
+    `endpoint_scope` (migration `000004`), so a limit can name one relay — previously a second
+    policy for a sibling endpoint collided on the unique index and silently replaced the first.
+    **Still open:** the original case, Groq's per-model limits (14400/1000/250 RPD) collapsing
+    into one `groq::account` row. That remains a pool-key correction rather than a migration,
+    and remains blocked on a live capture proving which pooling is real.
   - ✅ Attempt-level metering (F9) — 2026-09-05.
 - **W1 — provider-wide autoroute policy.** ✅ 2026-09-05. Built on the existing chain-enable
   mechanism (F1); Hugging Face and SambaNova off by default. Needed reach in three chain
