@@ -94,11 +94,16 @@ export interface QuotaCandidate {
   platform: string;
   modelId: string;
   displayName: string;
+  /** '' for a catalog platform, 'custom:<hash>' for a relay. For a relay model
+   *  the platform is always 'custom', so this is what actually names the
+   *  provider — without it two endpoints serving one model id are one row. */
+  endpointScope?: string;
 }
 
 export interface ScoredCandidate {
   platform: string;
   modelId: string;
+  endpointScope?: string;
   /** 0..1, higher is a better place to spend. Null when no quota is known —
    *  distinct from 0, which means "known and exhausted". */
   score: number | null;
@@ -112,7 +117,7 @@ export interface ShadowDecision {
   logicalModel: string;
   candidates: ScoredCandidate[];
   /** Null when scoring had no opinion — one candidate, or no quota signal. */
-  preferred: { platform: string; modelId: string } | null;
+  preferred: { platform: string; modelId: string; endpointScope?: string } | null;
   reason: string;
 }
 
@@ -205,7 +210,7 @@ export function evaluateShadowDecision(
       now,
       weights[candidate.platform.toLowerCase()] ?? 1,
     );
-    return { platform: candidate.platform, modelId: candidate.modelId, score, headroom, paceDelta };
+    return { platform: candidate.platform, modelId: candidate.modelId, endpointScope: candidate.endpointScope, score, headroom, paceDelta };
   });
 
   // Every candidate now scores: an unmetered one takes UNKNOWN_HEADROOM rather
@@ -221,7 +226,7 @@ export function evaluateShadowDecision(
   return {
     logicalModel,
     candidates: scored,
-    preferred: { platform: best.platform, modelId: best.modelId },
+    preferred: { platform: best.platform, modelId: best.modelId, endpointScope: best.endpointScope },
     reason,
   };
 }
@@ -231,6 +236,9 @@ export interface RecordedDecision {
   mode: QuotaRoutingMode;
   actualPlatform: string;
   actualModelId: string;
+  /** The endpoint that actually served, so `agreed` can distinguish two relays
+   *  behind one platform name rather than reading true by default. */
+  actualEndpointScope?: string;
   decision: ShadowDecision;
 }
 
@@ -246,16 +254,21 @@ export function recordRoutingDecision(input: RecordedDecision): void {
     const agreed = preferred == null
       // No opinion is not a disagreement — the incumbent's choice stands
       // unchallenged, which is agreement for the purpose of the rate.
-      || (preferred.platform === input.actualPlatform && preferred.modelId === input.actualModelId);
+      || (preferred.platform === input.actualPlatform
+        && preferred.modelId === input.actualModelId
+        // Compare endpoints only when both sides name one. Rows written before
+        // the endpoint columns existed carry undefined on both sides and must
+        // keep comparing equal rather than all flipping to disagreement.
+        && (preferred.endpointScope ?? '') === (input.actualEndpointScope ?? ''));
     db.prepare(`
       INSERT INTO routing_decision (
-        created_at_ms, logical_model, mode, actual_platform, actual_model_id,
-        shadow_platform, shadow_model_id, agreed, reason, candidates_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        created_at_ms, logical_model, mode, actual_platform, actual_model_id, actual_endpoint,
+        shadow_platform, shadow_model_id, shadow_endpoint, agreed, reason, candidates_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       Date.now(), input.decision.logicalModel, input.mode,
-      input.actualPlatform, input.actualModelId,
-      preferred?.platform ?? null, preferred?.modelId ?? null,
+      input.actualPlatform, input.actualModelId, input.actualEndpointScope ?? null,
+      preferred?.platform ?? null, preferred?.modelId ?? null, preferred?.endpointScope ?? null,
       agreed ? 1 : 0, input.decision.reason,
       JSON.stringify(input.decision.candidates),
     );
@@ -304,6 +317,8 @@ export interface RoutingDecisionRow {
   actualModelId: string;
   shadowPlatform: string | null;
   shadowModelId: string | null;
+  actualEndpoint: string | null;
+  shadowEndpoint: string | null;
   agreed: boolean;
   reason: string | null;
   candidates: unknown;
@@ -326,6 +341,8 @@ interface RawDecisionRow {
   actual_model_id: string;
   shadow_platform: string | null;
   shadow_model_id: string | null;
+  actual_endpoint: string | null;
+  shadow_endpoint: string | null;
   agreed: number;
   reason: string | null;
   candidates_json: string | null;
@@ -345,7 +362,8 @@ export function listRoutingDecisions(query: RoutingDecisionQuery = {}): RoutingD
 
     const rows = db.prepare(`
       SELECT id, created_at_ms, logical_model, mode, actual_platform, actual_model_id,
-             shadow_platform, shadow_model_id, agreed, reason, candidates_json
+             shadow_platform, shadow_model_id, actual_endpoint, shadow_endpoint,
+             agreed, reason, candidates_json
         FROM routing_decision
        WHERE ${clauses.join(' AND ')}
        ORDER BY created_at_ms DESC, id DESC
@@ -361,6 +379,8 @@ export function listRoutingDecisions(query: RoutingDecisionQuery = {}): RoutingD
       actualModelId: row.actual_model_id,
       shadowPlatform: row.shadow_platform,
       shadowModelId: row.shadow_model_id,
+      actualEndpoint: row.actual_endpoint,
+      shadowEndpoint: row.shadow_endpoint,
       agreed: row.agreed === 1,
       reason: row.reason,
       // Stored as JSON text; a malformed blob must not take the endpoint down.

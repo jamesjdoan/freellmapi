@@ -41,7 +41,7 @@ import { modelStatsKey, endpointScopeForBaseUrl } from '../lib/endpoint-scope.js
 import { parseModelScope, scopeAllows } from '../lib/model-scope.js';
 import { getKeyQuotaHeadroom, inferQuotaPoolKey, isAccountScopedPool } from './provider-quota.js';
 import { normalizeGroupKey } from './model-groups.js';
-import { getQuotaRoutingMode, evaluateShadowDecision, recordRoutingDecision, type QuotaRoutingMode } from './quota-routing.js';
+import { getQuotaRoutingMode, evaluateShadowDecision, recordRoutingDecision, type QuotaRoutingMode, type QuotaCandidate } from './quota-routing.js';
 import type { BaseProvider } from '../providers/base.js';
 import type { Platform } from '@freellmapi/shared/types.js';
 import type { Db } from '../db/types.js';
@@ -2017,21 +2017,30 @@ function noteShadowRoutingDecision(route: RouteResult, servingChain: ChainRow[])
     const groupKey = normalizeGroupKey(chosen.display_name);
     const peers = servingChain
       .filter(e => normalizeGroupKey(e.display_name) === groupKey)
-      .map(e => ({ platform: e.platform, modelId: e.model_id, displayName: e.display_name }));
+      .map(e => ({
+        platform: e.platform,
+        modelId: e.model_id,
+        displayName: e.display_name,
+        // For a relay this is the only thing distinguishing two peers that
+        // both report platform 'custom' and the same model id.
+        endpointScope: e.endpoint_scope ?? '',
+      }));
     if (peers.length < 2) return;
 
     const platform = route.platform;
     const modelId = route.modelId;
-    setImmediate(() => evaluateAndRecordShadow(peers, platform, modelId, mode));
+    const endpointScope = route.endpointScope ?? '';
+    setImmediate(() => evaluateAndRecordShadow(peers, platform, modelId, endpointScope, mode));
   } catch {
     // Quota awareness is an enhancement, never a reason a request fails.
   }
 }
 
 function evaluateAndRecordShadow(
-  peers: { platform: string; modelId: string; displayName: string }[],
+  peers: QuotaCandidate[],
   actualPlatform: string,
   actualModelId: string,
+  actualEndpointScope: string,
   mode: QuotaRoutingMode,
 ): void {
   try {
@@ -2054,6 +2063,7 @@ function evaluateAndRecordShadow(
       mode,
       actualPlatform,
       actualModelId,
+      actualEndpointScope,
       decision,
     });
   } catch {
