@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { initDb, getDb } from '../../db/index.js';
 import { encrypt } from '../../lib/crypto.js';
+import { refreshStatsCache, getRoutingScores } from '../../services/router.js';
+import { inferWindowsFromRecovery } from '../../services/quota-inference.js';
 import {
   startBurnRun,
   cancelBurnRun,
@@ -320,5 +322,92 @@ describe('quota burn', () => {
     await settle(run.id);
     expect(listBurnRuns('custom').map(r => r.id)).toEqual([run.id]);
     expect(listBurnRuns('groq')).toEqual([]);
+  });
+});
+
+// The design rests on one split: burn traffic counts as quota spend but not as
+// evidence of provider quality. Tagging the rows was the easy half; these pin
+// that the two readers actually skip them, because a refactor could quietly
+// drop either filter and nothing else would fail.
+describe('burn traffic isolation', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare('DELETE FROM requests').run();
+  });
+
+  function seedModel(): { keyId: number; modelDbId: number } {
+    const secret = encrypt('sk-x');
+    const keyId = Number(getDb().prepare(`
+      INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, status, enabled)
+      VALUES ('groq', 'k', ?, ?, ?, 'active', 1)
+    `).run(secret.encrypted, secret.iv, secret.authTag).lastInsertRowid);
+    const modelDbId = Number(getDb().prepare(`
+      INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, key_id, enabled)
+      VALUES ('groq', 'iso-model', 'Iso Model', 50, 50, ?, 1)
+    `).run(keyId).lastInsertRowid);
+    return { keyId, modelDbId };
+  }
+
+  function insertFailures(keyId: number, requestType: string, n: number): void {
+    const stmt = getDb().prepare(`
+      INSERT INTO requests (platform, model_id, key_id, status, input_tokens, output_tokens, latency_ms, error, request_type)
+      VALUES ('groq', 'iso-model', ?, 'error', 0, 0, 10, 'HTTP 429 rate limited', ?)
+    `);
+    for (let i = 0; i < n; i++) stmt.run(keyId, requestType);
+  }
+
+  function statsFor(modelDbId: number): { reliability: number; totalRequests: number } {
+    refreshStatsCache(getDb(), true);
+    const row = getRoutingScores().scores.find(s => s.modelDbId === modelDbId);
+    if (!row) throw new Error('model missing from routing scores');
+    return { reliability: row.reliability, totalRequests: row.totalRequests };
+  }
+
+  it('does not let a burn run demote the provider it measured', () => {
+    const { keyId, modelDbId } = seedModel();
+    const clean = statsFor(modelDbId);
+
+    insertFailures(keyId, 'burn_test', 25);
+    const afterBurn = statsFor(modelDbId);
+    // Twenty-five deliberate refusals, and the router has not observed a thing.
+    expect(afterBurn.totalRequests).toBe(clean.totalRequests);
+    expect(afterBurn.reliability).toBe(clean.reliability);
+
+    // The same rows untagged DO demote it — which is what makes the assertion
+    // above meaningful rather than a test of an empty table.
+    insertFailures(keyId, 'chat', 25);
+    const afterReal = statsFor(modelDbId);
+    expect(afterReal.totalRequests).toBeGreaterThan(0);
+    expect(afterReal.reliability).toBeLessThan(clean.reliability);
+  });
+
+  it('keeps a deliberate exhaustion out of the organic window estimate', () => {
+    const { keyId } = seedModel();
+    const insert = getDb().prepare(`
+      INSERT INTO requests (platform, model_id, key_id, status, input_tokens, output_tokens, latency_ms, error, request_type, created_at)
+      VALUES ('groq', 'iso-model', ?, ?, 0, 0, 10, ?, ?, ?)
+    `);
+    const iso = (ms: number) => new Date(ms).toISOString().replace('T', ' ').replace('Z', '');
+    let at = Date.UTC(2026, 0, 1);
+    // Refusal-then-recovery pairs: exactly the shape inference reads.
+    for (let i = 0; i < 6; i++) {
+      insert.run(keyId, 'error', 'HTTP 429 rate limited', 'burn_test', iso(at));
+      at += 9_000;
+      insert.run(keyId, 'success', null, 'burn_test', iso(at));
+      at += 3_600_000;
+    }
+    expect(inferWindowsFromRecovery('groq')).toEqual([]);
+
+    // Untagged, the identical pattern is evidence — so the emptiness above is
+    // the filter working, not the estimator failing to see anything.
+    at = Date.UTC(2026, 1, 1);
+    for (let i = 0; i < 6; i++) {
+      insert.run(keyId, 'error', 'HTTP 429 rate limited', 'chat', iso(at));
+      at += 9_000;
+      insert.run(keyId, 'success', null, 'chat', iso(at));
+      at += 3_600_000;
+    }
+    expect(inferWindowsFromRecovery('groq').map(w => w.period)).toContain('minute');
   });
 });
