@@ -229,6 +229,59 @@ function recordUsage(
   }) ?? false;
 }
 
+// ── Cross-key window counts (shadow quota evaluation, ADR W3) ───────────────
+// The gates above count per (platform, model, key) because that is what they
+// enforce. Comparing PROVIDERS needs the other axis: everything this account
+// has spent on one model, across whichever keys served it.
+//
+// Memoised on the same reasoning as the routing window snapshot: quota moves on
+// the timescale of a rate-limit window, not a request, so a few seconds of
+// staleness is invisible here while the query count collapses to roughly one
+// per model per burst. This feeds a recorded comparison, never a gate — the
+// hard checks below still read live counts.
+const SHADOW_COUNT_TTL_MS = 5_000;
+const shadowCountCache = new Map<string, { at: number; value: number }>();
+
+function countAcrossKeys(platform: string, modelId: string, kind: 'request' | 'tokens', windowMs: number, now: number): number {
+  // Bucket the window so a continuously-sliding width does not defeat the cache.
+  const bucket = Math.round(windowMs / 1000);
+  const cacheKey = `${platform}:${modelId}:${kind}:${bucket}`;
+  const hit = shadowCountCache.get(cacheKey);
+  if (hit && now - hit.at < SHADOW_COUNT_TTL_MS) return hit.value;
+
+  const value = withDb(db => {
+    const row = db.prepare(`
+      SELECT COUNT(*) AS requests, COALESCE(SUM(tokens), 0) AS tokens
+        FROM rate_limit_usage
+       WHERE platform = ?
+         AND model_id = ?
+         AND kind = ?
+         AND created_at_ms > ?
+    `).get(platform, modelId, kind, now - windowMs) as { requests: number; tokens: number };
+    return kind === 'request' ? row.requests : row.tokens;
+  }) ?? 0;
+
+  shadowCountCache.set(cacheKey, { at: now, value });
+  return value;
+}
+
+/** Requests this account made against one model, across every key, in the last
+ *  `windowMs`. For the shadow comparison only — not a gate. */
+export function countRequestsInWindow(platform: string, modelId: string, windowMs: number, now = Date.now()): number {
+  return countAcrossKeys(platform, modelId, 'request', windowMs, now);
+}
+
+/** Tokens this account spent on one model, across every key, in the last
+ *  `windowMs`. For the shadow comparison only — not a gate. */
+export function countTokensInWindow(platform: string, modelId: string, windowMs: number, now = Date.now()): number {
+  return countAcrossKeys(platform, modelId, 'tokens', windowMs, now);
+}
+
+/** Test seam: drop the memoised shadow counts. */
+export function invalidateShadowCounts(): void {
+  shadowCountCache.clear();
+}
+
 function countPersistedRequests(
   platform: string,
   modelId: string,

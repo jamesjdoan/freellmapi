@@ -38,6 +38,7 @@ const ANALYTICS_LATENCY_PERCENTILE_INDEX_FILENAME = '20260902_000001_analytics_l
 const MCP_ENABLED_DEFAULT_FILENAME = '20260903_000001_mcp_enabled_default.ts';
 const RESPONSE_CACHE_FILENAME = '20260903_000002_response_cache.ts';
 const QUOTA_POLICY_FILENAME = '20260905_000001_quota_policy.ts';
+const ROUTING_DECISION_FILENAME = '20260905_000002_routing_decision.ts';
 
 interface SchemaRow {
   type: string;
@@ -122,6 +123,7 @@ describe('migration round trip', () => {
         MCP_ENABLED_DEFAULT_FILENAME,
         RESPONSE_CACHE_FILENAME,
         QUOTA_POLICY_FILENAME,
+        ROUTING_DECISION_FILENAME,
       ]);
     } finally {
       db.close();

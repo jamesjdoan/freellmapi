@@ -14,6 +14,8 @@ import {
   releaseLease,
   getSoonestCooldownExpiry,
   modelWindowUsedFraction,
+  countRequestsInWindow,
+  countTokensInWindow,
 } from './ratelimit.js';
 import {
   BANDIT_PRESETS, DEFAULT_STRATEGY, type RoutingStrategy, type RoutingWeights,
@@ -38,6 +40,8 @@ import { isDegraded } from './degradation.js';
 import { modelStatsKey, endpointScopeForBaseUrl } from '../lib/endpoint-scope.js';
 import { parseModelScope, scopeAllows } from '../lib/model-scope.js';
 import { getKeyQuotaHeadroom, inferQuotaPoolKey, isAccountScopedPool } from './provider-quota.js';
+import { normalizeGroupKey } from './model-groups.js';
+import { getQuotaRoutingMode, evaluateShadowDecision, recordRoutingDecision } from './quota-routing.js';
 import type { BaseProvider } from '../providers/base.js';
 import type { Platform } from '@freellmapi/shared/types.js';
 import type { Db } from '../db/types.js';
@@ -1984,6 +1988,56 @@ export function resolveFusionCandidate(modelId: string): FusionCandidate | null 
   return null;
 }
 
+/**
+ * Record what quota-aware scoring would have preferred among the providers
+ * serving the SAME logical model as the route just chosen (ADR W3).
+ *
+ * Peers are found by normalized group key, so "GPT-OSS 120B (Groq)" and
+ * "GPT-OSS 120B (NV)" are recognised as one logical model while "Command R+"
+ * stays distinct from "Command R". Fewer than two peers means there was no
+ * provider choice to make and nothing is recorded.
+ *
+ * Entirely side-effect-free with respect to routing: it receives the decided
+ * route, returns nothing, and cannot throw into the caller.
+ */
+function noteShadowRoutingDecision(route: RouteResult, servingChain: ChainRow[]): void {
+  try {
+    const mode = getQuotaRoutingMode();
+    if (mode === 'off') return;
+
+    const chosen = servingChain.find(e => e.model_db_id === route.modelDbId);
+    if (!chosen) return;
+    const groupKey = normalizeGroupKey(chosen.display_name);
+    const peers = servingChain
+      .filter(e => normalizeGroupKey(e.display_name) === groupKey)
+      .map(e => ({ platform: e.platform, modelId: e.model_id, displayName: e.display_name }));
+
+    const decision = evaluateShadowDecision(peers, (platform, modelId, quota) => {
+      // Reuse the limiter's own counters rather than a second accounting of the
+      // same events: whatever the gates believe has been spent is what the
+      // comparison should be judged against.
+      const windowMs = quota.window.periodStartMs == null
+        ? null
+        : Math.max(1, Date.now() - quota.window.periodStartMs);
+      if (windowMs == null) return null;
+      return quota.metric === 'requests'
+        ? countRequestsInWindow(platform, modelId, windowMs)
+        : countTokensInWindow(platform, modelId, windowMs);
+    });
+    if (!decision) return;
+
+    recordRoutingDecision({
+      logicalModel: decision.logicalModel,
+      mode,
+      actualPlatform: route.platform,
+      actualModelId: route.modelId,
+      decision,
+    });
+  } catch {
+    // Quota awareness is an enhancement, never a reason a request fails.
+  }
+}
+
 export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, preferredModelDbId?: number, requireVision = false, requireTools = false, skipModels?: Set<number>, prefetchedChain?: ChainRow[], requireStructured = false, skipPlatforms?: Set<string>, exactOutputReserve = 0, task?: 'code' | 'chat'): RouteResult {
   const db = getDb();
 
@@ -2156,7 +2210,14 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
     // can serve right now — in which case we fall through to the next model in
     // the sorted chain for THIS request (no explicit penalty needed).
     const route = selectKeyForModel(entry, estimatedTokens, skipKeys, diag);
-    if (route) return route;
+    if (route) {
+      // Shadow only (W3): the route above is already decided and is returned
+      // untouched whatever this concludes. It runs after selection precisely so
+      // it CANNOT influence it — there is no code path from here back into the
+      // choice, and every failure inside is swallowed.
+      noteShadowRoutingDecision(route, servingChain);
+      return route;
+    }
   }
 
   throw new RouteError(summarizeExhaustion(diag, getSoonestCooldownExpiry()), 429, diag);
