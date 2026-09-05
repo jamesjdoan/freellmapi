@@ -266,11 +266,18 @@ learned observations, and never allowed to outrank a live provider reading.
   - ⏸ Subject identity (F8) — held. See the 2026-09-05 amendment: likely a pool-key correction
     rather than a migration, and blocked on the first live capture proving which pooling is real.
   - ✅ Attempt-level metering (F9) — 2026-09-05.
-- **W1 — provider-wide autoroute policy.** Built on the existing `fallbackEnabled` mechanism
-  (F1); Hugging Face and SambaNova off. Independent of everything else; can ship first.
-- **W2 — one effective-policy resolver + minimal read/write API**, consolidating the two clocks
-  (F5). The API is **not** deferred: without it the policy is not operable and shadow output is
-  not auditable.
+- **W1 — provider-wide autoroute policy.** ✅ 2026-09-05. Built on the existing chain-enable
+  mechanism (F1); Hugging Face and SambaNova off by default. Needed reach in three chain
+  builders, not one — the `auto:<sort>` chain spans the whole catalog and defaults unlisted
+  models IN, which is how a freshly synced model would have re-entered autoroute.
+- **W2 — effective-policy resolver + API.**
+  - ✅ Timezone-safe reset clock (`services/quota-clock.ts`) — 2026-09-05.
+  - ✅ `quota_policy` table, resolver and `/api/quota` — 2026-09-05.
+  - ⏸ **Hard-gate consolidation moved out of W2** (operator, 2026-09-05). Codex was right
+    that gates and scoring must share one clock, but that is a prerequisite for **active
+    mode**, not for W2: switching `canMakeRequest` from rolling-24h to policy windows changes
+    what gets rejected, live, on every model. Running the one irreversible enforcement change
+    before the observation layer inverts the point of shadow. It now sits at the W3→W4 boundary.
 - **W3 — shadow decision ledger.** Validates arithmetic and divergence only.
 - **W4 — bounded canary**, then active mode and the full dashboard.
 
