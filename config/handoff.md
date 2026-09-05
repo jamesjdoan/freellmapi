@@ -60,8 +60,10 @@ New files: `services/quota-clock.ts`, `services/quota-policy.ts`, `services/quot
 - `server/data/freeapi.db` is **empty** (0 keys, 0 requests). All evidence in the ADR came from
   `backups/freellmapi-data-20260902-131315.tar.gz`. The live-capture trigger is the real
   deployment, not this checkout.
-- `DATA_DIR` is **not** honoured by the server — it wrote to `server/data/freeapi.db` during a
-  smoke test regardless. Test data was cleaned out; the two new tables legitimately remain.
+- The DB path env var is **`FREEAPI_DB_PATH`**, not `DATA_DIR` — `DATA_DIR` does not exist and
+  is silently ignored, so a smoke test pointed at it writes to the live
+  `server/data/freeapi.db`. An earlier one did exactly that; the test data was cleaned out and
+  the new tables legitimately remain.
 - `package-lock.json` was already modified before this session; left alone.
 - Untracked and deliberately not committed: `.compressa/`, `backups/`, `config/`, `freellmapi/`.
 
