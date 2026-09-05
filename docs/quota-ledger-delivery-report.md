@@ -222,8 +222,9 @@ and no basis for W4.
    real header shows the format.
 6. **Failed-attempt metering counts requests only, never tokens.** On a failure we do not know
    what the provider billed.
-7. **`DATA_DIR` is not honoured by the server** — it writes to `server/data/freeapi.db`
-   regardless. Discovered during smoke testing.
+7. **The database path env var is `FREEAPI_DB_PATH`, not `DATA_DIR`.** `DATA_DIR` does not
+   exist and is silently ignored, so a smoke test pointed at it writes to the live
+   `server/data/freeapi.db`. Verified: `FREEAPI_DB_PATH` isolates correctly.
 8. **Unclassified failures are not metered**, biasing local usage slightly low rather than
    arbitrarily high.
 
