@@ -54,6 +54,9 @@ export interface QuotaPolicy {
   id: number;
   platform: string;
   modelId: string | null;
+  /** Null = every endpoint of this platform+model. For a relay, the platform is
+   *  always 'custom', so this is what names the provider. */
+  endpointScope: string | null;
   scope: QuotaPolicyScope;
   metric: QuotaPolicyMetric;
   limit: number;
@@ -75,6 +78,7 @@ export interface EffectiveQuota {
   platform: string;
   /** Null when the limit belongs to the whole platform rather than one model. */
   modelId: string | null;
+  endpointScope: string | null;
   metric: QuotaPolicyMetric;
   scope: QuotaPolicyScope;
   limit: number;
@@ -88,6 +92,7 @@ interface PolicyRow {
   id: number;
   platform: string;
   model_id: string | null;
+  endpoint_scope: string | null;
   scope: QuotaPolicyScope;
   metric: QuotaPolicyMetric;
   limit_value: number;
@@ -107,6 +112,7 @@ function toPolicy(row: PolicyRow): QuotaPolicy {
     id: row.id,
     platform: row.platform,
     modelId: row.model_id,
+    endpointScope: row.endpoint_scope,
     scope: row.scope,
     metric: row.metric,
     limit: row.limit_value,
@@ -192,10 +198,10 @@ export function upsertQuotaPolicy(input: QuotaPolicyInput): QuotaPolicy {
   const db = getDb();
   db.prepare(`
     INSERT INTO quota_policy (
-      platform, model_id, scope, metric, limit_value, period_kind, period_ms,
+      platform, model_id, endpoint_scope, scope, metric, limit_value, period_kind, period_ms,
       timezone, anchor_day, priority, enabled, source, confidence, notes, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    ON CONFLICT(platform, IFNULL(model_id, ''), scope, metric) DO UPDATE SET
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(platform, IFNULL(model_id, ''), IFNULL(endpoint_scope, ''), scope, metric) DO UPDATE SET
       limit_value = excluded.limit_value,
       period_kind = excluded.period_kind,
       period_ms   = excluded.period_ms,
@@ -208,15 +214,16 @@ export function upsertQuotaPolicy(input: QuotaPolicyInput): QuotaPolicy {
       notes       = excluded.notes,
       updated_at  = datetime('now')
   `).run(
-    input.platform, input.modelId, input.scope, input.metric, input.limit,
+    input.platform, input.modelId, input.endpointScope ?? null, input.scope, input.metric, input.limit,
     input.periodKind, input.periodMs, input.timezone, input.anchorDay,
     input.priority ?? 0, input.enabled === false ? 0 : 1,
     input.source ?? 'operator', input.confidence ?? 0.8, input.notes ?? null,
   );
   const row = db.prepare(`
     SELECT * FROM quota_policy
-     WHERE platform = ? AND IFNULL(model_id, '') = IFNULL(?, '') AND scope = ? AND metric = ?
-  `).get(input.platform, input.modelId, input.scope, input.metric) as PolicyRow;
+     WHERE platform = ? AND IFNULL(model_id, '') = IFNULL(?, '')
+       AND IFNULL(endpoint_scope, '') = IFNULL(?, '') AND scope = ? AND metric = ?
+  `).get(input.platform, input.modelId, input.endpointScope ?? null, input.scope, input.metric) as PolicyRow;
   invalidateQuotaPolicyCache(input.platform);
   return toPolicy(row);
 }
@@ -262,9 +269,16 @@ interface ObservationRow {
   confidence: number;
 }
 
+/** How narrowly a policy names its subject. Higher wins when two policies
+ *  claim the same axis: an endpoint-specific limit is a statement about one
+ *  relay, a platform-wide one is a fallback for everything else. */
+function policySpecificity(policy: QuotaPolicy): number {
+  return (policy.endpointScope != null ? 2 : 0) + (policy.modelId != null ? 1 : 0);
+}
+
 /**
- * Every limit that currently binds `(platform, modelId)`, one per axis, each
- * from the most trustworthy source that has an opinion about it.
+ * Every limit that currently binds `(platform, modelId, endpointScope)`, one
+ * per axis, each from the most trustworthy source that has an opinion about it.
  *
  * A model is metered on several axes at once — the existing gates check RPM,
  * RPD, TPM and TPD independently — so this returns a list, not a single number.
@@ -275,6 +289,7 @@ export function resolveEffectiveQuotas(
   platform: string,
   modelId: string | null,
   now: number = Date.now(),
+  endpointScope: string | null = null,
 ): EffectiveQuota[] {
   let db: Db;
   try {
@@ -295,7 +310,7 @@ export function resolveEffectiveQuotas(
   ): void => {
     if (!Number.isFinite(limit) || limit <= 0) return;
     considerCandidate(best, {
-      platform, modelId: subjectModelId, metric, scope, limit,
+      platform, modelId: subjectModelId, endpointScope, metric, scope, limit,
       period, window: resolveQuotaWindow(period, now), source, confidence,
     });
   };
@@ -329,11 +344,23 @@ export function resolveEffectiveQuotas(
     }
   }
 
-  // ── 2. Operator policy (platform-wide first, then the per-model override) ──
-  for (const policy of listQuotaPolicies(platform)) {
-    if (!policy.enabled) continue;
-    if (policy.modelId != null && policy.modelId !== modelId) continue;
-    add(policy.metric, policy.scope, policy.limit, periodForPolicy(policy), policy.source === 'catalog' ? 'catalog' : policy.source, policy.confidence, policy.modelId);
+  // ── 2. Operator policy, most specific first ────────────────────────────────
+  // All operator policies share one source rank, and considerCandidate only
+  // replaces on a STRICTLY better rank — so on an axis claimed twice the FIRST
+  // one wins. Sorting most-specific-first is therefore what makes a
+  // per-endpoint policy beat a per-model one, and that beat a platform-wide one.
+  const applicable = listQuotaPolicies(platform)
+    .filter(policy => policy.enabled)
+    .filter(policy => policy.modelId == null || policy.modelId === modelId)
+    // A policy naming an endpoint applies only to that endpoint. One naming
+    // none applies to all of them, which is what every pre-existing row means.
+    .filter(policy => policy.endpointScope == null || policy.endpointScope === endpointScope)
+    .sort((a, b) => policySpecificity(b) - policySpecificity(a));
+  for (const policy of applicable) {
+    add(
+      policy.metric, policy.scope, policy.limit, periodForPolicy(policy),
+      policy.source === 'catalog' ? 'catalog' : policy.source, policy.confidence, policy.modelId,
+    );
   }
 
   // ── 1. Live provider headers (a measurement, so it outranks every claim) ──

@@ -32,6 +32,9 @@ export const quotaRouter = Router();
 const PolicyBody = z.object({
   platform: z.string().min(1),
   modelId: z.string().min(1).nullable().default(null),
+  /** Names one relay endpoint. Null = every endpoint of this platform+model,
+   *  which is what a catalog platform always means. */
+  endpointScope: z.string().min(1).nullable().default(null),
   scope: z.enum(['provider_account', 'provider_key', 'model', 'shared_pool']).default('provider_account'),
   metric: z.enum(['requests', 'input_tokens', 'output_tokens', 'total_tokens', 'credits']).default('requests'),
   limit: z.number().int().positive(),
@@ -98,7 +101,8 @@ quotaRouter.get('/state', (req: Request, res: Response) => {
     return;
   }
   const modelId = typeof req.query.model === 'string' ? req.query.model : null;
-  const quotas = resolveEffectiveQuotas(platform, modelId).map(q => ({
+  const endpointScope = typeof req.query.endpoint === 'string' ? req.query.endpoint : null;
+  const quotas = resolveEffectiveQuotas(platform, modelId, Date.now(), endpointScope).map(q => ({
     platform: q.platform,
     modelId: q.modelId,
     metric: q.metric,

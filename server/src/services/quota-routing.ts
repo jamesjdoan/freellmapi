@@ -203,7 +203,7 @@ export function evaluateShadowDecision(
   const logicalModel = normalizeGroupKey(candidates[0]!.displayName);
   const weights = getReservationWeights();
   const scored: ScoredCandidate[] = candidates.map(candidate => {
-    const quotas = resolveEffectiveQuotas(candidate.platform, candidate.modelId, now);
+    const quotas = resolveEffectiveQuotas(candidate.platform, candidate.modelId, now, candidate.endpointScope ?? null);
     const { score, headroom, paceDelta } = scoreQuotaCandidate(
       quotas,
       quota => usedFor(candidate.platform, candidate.modelId, quota),
