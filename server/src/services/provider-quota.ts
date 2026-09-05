@@ -339,6 +339,7 @@ function maybeAddObservation(
   resetRaw: string | null | undefined,
   strategy: QuotaResetStrategy,
   rawJson: string | null,
+  statusCode: number | null,
 ): void {
   const limit = parseHeaderNumber(limitRaw);
   const remaining = parseHeaderNumber(remainingRaw ?? null);
@@ -359,6 +360,7 @@ function maybeAddObservation(
     confidence: 1,
     notes: unparsedReset ? 'reset header present but unparsed' : null,
     rawJson,
+    statusCode,
   });
 }
 
@@ -389,6 +391,7 @@ export function parseQuotaObservationsFromResponse(
         spec.reset ? get(spec.reset) : null,
         spec.strategy ?? 'provider_reported',
         captureRawHeaders(headers, [spec.limit, spec.remaining, spec.reset]),
+        response.status,
       );
     }
   }
