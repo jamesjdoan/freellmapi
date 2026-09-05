@@ -99,6 +99,7 @@ All under `/api/quota`, all behind `requireAuth` (dashboard session, not the `/v
 | GET | `/shadow?days=` | Shadow agreement rate, overall and per logical model |
 | GET | `/decisions?disagreed=1&model=&days=&limit=` | Routing decision history |
 | GET | `/mode` · PUT `/mode` | Read/switch `off` \| `shadow` \| `active` |
+| GET | `/reservation` · PUT `/reservation` | Read/set per-platform scarcity weights |
 
 `PUT /policies` **refuses a client-supplied `source`**, so a typed limit cannot label itself
 measured and outrank a real provider header. No endpoint returns key material.
@@ -140,20 +141,36 @@ not a pace of zero.
 
 ## 9. Routing scoring formula
 
-**Deliberately not a weighted blend.** Shadow scores a candidate as the remaining fraction on its
-**binding axis** — the worst of the axes that apply:
-
 ```
-score = min over axes of ( 1 - used / limit ),  clamped to [0,1]
+headroom = min over axes of ( 1 - used / limit ),  clamped to [0,1]
+           UNKNOWN_HEADROOM (0.5) when no axis is metered
+score    = headroom × reservationWeight[platform]   (default weight 1.0)
 ```
 
-`null` (no opinion) is distinct from `0` (known and exhausted). With no shadow data yet, a
-formula with tuned constants for scarcity, reset-proximity, latency and reliability would be
-false precision. `paceDelta` is recorded per candidate so the weighting can be decided from
-recorded data at W4 rather than guessed at now.
+`headroom` takes the **binding axis** — the worst one, since that is what
+actually 429s. Reported `headroom` stays `null` for an unmetered candidate: the
+score is neutral, but we do not claim to have measured what we did not.
 
-The existing bandit score is untouched. Layering: bandit picks the logical model; shadow picks
-only which provider would serve it.
+Both terms exist because an end-to-end run of the four-provider scenario caught
+the formula preferring OpenRouter at 45/50 over a provider with no published
+limit:
+
+- **Unmetered is neutral, not unrankable.** Scoring `null` dropped a candidate
+  from the ranking, so the only metered provider won by default however little
+  it had left. Same value and reasoning as the router's `UNKNOWN_QUOTA_HEADROOM`
+  (#919).
+- **A fraction cannot see scarcity.** Half of OpenRouter's 50/day and half of a
+  2000/day pool are both 0.5. Reservation weights are operator-declared and
+  **empty by default** — shipping weights would bake a routing opinion into the
+  code. Recommended starting point for a free OpenRouter account:
+  `curl -X PUT .../api/quota/reservation -d '{"weights":{"openrouter":0.3}}'`.
+
+There is still no term for reset-proximity, latency, reliability or recent 429
+rate. Those need shadow data to weight honestly; `paceDelta` is recorded per
+candidate so the question is answerable from evidence at W4.
+
+The existing bandit score is untouched. Layering: the bandit picks the logical
+model, this picks only which provider serves it.
 
 ## 10. Configuration options
 
@@ -162,6 +179,7 @@ only which provider would serve it.
 | `quota_routing_mode` | `settings`, via `GET/PUT /api/quota/mode` | `shadow` |
 | `routing_autoroute_disabled_platforms` | `settings` | `huggingface,sambanova` |
 | Quota policies | `quota_policy` table, via `/api/quota/policies` | none |
+| `quota_reservation_weights` | `settings`, via `GET/PUT /api/quota/reservation` | `{}` (all 1.0) |
 | `PROVIDER_DAILY_REQUEST_CAP_<PLATFORM>` | env | per-platform defaults |
 | `PROVIDER_MINUTE_REQUEST_CAP_<PLATFORM>` | env | nvidia 40 |
 | `PROVIDER_DAILY_TOKEN_CAP_<PLATFORM>` | env | per-platform defaults |
@@ -172,8 +190,8 @@ catalog → env cap.** An operator-typed limit never outranks a live provider re
 ## 11. Test results
 
 ```
-Test Files  254 passed (254)
-Tests       2983 passed | 5 skipped (2988)
+Test Files  255 passed (255)
+Tests       2989 passed | 5 skipped (2994)
 ```
 
 Against the brief's 25 cases: **19 covered** (Pacific reset, UTC reset, rolling, monthly/billing,
