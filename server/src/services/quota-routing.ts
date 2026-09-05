@@ -48,6 +48,47 @@ export function setQuotaRoutingMode(mode: QuotaRoutingMode): void {
   setSetting(QUOTA_ROUTING_MODE_KEY, mode);
 }
 
+
+// ── Reservation weights (scarcity, ADR W3) ──────────────────────────────────
+// A multiplier per platform, 0..1, where lower means "hold this pool back".
+// Deliberately EMPTY by default: shipping weights would bake a routing opinion
+// into the code, and the brief's own numbers ("OpenRouter: high scarcity") are
+// initial assumptions about one account, not facts about the provider. The
+// operator declares them; the recommended starting point is documented rather
+// than defaulted.
+const RESERVATION_WEIGHTS_KEY = 'quota_reservation_weights';
+
+export function getReservationWeights(): Record<string, number> {
+  try {
+    const raw = getSetting(RESERVATION_WEIGHTS_KEY);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const out: Record<string, number> = {};
+    for (const [platform, weight] of Object.entries(parsed as Record<string, unknown>)) {
+      // A corrupt entry is skipped rather than defaulting to 0, which would
+      // silently bench a provider instead of leaving it unweighted.
+      if (typeof weight === 'number' && Number.isFinite(weight) && weight >= 0 && weight <= 1) {
+        out[platform.toLowerCase()] = weight;
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+export function setReservationWeights(weights: Record<string, number>): Record<string, number> {
+  const clean: Record<string, number> = {};
+  for (const [platform, weight] of Object.entries(weights)) {
+    if (!Number.isFinite(weight) || weight < 0 || weight > 1) {
+      throw new Error(`Reservation weight for ${platform} must be between 0 and 1`);
+    }
+    clean[platform.trim().toLowerCase()] = weight;
+  }
+  setSetting(RESERVATION_WEIGHTS_KEY, JSON.stringify(clean));
+  return clean;
+}
 /** One provider that could serve the logical model under consideration. */
 export interface QuotaCandidate {
   platform: string;
@@ -83,7 +124,27 @@ export interface ShadowDecision {
  * reported alongside so the weighting question can be answered from recorded
  * data rather than guessed at now.
  */
-export function scoreQuotaCandidate(quotas: EffectiveQuota[], used: (q: EffectiveQuota) => number | null, now: number): Pick<ScoredCandidate, 'score' | 'headroom' | 'paceDelta'> {
+/**
+ * An unmetered provider is not an unrankable one. The same value and the same
+ * reasoning as `UNKNOWN_QUOTA_HEADROOM` in the router (#919): an unobserved
+ * budget is no reason to prefer a provider (it could be drained) and no reason
+ * to avoid one (it could be untouched), so it sorts between an exhausted
+ * provider and a fresh one.
+ *
+ * Treating it as "no opinion" instead — which this did until an end-to-end run
+ * showed it — meant the ONLY candidate with a signal won by default, so a
+ * provider at 10% of a 50-request pool beat one with no known cap at all. That
+ * is precisely the "burn the last five OpenRouter requests" outcome the design
+ * exists to prevent.
+ */
+export const UNKNOWN_HEADROOM = 0.5;
+
+export function scoreQuotaCandidate(
+  quotas: EffectiveQuota[],
+  used: (q: EffectiveQuota) => number | null,
+  now: number,
+  reservationWeight = 1,
+): Pick<ScoredCandidate, 'score' | 'headroom' | 'paceDelta'> {
   let worstHeadroom: number | null = null;
   let bindingPace: number | null = null;
 
@@ -97,7 +158,30 @@ export function scoreQuotaCandidate(quotas: EffectiveQuota[], used: (q: Effectiv
     }
   }
 
-  return { score: worstHeadroom, headroom: worstHeadroom, paceDelta: bindingPace };
+  const headroom = worstHeadroom ?? UNKNOWN_HEADROOM;
+  // Reservation weight separates two pools that look identical as fractions:
+  // half of OpenRouter's 50/day and half of a 1000/day pool are both 0.5, and
+  // spending the first is far more costly. The operator declares which pools
+  // to hold back; inferring it from absolute counts would conflate requests
+  // with tokens and bake in a constant nobody chose.
+  return {
+    score: headroom * reservationWeight,
+    headroom: worstHeadroom,
+    paceDelta: bindingPace,
+  };
+}
+
+/** Operator-readable justification. Says which of the three things decided it:
+ *  measured headroom, an absent limit, or the pool being held back. */
+function describePreference(best: ScoredCandidate, weight: number): string {
+  if (best.headroom == null) {
+    return 'no published limit — treated as neutral, not as unlimited';
+  }
+  const pct = `${(best.headroom * 100).toFixed(0)}%`;
+  const held = weight < 1 ? ` (reservation weight ${weight})` : '';
+  return best.paceDelta != null && best.paceDelta < -0.2
+    ? `most headroom (${pct}) and behind pace — allowance on course to expire unused${held}`
+    : `most headroom (${pct}) on its binding axis${held}`;
 }
 
 /**
@@ -112,25 +196,27 @@ export function evaluateShadowDecision(
   if (candidates.length < 2) return null; // Nothing to choose between.
 
   const logicalModel = normalizeGroupKey(candidates[0]!.displayName);
+  const weights = getReservationWeights();
   const scored: ScoredCandidate[] = candidates.map(candidate => {
     const quotas = resolveEffectiveQuotas(candidate.platform, candidate.modelId, now);
     const { score, headroom, paceDelta } = scoreQuotaCandidate(
       quotas,
       quota => usedFor(candidate.platform, candidate.modelId, quota),
       now,
+      weights[candidate.platform.toLowerCase()] ?? 1,
     );
     return { platform: candidate.platform, modelId: candidate.modelId, score, headroom, paceDelta };
   });
 
+  // Every candidate now scores: an unmetered one takes UNKNOWN_HEADROOM rather
+  // than dropping out, so the only remaining null case is an empty list.
   const withOpinion = scored.filter(c => c.score != null);
   if (withOpinion.length === 0) {
     return { logicalModel, candidates: scored, preferred: null, reason: 'no quota signal for any candidate' };
   }
 
   const best = withOpinion.reduce((a, b) => (b.score! > a.score! ? b : a));
-  const reason = best.paceDelta != null && best.paceDelta < -0.2
-    ? `most headroom (${(best.headroom! * 100).toFixed(0)}%) and behind pace — allowance on course to expire unused`
-    : `most headroom (${(best.headroom! * 100).toFixed(0)}%) on its binding axis`;
+  const reason = describePreference(best, weights[best.platform.toLowerCase()] ?? 1);
 
   return {
     logicalModel,

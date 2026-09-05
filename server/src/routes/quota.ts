@@ -11,6 +11,8 @@ import {
   setQuotaRoutingMode,
   getShadowAgreementStats,
   listRoutingDecisions,
+  getReservationWeights,
+  setReservationWeights,
   type QuotaRoutingMode,
 } from '../services/quota-routing.js';
 import { getQuotaForecast } from '../services/quota-forecast.js';
@@ -162,4 +164,25 @@ quotaRouter.put('/mode', (req: Request, res: Response) => {
   }
   setQuotaRoutingMode(parsed.data.mode as QuotaRoutingMode);
   res.json({ mode: getQuotaRoutingMode() });
+});
+
+/**
+ * Per-platform scarcity multipliers, 0..1, lower meaning "hold this pool back".
+ * Empty by default: a shipped weight would be a routing opinion baked into the
+ * code, and the right value depends on the operator's own account. For a free
+ * OpenRouter account with 50 shared requests/day, something like 0.3 is a
+ * sensible starting point.
+ */
+quotaRouter.get('/reservation', (_req: Request, res: Response) => {
+  res.json({ weights: getReservationWeights() });
+});
+
+quotaRouter.put('/reservation', (req: Request, res: Response) => {
+  const parsed = z.object({ weights: z.record(z.string(), z.number().min(0).max(1)) })
+    .strict().safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: 'weights must map platform -> number between 0 and 1' } });
+    return;
+  }
+  res.json({ weights: setReservationWeights(parsed.data.weights) });
 });
