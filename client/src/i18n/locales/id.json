@@ -554,6 +554,8 @@
     "ollamaKeyRequired": "Perlu kunci API",
     "claudeAliases": "Alias penemuan Claude Code",
     "claudeAliasesHint": "Ekspos alias claude/<model> agar pemilih model gateway dapat menampilkan daftar katalog.",
+    "mcpServer": "Server MCP",
+    "mcpServerHint": "Membuka endpoint /mcp untuk klien agen. Instalasi baru dimulai dalam keadaan nonaktif.",
     "urlTokensTitle": "Token URL yang dapat dicabut",
     "urlTokensDesc": "Hanya untuk klien tanpa header. Token URL bisa bocor ke riwayat dan log, jadi cabut jika sudah tidak diperlukan.",
     "urlTokenLabel": "Label token",
@@ -724,7 +726,10 @@
     "ttft": "TTFT",
     "requestsByAgent": "Permintaan per agen",
     "sortBy": "Urutkan berdasarkan {column}",
-    "sortHint": "Pengurutan berlaku untuk {count} baris yang dimuat"
+    "sortHint": "Pengurutan berlaku untuk {count} baris yang dimuat",
+    "cacheHitRate": "Rasio hit cache",
+    "cacheSavedTokens": "{tokens} token dihemat",
+    "cacheHitRateHint": "{hits} hit vs {misses} miss sejak server dijalankan · {requests} panggilan penyedia dihindari"
   },
   "logs": {
     "title": "Log",

@@ -36,6 +36,12 @@ const IDEMPOTENCY_CLAIMS_FILENAME = '20260901_000001_idempotency_claims.ts';
 const QUOTA_OBSERVATION_LOOKUP_FILENAME = '20260901_000002_quota_observation_lookup.ts';
 const ANALYTICS_LATENCY_PERCENTILE_INDEX_FILENAME = '20260902_000001_analytics_latency_percentile_index.ts';
 const PROVIDER_ACCOUNT_LIMITS_FILENAME = '20260902_000002_provider_account_limits.ts';
+const MCP_ENABLED_DEFAULT_FILENAME = '20260903_000001_mcp_enabled_default.ts';
+const RESPONSE_CACHE_FILENAME = '20260903_000002_response_cache.ts';
+const QUOTA_POLICY_FILENAME = '20260905_000001_quota_policy.ts';
+const ROUTING_DECISION_FILENAME = '20260905_000002_routing_decision.ts';
+const ROUTING_DECISION_ENDPOINT_FILENAME = '20260905_000003_routing_decision_endpoint.ts';
+const QUOTA_POLICY_ENDPOINT_FILENAME = '20260905_000004_quota_policy_endpoint.ts';
 
 interface SchemaRow {
   type: string;
@@ -118,6 +124,12 @@ describe('migration round trip', () => {
         QUOTA_OBSERVATION_LOOKUP_FILENAME,
         ANALYTICS_LATENCY_PERCENTILE_INDEX_FILENAME,
         PROVIDER_ACCOUNT_LIMITS_FILENAME,
+        MCP_ENABLED_DEFAULT_FILENAME,
+        RESPONSE_CACHE_FILENAME,
+        QUOTA_POLICY_FILENAME,
+        ROUTING_DECISION_FILENAME,
+        ROUTING_DECISION_ENDPOINT_FILENAME,
+        QUOTA_POLICY_ENDPOINT_FILENAME,
       ]);
     } finally {
       db.close();
@@ -146,6 +158,16 @@ describe('migration round trip', () => {
       db.prepare(`
         INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, base_url)
         VALUES ('custom', '127.0.0.1:11434', 'x', 'x', 'x', 'http://127.0.0.1:11434/v1')
+      `).run();
+
+      // Same again for the /mcp lifecycle seed (#925): it reads api_keys, and
+      // with the key above present its post-migration state is enabled ('1').
+      // The first up ran against an empty api_keys and wrote '0', so pin the
+      // post-seed value here for down (row removed) and up (row rewritten) to
+      // round trip.
+      db.prepare(`
+        INSERT INTO settings (key, value) VALUES ('enable_mcp', '1')
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
       `).run();
 
       const fullState = snapshotAppState(db);

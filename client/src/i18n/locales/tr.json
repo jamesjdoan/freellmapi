@@ -554,6 +554,8 @@
     "ollamaKeyRequired": "API anahtarı gerekli",
     "claudeAliases": "Claude Code keşif takma adları",
     "claudeAliasesHint": "Ağ geçidi model seçicisinin kataloğu listeleyebilmesi için claude/<model> takma adlarını açığa çıkarın.",
+    "mcpServer": "MCP sunucusu",
+    "mcpServerHint": "/mcp uç noktasını aracı istemcilere açar. Yeni kurulumlarda kapalı başlar.",
     "urlTokensTitle": "İptal edilebilir URL belirteçleri",
     "urlTokensDesc": "Yalnızca başlık gönderemeyen istemciler için. URL belirteçleri geçmişe ve günlüklere sızabilir; bu yüzden artık gerekmediğinde iptal edin.",
     "urlTokenLabel": "Belirteç etiketi",
@@ -724,7 +726,10 @@
     "ttft": "TTFT",
     "requestsByAgent": "Ajan başına istekler",
     "sortBy": "{column} ölçütüne göre sırala",
-    "sortHint": "Sıralama yalnızca yüklenen {count} satıra uygulanır"
+    "sortHint": "Sıralama yalnızca yüklenen {count} satıra uygulanır",
+    "cacheHitRate": "Önbellek isabet oranı",
+    "cacheSavedTokens": "{tokens} jeton tasarruf edildi",
+    "cacheHitRateHint": "Sunucu başlatıldığından beri {hits} isabet, {misses} ıskalama · {requests} sağlayıcı çağrısından kaçınıldı"
   },
   "logs": {
     "title": "Günlükler",

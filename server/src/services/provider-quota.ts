@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { getDb } from '../db/index.js';
+import type { Db } from '../db/types.js';
 // Single shared Retry-After parser (was duplicated here and in providers/base.ts).
 import { parseRetryAfterMs } from '../providers/base.js';
 import type {
@@ -99,6 +100,32 @@ function parseHeaderNumber(raw: string | null): number | null {
 }
 
 function parseResetAtFromHeader(raw: string | null, now = Date.now()): string | null {
+  if (!raw) return null;
+
+  // First, try to parse as a duration string (e.g., "2m59.56s", "59.56s", "1h2m3s", "750ms", "1m", "45s").
+  // This is safe because the raw value is retained (see captureRawHeaders), so any parsing error is auditable.
+  const durationRegex = /^(\d+(?:\.\d+)?(ms|h|m|s))+$/;
+  if (durationRegex.test(raw)) {
+    const timePartRegex = /(\d+(?:\.\d+)?)(ms|h|m|s)/g;
+    let totalMs = 0;
+    let match;
+    while ((match = timePartRegex.exec(raw)) !== null) {
+      const value = parseFloat(match[1]);
+      const unit = match[2];
+      let ms;
+      switch (unit) {
+        case 'h': ms = value * 3600 * 1000; break;
+        case 'm': ms = value * 60 * 1000; break;
+        case 's': ms = value * 1000; break;
+        case 'ms': ms = value; break;
+        default: return null; // Should not happen due to outer regex
+      }
+      totalMs += ms;
+    }
+    return new Date(now + totalMs).toISOString();
+  }
+
+  // Fall back to existing numeric parsing.
   const parsed = parseHeaderNumber(raw);
   if (parsed === null) return null;
   if (parsed > 1_000_000_000_000) return new Date(parsed).toISOString();
@@ -164,6 +191,13 @@ export function resolveQuotaPolicy(
   if (platform === 'cerebras') return policy('cerebras::shared', 'shared_pool', 'metered', ['requests', 'tokens'], 'provider_reported');
   if (platform === 'sail') return policy('sail::monthly-credit', 'shared_pool', 'metered', ['credits'], 'fixed_calendar', 'month');
   if (platform === 'bai') return policy('bai::promo', 'shared_pool', 'unknown', [], 'unknown');
+  // AMD Radeon Cloud TokenFactory (upstream v0.9.6): one recurring daily
+  // allowance, reported in USD, plus a user-level RPM ceiling. Both numbers
+  // arrive on every response, so the pool is metered and provider-reported.
+  // 'shared_pool', not 'account': the allowance is per key/user, so ranking
+  // keys by remaining is meaningful — matching upstream, whose
+  // 'radeon::daily-free' key was never account-scoped.
+  if (platform === 'radeon') return policy('radeon::daily-free', 'shared_pool', 'metered', ['requests', 'credits'], 'provider_reported');
   if (platform === 'sambanova') return policy('sambanova::shared', 'shared_pool', 'metered', ['requests', 'tokens'], 'provider_reported');
   if (platform === 'nvidia') return policy('nvidia::credit-pool', 'shared_pool', 'metered', ['requests'], 'provider_reported');
   if (platform === 'mistral') return policy('mistral::experiment-pool', 'shared_pool', 'metered', ['requests', 'tokens'], 'provider_reported');
@@ -211,6 +245,26 @@ export function resolveQuotaPolicy(
   return policy(normalizedModelId ? `${platform}::${normalizedModelId}` : `${platform}::account`, normalizedModelId ? 'model' : 'account', 'unknown', [], 'unknown');
 }
 
+/**
+ * True when one quota bucket covers every KEY on the platform, so every key
+ * reports the same remaining number. Callers that rank keys against each other
+ * (the 'least-remaining' key strategy, #919) must skip these pools — reordering
+ * on an identical number only churns the rotation.
+ *
+ * Derived from `resolveQuotaPolicy`, not from the pool-key string. The string is
+ * a label whose shape already changed once (Groq is now `groq::model::<id>`),
+ * and a routing rule must not move with it.
+ *
+ * NOTE: this is a deliberate behaviour change from the previous
+ * `endsWith('::account')` test. Pools whose key does not end in `::account` but
+ * whose scope genuinely IS account-wide — `ollama::cloud`, `custom::local::…` —
+ * now correctly skip key ranking. Inert unless a platform has several keys AND
+ * the least-remaining strategy is on.
+ */
+export function isAccountScopedPool(platform: Platform, modelId?: string | null): boolean {
+  return resolveQuotaPolicy(platform, modelId).scope === 'account';
+}
+
 function isSharedPool(platform: Platform): boolean {
   return resolveQuotaPolicy(platform).scope !== 'model';
 }
@@ -230,6 +284,10 @@ const HEADER_SPECS: Partial<Record<Platform, HeaderSpec[]>> = {
     { metric: 'requests', limit: 'x-ratelimit-limit-requests', remaining: 'x-ratelimit-remaining-requests', reset: 'x-ratelimit-reset-requests', strategy: 'provider_reported' },
     { metric: 'tokens', limit: 'x-ratelimit-limit-tokens', remaining: 'x-ratelimit-remaining-tokens', reset: 'x-ratelimit-reset-tokens', strategy: 'provider_reported' },
   ],
+  radeon: [
+    { metric: 'requests', limit: 'x-ratelimit-limit-user-rpm', remaining: 'x-ratelimit-remaining-user-rpm', reset: 'x-ratelimit-reset', strategy: 'provider_reported' },
+    { metric: 'credits', limit: 'x-ratelimit-limit-user-daily-usd', remaining: 'x-ratelimit-remaining-user-daily-usd', reset: 'x-ratelimit-reset-user-daily-usd', strategy: 'provider_reported' },
+  ],
   // ModelScope reportedly returns `modelscope-ratelimit-*`-style headers on
   // authenticated responses. UNCONFIRMED: no real token exists for this
   // platform yet (auth needs an Alibaba Cloud cn-site binding, #581), and the
@@ -243,7 +301,22 @@ const HEADER_SPECS: Partial<Record<Platform, HeaderSpec[]>> = {
   ],
 };
 
-function extractContext(opts: Pick<QuotaObservationInput, 'platform' | 'modelId' | 'quotaPoolKey' | 'keyId' | 'providerAccountId' | 'endpoint'> = {}) {
+/** The subject an observation is attributed to: which account, key, model and
+ *  pool the numbers belong to. Named because it is the contract every
+ *  observation builder consumes, and (ADR ARCH-20260905, F8) the shape that
+ *  changes when quota gains a per-model subject. */
+export interface QuotaObservationSubject {
+  platform: Platform;
+  keyId: number;
+  providerAccountId: string | null;
+  modelId: string | null;
+  quotaPoolKey: string;
+  endpoint: string | null;
+}
+
+function extractContext(
+  opts: Pick<QuotaObservationInput, 'platform' | 'modelId' | 'quotaPoolKey' | 'keyId' | 'providerAccountId' | 'endpoint'> = {},
+): QuotaObservationSubject | null {
   const context = getQuotaObservationContext();
   const platform = opts.platform ?? context?.platform;
   if (!platform) return null;
@@ -257,19 +330,75 @@ function extractContext(opts: Pick<QuotaObservationInput, 'platform' | 'modelId'
   };
 }
 
+// ── Raw header capture (ADR ARCH-20260905, F3/F10) ──────────────────────────
+// `parseResetAtFromHeader` accepts only numerics, so a provider that states its
+// reset as a duration ("2m59.56s") has that value silently dropped — and until
+// now nothing retained the original, which made "the provider omits it" and
+// "our parser rejected it" indistinguishable after the fact. Capture the raw
+// values so the question is answerable from the log instead of from a live
+// packet capture.
+//
+// Whitelist + pattern, never a full header dump: a blind snapshot can carry
+// Set-Cookie or similar, and telemetry must not hold credential material.
+// The deny-list wins over the pattern, so a quota-shaped header that names a
+// token is still refused.
+const RAW_CAPTURE_PATTERN = /ratelimit|rate-limit|quota|retry|reset|remaining|credit/i;
+const RAW_CAPTURE_DENY = /authorization|cookie|token|secret|api-?key|bearer|session|password|signature/i;
+/** Defensive ceiling. Real header sets are a few hundred bytes; anything larger
+ *  is a provider doing something unexpected and is not worth persisting. */
+const RAW_CAPTURE_MAX_CHARS = 2048;
+
+function captureRawHeaders(headers: Headers | undefined, explicit: (string | undefined)[]): string | null {
+  if (!headers) return null;
+  const captured: Record<string, string> = {};
+  const take = (name: string, value: string | null | undefined) => {
+    if (value === null || value === undefined) return;
+    const lower = name.toLowerCase();
+    if (RAW_CAPTURE_DENY.test(lower)) return;
+    captured[lower] = value;
+  };
+
+  // The headers this observation was actually derived from, present or not —
+  // an absent one is itself the finding, so it is recorded as null below.
+  for (const name of explicit) {
+    if (!name) continue;
+    const lower = name.toLowerCase();
+    if (RAW_CAPTURE_DENY.test(lower)) continue;
+    captured[lower] = headers.get?.(name) ?? '';
+  }
+
+  // Discovery: anything quota-shaped the provider sent that we have no spec
+  // for. This is how the header names for platforms with no HEADER_SPECS entry
+  // get found, rather than guessed.
+  headers.forEach?.((value, name) => {
+    if (!RAW_CAPTURE_PATTERN.test(name)) return;
+    take(name, value);
+  });
+
+  if (Object.keys(captured).length === 0) return null;
+  const json = JSON.stringify(captured);
+  return json.length > RAW_CAPTURE_MAX_CHARS ? json.slice(0, RAW_CAPTURE_MAX_CHARS) : json;
+}
+
 function maybeAddObservation(
   observations: QuotaObservationInput[],
-  base: NonNullable<ReturnType<typeof extractContext>>,
+  base: QuotaObservationSubject,
   metric: QuotaMetric,
   limitRaw: string | null,
   remainingRaw: string | null | undefined,
   resetRaw: string | null | undefined,
   strategy: QuotaResetStrategy,
+  rawJson: string | null,
+  statusCode: number | null,
 ): void {
   const limit = parseHeaderNumber(limitRaw);
   const remaining = parseHeaderNumber(remainingRaw ?? null);
   const resetAt = parseResetAtFromHeader(resetRaw ?? null);
-  if (limit === null && remaining === null && resetAt === null) return;
+  // A reset the parser could not read is still evidence: keep the observation
+  // when the raw header was present, so the unparsed value reaches the log
+  // instead of vanishing with the response (F3).
+  const unparsedReset = resetAt === null && (resetRaw ?? null) !== null;
+  if (limit === null && remaining === null && resetAt === null && !unparsedReset) return;
   observations.push({
     ...base,
     metric,
@@ -279,6 +408,9 @@ function maybeAddObservation(
     resetStrategy: strategy,
     source: 'header',
     confidence: 1,
+    notes: unparsedReset ? 'reset header present but unparsed' : null,
+    rawJson,
+    statusCode,
   });
 }
 
@@ -297,9 +429,20 @@ export function parseQuotaObservationsFromResponse(
   const get = (name: string) => headers?.get?.(name) ?? null;
   const observations: QuotaObservationInput[] = [];
   const specs = HEADER_SPECS[base.platform];
+  // Every header name this platform is known to use, so the discovery capture
+  // below records them as explicitly absent rather than merely unmentioned.
+  const specNames = (specs ?? []).flatMap(spec => [spec.limit, spec.remaining, spec.reset]);
   if (specs) {
     for (const spec of specs) {
-      maybeAddObservation(observations, base, spec.metric, get(spec.limit), spec.remaining ? get(spec.remaining) : null, spec.reset ? get(spec.reset) : null, spec.strategy ?? 'provider_reported');
+      maybeAddObservation(
+        observations, base, spec.metric,
+        get(spec.limit),
+        spec.remaining ? get(spec.remaining) : null,
+        spec.reset ? get(spec.reset) : null,
+        spec.strategy ?? 'provider_reported',
+        captureRawHeaders(headers, [spec.limit, spec.remaining, spec.reset]),
+        response.status,
+      );
     }
   }
 
@@ -316,6 +459,8 @@ export function parseQuotaObservationsFromResponse(
       source: response.status === 429 ? 'header' : 'error_body',
       confidence: response.status === 429 ? 1 : 0.8,
       notes: `retry-after=${retryAfterMs}ms`,
+      statusCode: response.status,
+      rawJson: captureRawHeaders(headers, ['retry-after', 'x-ratelimit-limit-requests']),
     });
   }
 
@@ -331,21 +476,38 @@ export function parseQuotaObservationsFromResponse(
       source: 'error_body',
       confidence: 0.55,
       notes: response.status === 402 ? 'upstream payment/credit exhaustion' : 'rate limited',
+      statusCode: response.status,
+      rawJson: captureRawHeaders(headers, ['retry-after', 'x-ratelimit-limit-requests', 'x-ratelimit-reset-requests', ...specNames]),
     });
   }
 
-  if (observations.length === 0 && isSharedPool(base.platform) && response.status === 200) {
-    observations.push({
-      ...base,
-      metric: 'requests',
-      limit: null,
-      remaining: null,
-      resetAt: null,
-      resetStrategy: 'unknown',
-      source: 'probe',
-      confidence: 0.1,
-      notes: 'no quota headers exposed',
-    });
+  if (observations.length === 0 && response.status === 200) {
+    // Two different questions were being answered by one condition. Recording a
+    // synthetic "we called it and nothing was reported" row is about POOLING —
+    // it only means something for a platform whose models share one account
+    // budget. Capturing quota-shaped headers we have no spec for is about
+    // DISCOVERY, and applies to every platform.
+    //
+    // Gating both on isSharedPool meant a relay or a platform outside that list
+    // could return textbook x-ratelimit-* headers and we would record nothing
+    // at all — found by driving real traffic through a stub provider that sent
+    // exactly those headers (F3).
+    const discovered = captureRawHeaders(headers, []);
+    if (discovered || isSharedPool(base.platform)) {
+      observations.push({
+        ...base,
+        metric: 'requests',
+        limit: null,
+        remaining: null,
+        resetAt: null,
+        resetStrategy: 'unknown',
+        source: 'probe',
+        confidence: 0.1,
+        notes: discovered ? 'unrecognised quota-shaped headers present' : 'no quota headers exposed',
+        statusCode: response.status,
+        rawJson: discovered,
+      });
+    }
   }
 
   return observations;
@@ -485,7 +647,7 @@ export function recordQuotaObservationsFromResponse(
 // unknown when the limit isn't known — `= limit_value` yields NULL in that case)
 // and drop the stale reset_at so the row stops reading as exhausted and this
 // fix-up doesn't recur. Runs on read; a new observation re-populates reset_at.
-function normalizeExpiredQuotaState(db: ReturnType<typeof getDb>): void {
+function normalizeExpiredQuotaState(db: Db): void {
   db.prepare(`
     UPDATE provider_quota_state
        SET remaining_value = limit_value,
@@ -669,7 +831,13 @@ export function getQuotaStateForKeys(): QuotaObservationView[] {
       latest.endpoint AS endpoint,
       latest.status_code AS statusCode,
       latest.retry_after_ms AS retryAfterMs,
-      latest.raw_json AS rawJson,
+      -- raw_json is deliberately NOT projected. It is a verbatim slice of the
+      -- provider's response headers, kept so a parse failure stays auditable in
+      -- the DB — but this view is served straight to the dashboard by
+      -- routes/health.ts, and raw upstream headers are not something to hand a
+      -- client by default. The capture filters (whitelist + deny-list) reduce
+      -- the risk at write time; not serving it removes the egress path.
+      NULL AS rawJson,
       latest.created_at AS createdAt
     FROM provider_quota_state pqs
     LEFT JOIN api_keys k ON k.id = pqs.key_id

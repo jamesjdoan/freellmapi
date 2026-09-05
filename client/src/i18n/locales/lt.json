@@ -554,6 +554,8 @@
     "ollamaKeyRequired": "Reikalingas API raktas",
     "claudeAliases": "Claude Code aptikimo aliasai",
     "claudeAliasesHint": "Atskleiskite claude/<model> aliasus, kad šliuzo modelių parinkiklis galėtų pateikti katalogą.",
+    "mcpServer": "MCP serveris",
+    "mcpServerHint": "Atveria /mcp galinį tašką agentų klientams. Naujuose diegimuose iš pradžių išjungta.",
     "urlTokensTitle": "Atšaukiami URL žetonai",
     "urlTokensDesc": "Tik klientams be antraščių. URL žetonai gali nutekėti į istoriją ir žurnalus, todėl atšaukite juos, kai nebereikia.",
     "urlTokenLabel": "Žetono etiketė",
@@ -724,7 +726,10 @@
     "ttft": "TTFT",
     "requestsByAgent": "Užklausos pagal agentą",
     "sortBy": "Rikiuoti pagal {column}",
-    "sortHint": "Rikiavimas taikomas {count} įkeltoms eilutėms"
+    "sortHint": "Rikiavimas taikomas {count} įkeltoms eilutėms",
+    "cacheHitRate": "Podėlio pataikymų dalis",
+    "cacheSavedTokens": "Sutaupyta {tokens} žetonų",
+    "cacheHitRateHint": "{hits} pataikymai prieš {misses} praleidimus nuo serverio paleidimo · išvengta {requests} tiekėjo užklausų"
   },
   "logs": {
     "title": "Žurnalas",

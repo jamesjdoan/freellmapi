@@ -554,6 +554,8 @@
     "ollamaKeyRequired": "የAPI ቁልፍ ያስፈልጋል",
     "claudeAliases": "የClaude Code ፍለጋ ተለዋጭ ስሞች",
     "claudeAliasesHint": "የጌትዌዩ ሞዴል መራጭ ካታሎጉን መዘርዘር እንዲችል የclaude/<model> ተለዋጭ ስሞችን ይክፈቱ።",
+    "mcpServer": "MCP አገልጋይ",
+    "mcpServerHint": "ለወኪል ደንበኞች የ/mcp መዳረሻን ይክፈቱ። አዲስ ተከላዎች ጠፍቶ ይጀምራሉ።",
     "urlTokensTitle": "ሊሻሩ የሚችሉ የURL ቶከኖች",
     "urlTokensDesc": "ራስጌ ለሌላቸው ደንበኞች ብቻ። የURL ቶከኖች ወደ ታሪክ እና ምዝግብ ማስታወሻዎች ሊፈሱ ይችላሉ፣ ስለዚህ በማያስፈልጉበት ጊዜ ይሽሯቸው።",
     "urlTokenLabel": "የቶከን መለያ",
@@ -724,7 +726,10 @@
     "ttft": "TTFT",
     "requestsByAgent": "ጥያቄዎች በወኪል",
     "sortBy": "በ{column} ደርድር",
-    "sortHint": "መደርደሩ የሚሠራው በተጫኑት {count} ረድፎች ላይ ብቻ ነው"
+    "sortHint": "መደርደሩ የሚሠራው በተጫኑት {count} ረድፎች ላይ ብቻ ነው",
+    "cacheHitRate": "የመሸጎጫ ግኝት መጠን",
+    "cacheSavedTokens": "{tokens} ቶከን ተቆጥቧል",
+    "cacheHitRateHint": "አገልጋዩ ከተጀመረ ወዲህ {hits} ግኝት እና {misses} ስህተት · {requests} የአቅራቢ ጥሪዎች ተስወግደዋል"
   },
   "logs": {
     "title": "መዝገቦች",

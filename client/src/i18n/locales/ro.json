@@ -554,6 +554,8 @@
     "ollamaKeyRequired": "Cheie API necesară",
     "claudeAliases": "Aliasuri de descoperire Claude Code",
     "claudeAliasesHint": "Expune aliasurile claude/<model> pentru ca selectorul de modele al gateway-ului să poată lista catalogul.",
+    "mcpServer": "Server MCP",
+    "mcpServerHint": "Expune endpointul /mcp către clienții agent. Instalările noi pornesc dezactivate.",
     "urlTokensTitle": "Tokenuri URL revocabile",
     "urlTokensDesc": "Doar pentru clienți fără anteturi. Tokenurile URL pot ajunge în istoric și în loguri, așa că revocă-le când nu mai sunt necesare.",
     "urlTokenLabel": "Etichetă token",
@@ -724,7 +726,10 @@
     "ttft": "TTFT",
     "requestsByAgent": "Cereri per agent",
     "sortBy": "Sortează după {column}",
-    "sortHint": "Sortarea se aplică celor {count} rânduri încărcate"
+    "sortHint": "Sortarea se aplică celor {count} rânduri încărcate",
+    "cacheHitRate": "Rata de succes a cache-ului",
+    "cacheSavedTokens": "{tokens} tokenuri economisite",
+    "cacheHitRateHint": "{hits} accesări reușite față de {misses} ratări de la pornirea serverului · {requests} apeluri către furnizor evitate"
   },
   "logs": {
     "title": "Jurnale",

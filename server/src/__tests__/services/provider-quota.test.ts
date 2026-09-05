@@ -58,6 +58,8 @@ describe('provider-quota: pool inference', () => {
     // the platform shares a single pool.
     expect(inferQuotaPoolKey('anyapi')).toBe('anyapi::free');
     expect(inferQuotaPoolKey('anyapi', 'qwen/qwen3-coder:free')).toBe('anyapi::free');
+    expect(inferQuotaPoolKey('radeon', 'DeepSeek-V4-Flash')).toBe('radeon::daily-free');
+    expect(inferQuotaPoolKey('radeon', 'Qwen3.8-Flash-Next')).toBe('radeon::daily-free');
     // Unknown platform falls back to platform::model or platform::account.
     expect(inferQuotaPoolKey('acme' as any, 'x')).toBe('acme::x');
     expect(inferQuotaPoolKey('acme' as any)).toBe('acme::account');
@@ -314,6 +316,184 @@ describe('provider-quota: parse from response headers (shared parseRetryAfterMs)
     // A 429 always marks the pool as remaining 0.
     expect(obs.some(o => o.remaining === 0)).toBe(true);
   });
+
+  it('parses Radeon Cloud RPM and recurring daily allowance headers', () => {
+    const resp = new Response(null, {
+      status: 200,
+      headers: {
+        'x-ratelimit-limit-user-rpm': '30',
+        'x-ratelimit-remaining-user-rpm': '29',
+        'x-ratelimit-reset': '60',
+        'x-ratelimit-limit-user-daily-usd': '10',
+        'x-ratelimit-used-user-daily-usd': '2.5',
+        'x-ratelimit-remaining-user-daily-usd': '7.5',
+        'x-ratelimit-reset-user-daily-usd': '86400',
+      },
+    });
+    const obs = parseQuotaObservationsFromResponse(resp, { platform: 'radeon', keyId: 9 });
+    expect(obs.find(o => o.metric === 'requests')).toMatchObject({
+      quotaPoolKey: 'radeon::daily-free', limit: 30, remaining: 29,
+    });
+    expect(obs.find(o => o.metric === 'credits')).toMatchObject({
+      quotaPoolKey: 'radeon::daily-free', limit: 10, remaining: 7.5,
+    });
+  });
+
+  // ADR ARCH-20260905, F3: the reset parser takes numerics only, so Groq's
+  // documented duration form ("2m59.56s") produced no reset_at AND left no
+  // trace of what arrived — making "the provider omits it" indistinguishable
+  // from "we could not read it". The raw value must survive the parse failure.
+  // ADR ARCH-20260905, F3: the reset parser now handles duration strings, so Groq's
+  // documented duration form ("2m59.56s") is parsed and retained in rawJson.
+  it('parses a duration reset header and retains the raw value', () => {
+    const resp = new Response(null, {
+      status: 200,
+      headers: {
+        'x-ratelimit-limit-requests': '1000',
+        'x-ratelimit-remaining-requests': '999',
+        'x-ratelimit-reset-requests': '2m59.56s',
+      },
+    });
+    const obs = parseQuotaObservationsFromResponse(resp, { platform: 'groq', keyId: 1 });
+    const requests = obs.find(o => o.metric === 'requests');
+    expect(requests).toBeDefined();
+    // Now parsed: resetAt should be set to approximately now + 2m59.56s.
+    const resetAt = requests!.resetAt;
+    expect(resetAt).not.toBeNull();
+    const resetDate = new Date(resetAt);
+    const now = Date.now();
+    const expected = now + 2 * 60 * 1000 + 59.56 * 1000; // 2 minutes, 59.56 seconds in ms
+    expect(Math.abs(resetDate.getTime() - expected)).toBeLessThan(2000); // within 2 seconds
+    // The raw value is still retained for auditing.
+    expect(requests!.rawJson).toBeTruthy();
+    expect(JSON.parse(requests!.rawJson!)['x-ratelimit-reset-requests']).toBe('2m59.56s');
+  });
+
+  // A platform with no HEADER_SPECS entry currently records "no quota headers
+  // exposed" on every 200. That claim is only checkable if the quota-shaped
+  // headers the provider DID send are captured.
+  it('discovers quota-shaped headers on a platform with no spec', () => {
+    const resp = new Response(null, {
+      status: 200,
+      headers: { 'x-nvidia-quota-remaining': '37', 'content-type': 'application/json' },
+    });
+    const obs = parseQuotaObservationsFromResponse(resp, { platform: 'nvidia', keyId: 1 });
+    const probe = obs.find(o => o.source === 'probe');
+    expect(probe).toBeDefined();
+    const raw = JSON.parse(probe!.rawJson!);
+    expect(raw['x-nvidia-quota-remaining']).toBe('37');
+    // Non-quota headers are not swept up.
+    expect(raw['content-type']).toBeUndefined();
+  });
+
+  it('never captures credential-bearing headers', () => {
+    const resp = new Response(null, {
+      status: 429,
+      headers: {
+        'retry-after': '30',
+        'set-cookie': 'session=super-secret-value',
+        'x-ratelimit-reset-token': 'quota-shaped-but-a-token',
+      },
+    });
+    const obs = parseQuotaObservationsFromResponse(resp, { platform: 'groq', keyId: 1 });
+    const serialized = JSON.stringify(obs);
+    expect(serialized).not.toContain('super-secret-value');
+    expect(serialized).not.toContain('quota-shaped-but-a-token');
+    // The legitimate signal still lands.
+    expect(obs.some(o => o.retryAfterMs === 30_000)).toBe(true);
+  });
+
+  // Found by driving real traffic through a stub relay: discovery capture was
+  // gated on isSharedPool, which is a question about POOLING, so a platform
+  // outside that list could return textbook x-ratelimit-* headers and we
+  // recorded nothing whatsoever.
+  it('captures quota headers from a platform that is not a shared pool', () => {
+    const resp = new Response(null, {
+      status: 200,
+      headers: {
+        'x-ratelimit-limit-requests': '1000',
+        'x-ratelimit-remaining-requests': '997',
+        'x-ratelimit-reset-requests': '2m59.56s',
+      },
+    });
+    const obs = parseQuotaObservationsFromResponse(resp, { platform: 'custom', keyId: 1 });
+    expect(obs).toHaveLength(1);
+    expect(obs[0]!.notes).toMatch(/unrecognised quota-shaped headers/);
+    expect(JSON.parse(obs[0]!.rawJson!)['x-ratelimit-reset-requests']).toBe('2m59.56s');
+  });
+
+  it('stays silent for an unpooled platform that reports nothing', () => {
+    const resp = new Response(null, { status: 200, headers: { 'content-type': 'application/json' } });
+    expect(parseQuotaObservationsFromResponse(resp, { platform: 'custom', keyId: 1 })).toHaveLength(0);
+  });
+  // The reset grammar is one pure function, so it is exercised as a table
+  // rather than as one 20-line Response per case: same coverage, and a new
+  // accepted form is one row instead of a copied block.
+  const RESET_CASES: { header: string; expectedMs: number | null }[] = [
+    { header: '2m59.56s', expectedMs: 179_560 },
+    { header: '59.56s', expectedMs: 59_560 },
+    { header: '1h2m3s', expectedMs: 3_723_000 },
+    { header: '750ms', expectedMs: 750 },
+    { header: '1m', expectedMs: 60_000 },
+    { header: '45s', expectedMs: 45_000 },
+    // Existing numeric behaviour, unchanged: a bare number is seconds from now.
+    { header: '30', expectedMs: 30_000 },
+    // Anything it cannot read with certainty stays null. A wrong reset silently
+    // corrupts pacing; a null one is already handled and observable.
+    { header: 'soon', expectedMs: null },
+    { header: '2 minutes', expectedMs: null },
+    { header: '-5s', expectedMs: null },
+    { header: '', expectedMs: null },
+  ];
+
+  it.each(RESET_CASES)('reads reset header $header', ({ header, expectedMs }) => {
+    const before = Date.now();
+    const resp = new Response(null, {
+      status: 200,
+      headers: { 'x-ratelimit-limit-requests': '1000', 'x-ratelimit-reset-requests': header },
+    });
+    const requests = parseQuotaObservationsFromResponse(resp, { platform: 'groq', keyId: 1 })
+      .find(o => o.metric === 'requests');
+    expect(requests).toBeDefined();
+
+    if (expectedMs === null) {
+      expect(requests!.resetAt).toBeNull();
+      return;
+    }
+    expect(requests!.resetAt).not.toBeNull();
+    const offset = Date.parse(requests!.resetAt!) - before;
+    expect(offset).toBeGreaterThanOrEqual(expectedMs - 50);
+    expect(offset).toBeLessThanOrEqual(expectedMs + 1000);
+  });
+
+  it('retains the raw reset value whether or not it parsed', () => {
+    const resp = new Response(null, {
+      status: 200,
+      headers: {
+        'x-ratelimit-limit-requests': '1000',
+        'x-ratelimit-remaining-requests': '999',
+        'x-ratelimit-reset-requests': '2m59.56s',
+      },
+    });
+    const requests = parseQuotaObservationsFromResponse(resp, { platform: 'groq', keyId: 1 })
+      .find(o => o.metric === 'requests');
+    // Retention is the property that makes parsing safe to attempt at all: a
+    // wrong grammar stays auditable against what the provider actually sent.
+    expect(JSON.parse(requests!.rawJson!)['x-ratelimit-reset-requests']).toBe('2m59.56s');
+  });
+
+  it('still reads an epoch-seconds reset as an absolute instant', () => {
+    const epochSeconds = Math.floor((Date.now() + 3_600_000) / 1000);
+    const resp = new Response(null, {
+      status: 200,
+      headers: { 'x-ratelimit-limit-requests': '1000', 'x-ratelimit-reset-requests': String(epochSeconds) },
+    });
+    const requests = parseQuotaObservationsFromResponse(resp, { platform: 'groq', keyId: 1 })
+      .find(o => o.metric === 'requests');
+    expect(Date.parse(requests!.resetAt!)).toBe(epochSeconds * 1000);
+  });
+
+
 });
 
 describe('provider-quota: reset_at replenishment on read (#453)', () => {

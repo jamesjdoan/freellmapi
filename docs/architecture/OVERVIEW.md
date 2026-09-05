@@ -14,6 +14,7 @@ This domain holds the implementation deep-dives for FreeLLMAPI's server-side arc
 | [`04-degraded-mode-and-failover.md`](04-degraded-mode-and-failover.md) | Degraded-mode state machine (f412e97), hedging/abort on retry budget expiry (1d2226a), X-Fallback-Detail header (8cb75ac), bare safe/unsafe classification failover (a961d93) |
 | [`05-catalog-sync.md`](05-catalog-sync.md) | Live signed catalog sync from freellmapi.co, model-age gate (30 days), premium/free tiers, migration seeding vs hosted catalog |
 | [`06-observability.md`](06-observability.md) | Observability internals: server-logs ingest path, structured provider logs, boot preload, request analytics, log redaction, attempt tracing, health/routing-trace headers, desktop `freeapi.log` file logger. The operator-facing log viewer and polling API live in [logs/](../logs/01-server-logs-viewer.md). |
+| [`07-quota-ledger-and-shadow-routing.md`](07-quota-ledger-and-shadow-routing.md) | Quota ledger with operator‑configured limits, shadow decision log, scarcity scoring, raw header capture, and quota‑aware provider selection |
 | [`CHANGELOG.md`](CHANGELOG.md) | Doc revision history for this domain, seeded from architecture-relevant commits |
 
 ## How deep-dives fit

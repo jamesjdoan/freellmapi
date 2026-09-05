@@ -14,12 +14,23 @@ The quota engine is the **gatekeeper** between the router and upstream providers
 
 | Window | Width | Persisted Column | In-Memory Fallback |
 |--------|-------|------------------|-------------------|
-| RPM    | 60 s  | `rpm_limit`      | `timestamps[]`    |
-| RPD    | 24 h (UTC midnight) | `rpd_limit` | `timestamps[]` |
-| TPM    | 60 s  | `tpm_limit`      | `{ts, tokens}[]`  |
-| TPD    | 24 h (UTC midnight) | `tpd_limit` | `{ts, tokens}[]` |
+| RPM    | 60 s (sliding) | `rpm_limit`      | `timestamps[]`    |
+| RPD    | 24 h (**rolling**) | `rpd_limit` | `timestamps[]` |
+| TPM    | 60 s (sliding) | `tpm_limit`      | `{ts, tokens}[]`  |
+| TPD    | 24 h (**rolling**) | `tpd_limit` | `{ts, tokens}[]` |
 
-- **Sliding minute** for RPM/TPM; **UTC-day boundary** for RPD/TPD (providers reset at midnight, not 24h rolling).
+- All four per-model windows are **lookbacks**, not calendar buckets: `canMakeRequest` and
+  `canUseTokens` pass a fixed width (`MINUTE`, `DAY`) and count events newer than `now - width`
+  (`ratelimit.ts:328`, `:351`). An RPD of 20 therefore means "20 in any trailing 24 h", not
+  "20 since midnight".
+- ⚠️ **The provider-wide pools are the ones that use a calendar day.**
+  `providerDailyRequestCount` / `providerDailyTokenCount` window on `msSinceUtcMidnight`
+  (`ratelimit.ts:38`, used at `:640` and `:755`), so those reset at UTC midnight while the
+  per-model windows above roll continuously. **Two different clocks, deliberately** — do not
+  assume one from the other.
+- Neither clock is timezone-aware. A provider that resets on a local calendar day (Google's
+  Pacific day) cannot be expressed in either today — see ADR
+  `docs/adr/ARCH-20260905-quota-ledger-and-quota-aware-router.md` (F5).
 - `rate_limit_usage` table: one row per request/token event with `kind = 'request' | 'tokens'`, `created_at_ms`.
 - Retention: 1 day (pruned on insert, throttled to 1/min).
 - **Degraded mode**: when DB write fails, counts go to in-memory windows only (pruned on push so a long outage can't grow unbounded).

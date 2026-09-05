@@ -554,6 +554,8 @@
     "ollamaKeyRequired": "مفتاح API مطلوب",
     "claudeAliases": "أسماء بديلة لاكتشاف Claude Code",
     "claudeAliasesHint": "اعرض أسماء بديلة بصيغة claude/<model> ليتمكن منتقي النماذج في البوابة من عرض الكتالوج.",
+    "mcpServer": "خادم MCP",
+    "mcpServerHint": "يتيح نقطة النهاية /mcp لعملاء الوكلاء. التثبيتات الجديدة تبدأ وهو معطَّل.",
     "urlTokensTitle": "رموز URL قابلة للإلغاء",
     "urlTokensDesc": "للعملاء بدون ترويسات فقط. قد تتسرب رموز URL إلى المحفوظات والسجلات، لذا ألغِها عندما لا تعود هناك حاجة إليها.",
     "urlTokenLabel": "تسمية الرمز",
@@ -724,7 +726,10 @@
     "ttft": "TTFT",
     "requestsByAgent": "الطلبات حسب الوكيل",
     "sortBy": "ترتيب حسب {column}",
-    "sortHint": "يُطبَّق الترتيب على الصفوف المحمَّلة البالغ عددها {count}"
+    "sortHint": "يُطبَّق الترتيب على الصفوف المحمَّلة البالغ عددها {count}",
+    "cacheHitRate": "معدل إصابات التخزين المؤقت",
+    "cacheSavedTokens": "تم توفير {tokens} رمز",
+    "cacheHitRateHint": "{hits} إصابة مقابل {misses} إخفاق منذ تشغيل الخادم · تم تفادي {requests} طلب للمزوّد"
   },
   "logs": {
     "title": "السجلات",

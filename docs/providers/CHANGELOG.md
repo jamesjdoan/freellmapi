@@ -4,6 +4,7 @@ Revision history for `docs/providers/`, listing the upstream commits that shaped
 
 | Commit | Date | Summary |
 | --- | --- | --- |
+| Unreleased | 2026-09-04 | Add AMD Radeon Cloud TokenFactory shared-model adapter and catalog-ready platform wiring. |
 | Unreleased | 2026-09-02 | Add a credential-blind Markdown export of provider free-model access, limits and quota evidence from Model Scope. |
 | Unreleased | 2026-09-02 | Add the Imperium extension's reviewed provider quota-guidance catalogue and refresh contract. |
 | Unreleased | 2026-09-01 | Add the native Sail Research background Responses adapter and catalog-ready platform wiring. |

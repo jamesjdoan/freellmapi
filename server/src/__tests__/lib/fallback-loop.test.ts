@@ -155,6 +155,50 @@ describe('isDailyQuotaExhaustedError + midnight benching (drift: 90s cooldown on
   });
 });
 
+// ADR ARCH-20260905, F9: only successes were ever metered, so a provider that
+// burned our allowance and then failed looked untouched — the local "remaining"
+// figure read high exactly when the provider was under pressure.
+describe('failed-attempt quota metering (#F9)', () => {
+  const usageRows = (route: RouteResult): number => {
+    const row = getDb().prepare(
+      `SELECT COUNT(*) AS n FROM rate_limit_usage
+        WHERE platform = ? AND model_id = ? AND key_id = ? AND kind = 'request'`,
+    ).get(route.platform, route.modelId, route.keyId) as { n: number };
+    return row.n;
+  };
+
+  it('counts a timeout — the model was generating when we gave up', () => {
+    const route = fakeRoute();
+    recordRetryableFailure(route, new Error('upstream timeout after 30000ms'), newFallbackState());
+    expect(usageRows(route)).toBe(1);
+  });
+
+  it('counts an empty completion — the model ran and produced output', () => {
+    const route = fakeRoute();
+    recordRetryableFailure(route, new Error(`empty completion from ${route.displayName}`), newFallbackState());
+    expect(usageRows(route)).toBe(1);
+  });
+
+  it('does not count a 429 — the provider refused before spending anything', () => {
+    const route = fakeRoute();
+    recordRetryableFailure(route, Object.assign(new Error('429 Too Many Requests'), { status: 429 }), newFallbackState());
+    expect(usageRows(route)).toBe(0);
+  });
+
+  it('does not count a bad request — rejected at validation, never reached the model', () => {
+    const route = fakeRoute();
+    recordRetryableFailure(route, Object.assign(new Error('API error 400: bad shape'), { status: 400 }), newFallbackState());
+    expect(usageRows(route)).toBe(0);
+  });
+
+  it('meters the attempt exactly once, not once per bookkeeping consequence', () => {
+    const route = fakeRoute();
+    recordRetryableFailure(route, new Error('upstream timeout'), newFallbackState());
+    recordRetryableFailure(route, new Error('upstream timeout'), newFallbackState());
+    expect(usageRows(route)).toBe(2);
+  });
+});
+
 describe('recordRetryableFailure skipBench exemption (reasoning truncation)', () => {
   it('skips cooldown + penalty but still rules the key out for this request', () => {
     const route = fakeRoute();
