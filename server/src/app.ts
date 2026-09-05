@@ -17,6 +17,7 @@ import { profilesRouter } from './routes/profiles.js';
 import { embeddingsRouter } from './routes/embeddings.js';
 import { mediaRouter } from './routes/media.js';
 import { analyticsRouter } from './routes/analytics.js';
+import { quotaRouter } from './routes/quota.js';
 import { healthRouter } from './routes/health.js';
 import { freeTierRouter } from './routes/free-tier.js';
 import { settingsRouter } from './routes/settings.js';
@@ -253,6 +254,7 @@ export function createApp(config?: Config) {
   app.use('/api/analytics', requireAuth, analyticsRouter);
   app.use('/api/health', requireAuth, healthRouter);
   app.use('/api/free-tier', requireAuth, freeTierRouter);
+  app.use('/api/quota', requireAuth, quotaRouter);
   app.use('/api/settings', requireAuth, settingsRouter);
   app.use('/api/premium', requireAuth, premiumRouter);
   // Database dumps and restores. Dashboard-session gated: the dump files carry
