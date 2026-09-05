@@ -155,6 +155,41 @@ describe('quota-policy resolver', () => {
     // Pacific midnight, not UTC midnight — the reason the clock exists.
     expect(new Date(daily!.window.resetAtMs!).toISOString()).toBe('2026-03-10T07:00:00.000Z');
   });
+
+  // Third instance of the subject-identity defect (ADR F8): two relays behind
+  // platform='custom' with the same model id were one policy subject, so no
+  // limit could apply to one without applying to the other.
+  it('lets a per-endpoint policy override the platform-wide one', () => {
+    upsertQuotaPolicy({
+      platform: 'custom', modelId: null, endpointScope: null, scope: 'provider_account', metric: 'requests',
+      limit: 1000, periodKind: 'calendar_day', periodMs: null, timezone: 'UTC', anchorDay: null,
+    });
+    upsertQuotaPolicy({
+      platform: 'custom', modelId: null, endpointScope: 'custom:alpha', scope: 'provider_account', metric: 'requests',
+      limit: 25, periodKind: 'calendar_day', periodMs: null, timezone: 'UTC', anchorDay: null,
+    });
+
+    const alpha = axis(resolveEffectiveQuotas('custom', 'm', Date.now(), 'custom:alpha'), 'requests', 'calendar_day');
+    const beta = axis(resolveEffectiveQuotas('custom', 'm', Date.now(), 'custom:beta'), 'requests', 'calendar_day');
+
+    expect(alpha?.limit).toBe(25);
+    // The other relay is untouched by a limit that names its sibling.
+    expect(beta?.limit).toBe(1000);
+  });
+
+  it('keeps both policies rather than treating them as one subject', () => {
+    upsertQuotaPolicy({
+      platform: 'custom', modelId: null, endpointScope: 'custom:alpha', scope: 'provider_account', metric: 'requests',
+      limit: 25, periodKind: 'calendar_day', periodMs: null, timezone: 'UTC', anchorDay: null,
+    });
+    upsertQuotaPolicy({
+      platform: 'custom', modelId: null, endpointScope: 'custom:beta', scope: 'provider_account', metric: 'requests',
+      limit: 900, periodKind: 'calendar_day', periodMs: null, timezone: 'UTC', anchorDay: null,
+    });
+    // Before the endpoint column these collided on the unique index and the
+    // second silently replaced the first.
+    expect(listQuotaPolicies('custom')).toHaveLength(2);
+  });
 });
 
 describe('quota-policy storage', () => {
