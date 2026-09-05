@@ -1,6 +1,7 @@
 import type { QuotaObservationView } from './provider-quota.js';
 import { getQuotaStateForKeys } from './provider-quota.js';
 import { parseStoredUtc } from './quota-clock.js';
+import { getDb } from '../db/index.js';
 
 // Daily free-tier balance forecast (#1104). Free tiers reset on a per-account
 // window (usually UTC midnight) and the only way to know how much headroom is
@@ -112,4 +113,82 @@ export function getQuotaForecast(): QuotaForecastEntry[] {
     if (a.low_balance !== b.low_balance) return a.low_balance ? -1 : 1;
     return a.platform.localeCompare(b.platform);
   });
+}
+
+// ── Provider overview (dashboard) ───────────────────────────────────────────
+// getQuotaForecast() is a WARNING feed: it drops any pool without a numeric
+// limit, because you cannot warn on a number you do not have. Driving a
+// provider-overview panel from it made every provider except Groq disappear —
+// Groq is the only one that reports a parseable limit — which reads as "you
+// have one provider" rather than "we have numbers for one provider".
+//
+// This returns a row for every platform with an enabled key, whether or not we
+// know anything about its quota, so an unmeasured provider is visibly unknown
+// instead of absent.
+
+export interface ProviderQuotaOverviewRow {
+  platform: string;
+  /** Null when we have no pool identity for this platform yet. */
+  pool: string | null;
+  used: number | null;
+  remaining: number | null;
+  limit: number | null;
+  remaining_pct: number | null;
+  reset_at: string | null;
+  seconds_until_reset: number | null;
+  low_balance: boolean;
+  /** Where the numbers came from: 'header', 'error_body', 'probe', or null when
+   *  nothing has ever been observed for this platform. */
+  source: string | null;
+  confidence: number | null;
+  /** False when the provider has never reported a usable limit. The panel shows
+   *  these as Unknown rather than implying a healthy pool. */
+  metered: boolean;
+}
+
+export function getProviderQuotaOverview(): ProviderQuotaOverviewRow[] {
+  let db;
+  try {
+    db = getDb();
+  } catch {
+    return [];
+  }
+
+  const platforms = (db.prepare(
+    'SELECT DISTINCT platform FROM api_keys WHERE enabled = 1 ORDER BY platform',
+  ).all() as { platform: string }[]).map(r => r.platform);
+
+  const measured = getQuotaForecast();
+  const states = getQuotaStateForKeys();
+  const rows: ProviderQuotaOverviewRow[] = [];
+
+  for (const platform of platforms) {
+    const pools = measured.filter(m => m.platform === platform);
+    if (pools.length > 0) {
+      for (const pool of pools) {
+        // Attach the provenance of the observation this pool came from; the
+        // forecast itself does not carry it.
+        const state = states.find(s => s.platform === platform && s.quotaPoolKey === pool.pool);
+        rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true });
+      }
+      continue;
+    }
+    // Nothing measurable. Report the strongest observation we do have, so the
+    // panel can say "we called it and it told us nothing" rather than omitting
+    // the provider entirely.
+    const seen = states.filter(s => s.platform === platform);
+    const best = seen.find(s => s.source === 'header') ?? seen.find(s => s.source === 'error_body') ?? seen[0];
+    rows.push({
+      platform,
+      pool: best?.quotaPoolKey ?? null,
+      used: null, remaining: null, limit: null, remaining_pct: null,
+      reset_at: null, seconds_until_reset: null, low_balance: false,
+      source: best?.source ?? null,
+      confidence: best?.confidence ?? null,
+      metered: false,
+    });
+  }
+
+  // Measured pools first, then unknowns — the rows a reader can act on lead.
+  return rows.sort((a, b) => (Number(b.metered) - Number(a.metered)) || a.platform.localeCompare(b.platform));
 }

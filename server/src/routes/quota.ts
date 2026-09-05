@@ -6,6 +6,7 @@ import {
   deleteQuotaPolicy,
   resolveEffectiveQuotas,
 } from '../services/quota-policy.js';
+import { getQuotaForecast, getProviderQuotaOverview } from '../services/quota-forecast.js';
 import {
   getQuotaRoutingMode,
   setQuotaRoutingMode,
@@ -15,7 +16,6 @@ import {
   setReservationWeights,
   type QuotaRoutingMode,
 } from '../services/quota-routing.js';
-import { getQuotaForecast } from '../services/quota-forecast.js';
 
 // Quota policy + effective-state API (ADR ARCH-20260905, W2).
 //
@@ -189,4 +189,13 @@ quotaRouter.put('/reservation', (req: Request, res: Response) => {
     return;
   }
   res.json({ weights: setReservationWeights(parsed.data.weights) });
+});
+
+/**
+ * Every provider with an enabled key, whether or not we have quota numbers for
+ * it. The forecast alone drops unmeasured pools — correct for a warning feed,
+ * misleading as an inventory, because it renders as "you have one provider".
+ */
+quotaRouter.get('/providers', (_req: Request, res: Response) => {
+  res.json({ providers: getProviderQuotaOverview() });
 });
