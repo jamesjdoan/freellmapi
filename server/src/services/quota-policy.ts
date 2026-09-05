@@ -142,6 +142,24 @@ export function periodForPolicy(policy: Pick<QuotaPolicy, 'periodKind' | 'period
   }
 }
 
+// Policies change when an operator edits them — which is to say, almost never
+// relative to request rate. The shadow evaluator reads them once per candidate
+// per routed request, so an uncached read turns one routing decision into a
+// query per provider. Same short-TTL discipline as getKeyQuotaHeadroom, and
+// writes bust it outright so an API edit is visible immediately.
+const POLICY_CACHE_TTL_MS = 5_000;
+const policyCache = new Map<string, { db: unknown; at: number; rows: QuotaPolicy[] }>();
+
+/** Drop the memoised policies for one platform, or all of them. */
+export function invalidateQuotaPolicyCache(platform?: string): void {
+  if (platform) {
+    policyCache.delete(platform);
+    policyCache.delete('*');
+  } else {
+    policyCache.clear();
+  }
+}
+
 export function listQuotaPolicies(platform?: string): QuotaPolicy[] {
   let db: Db;
   try {
@@ -149,10 +167,19 @@ export function listQuotaPolicies(platform?: string): QuotaPolicy[] {
   } catch {
     return [];
   }
+  // The Db handle is part of the cache identity: reconnecting (tests, a
+  // restore) hands back a different object and invalidates every entry.
+  const cacheKey = platform ?? '*';
+  const hit = policyCache.get(cacheKey);
+  const now = Date.now();
+  if (hit && hit.db === db && now - hit.at < POLICY_CACHE_TTL_MS) return hit.rows;
+
   const rows = platform
     ? db.prepare('SELECT * FROM quota_policy WHERE platform = ? ORDER BY platform, IFNULL(model_id, \'\'), metric').all(platform)
     : db.prepare('SELECT * FROM quota_policy ORDER BY platform, IFNULL(model_id, \'\'), metric').all();
-  return (rows as PolicyRow[]).map(toPolicy);
+  const policies = (rows as PolicyRow[]).map(toPolicy);
+  policyCache.set(cacheKey, { db, at: now, rows: policies });
+  return policies;
 }
 
 /**
@@ -190,12 +217,14 @@ export function upsertQuotaPolicy(input: QuotaPolicyInput): QuotaPolicy {
     SELECT * FROM quota_policy
      WHERE platform = ? AND IFNULL(model_id, '') = IFNULL(?, '') AND scope = ? AND metric = ?
   `).get(input.platform, input.modelId, input.scope, input.metric) as PolicyRow;
+  invalidateQuotaPolicyCache(input.platform);
   return toPolicy(row);
 }
 
 export function deleteQuotaPolicy(id: number): boolean {
   const db = getDb();
   const info = db.prepare('DELETE FROM quota_policy WHERE id = ?').run(id);
+  invalidateQuotaPolicyCache();
   return Number(info.changes) > 0;
 }
 
