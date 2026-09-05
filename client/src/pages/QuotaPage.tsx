@@ -15,6 +15,7 @@ interface ProviderOverviewRow extends QuotaForecastEntry {
   /** False when the provider has never reported a usable limit — shown as
    *  Unknown rather than omitted, so an unmeasured provider stays visible. */
   metered: boolean;
+  usedSource: 'provider' | 'local' | null;
 }
 
 interface QuotaForecastEntry {
@@ -192,7 +193,10 @@ export default function QuotaPage() {
                     <TableCell className="text-right">{p.remaining ?? '—'}</TableCell>
                     <TableCell className="text-right">{p.limit ?? '—'}</TableCell>
                     <TableCell className="text-right">{formatCountdown(p.seconds_until_reset)}</TableCell>
-                    <TableCell className="text-muted-foreground">{p.source ?? '—'}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {p.source ?? '—'}
+                      {p.usedSource === 'local' ? ` ${t('quota.locallyCounted')}` : ''}
+                    </TableCell>
                     <TableCell><Badge variant={status.variant}>{t(status.labelKey)}</Badge></TableCell>
                   </TableRow>
                 );

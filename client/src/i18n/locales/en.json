@@ -856,7 +856,8 @@
     "colModel": "Model",
     "colMetric": "Metric",
     "colScope": "Scope",
-    "colSource": "Source"
+    "colSource": "Source",
+    "locallyCounted": "(counted locally)"
   },
   "logs": {
     "title": "Logs",
