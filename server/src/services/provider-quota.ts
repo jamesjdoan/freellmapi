@@ -855,3 +855,68 @@ export function getQuotaStateForKeys(): QuotaObservationView[] {
     ORDER BY pqs.platform ASC, pqs.key_id ASC, pqs.quota_pool_key ASC, pqs.metric ASC
   `).all() as QuotaObservationView[];
 }
+
+// ── Learned ceilings (429 with no published limit) ──────────────────────────
+// Some providers publish nothing and only ever tell us "no" — OpenCode Zen,
+// Ollama Cloud, Google on some models. For those the only evidence of a ceiling
+// is the point at which they started refusing, so record it: how much this
+// account had spent on the platform when the 429 arrived.
+//
+// This is an OBSERVED CEILING, not a limit. It is deliberately written to the
+// observation log ONLY, never to provider_quota_state:
+//   - state.limit_value feeds the forecast and the headroom cache, and a 429
+//     also writes remaining=0, so a learned limit there would pin the pool at
+//     "Exhausted" with no reset_at to ever clear it.
+//   - one refusal is weak evidence. The ADR is explicit that a single 429 must
+//     not permanently mutate a provider's limits.
+// It surfaces at the lowest precedence rank, below even a shipped env default.
+
+export const LEARNED_CEILING_NOTE = 'learned ceiling from 429';
+
+export function recordLearnedCeiling(input: {
+  platform: Platform;
+  keyId: number;
+  quotaPoolKey: string;
+  modelId?: string | null;
+  /** Requests this account had spent on the platform when it was refused. */
+  observedRequests: number;
+}): void {
+  // Zero tells us nothing — a refusal on the first request of a window means
+  // the ceiling is elsewhere (a minute window, another key, a stale cooldown).
+  if (!Number.isFinite(input.observedRequests) || input.observedRequests <= 0) return;
+  try {
+    const db = getDb();
+    db.prepare(`
+      INSERT INTO provider_quota_observations (
+        id, platform, key_id, provider_account_id, model_id, quota_pool_key, metric,
+        status_code, limit_value, remaining_value, reset_at, retry_after_ms,
+        reset_strategy, source, confidence, notes, raw_json, endpoint, observed_at, created_at
+      ) VALUES (?, ?, ?, NULL, ?, ?, 'requests', 429, ?, 0, NULL, NULL, 'unknown', 'error_body', 0.3, ?, NULL, NULL, ?, ?)
+    `).run(
+      crypto.randomUUID(), input.platform, input.keyId, input.modelId ?? null,
+      input.quotaPoolKey, input.observedRequests, LEARNED_CEILING_NOTE,
+      toSqliteUtc(new Date()), toSqliteUtc(new Date()),
+    );
+  } catch {
+    // Learning is best-effort; never fail a request over it.
+  }
+}
+
+/** The highest ceiling we have ever been refused at, per platform. Highest
+ *  because a lower refusal is explained by a narrower window (a per-minute cap
+ *  inside a daily pool); the largest observed spend is the tightest lower bound
+ *  on the daily allowance we can honestly claim. */
+export function getLearnedCeiling(platform: Platform): { limit: number; observations: number } | null {
+  try {
+    const db = getDb();
+    const row = db.prepare(`
+      SELECT MAX(limit_value) AS ceiling, COUNT(*) AS n
+        FROM provider_quota_observations
+       WHERE platform = ? AND notes = ? AND limit_value IS NOT NULL
+    `).get(platform, LEARNED_CEILING_NOTE) as { ceiling: number | null; n: number };
+    if (row?.ceiling == null || row.ceiling <= 0) return null;
+    return { limit: row.ceiling, observations: row.n };
+  } catch {
+    return null;
+  }
+}

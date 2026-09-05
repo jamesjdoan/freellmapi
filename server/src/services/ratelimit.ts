@@ -283,6 +283,46 @@ export function countTokensInWindow(platform: string, modelId: string, windowMs:
   return countAcrossKeys(platform, modelId, 'tokens', windowMs, now);
 }
 
+/**
+ * Everything this account spent on ONE PLATFORM in the last `windowMs`, across
+ * every key and every model.
+ *
+ * The gates count per (platform, model, key) because that is what they enforce.
+ * A provider-wide allowance — OpenRouter's shared daily requests, NVIDIA's
+ * account RPM — is spent by all of them together, so answering "how much of
+ * that pool is left" needs this axis. Without it we hold a limit for those
+ * providers and never count anything against it, which is why they read as
+ * Unknown on the dashboard despite the limit being known.
+ *
+ * Same 5s memo and the same rule as its siblings: this informs a display and a
+ * shadow comparison, never a gate.
+ */
+export function countPlatformUsageInWindow(
+  platform: string,
+  kind: 'request' | 'tokens',
+  windowMs: number,
+  now = Date.now(),
+): number {
+  const bucket = Math.round(windowMs / 1000);
+  const cacheKey = `platform:${platform}:${kind}:${bucket}`;
+  let handle: unknown;
+
+  const value = withDb(db => {
+    handle = db;
+    const hit = shadowCountCache.get(cacheKey);
+    if (hit && hit.db === db && now - hit.at < SHADOW_COUNT_TTL_MS) return hit.value;
+    const row = db.prepare(`
+      SELECT COUNT(*) AS requests, COALESCE(SUM(tokens), 0) AS tokens
+        FROM rate_limit_usage
+       WHERE platform = ? AND kind = ? AND created_at_ms > ?
+    `).get(platform, kind, now - windowMs) as { requests: number; tokens: number };
+    return kind === 'request' ? row.requests : row.tokens;
+  }) ?? 0;
+
+  if (handle !== undefined) shadowCountCache.set(cacheKey, { db: handle, at: now, value });
+  return value;
+}
+
 /** Test seam: drop the memoised shadow counts. */
 export function invalidateShadowCounts(): void {
   shadowCountCache.clear();

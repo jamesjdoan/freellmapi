@@ -9,6 +9,7 @@ import {
   type EffectiveQuota,
 } from '../../services/quota-policy.js';
 import { MINUTE_MS, DAY_MS } from '../../services/quota-clock.js';
+import { recordLearnedCeiling, getLearnedCeiling } from '../../services/provider-quota.js';
 
 // The resolver's whole job is ranking four sources that disagree. These pin the
 // ranking and the axis separation, not the plumbing.
@@ -242,5 +243,56 @@ describe('quota-policy storage', () => {
       .toEqual({ kind: 'rolling', windowMs: MINUTE_MS });
     expect(periodForPolicy({ periodKind: 'billing_cycle', periodMs: null, timezone: 'UTC', anchorDay: null }))
       .toEqual({ kind: 'billing_cycle', timezone: 'UTC', anchorDay: 1 });
+  });
+});
+
+// "For Zen we keep count and track and work out the details": some providers
+// publish nothing and only ever say no. The point at which they refused is the
+// only evidence of a ceiling there is.
+describe('learned ceilings from refusals', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare('DELETE FROM quota_policy').run();
+    getDb().prepare('DELETE FROM provider_quota_observations').run();
+  });
+
+  it('surfaces a ceiling inferred from a 429 when nothing else is known', () => {
+    recordLearnedCeiling({ platform: 'opencode', keyId: 1, quotaPoolKey: 'opencode::promo', observedRequests: 120 });
+
+    const quota = resolveEffectiveQuotas('opencode', null)
+      .find(q => q.metric === 'requests' && q.source === 'learned_429');
+    expect(quota?.limit).toBe(120);
+    // Weak evidence, and labelled as such.
+    expect(quota?.confidence).toBeCloseTo(0.3, 2);
+  });
+
+  it('takes the highest refusal, not the most recent', () => {
+    // A lower refusal is explained by a narrower window inside the same pool;
+    // the largest observed spend is the tightest honest lower bound.
+    recordLearnedCeiling({ platform: 'opencode', keyId: 1, quotaPoolKey: 'opencode::promo', observedRequests: 120 });
+    recordLearnedCeiling({ platform: 'opencode', keyId: 1, quotaPoolKey: 'opencode::promo', observedRequests: 45 });
+
+    expect(getLearnedCeiling('opencode')?.limit).toBe(120);
+  });
+
+  it('never outranks a stated limit', () => {
+    recordLearnedCeiling({ platform: 'opencode', keyId: 1, quotaPoolKey: 'opencode::promo', observedRequests: 120 });
+    upsertQuotaPolicy({
+      platform: 'opencode', modelId: null, endpointScope: null, scope: 'provider_account', metric: 'requests',
+      limit: 500, periodKind: 'calendar_day', periodMs: null, timezone: 'UTC', anchorDay: null,
+    });
+
+    const daily = resolveEffectiveQuotas('opencode', null).find(q => q.period.kind === 'calendar_day');
+    expect(daily?.limit).toBe(500);
+    expect(daily?.source).toBe('operator');
+  });
+
+  it('ignores a refusal on an untouched window', () => {
+    // Refused at zero spend means the ceiling is somewhere else entirely — a
+    // minute window, another key, a stale cooldown. Recording 0 would claim a
+    // limit of nothing.
+    recordLearnedCeiling({ platform: 'opencode', keyId: 1, quotaPoolKey: 'opencode::promo', observedRequests: 0 });
+    expect(getLearnedCeiling('opencode')).toBeNull();
   });
 });

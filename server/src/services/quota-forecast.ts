@@ -2,6 +2,8 @@ import type { QuotaObservationView } from './provider-quota.js';
 import { getQuotaStateForKeys } from './provider-quota.js';
 import { parseStoredUtc } from './quota-clock.js';
 import { getDb } from '../db/index.js';
+import { resolveEffectiveQuotas } from './quota-policy.js';
+import { countPlatformUsageInWindow } from './ratelimit.js';
 
 // Daily free-tier balance forecast (#1104). Free tiers reset on a per-account
 // window (usually UTC midnight) and the only way to know how much headroom is
@@ -144,9 +146,13 @@ export interface ProviderQuotaOverviewRow {
   /** False when the provider has never reported a usable limit. The panel shows
    *  these as Unknown rather than implying a healthy pool. */
   metered: boolean;
+  /** Who counted the consumption. 'provider' = its own remaining figure.
+   *  'local' = we hold a declared limit and counted our own requests against
+   *  it, which is an estimate and must not be presented as confirmed. */
+  usedSource: 'provider' | 'local' | null;
 }
 
-export function getProviderQuotaOverview(): ProviderQuotaOverviewRow[] {
+export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuotaOverviewRow[] {
   let db;
   try {
     db = getDb();
@@ -163,30 +169,74 @@ export function getProviderQuotaOverview(): ProviderQuotaOverviewRow[] {
   const rows: ProviderQuotaOverviewRow[] = [];
 
   for (const platform of platforms) {
-    const pools = measured.filter(m => m.platform === platform);
-    if (pools.length > 0) {
-      for (const pool of pools) {
-        // Attach the provenance of the observation this pool came from; the
-        // forecast itself does not carry it.
-        const state = states.find(s => s.platform === platform && s.quotaPoolKey === pool.pool);
-        rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true });
-      }
-      continue;
+    // 1. Pools the PROVIDER reported on. Its own remaining figure beats any
+    //    local count, so these are taken as-is.
+    const reported = measured.filter(m => m.platform === platform);
+    for (const pool of reported) {
+      const state = states.find(s => s.platform === platform && s.quotaPoolKey === pool.pool);
+      rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true, usedSource: 'provider' });
     }
-    // Nothing measurable. Report the strongest observation we do have, so the
-    // panel can say "we called it and it told us nothing" rather than omitting
-    // the provider entirely.
-    const seen = states.filter(s => s.platform === platform);
-    const best = seen.find(s => s.source === 'header') ?? seen.find(s => s.source === 'error_body') ?? seen[0];
-    rows.push({
-      platform,
-      pool: best?.quotaPoolKey ?? null,
-      used: null, remaining: null, limit: null, remaining_pct: null,
-      reset_at: null, seconds_until_reset: null, low_balance: false,
-      source: best?.source ?? null,
-      confidence: best?.confidence ?? null,
-      metered: false,
-    });
+
+    // 2. Limits we KNOW but the provider never reports — an env cap, a catalog
+    //    figure, an operator policy. Previously these read as Unknown despite
+    //    the limit being in hand: nothing was counting local usage against it.
+    //    Only request-metric axes; token windows are not reliably comparable
+    //    to the request counters.
+    const seenAxes = new Set(reported.map(r => r.pool));
+    for (const quota of resolveEffectiveQuotas(platform, null, now)) {
+      if (quota.metric !== 'requests') continue;
+      if (quota.source === 'provider_header' || quota.source === 'provider_api') continue;
+      const poolLabel = `${platform}::${quota.period.kind === 'rolling' ? `rolling-${Math.round(quota.period.windowMs / 1000)}s` : quota.period.kind}`;
+      if (seenAxes.has(poolLabel)) continue;
+      seenAxes.add(poolLabel);
+
+      const windowMs = quota.window.periodStartMs == null
+        ? (quota.period.kind === 'rolling' ? quota.period.windowMs : null)
+        : Math.max(1, now - quota.window.periodStartMs);
+      if (windowMs == null) continue;
+
+      const used = countPlatformUsageInWindow(platform, 'request', windowMs, now);
+      const remaining = Math.max(0, quota.limit - used);
+      const secondsUntilReset = quota.window.resetAtMs == null
+        ? null
+        : Math.max(0, Math.floor((quota.window.resetAtMs - now) / 1000));
+      const remainingPct = Math.max(0, Math.min(100, Math.round((remaining / quota.limit) * 100)));
+
+      rows.push({
+        platform,
+        pool: poolLabel,
+        used,
+        remaining,
+        limit: quota.limit,
+        remaining_pct: remainingPct,
+        reset_at: quota.window.resetAtMs == null ? null : new Date(quota.window.resetAtMs).toISOString(),
+        seconds_until_reset: secondsUntilReset,
+        low_balance: remaining / quota.limit < LOW_BALANCE_THRESHOLD,
+        source: quota.source,
+        confidence: quota.confidence,
+        metered: true,
+        // The limit is declared; the consumption is ours. Marked so the panel
+        // never implies the provider confirmed this number.
+        usedSource: 'local',
+      });
+    }
+
+    // 3. Nothing measurable at all. Report the strongest observation we have,
+    //    so the row says "we called it and learned nothing" instead of vanishing.
+    if (!rows.some(r => r.platform === platform)) {
+      const seen = states.filter(s => s.platform === platform);
+      const best = seen.find(s => s.source === 'header') ?? seen.find(s => s.source === 'error_body') ?? seen[0];
+      rows.push({
+        platform,
+        pool: best?.quotaPoolKey ?? null,
+        used: null, remaining: null, limit: null, remaining_pct: null,
+        reset_at: null, seconds_until_reset: null, low_balance: false,
+        source: best?.source ?? null,
+        confidence: best?.confidence ?? null,
+        metered: false,
+        usedSource: null,
+      });
+    }
   }
 
   // Measured pools first, then unknowns — the rows a reader can act on lead.
