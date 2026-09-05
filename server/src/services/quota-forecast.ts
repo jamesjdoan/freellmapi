@@ -2,6 +2,7 @@ import type { QuotaObservationView } from './provider-quota.js';
 import { getQuotaStateForKeys } from './provider-quota.js';
 import { parseStoredUtc } from './quota-clock.js';
 import { getDb } from '../db/index.js';
+import { inferQuotaShape, type InferredWindow } from './quota-inference.js';
 import { resolveEffectiveQuotas } from './quota-policy.js';
 import { countPlatformUsageInWindow } from './ratelimit.js';
 
@@ -150,6 +151,19 @@ export interface ProviderQuotaOverviewRow {
    *  'local' = we hold a declared limit and counted our own requests against
    *  it, which is an estimate and must not be presented as confirmed. */
   usedSource: 'provider' | 'local' | null;
+  /** What behaviour suggests, for providers that publish nothing. Empty when
+   *  there is no evidence, or when the provider reports its own numbers and
+   *  guessing would add nothing. Never merged into `limit`/`remaining` — an
+   *  estimate of the window is not a measurement of the balance. */
+  inferred: InferredWindowSummary[];
+}
+
+export interface InferredWindowSummary {
+  period: string;
+  method: string;
+  samples: number;
+  confidence: number;
+  note: string;
 }
 
 export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuotaOverviewRow[] {
@@ -174,7 +188,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
     const reported = measured.filter(m => m.platform === platform);
     for (const pool of reported) {
       const state = states.find(s => s.platform === platform && s.quotaPoolKey === pool.pool);
-      rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true, usedSource: 'provider' });
+      rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true, usedSource: 'provider', inferred: [] });
     }
 
     // 2. Limits we KNOW but the provider never reports — an env cap, a catalog
@@ -218,6 +232,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         // The limit is declared; the consumption is ours. Marked so the panel
         // never implies the provider confirmed this number.
         usedSource: 'local',
+        inferred: [],
       });
     }
 
@@ -235,10 +250,49 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         confidence: best?.confidence ?? null,
         metered: false,
         usedSource: null,
+        inferred: [],
       });
     }
   }
 
+  // Behavioural inference, only where it adds something. A provider reporting
+  // its own remaining figure needs no estimate, and running this for every
+  // platform would scan the request history on every dashboard poll.
+  for (const row of rows) {
+    if (row.metered && row.usedSource === 'provider') continue;
+    row.inferred = inferredWindowsFor(row.platform, now).map(w => ({
+      period: w.period,
+      method: w.method,
+      samples: w.samples,
+      confidence: w.confidence,
+      note: w.note,
+    }));
+  }
+
   // Measured pools first, then unknowns — the rows a reader can act on lead.
   return rows.sort((a, b) => (Number(b.metered) - Number(a.metered)) || a.platform.localeCompare(b.platform));
+}
+
+/** Inference reads the whole request history for a platform, and the dashboard
+ *  polls. A minute of staleness is invisible in an estimate whose own window is
+ *  measured in factors. */
+const INFERENCE_TTL_MS = 60_000;
+const inferenceCache = new Map<string, { at: number; windows: InferredWindow[] }>();
+
+function inferredWindowsFor(platform: string, now: number): InferredWindow[] {
+  const hit = inferenceCache.get(platform);
+  if (hit && now - hit.at < INFERENCE_TTL_MS) return hit.windows;
+  let windows: InferredWindow[] = [];
+  try {
+    windows = inferQuotaShape(platform).windows;
+  } catch {
+    windows = [];
+  }
+  inferenceCache.set(platform, { at: now, windows });
+  return windows;
+}
+
+/** Test seam: drop the memoised inferences. */
+export function invalidateQuotaInference(): void {
+  inferenceCache.clear();
 }

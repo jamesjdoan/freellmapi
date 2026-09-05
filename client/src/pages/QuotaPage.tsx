@@ -9,6 +9,14 @@ import { Badge } from '@/components/ui/badge';
 import { formatSqliteUtcToLocalTime } from '@/lib/utils';
 
 // Define interfaces based on API contracts
+interface InferredWindow {
+  period: string;
+  method: string;
+  samples: number;
+  confidence: number;
+  note: string;
+}
+
 interface ProviderOverviewRow extends QuotaForecastEntry {
   source: string | null;
   confidence: number | null;
@@ -16,6 +24,7 @@ interface ProviderOverviewRow extends QuotaForecastEntry {
    *  Unknown rather than omitted, so an unmeasured provider stays visible. */
   metered: boolean;
   usedSource: 'provider' | 'local' | null;
+  inferred: InferredWindow[];
 }
 
 interface QuotaForecastEntry {
@@ -176,6 +185,7 @@ export default function QuotaPage() {
                 <TableHead className="text-right">{t('quota.colRemaining')}</TableHead>
                 <TableHead className="text-right">{t('quota.colLimit')}</TableHead>
                 <TableHead className="text-right">{t('quota.colReset')}</TableHead>
+                <TableHead>{t('quota.colWindow')}</TableHead>
                 <TableHead>{t('quota.colSource')}</TableHead>
                 <TableHead>{t('quota.colStatus')}</TableHead>
               </TableRow>
@@ -193,6 +203,16 @@ export default function QuotaPage() {
                     <TableCell className="text-right">{p.remaining ?? '—'}</TableCell>
                     <TableCell className="text-right">{p.limit ?? '—'}</TableCell>
                     <TableCell className="text-right">{formatCountdown(p.seconds_until_reset)}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {p.inferred.length === 0 ? '—' : p.inferred.map(w => (
+                        // Always prefixed and always carrying its sample count:
+                        // a reader must be able to tell an estimate from a
+                        // number the provider stated.
+                        <div key={`${w.method}:${w.period}`} title={w.note}>
+                          {t('quota.inferredWindow', { period: t(`quota.period_${w.period}`), samples: w.samples })}
+                        </div>
+                      ))}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">
                       {p.source ?? '—'}
                       {p.usedSource === 'local' ? ` ${t('quota.locallyCounted')}` : ''}
