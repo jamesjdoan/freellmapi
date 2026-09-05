@@ -7,6 +7,7 @@ import {
   evaluateShadowDecision,
   recordRoutingDecision,
   getShadowAgreementStats,
+  listRoutingDecisions,
   scoreQuotaCandidate,
   DEFAULT_QUOTA_ROUTING_MODE,
   UNKNOWN_HEADROOM,
@@ -198,6 +199,44 @@ describe('shadow ledger', () => {
     expect(stats.total).toBe(2);
     expect(stats.agreed).toBe(1);
     expect(stats.agreementRate).toBe(0.5);
+  });
+
+  // Two relays behind one platform name. Before the endpoint columns, both
+  // sides recorded platform 'custom' with the same model id, so `agreed` was
+  // true whichever endpoint each router had actually picked — the flag could
+  // not be false. Found by driving real traffic through two stub relays.
+  it('tells two relay endpoints apart instead of agreeing by default', () => {
+    const relayDecision = {
+      logicalModel: 'shared model',
+      candidates: [],
+      preferred: { platform: 'custom', modelId: 'm', endpointScope: 'custom:beta' },
+      reason: 'most headroom',
+    };
+    recordRoutingDecision({
+      logicalModel: 'shared model', mode: 'shadow',
+      actualPlatform: 'custom', actualModelId: 'm', actualEndpointScope: 'custom:alpha',
+      decision: relayDecision,
+    });
+
+    const [row] = listRoutingDecisions({});
+    expect(row?.actualEndpoint).toBe('custom:alpha');
+    expect(row?.shadowEndpoint).toBe('custom:beta');
+    // Same platform and model on both sides, different endpoint: a real
+    // disagreement that used to be invisible.
+    expect(row?.agreed).toBe(false);
+  });
+
+  it('still agrees when both sides name the same endpoint', () => {
+    recordRoutingDecision({
+      logicalModel: 'shared model', mode: 'shadow',
+      actualPlatform: 'custom', actualModelId: 'm', actualEndpointScope: 'custom:alpha',
+      decision: {
+        logicalModel: 'shared model', candidates: [],
+        preferred: { platform: 'custom', modelId: 'm', endpointScope: 'custom:alpha' },
+        reason: 'most headroom',
+      },
+    });
+    expect(listRoutingDecisions({})[0]?.agreed).toBe(true);
   });
 
   it('never leaks key material into the ledger', () => {
