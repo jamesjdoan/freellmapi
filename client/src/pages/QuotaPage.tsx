@@ -9,6 +9,14 @@ import { Badge } from '@/components/ui/badge';
 import { formatSqliteUtcToLocalTime } from '@/lib/utils';
 
 // Define interfaces based on API contracts
+interface ProviderOverviewRow extends QuotaForecastEntry {
+  source: string | null;
+  confidence: number | null;
+  /** False when the provider has never reported a usable limit — shown as
+   *  Unknown rather than omitted, so an unmeasured provider stays visible. */
+  metered: boolean;
+}
+
 interface QuotaForecastEntry {
   platform: string;
   pool: string;
@@ -138,7 +146,12 @@ export default function QuotaPage() {
     queryFn: () => apiFetch<{ mode: string }>('/api/quota/mode'),
   });
 
-  const providers = forecastData.forecast;
+  const { data: providerData = { providers: [] }, isLoading: providerLoading, isError: providerError } = useQuery({
+    queryKey: ['quota', 'providers'],
+    queryFn: () => apiFetch<{ providers: ProviderOverviewRow[] }>('/api/quota/providers'),
+  });
+
+  const providers = providerData.providers;
   // Soonest first: the panel exists to answer "which allowance renews next".
   const resets = forecastData.forecast
     .filter(e => e.reset_at != null && e.seconds_until_reset != null && e.seconds_until_reset > 0)
@@ -152,7 +165,7 @@ export default function QuotaPage() {
       </div>
 
       <Panel icon={Server} title={t('quota.overviewTitle')}>
-        <PanelState loading={forecastLoading} error={forecastError} empty={providers.length === 0} emptyKey="quota.emptyOverview">
+        <PanelState loading={providerLoading} error={providerError} empty={providers.length === 0} emptyKey="quota.emptyOverview">
           <Table>
             <TableHeader>
               <TableRow>
@@ -162,20 +175,24 @@ export default function QuotaPage() {
                 <TableHead className="text-right">{t('quota.colRemaining')}</TableHead>
                 <TableHead className="text-right">{t('quota.colLimit')}</TableHead>
                 <TableHead className="text-right">{t('quota.colReset')}</TableHead>
+                <TableHead>{t('quota.colSource')}</TableHead>
                 <TableHead>{t('quota.colStatus')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {providers.map(p => {
-                const status = getStatus(p.remaining_pct, p.low_balance);
+                // An unmetered provider has no percentage to judge; getStatus
+                // already reports null as Unknown rather than as healthy.
+                const status = getStatus(p.metered ? p.remaining_pct : null, p.low_balance);
                 return (
-                  <TableRow key={`${p.platform}:${p.pool}`}>
+                  <TableRow key={`${p.platform}:${p.pool ?? 'unknown'}`}>
                     <TableCell className="font-medium">{p.platform}</TableCell>
-                    <TableCell className="text-muted-foreground">{p.pool}</TableCell>
+                    <TableCell className="text-muted-foreground">{p.pool ?? '—'}</TableCell>
                     <TableCell className="text-right">{p.used ?? '—'}</TableCell>
                     <TableCell className="text-right">{p.remaining ?? '—'}</TableCell>
                     <TableCell className="text-right">{p.limit ?? '—'}</TableCell>
                     <TableCell className="text-right">{formatCountdown(p.seconds_until_reset)}</TableCell>
+                    <TableCell className="text-muted-foreground">{p.source ?? '—'}</TableCell>
                     <TableCell><Badge variant={status.variant}>{t(status.labelKey)}</Badge></TableCell>
                   </TableRow>
                 );
