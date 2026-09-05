@@ -109,58 +109,118 @@ function pickBetterSource(existing: QuotaObservationSource | null | undefined, n
   return SOURCE_PRIORITY[next] >= SOURCE_PRIORITY[existing] ? next : existing;
 }
 
-function inferPoolForPlatform(platform: Platform, modelId?: string | null): string {
-  const normalizedModelId = modelId?.trim() ?? '';
-  if (platform === 'openrouter') return normalizedModelId.endsWith(':free') ? 'openrouter::free' : 'openrouter::account';
-  if (platform === 'google') return 'google::project';
-  if (platform === 'groq') return 'groq::account';
-  if (platform === 'cerebras') return 'cerebras::shared';
-  if (platform === 'sail') return 'sail::monthly-credit';
-  if (platform === 'bai') return 'bai::promo';
-  if (platform === 'radeon') return 'radeon::daily-free';
-  if (platform === 'sambanova') return 'sambanova::shared';
-  if (platform === 'nvidia') return 'nvidia::credit-pool';
-  if (platform === 'mistral') return 'mistral::experiment-pool';
-  if (platform === 'github') return 'github::account';
-  if (platform === 'cohere') return 'cohere::trial-pool';
-  if (platform === 'cloudflare') return 'cloudflare::account';
-  if (platform === 'zhipu') return 'zhipu::account';
-  if (platform === 'ollama') return 'ollama::cloud';
-  if (platform === 'kilo') return 'kilo::anonymous';
-  if (platform === 'pollinations') return 'pollinations::account';
-  if (platform === 'llm7') return 'llm7::anonymous';
+// ── Pool identity and pool SCOPE ────────────────────────────────────────────
+// Two different questions used to be answered by one string:
+//   1. "which bucket does this usage belong to?"  → the pool key
+//   2. "is that bucket shared across every key on the platform?" → the scope
+// (2) was inferred by testing whether the key string ended in '::account'
+// (router.ts, #919). That coupling means any change to the pool-key SHAPE
+// silently changes routing behaviour, which is a trap for the per-model
+// subject-identity work (ADR ARCH-20260905, F8). The scope is now declared
+// alongside the key and the string is derived, so the two can only diverge
+// by a deliberate edit to this table.
+//
+// 'account' — one bucket for the WHOLE account: every key reports the same
+//             number, so ranking keys by remaining quota is meaningless.
+// 'key'     — each key has its own bucket (it may still span models), so
+//             "which key has more left" is a question with an answer.
+type QuotaPoolScope = 'account' | 'key';
+
+type PoolSpec = { suffix: string; scope: QuotaPoolScope };
+
+// Scopes preserve the classification the '::account' suffix test produced, so
+// this change is behaviour-neutral. Several pools that ARE account-wide in
+// reality are still marked 'key' here because that is what the suffix test
+// said (e.g. 'openrouter::free', 'google::project'); re-classifying them
+// changes live key selection and is a separate decision, not a refactor.
+const POOL_SPECS: Partial<Record<Platform, PoolSpec>> = {
+  google: { suffix: 'project', scope: 'key' },
+  groq: { suffix: 'account', scope: 'account' },
+  cerebras: { suffix: 'shared', scope: 'key' },
+  sail: { suffix: 'monthly-credit', scope: 'key' },
+  bai: { suffix: 'promo', scope: 'key' },
+  // Radeon (upstream v0.9.6) reports `x-ratelimit-*-user-daily-usd`, so the
+  // allowance is per account in reality. Marked 'key' to match what the old
+  // '::account' suffix test would have said for 'radeon::daily-free' —
+  // re-classifying it is a routing decision, not part of this refactor.
+  radeon: { suffix: 'daily-free', scope: 'key' },
+  sambanova: { suffix: 'shared', scope: 'key' },
+  nvidia: { suffix: 'credit-pool', scope: 'key' },
+  mistral: { suffix: 'experiment-pool', scope: 'key' },
+  github: { suffix: 'account', scope: 'account' },
+  cohere: { suffix: 'trial-pool', scope: 'key' },
+  cloudflare: { suffix: 'account', scope: 'account' },
+  zhipu: { suffix: 'account', scope: 'account' },
+  ollama: { suffix: 'cloud', scope: 'key' },
+  kilo: { suffix: 'anonymous', scope: 'key' },
+  pollinations: { suffix: 'account', scope: 'account' },
+  llm7: { suffix: 'anonymous', scope: 'key' },
   // AI Horde: anonymous requests share one queue priority (the 0000000000 key),
   // so they pool together; a registered key has its own kudos priority but we
   // still bucket per-platform here.
-  if (platform === 'aihorde') return 'aihorde::anonymous';
-  if (platform === 'huggingface') return 'huggingface::router';
-  if (platform === 'opencode') return 'opencode::promo';
+  aihorde: { suffix: 'anonymous', scope: 'key' },
+  huggingface: { suffix: 'router', scope: 'key' },
+  opencode: { suffix: 'promo', scope: 'key' },
   // Aggregators with a single shared free pool across all ':free'/'auto:free' models.
-  if (platform === 'routeway') return 'routeway::free';
-  if (platform === 'bazaarlink') return 'bazaarlink::free';
-  if (platform === 'ainative') return 'ainative::account';
-  if (platform === 'aion') return 'aion::free';
-  if (platform === 'requesty') return 'requesty::free';
-  if (platform === 'navy') return 'navy::free';
-  if (platform === 'nara') return 'nara::free';
-  if (platform === 'sealion') return 'sealion::free';
+  routeway: { suffix: 'free', scope: 'key' },
+  bazaarlink: { suffix: 'free', scope: 'key' },
+  ainative: { suffix: 'account', scope: 'account' },
+  aion: { suffix: 'free', scope: 'key' },
+  requesty: { suffix: 'free', scope: 'key' },
+  navy: { suffix: 'free', scope: 'key' },
+  nara: { suffix: 'free', scope: 'key' },
+  sealion: { suffix: 'free', scope: 'key' },
   // OrcaRouter: one rate-limited free allowance across all `*-free` aliases
   // and the `orcarouter/free` auto route (limits unpublished; 429 on cap).
-  if (platform === 'orcarouter') return 'orcarouter::free';
+  orcarouter: { suffix: 'free', scope: 'key' },
   // UnoRouter: the docs say 1 req/min per free model, but live-probed
   // 2026-08-23 a burst across many `:free` models put the whole account into
   // 429 on every model for several minutes — so one pool, and a 429 on any
   // model backs off the platform as a whole.
-  if (platform === 'unorouter') return 'unorouter::free';
+  unorouter: { suffix: 'free', scope: 'key' },
   // xkiro: one account-level allowance shared across its free models (the
   // free tier is a per-account grant, not per-model), so one pool.
-  if (platform === 'xkiro') return 'xkiro::free';
+  xkiro: { suffix: 'free', scope: 'key' },
   // AnyAPI: the free tier is one 100K-tokens/day budget for the whole account,
   // shared across every free/basic model — so one pool, not one per model.
-  if (platform === 'anyapi') return 'anyapi::free';
+  anyapi: { suffix: 'free', scope: 'key' },
   // ModelScope: one 2000-requests/day quota across the whole account.
-  if (platform === 'modelscope') return 'modelscope::account';
-  return normalizedModelId ? `${platform}::${normalizedModelId}` : `${platform}::account`;
+  modelscope: { suffix: 'account', scope: 'account' },
+};
+
+function poolSpecFor(platform: Platform, modelId?: string | null): PoolSpec {
+  const normalizedModelId = modelId?.trim() ?? '';
+  // OpenRouter splits by model: ':free' models draw on the shared free
+  // allowance, everything else on the paid account balance.
+  if (platform === 'openrouter') {
+    return normalizedModelId.endsWith(':free')
+      ? { suffix: 'free', scope: 'key' }
+      : { suffix: 'account', scope: 'account' };
+  }
+  const spec = POOL_SPECS[platform];
+  if (spec) return spec;
+  // Unknown platform: one bucket per model when we know the model, otherwise
+  // the account. The per-model form is not account-wide by definition.
+  return normalizedModelId
+    ? { suffix: normalizedModelId, scope: 'key' }
+    : { suffix: 'account', scope: 'account' };
+}
+
+function inferPoolForPlatform(platform: Platform, modelId?: string | null): string {
+  return `${platform}::${poolSpecFor(platform, modelId).suffix}`;
+}
+
+/**
+ * True when one quota bucket covers every key on the platform, so every key
+ * reports the same remaining number. Callers that rank keys against each other
+ * (the 'least-remaining' key strategy, #919) must skip these pools — reordering
+ * on an identical number only churns the rotation.
+ *
+ * Ask this instead of pattern-matching `inferQuotaPoolKey(...)`: the key string
+ * is a label and its shape will change.
+ */
+export function isAccountScopedPool(platform: Platform, modelId?: string | null): boolean {
+  return poolSpecFor(platform, modelId).scope === 'account';
 }
 
 function isSharedPool(platform: Platform): boolean {
