@@ -293,6 +293,11 @@ export interface ApiKey {
   /** Model ids this key is limited to; null = serves every model of its
    *  platform (#657). */
   modelScope?: string[] | null;
+  /** Per-account provider quota overrides. NULL inherits provider/env defaults;
+   *  zero explicitly disables that account-wide gate. */
+  providerRpmLimit?: number | null;
+  providerRpdLimit?: number | null;
+  providerTpdLimit?: number | null;
   models?: ApiKeyModel[];
   cooldowns?: ApiKeyCooldown[];
 }
@@ -301,6 +306,75 @@ export interface ApiKeyCreate {
   platform: Platform;
   key: string;
   label?: string;
+}
+
+// ---- Extension quota guidance ----
+
+export type QuotaGuidanceScope = 'model' | 'account' | 'project' | 'shared_pool' | 'unmetered';
+export type QuotaGuidanceStatus = 'verified' | 'uncertain' | 'contradictory' | 'superseded';
+export type QuotaGuidanceAccess = 'available' | 'payment_required' | 'unmetered' | 'unknown';
+export type QuotaGuidanceMetric = 'requests' | 'tokens' | 'credits' | 'concurrency' | 'compute';
+export type QuotaGuidancePeriod = 'minute' | 'day' | 'month' | 'rolling_window' | 'provider_defined' | 'none';
+export type QuotaGuidanceSourceKind = 'authenticated_observation' | 'official_documentation' | 'official_announcement' | 'secondary';
+
+export interface QuotaGuidanceLimits {
+  rpmLimit: number | null;
+  rpdLimit: number | null;
+  tpmLimit: number | null;
+  tpdLimit: number | null;
+}
+
+export interface QuotaGuidanceFact {
+  metric: QuotaGuidanceMetric;
+  amount: number | string | null;
+  period: QuotaGuidancePeriod;
+  label: string;
+  applicability: 'enforceable' | 'reference_only';
+}
+
+export interface QuotaGuidanceSource {
+  kind: QuotaGuidanceSourceKind;
+  title: string;
+  url: string;
+  checkedAt: string;
+}
+
+export interface QuotaGuidanceAdvisory {
+  kind: 'research_needed' | 'model_changed' | 'billing_required' | 'provider_retired';
+  message: string;
+  replacementModelId?: string;
+}
+
+export interface ModelQuotaGuidance {
+  modelId: string;
+  scope: QuotaGuidanceScope;
+  status: QuotaGuidanceStatus;
+  summary: string;
+  recommendedLimits: QuotaGuidanceLimits | null;
+  facts: QuotaGuidanceFact[];
+  advisory: QuotaGuidanceAdvisory | null;
+}
+
+export interface ProviderQuotaGuidance {
+  platform: Platform;
+  displayName: string;
+  scope: QuotaGuidanceScope;
+  status: QuotaGuidanceStatus;
+  currentAccess: QuotaGuidanceAccess;
+  summary: string;
+  verifiedAt: string;
+  reviewAfter: string;
+  recommendedLimits: QuotaGuidanceLimits | null;
+  facts: QuotaGuidanceFact[];
+  sources: QuotaGuidanceSource[];
+  models: ModelQuotaGuidance[];
+  advisory: QuotaGuidanceAdvisory | null;
+}
+
+export interface QuotaGuidanceCatalog {
+  version: string;
+  updatedAt: string;
+  providers: ProviderQuotaGuidance[];
 }
 
 // ---- Fallback Config ----
@@ -533,6 +607,20 @@ export interface RateLimitStatus {
 export type QuotaMetric = 'requests' | 'tokens' | 'credits' | 'neurons';
 export type QuotaResetStrategy = 'fixed_calendar' | 'rolling_window' | 'token_bucket' | 'provider_reported' | 'unknown';
 export type QuotaObservationSource = 'header' | 'quota_api' | 'error_body' | 'local_usage' | 'documentation' | 'probe';
+export type QuotaScope = 'model' | 'account' | 'project' | 'shared_pool';
+export type QuotaAccounting = 'metered' | 'unknown' | 'unmetered';
+export type QuotaResetPeriod = 'minute' | 'day' | 'month';
+
+/** Describes the resource an endpoint consumes. Scope and accounting are
+ * deliberately separate: an account can be unmetered, and a shared pool can
+ * have unknown capacity. */
+export interface QuotaPolicy {
+  poolKey: string;
+  scope: QuotaScope;
+  accounting: QuotaAccounting;
+  metrics: QuotaMetric[];
+  reset: { strategy: QuotaResetStrategy; period?: QuotaResetPeriod };
+}
 
 export interface ProviderQuotaState {
   platform: Platform;

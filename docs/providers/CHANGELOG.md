@@ -5,6 +5,8 @@ Revision history for `docs/providers/`, listing the upstream commits that shaped
 | Commit | Date | Summary |
 | --- | --- | --- |
 | Unreleased | 2026-09-04 | Add AMD Radeon Cloud TokenFactory shared-model adapter and catalog-ready platform wiring. |
+| Unreleased | 2026-09-02 | Add a credential-blind Markdown export of provider free-model access, limits and quota evidence from Model Scope. |
+| Unreleased | 2026-09-02 | Add the Imperium extension's reviewed provider quota-guidance catalogue and refresh contract. |
 | Unreleased | 2026-09-01 | Add the native Sail Research background Responses adapter and catalog-ready platform wiring. |
 | `ef4519a` | 2026-08-23 | feat(providers): add xkiro.com as OpenAI-compatible provider (#967) |
 | `68ddca4` | 2026-08-23 | feat(providers): add UnoRouter (unorouter.com) as OpenAI-compatible provider (#875) |

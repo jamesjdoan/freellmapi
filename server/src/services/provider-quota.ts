@@ -11,7 +11,9 @@ import type {
   QuotaResetStrategy,
   ProviderQuotaObservation,
   ProviderQuotaState,
+  QuotaPolicy,
 } from '@freellmapi/shared/types.js';
+import { isLoopbackOrPrivateUrl } from '../lib/url-guard.js';
 
 export interface QuotaObservationContext {
   platform: Platform;
@@ -136,122 +138,135 @@ function pickBetterSource(existing: QuotaObservationSource | null | undefined, n
   return SOURCE_PRIORITY[next] >= SOURCE_PRIORITY[existing] ? next : existing;
 }
 
-// ── Pool identity and pool SCOPE ────────────────────────────────────────────
-// Two different questions used to be answered by one string:
-//   1. "which bucket does this usage belong to?"  → the pool key
-//   2. "is that bucket shared across every key on the platform?" → the scope
-// (2) was inferred by testing whether the key string ended in '::account'
-// (router.ts, #919). That coupling means any change to the pool-key SHAPE
-// silently changes routing behaviour, which is a trap for the per-model
-// subject-identity work (ADR ARCH-20260905, F8). The scope is now declared
-// alongside the key and the string is derived, so the two can only diverge
-// by a deliberate edit to this table.
-//
-// 'account' — one bucket for the WHOLE account: every key reports the same
-//             number, so ranking keys by remaining quota is meaningless.
-// 'key'     — each key has its own bucket (it may still span models), so
-//             "which key has more left" is a question with an answer.
-type QuotaPoolScope = 'account' | 'key';
+function modelPool(platform: Platform, modelId?: string | null, prefix = 'model'): string {
+  const normalizedModelId = modelId?.trim() ?? '';
+  return normalizedModelId ? `${platform}::${prefix}::${normalizedModelId}` : `${platform}::account`;
+}
 
-type PoolSpec = { suffix: string; scope: QuotaPoolScope };
+/** Pool names used before quota scope became explicit. Only providers whose
+ * corrected economics required a new identity need a read fallback. Once an
+ * exact new-pool observation exists for a key, it takes precedence. */
+function legacyPoolKey(platform: Platform, poolKey: string): string | null {
+  if (platform === 'groq' && poolKey.startsWith('groq::model::')) return 'groq::account';
+  if (platform === 'google' && poolKey.startsWith('google::project-model::')) return 'google::project';
+  return null;
+}
 
-// Scopes preserve the classification the '::account' suffix test produced, so
-// this change is behaviour-neutral. Several pools that ARE account-wide in
-// reality are still marked 'key' here because that is what the suffix test
-// said (e.g. 'openrouter::free', 'google::project'); re-classifying them
-// changes live key selection and is a separate decision, not a refactor.
-const POOL_SPECS: Partial<Record<Platform, PoolSpec>> = {
-  google: { suffix: 'project', scope: 'key' },
-  groq: { suffix: 'account', scope: 'account' },
-  cerebras: { suffix: 'shared', scope: 'key' },
-  sail: { suffix: 'monthly-credit', scope: 'key' },
-  bai: { suffix: 'promo', scope: 'key' },
-  // Radeon (upstream v0.9.6) reports `x-ratelimit-*-user-daily-usd`, so the
-  // allowance is per account in reality. Marked 'key' to match what the old
-  // '::account' suffix test would have said for 'radeon::daily-free' —
-  // re-classifying it is a routing decision, not part of this refactor.
-  radeon: { suffix: 'daily-free', scope: 'key' },
-  sambanova: { suffix: 'shared', scope: 'key' },
-  nvidia: { suffix: 'credit-pool', scope: 'key' },
-  mistral: { suffix: 'experiment-pool', scope: 'key' },
-  github: { suffix: 'account', scope: 'account' },
-  cohere: { suffix: 'trial-pool', scope: 'key' },
-  cloudflare: { suffix: 'account', scope: 'account' },
-  zhipu: { suffix: 'account', scope: 'account' },
-  ollama: { suffix: 'cloud', scope: 'key' },
-  kilo: { suffix: 'anonymous', scope: 'key' },
-  pollinations: { suffix: 'account', scope: 'account' },
-  llm7: { suffix: 'anonymous', scope: 'key' },
+/**
+ * Resolve quota economics for one provider endpoint. This is intentionally a
+ * small provider-knowledge table, not a cost optimiser: Phase 1 only needs a
+ * stable pool identity and enough metadata to avoid treating shared and
+ * independent allowances as the same thing.
+ */
+export function resolveQuotaPolicy(
+  platform: Platform,
+  modelId?: string | null,
+  endpoint?: string | null,
+): QuotaPolicy {
+  const normalizedModelId = modelId?.trim() ?? '';
+  const policy = (
+    poolKey: string,
+    scope: QuotaPolicy['scope'],
+    accounting: QuotaPolicy['accounting'],
+    metrics: QuotaPolicy['metrics'],
+    strategy: QuotaPolicy['reset']['strategy'] = 'unknown',
+    period?: QuotaPolicy['reset']['period'],
+  ): QuotaPolicy => ({ poolKey, scope, accounting, metrics, reset: { strategy, ...(period ? { period } : {}) } });
+
+  if (platform === 'custom' && endpoint && isLoopbackOrPrivateUrl(endpoint)) {
+    return policy(`custom::local::${endpoint}`, 'account', 'unmetered', []);
+  }
+  if (platform === 'openrouter') {
+    return normalizedModelId.endsWith(':free')
+      ? policy('openrouter::free', 'shared_pool', 'metered', ['requests'], 'provider_reported')
+      : policy('openrouter::account', 'account', 'metered', ['requests', 'tokens'], 'provider_reported');
+  }
+  // Groq publishes independent model limits at organisation/account level.
+  if (platform === 'groq') return policy(modelPool(platform, modelId), 'model', 'metered', ['requests', 'tokens'], 'provider_reported');
+  // The key identifies the Google project; the model suffix preserves each
+  // model's independently published project allowance.
+  if (platform === 'google') return policy(modelPool(platform, modelId, 'project-model'), 'project', 'metered', ['requests', 'tokens'], 'provider_reported');
+  if (platform === 'huggingface') return policy('huggingface::router', 'shared_pool', 'metered', ['credits'], 'provider_reported', 'month');
+  if (platform === 'opencode') return policy('opencode::promo', 'shared_pool', 'unknown', [], 'unknown');
+  if (platform === 'cerebras') return policy('cerebras::shared', 'shared_pool', 'metered', ['requests', 'tokens'], 'provider_reported');
+  if (platform === 'sail') return policy('sail::monthly-credit', 'shared_pool', 'metered', ['credits'], 'fixed_calendar', 'month');
+  if (platform === 'bai') return policy('bai::promo', 'shared_pool', 'unknown', [], 'unknown');
+  // AMD Radeon Cloud TokenFactory (upstream v0.9.6): one recurring daily
+  // allowance, reported in USD, plus a user-level RPM ceiling. Both numbers
+  // arrive on every response, so the pool is metered and provider-reported.
+  // 'shared_pool', not 'account': the allowance is per key/user, so ranking
+  // keys by remaining is meaningful — matching upstream, whose
+  // 'radeon::daily-free' key was never account-scoped.
+  if (platform === 'radeon') return policy('radeon::daily-free', 'shared_pool', 'metered', ['requests', 'credits'], 'provider_reported');
+  if (platform === 'sambanova') return policy('sambanova::shared', 'shared_pool', 'metered', ['requests', 'tokens'], 'provider_reported');
+  if (platform === 'nvidia') return policy('nvidia::credit-pool', 'shared_pool', 'metered', ['requests'], 'provider_reported');
+  if (platform === 'mistral') return policy('mistral::experiment-pool', 'shared_pool', 'metered', ['requests', 'tokens'], 'provider_reported');
+  if (platform === 'github') return policy('github::account', 'account', 'metered', ['requests'], 'provider_reported');
+  if (platform === 'cohere') return policy('cohere::trial-pool', 'shared_pool', 'metered', ['requests', 'tokens'], 'provider_reported');
+  if (platform === 'cloudflare') return policy('cloudflare::account', 'account', 'metered', ['neurons'], 'provider_reported');
+  if (platform === 'zhipu') return policy('zhipu::account', 'account', 'metered', ['tokens'], 'provider_reported');
+  if (platform === 'ollama') return policy('ollama::cloud', 'account', 'metered', ['requests'], 'provider_reported');
+  if (platform === 'kilo') return policy('kilo::anonymous', 'shared_pool', 'unknown', [], 'unknown');
+  if (platform === 'pollinations') return policy('pollinations::account', 'account', 'unknown', [], 'unknown');
+  if (platform === 'llm7') return policy('llm7::anonymous', 'shared_pool', 'unknown', [], 'unknown');
   // AI Horde: anonymous requests share one queue priority (the 0000000000 key),
   // so they pool together; a registered key has its own kudos priority but we
   // still bucket per-platform here.
-  aihorde: { suffix: 'anonymous', scope: 'key' },
-  huggingface: { suffix: 'router', scope: 'key' },
-  opencode: { suffix: 'promo', scope: 'key' },
+  if (platform === 'aihorde') return policy('aihorde::anonymous', 'shared_pool', 'unknown', ['neurons'], 'unknown');
   // Aggregators with a single shared free pool across all ':free'/'auto:free' models.
-  routeway: { suffix: 'free', scope: 'key' },
-  bazaarlink: { suffix: 'free', scope: 'key' },
-  ainative: { suffix: 'account', scope: 'account' },
-  aion: { suffix: 'free', scope: 'key' },
-  requesty: { suffix: 'free', scope: 'key' },
-  navy: { suffix: 'free', scope: 'key' },
-  nara: { suffix: 'free', scope: 'key' },
-  sealion: { suffix: 'free', scope: 'key' },
+  if (platform === 'routeway') return policy('routeway::free', 'shared_pool', 'metered', ['requests'], 'provider_reported');
+  if (platform === 'bazaarlink') return policy('bazaarlink::free', 'shared_pool', 'unknown', [], 'unknown');
+  if (platform === 'ainative') return policy('ainative::account', 'account', 'metered', ['tokens'], 'provider_reported', 'month');
+  if (platform === 'aion') return policy('aion::free', 'shared_pool', 'unknown', [], 'unknown');
+  if (platform === 'requesty') return policy('requesty::free', 'shared_pool', 'unknown', [], 'unknown');
+  if (platform === 'navy') return policy('navy::free', 'shared_pool', 'metered', ['tokens'], 'fixed_calendar', 'day');
+  if (platform === 'nara') return policy('nara::free', 'shared_pool', 'unknown', [], 'unknown');
+  if (platform === 'sealion') return policy('sealion::free', 'shared_pool', 'metered', ['requests'], 'provider_reported');
   // OrcaRouter: one rate-limited free allowance across all `*-free` aliases
   // and the `orcarouter/free` auto route (limits unpublished; 429 on cap).
-  orcarouter: { suffix: 'free', scope: 'key' },
+  if (platform === 'orcarouter') return policy('orcarouter::free', 'shared_pool', 'unknown', [], 'unknown');
   // UnoRouter: the docs say 1 req/min per free model, but live-probed
   // 2026-08-23 a burst across many `:free` models put the whole account into
   // 429 on every model for several minutes — so one pool, and a 429 on any
   // model backs off the platform as a whole.
-  unorouter: { suffix: 'free', scope: 'key' },
+  if (platform === 'unorouter') return policy('unorouter::free', 'shared_pool', 'metered', ['requests'], 'provider_reported');
   // xkiro: one account-level allowance shared across its free models (the
   // free tier is a per-account grant, not per-model), so one pool.
-  xkiro: { suffix: 'free', scope: 'key' },
+  if (platform === 'xkiro') return policy('xkiro::free', 'shared_pool', 'metered', ['tokens'], 'fixed_calendar', 'day');
   // AnyAPI: the free tier is one 100K-tokens/day budget for the whole account,
   // shared across every free/basic model — so one pool, not one per model.
-  anyapi: { suffix: 'free', scope: 'key' },
+  if (platform === 'anyapi') return policy('anyapi::free', 'shared_pool', 'metered', ['tokens'], 'fixed_calendar', 'day');
   // ModelScope: one 2000-requests/day quota across the whole account.
-  modelscope: { suffix: 'account', scope: 'account' },
-};
-
-function poolSpecFor(platform: Platform, modelId?: string | null): PoolSpec {
-  const normalizedModelId = modelId?.trim() ?? '';
-  // OpenRouter splits by model: ':free' models draw on the shared free
-  // allowance, everything else on the paid account balance.
-  if (platform === 'openrouter') {
-    return normalizedModelId.endsWith(':free')
-      ? { suffix: 'free', scope: 'key' }
-      : { suffix: 'account', scope: 'account' };
-  }
-  const spec = POOL_SPECS[platform];
-  if (spec) return spec;
-  // Unknown platform: one bucket per model when we know the model, otherwise
-  // the account. The per-model form is not account-wide by definition.
-  return normalizedModelId
-    ? { suffix: normalizedModelId, scope: 'key' }
-    : { suffix: 'account', scope: 'account' };
-}
-
-function inferPoolForPlatform(platform: Platform, modelId?: string | null): string {
-  return `${platform}::${poolSpecFor(platform, modelId).suffix}`;
+  if (platform === 'modelscope') return policy('modelscope::account', 'account', 'metered', ['requests'], 'fixed_calendar', 'day');
+  // Volcengine's recurring reward is published per model; other unknown
+  // providers retain the legacy per-model pool fallback when a model is known.
+  if (platform === 'volcengine') return policy(normalizedModelId ? `volcengine::${normalizedModelId}` : 'volcengine::account', 'model', 'metered', ['tokens'], 'fixed_calendar', 'day');
+  if (platform === 'custom') return policy(normalizedModelId ? `custom::${normalizedModelId}` : 'custom::account', 'model', 'unknown', [], 'unknown');
+  return policy(normalizedModelId ? `${platform}::${normalizedModelId}` : `${platform}::account`, normalizedModelId ? 'model' : 'account', 'unknown', [], 'unknown');
 }
 
 /**
- * True when one quota bucket covers every key on the platform, so every key
+ * True when one quota bucket covers every KEY on the platform, so every key
  * reports the same remaining number. Callers that rank keys against each other
  * (the 'least-remaining' key strategy, #919) must skip these pools — reordering
  * on an identical number only churns the rotation.
  *
- * Ask this instead of pattern-matching `inferQuotaPoolKey(...)`: the key string
- * is a label and its shape will change.
+ * Derived from `resolveQuotaPolicy`, not from the pool-key string. The string is
+ * a label whose shape already changed once (Groq is now `groq::model::<id>`),
+ * and a routing rule must not move with it.
+ *
+ * NOTE: this is a deliberate behaviour change from the previous
+ * `endsWith('::account')` test. Pools whose key does not end in `::account` but
+ * whose scope genuinely IS account-wide — `ollama::cloud`, `custom::local::…` —
+ * now correctly skip key ranking. Inert unless a platform has several keys AND
+ * the least-remaining strategy is on.
  */
 export function isAccountScopedPool(platform: Platform, modelId?: string | null): boolean {
-  return poolSpecFor(platform, modelId).scope === 'account';
+  return resolveQuotaPolicy(platform, modelId).scope === 'account';
 }
 
 function isSharedPool(platform: Platform): boolean {
-  return ['openrouter', 'google', 'groq', 'cerebras', 'sail', 'bai', 'radeon', 'sambanova', 'nvidia', 'mistral', 'github', 'cohere', 'cloudflare', 'zhipu', 'ollama', 'kilo', 'pollinations', 'llm7', 'huggingface', 'opencode', 'routeway', 'bazaarlink', 'ainative', 'aion', 'requesty', 'navy', 'nara', 'sealion', 'orcarouter', 'unorouter', 'xkiro', 'anyapi', 'modelscope', 'aihorde'].includes(platform);
+  return resolveQuotaPolicy(platform).scope !== 'model';
 }
 
 type HeaderSpec = { metric: QuotaMetric; limit: string; remaining?: string; reset?: string; strategy?: QuotaResetStrategy };
@@ -310,7 +325,7 @@ function extractContext(
     keyId: opts.keyId ?? context?.keyId ?? 0,
     providerAccountId: opts.providerAccountId ?? context?.providerAccountId ?? null,
     modelId: opts.modelId ?? context?.modelId ?? null,
-    quotaPoolKey: opts.quotaPoolKey ?? context?.quotaPoolKey ?? inferPoolForPlatform(platform, opts.modelId ?? context?.modelId),
+    quotaPoolKey: opts.quotaPoolKey ?? context?.quotaPoolKey ?? resolveQuotaPolicy(platform, opts.modelId ?? context?.modelId, opts.endpoint ?? context?.endpoint).poolKey,
     endpoint: opts.endpoint ?? context?.endpoint ?? null,
   };
 }
@@ -399,8 +414,8 @@ function maybeAddObservation(
   });
 }
 
-export function inferQuotaPoolKey(platform: Platform, modelId?: string | null): string {
-  return inferPoolForPlatform(platform, modelId);
+export function inferQuotaPoolKey(platform: Platform, modelId?: string | null, endpoint?: string | null): string {
+  return resolveQuotaPolicy(platform, modelId, endpoint).poolKey;
 }
 
 export function parseQuotaObservationsFromResponse(
@@ -504,7 +519,7 @@ export function recordQuotaObservation(input: QuotaObservationInput): ProviderQu
   if (!platform) return null;
 
   const keyId = input.keyId ?? context?.keyId ?? 0;
-  const quotaPoolKey = input.quotaPoolKey ?? context?.quotaPoolKey ?? inferPoolForPlatform(platform, input.modelId ?? context?.modelId);
+  const quotaPoolKey = input.quotaPoolKey ?? context?.quotaPoolKey ?? resolveQuotaPolicy(platform, input.modelId ?? context?.modelId, input.endpoint ?? context?.endpoint).poolKey;
   const metric = input.metric ?? 'requests';
   const source = input.source ?? 'probe';
   const resetStrategy = input.resetStrategy ?? 'unknown';
@@ -672,7 +687,7 @@ const headroomCache = new Map<string, { db: unknown; at: number; map: Map<number
  * constraint is what 429s, so a key with 90% of its requests but 2% of its
  * tokens left has 2% of headroom, not 90%.
  */
-export function getKeyQuotaHeadroom(platform: Platform): Map<number, number> {
+export function getKeyQuotaHeadroom(platform: Platform, quotaPoolKey?: string): Map<number, number> {
   let db;
   try {
     db = getDb();
@@ -680,27 +695,35 @@ export function getKeyQuotaHeadroom(platform: Platform): Map<number, number> {
     return new Map();
   }
   const now = Date.now();
-  const cached = headroomCache.get(platform);
+  const cacheKey = `${platform}\u0000${quotaPoolKey ?? '*'}`;
+  const cached = headroomCache.get(cacheKey);
   if (cached && cached.db === db && now - cached.at < HEADROOM_TTL_MS) return cached.map;
 
+  const legacyPool = quotaPoolKey ? legacyPoolKey(platform, quotaPoolKey) : null;
   const rows = db.prepare(`
     SELECT key_id AS keyId,
+           quota_pool_key AS poolKey,
            limit_value AS limitValue,
            remaining_value AS remainingValue,
            CASE WHEN reset_at IS NOT NULL AND julianday(reset_at) < julianday('now')
                 THEN 1 ELSE 0 END AS expired
       FROM provider_quota_state
      WHERE platform = ?
+       AND (? IS NULL OR quota_pool_key = ? OR quota_pool_key = ?)
        AND confidence >= ?
        AND limit_value IS NOT NULL
        AND limit_value > 0
        AND remaining_value IS NOT NULL
-  `).all(platform, HEADROOM_MIN_CONFIDENCE) as {
-    keyId: number; limitValue: number; remainingValue: number; expired: number;
+  `).all(platform, quotaPoolKey ?? null, quotaPoolKey ?? null, legacyPool, HEADROOM_MIN_CONFIDENCE) as {
+    keyId: number; poolKey: string; limitValue: number; remainingValue: number; expired: number;
   }[];
 
   const map = new Map<number, number>();
+  const exactKeys = quotaPoolKey
+    ? new Set(rows.filter(row => row.poolKey === quotaPoolKey).map(row => row.keyId))
+    : new Set<number>();
   for (const row of rows) {
+    if (quotaPoolKey && exactKeys.has(row.keyId) && row.poolKey !== quotaPoolKey) continue;
     // A window that already reset is a full budget again. Same rule as
     // normalizeExpiredQuotaState, minus the write — this path must not take
     // one just to answer a routing question.
@@ -710,15 +733,65 @@ export function getKeyQuotaHeadroom(platform: Platform): Map<number, number> {
     const prev = map.get(row.keyId);
     if (prev === undefined || ratio < prev) map.set(row.keyId, ratio);
   }
-  headroomCache.set(platform, { db, at: now, map });
+  headroomCache.set(cacheKey, { db, at: now, map });
   return map;
+}
+
+/** Whether the exact pool consumed by this endpoint has a high-confidence,
+ * still-active exhaustion observation. Unknown capacity remains eligible;
+ * only a concrete zero with a future reset is a hard routing gate, avoiding
+ * permanent lockout when a provider omits reset metadata. */
+export function isQuotaPoolAvailable(
+  platform: Platform,
+  keyId: number,
+  modelId?: string | null,
+  endpoint?: string | null,
+): boolean {
+  const quota = resolveQuotaPolicy(platform, modelId, endpoint);
+  if (quota.accounting === 'unmetered') return true;
+  let db;
+  try {
+    db = getDb();
+  } catch {
+    return true;
+  }
+  const legacyPool = legacyPoolKey(platform, quota.poolKey);
+  const exactExists = db.prepare(`
+    SELECT 1
+      FROM provider_quota_state
+     WHERE platform = ?
+       AND key_id = ?
+       AND quota_pool_key = ?
+       AND confidence >= ?
+       AND remaining_value IS NOT NULL
+     LIMIT 1
+  `).get(platform, keyId, quota.poolKey, HEADROOM_MIN_CONFIDENCE);
+  const poolKey = exactExists || !legacyPool ? quota.poolKey : legacyPool;
+  const exhausted = db.prepare(`
+    SELECT 1
+      FROM provider_quota_state
+     WHERE platform = ?
+       AND key_id = ?
+       AND quota_pool_key = ?
+       AND confidence >= ?
+       AND remaining_value = 0
+       AND reset_at IS NOT NULL
+       AND julianday(reset_at) >= julianday('now')
+     LIMIT 1
+  `).get(platform, keyId, poolKey, HEADROOM_MIN_CONFIDENCE);
+  return !exhausted;
 }
 
 /** Drop the memoised headroom for one platform (or all of them). Called on
  *  every write so a fresh observation is visible to the very next route. */
 export function invalidateKeyQuotaHeadroom(platform?: Platform): void {
-  if (platform) headroomCache.delete(platform);
-  else headroomCache.clear();
+  if (!platform) {
+    headroomCache.clear();
+    return;
+  }
+  for (const key of headroomCache.keys()) {
+    if (key.startsWith(`${platform}\u0000`)) headroomCache.delete(key);
+  }
 }
 
 export function getQuotaStateForKeys(): QuotaObservationView[] {
@@ -781,4 +854,69 @@ export function getQuotaStateForKeys(): QuotaObservationView[] {
       )
     ORDER BY pqs.platform ASC, pqs.key_id ASC, pqs.quota_pool_key ASC, pqs.metric ASC
   `).all() as QuotaObservationView[];
+}
+
+// ── Learned ceilings (429 with no published limit) ──────────────────────────
+// Some providers publish nothing and only ever tell us "no" — OpenCode Zen,
+// Ollama Cloud, Google on some models. For those the only evidence of a ceiling
+// is the point at which they started refusing, so record it: how much this
+// account had spent on the platform when the 429 arrived.
+//
+// This is an OBSERVED CEILING, not a limit. It is deliberately written to the
+// observation log ONLY, never to provider_quota_state:
+//   - state.limit_value feeds the forecast and the headroom cache, and a 429
+//     also writes remaining=0, so a learned limit there would pin the pool at
+//     "Exhausted" with no reset_at to ever clear it.
+//   - one refusal is weak evidence. The ADR is explicit that a single 429 must
+//     not permanently mutate a provider's limits.
+// It surfaces at the lowest precedence rank, below even a shipped env default.
+
+export const LEARNED_CEILING_NOTE = 'learned ceiling from 429';
+
+export function recordLearnedCeiling(input: {
+  platform: Platform;
+  keyId: number;
+  quotaPoolKey: string;
+  modelId?: string | null;
+  /** Requests this account had spent on the platform when it was refused. */
+  observedRequests: number;
+}): void {
+  // Zero tells us nothing — a refusal on the first request of a window means
+  // the ceiling is elsewhere (a minute window, another key, a stale cooldown).
+  if (!Number.isFinite(input.observedRequests) || input.observedRequests <= 0) return;
+  try {
+    const db = getDb();
+    db.prepare(`
+      INSERT INTO provider_quota_observations (
+        id, platform, key_id, provider_account_id, model_id, quota_pool_key, metric,
+        status_code, limit_value, remaining_value, reset_at, retry_after_ms,
+        reset_strategy, source, confidence, notes, raw_json, endpoint, observed_at, created_at
+      ) VALUES (?, ?, ?, NULL, ?, ?, 'requests', 429, ?, 0, NULL, NULL, 'unknown', 'error_body', 0.3, ?, NULL, NULL, ?, ?)
+    `).run(
+      crypto.randomUUID(), input.platform, input.keyId, input.modelId ?? null,
+      input.quotaPoolKey, input.observedRequests, LEARNED_CEILING_NOTE,
+      toSqliteUtc(new Date()), toSqliteUtc(new Date()),
+    );
+  } catch {
+    // Learning is best-effort; never fail a request over it.
+  }
+}
+
+/** The highest ceiling we have ever been refused at, per platform. Highest
+ *  because a lower refusal is explained by a narrower window (a per-minute cap
+ *  inside a daily pool); the largest observed spend is the tightest lower bound
+ *  on the daily allowance we can honestly claim. */
+export function getLearnedCeiling(platform: Platform): { limit: number; observations: number } | null {
+  try {
+    const db = getDb();
+    const row = db.prepare(`
+      SELECT MAX(limit_value) AS ceiling, COUNT(*) AS n
+        FROM provider_quota_observations
+       WHERE platform = ? AND notes = ? AND limit_value IS NOT NULL
+    `).get(platform, LEARNED_CEILING_NOTE) as { ceiling: number | null; n: number };
+    if (row?.ceiling == null || row.ceiling <= 0) return null;
+    return { limit: row.ceiling, observations: row.n };
+  } catch {
+    return null;
+  }
 }

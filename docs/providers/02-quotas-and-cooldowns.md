@@ -13,9 +13,25 @@ Every catalog model row carries `rpm_limit` / `rpd_limit` columns. Before dispat
 
 `tpm_limit` / `tpd_limit` work the same way with estimated tokens: a request counts against its minute/day token window only if `used + in-flight tokens + estimate` fits under the limit. Because some providers publish a generous RPD but a tiny TPM (the code cites groq `gpt-oss-120b`: rpd 1000 yet tpm 8000), the daily token check also feeds a derived cap so one large burst cannot exhaust a day's budget in seconds.
 
-## Platform-wide pools
+## Quota policy and pool identity
 
-Per-model windows cannot see account-level ceilings: OpenRouter meters `:free` routes as one pool, Google meters per project, NVIDIA NIM meters a credit pool (~40 req/min across all models regardless of per-model rows). UnoRouter's `:free` models share a per-minute account-wide cap (a burst of parallel requests trips a 429 on every `:free` model for several minutes). xKiro's free plan enforces a 5M token/day account-wide budget across all free models (Mistral, MiniMax, DeepSeek families). `inferPoolForPlatform` maps platforms to shared pools (`openrouter::free`, `google::project`, `groq::account`, `nvidia::credit-pool`, `unorouter::free`, `xkiro::free`, ...) and each pool gets its own aggregate gate, so `(models × rpd)` fan-out earns surprise 429s no more.
+Per-model windows cannot describe every provider's economics. `resolveQuotaPolicy()` separates provider, model endpoint and consumed pool, returning a stable pool key plus scope (`model`, `account`, `project`, `shared_pool`), accounting kind (`metered`, `unknown`, `unmetered`), metrics and reset strategy.
+
+- OpenRouter `:free` models consume one `openrouter::free` request pool.
+- Groq publishes independent model limits, so each model has its own request/token pool. Exhausting model A does not suppress model B.
+- Google keys identify a project, while each Gemini model retains its independently published project/model allowance.
+- Hugging Face Router consumes one shared credits pool.
+- NVIDIA, SambaNova and several aggregators use shared provider/account pools.
+- Unknown promotional capacity stays unknown; the router does not invent a limit.
+- A private or loopback custom endpoint is unmetered for external API quota.
+
+The router hard-skips a pool only when a high-confidence observation reports zero remaining with a future reset. Unknown capacity remains eligible. Legacy Groq `groq::account` and Google `google::project` observations remain readable until an exact corrected-pool observation exists for the credential, preventing an upgrade from forgetting a real active exhaustion signal.
+
+### Operator key scopes and account gates
+
+Under **Keys**, each key row exposes **Models & account limits**. Catalogue-backed checkboxes persist `model_scope_json`; an absent scope means the key serves every model of its provider, while a non-empty scope makes the router skip that key for every other model. Live model discovery is only a fallback when the provider has no catalogue rows.
+
+Optional per-key `provider_rpm_limit`, `provider_rpd_limit` and `provider_tpd_limit` values gate the credential before model-specific limits. Blank inherits existing provider behaviour; zero disables that individual account-wide gate. These controls do not convert model-scoped quotas into provider-wide quotas—the quota policy and the explicit operator gate remain separate dimensions.
 
 ## Concurrency leases
 

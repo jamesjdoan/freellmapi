@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
   MODEL_PICKER_MIN_MODELS,
+  enabledModelCount,
+  modelFamilyAndVersion,
+  providerKeyAccess,
+  orderScopeCandidates,
   resolveScopeUpdate,
   scopeCandidates,
   shouldOfferModelPicker,
   type ScopeCandidate,
 } from './model-scope-selection'
 import type { FallbackEntry } from './routing'
+import type { ApiKey } from '../../../shared/types'
 
 function entry(platform: string, modelId: string, extra: Partial<FallbackEntry> = {}): FallbackEntry {
   return {
@@ -33,7 +38,13 @@ function entry(platform: string, modelId: string, extra: Partial<FallbackEntry> 
 }
 
 function candidates(...ids: string[]): ScopeCandidate[] {
-  return ids.map(modelId => ({ modelId, displayName: modelId, sizeLabel: null, contextWindow: null }))
+  return ids.map(modelId => ({
+    modelId,
+    displayName: modelId,
+    sizeLabel: null,
+    contextWindow: null,
+    intelligenceRank: 50,
+  }))
 }
 
 describe('scopeCandidates (#657 post-add picker)', () => {
@@ -53,6 +64,7 @@ describe('scopeCandidates (#657 post-add picker)', () => {
       displayName: 'Kimi K2',
       sizeLabel: 'Frontier',
       contextWindow: 262144,
+      intelligenceRank: 50,
     })
   })
 
@@ -136,5 +148,171 @@ describe('resolveScopeUpdate', () => {
 
   it('treats an empty catalog as nothing to save', () => {
     expect(resolveScopeUpdate([], new Set(['a']))).toEqual({ patch: false, reason: 'empty' })
+  })
+})
+
+describe('orderScopeCandidates', () => {
+  const model = (modelId: string, over: Partial<ScopeCandidate> = {}): ScopeCandidate => ({
+    modelId,
+    displayName: modelId,
+    sizeLabel: 'Medium',
+    contextWindow: null,
+    intelligenceRank: 50,
+    ...over,
+  })
+
+  it('puts enabled models above the rest, whatever their tier', () => {
+    const rows = orderScopeCandidates(
+      [model('frontier-unticked', { sizeLabel: 'Frontier' }), model('small-ticked', { sizeLabel: 'Small' })],
+      modelId => modelId === 'small-ticked',
+    )
+    expect(rows.map(row => row.modelId)).toEqual(['small-ticked', 'frontier-unticked'])
+  })
+
+  it('ranks the most advanced first inside one enabled group', () => {
+    const rows = orderScopeCandidates([
+      model('small', { sizeLabel: 'Small' }),
+      model('frontier', { sizeLabel: 'Frontier' }),
+      model('untiered', { sizeLabel: null }),
+      model('medium'),
+      model('large', { sizeLabel: 'Large' }),
+    ], () => true)
+    expect(rows.map(row => row.modelId)).toEqual(['frontier', 'large', 'medium', 'small', 'untiered'])
+  })
+
+  it('breaks a tier tie on per-provider rank, then name', () => {
+    const rows = orderScopeCandidates([
+      model('slower', { intelligenceRank: 90 }),
+      model('sharper', { intelligenceRank: 10 }),
+      model('b-tied', { intelligenceRank: 10 }),
+    ], () => true)
+    expect(rows.map(row => row.modelId)).toEqual(['b-tied', 'sharper', 'slower'])
+  })
+
+  it('keeps every unticked model below every ticked one', () => {
+    const rows = orderScopeCandidates([
+      model('frontier-off', { sizeLabel: 'Frontier', intelligenceRank: 1 }),
+      model('small-on', { sizeLabel: 'Small', intelligenceRank: 99 }),
+      model('large-off', { sizeLabel: 'Large', intelligenceRank: 2 }),
+      model('medium-on', { intelligenceRank: 40 }),
+    ], modelId => modelId.endsWith('-on'))
+    expect(rows.map(row => row.modelId)).toEqual(['medium-on', 'small-on', 'frontier-off', 'large-off'])
+  })
+
+  it('leaves the input array untouched', () => {
+    const input = [model('b'), model('a')]
+    orderScopeCandidates(input, () => true)
+    expect(input.map(row => row.modelId)).toEqual(['b', 'a'])
+  })
+
+  it('sorts unranked live-discovery rows after every ranked one', () => {
+    const rows = orderScopeCandidates([
+      model('live', { sizeLabel: null, intelligenceRank: Number.MAX_SAFE_INTEGER }),
+      model('small', { sizeLabel: 'Small' }),
+    ], () => true)
+    expect(rows.map(row => row.modelId)).toEqual(['small', 'live'])
+  })
+
+  it('leads with the highest version among tied siblings', () => {
+    const rows = orderScopeCandidates([
+      model('gemini-2.5-flash'),
+      model('gemini-3.6-flash'),
+      model('gemini-3.5-flash'),
+      model('gemini-3-flash'),
+    ], () => true)
+    expect(rows.map(row => row.modelId))
+      .toEqual(['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3-flash', 'gemini-2.5-flash'])
+  })
+
+  it('clusters families rather than comparing versions across vendors', () => {
+    const rows = orderScopeCandidates([
+      model('qwen3.6'),
+      model('glm-4.5'),
+      model('qwen3.9'),
+      model('glm-4.7'),
+    ], () => true)
+    // glm before qwen on family name; newest first inside each.
+    expect(rows.map(row => row.modelId)).toEqual(['glm-4.7', 'glm-4.5', 'qwen3.9', 'qwen3.6'])
+  })
+
+  it('still lets tier and rank outrank the version', () => {
+    const rows = orderScopeCandidates([
+      model('gemini-3.6-flash', { sizeLabel: 'Small' }),
+      model('gemini-2.5-flash', { sizeLabel: 'Frontier' }),
+    ], () => true)
+    expect(rows.map(row => row.modelId)).toEqual(['gemini-2.5-flash', 'gemini-3.6-flash'])
+  })
+})
+
+describe('modelFamilyAndVersion', () => {
+  it('reads the version that follows the family name', () => {
+    expect(modelFamilyAndVersion('gemini-3.5-flash')).toEqual({ family: 'gemini-flash', version: [3, 5] })
+    expect(modelFamilyAndVersion('google/gemini-2.5-flash-lite')).toEqual({ family: 'gemini-flash-lite', version: [2, 5] })
+    expect(modelFamilyAndVersion('glm-4.7-flash')).toEqual({ family: 'glm-flash', version: [4, 7] })
+  })
+
+  it('reads a version glued to the name', () => {
+    expect(modelFamilyAndVersion('qwen/qwen3.6-27b')).toEqual({ family: 'qwen', version: [3, 6] })
+    expect(modelFamilyAndVersion('gpt4')).toEqual({ family: 'gpt', version: [4] })
+  })
+
+  it('never mistakes a parameter count for a version', () => {
+    expect(modelFamilyAndVersion('openai/gpt-oss-120b')).toEqual({ family: 'gpt-oss', version: [] })
+    expect(modelFamilyAndVersion('meta/llama-3.3-70b-instruct'))
+      .toEqual({ family: 'llama-instruct', version: [3, 3] })
+    // `9b` is the parameter count and stays out of it; `v2` really is version 2.
+    expect(modelFamilyAndVersion('nvidia-nemotron-nano-9b-v2'))
+      .toEqual({ family: 'nvidia-nemotron-nano-v', version: [2] })
+    expect(modelFamilyAndVersion('nvidia-nemotron-nano-9b-v3').family)
+      .toBe(modelFamilyAndVersion('nvidia-nemotron-nano-9b-v2').family)
+  })
+
+  it('gives one family to siblings that differ only by version', () => {
+    const a = modelFamilyAndVersion('gemini-3.6-flash')
+    const b = modelFamilyAndVersion('gemini-2.5-flash')
+    expect(a.family).toBe(b.family)
+  })
+
+  it('keeps different vendors in different families', () => {
+    expect(modelFamilyAndVersion('glm-4.5').family).not.toBe(modelFamilyAndVersion('qwen3.6').family)
+  })
+})
+
+describe('enabledModelCount', () => {
+  const rows = [
+    entry('groq', 'a'),
+    entry('groq', 'b'),
+    entry('groq', 'b'), // duplicate id, counted once
+    entry('groq', 'c'),
+    entry('cerebras', 'x'),
+    entry('groq', 'relay', { source: 'custom' }),
+  ]
+  const keyed = (over: Partial<ApiKey>) =>
+    [{ id: 1, platform: 'groq', enabled: true, status: 'healthy', modelScope: null, ...over }] as unknown as ApiKey[]
+
+  it('counts every catalogue model of the platform, once, excluding relays', () => {
+    const access = providerKeyAccess(keyed({})).get('groq')
+    expect(enabledModelCount(rows, 'groq', access)).toEqual({ enabled: 3, total: 3 })
+  })
+
+  it('counts only the scoped models when the key is scoped', () => {
+    const access = providerKeyAccess(keyed({ modelScope: ['a', 'c'] })).get('groq')
+    expect(enabledModelCount(rows, 'groq', access)).toEqual({ enabled: 2, total: 3 })
+  })
+
+  it('reports none enabled when the provider has no key at all', () => {
+    expect(enabledModelCount(rows, 'cerebras', undefined)).toEqual({ enabled: 0, total: 1 })
+  })
+
+  it('still counts an unhealthy key when health is not required', () => {
+    const keys = keyed({ status: 'invalid', modelScope: ['a'] })
+    expect(providerKeyAccess(keys).get('groq')).toBeUndefined()
+    const configured = providerKeyAccess(keys, { requireUsable: false }).get('groq')
+    expect(enabledModelCount(rows, 'groq', configured)).toEqual({ enabled: 1, total: 3 })
+  })
+
+  it('ignores a disabled key under either reading', () => {
+    const keys = keyed({ enabled: false })
+    expect(providerKeyAccess(keys, { requireUsable: false }).get('groq')).toBeUndefined()
   })
 })

@@ -1,6 +1,10 @@
 import type { QuotaObservationView } from './provider-quota.js';
 import { getQuotaStateForKeys } from './provider-quota.js';
 import { parseStoredUtc } from './quota-clock.js';
+import { getDb } from '../db/index.js';
+import { inferQuotaShape, type InferredWindow } from './quota-inference.js';
+import { resolveEffectiveQuotas } from './quota-policy.js';
+import { countPlatformUsageInWindow } from './ratelimit.js';
 
 // Daily free-tier balance forecast (#1104). Free tiers reset on a per-account
 // window (usually UTC midnight) and the only way to know how much headroom is
@@ -112,4 +116,183 @@ export function getQuotaForecast(): QuotaForecastEntry[] {
     if (a.low_balance !== b.low_balance) return a.low_balance ? -1 : 1;
     return a.platform.localeCompare(b.platform);
   });
+}
+
+// ── Provider overview (dashboard) ───────────────────────────────────────────
+// getQuotaForecast() is a WARNING feed: it drops any pool without a numeric
+// limit, because you cannot warn on a number you do not have. Driving a
+// provider-overview panel from it made every provider except Groq disappear —
+// Groq is the only one that reports a parseable limit — which reads as "you
+// have one provider" rather than "we have numbers for one provider".
+//
+// This returns a row for every platform with an enabled key, whether or not we
+// know anything about its quota, so an unmeasured provider is visibly unknown
+// instead of absent.
+
+export interface ProviderQuotaOverviewRow {
+  platform: string;
+  /** Null when we have no pool identity for this platform yet. */
+  pool: string | null;
+  used: number | null;
+  remaining: number | null;
+  limit: number | null;
+  remaining_pct: number | null;
+  reset_at: string | null;
+  seconds_until_reset: number | null;
+  low_balance: boolean;
+  /** Where the numbers came from: 'header', 'error_body', 'probe', or null when
+   *  nothing has ever been observed for this platform. */
+  source: string | null;
+  confidence: number | null;
+  /** False when the provider has never reported a usable limit. The panel shows
+   *  these as Unknown rather than implying a healthy pool. */
+  metered: boolean;
+  /** Who counted the consumption. 'provider' = its own remaining figure.
+   *  'local' = we hold a declared limit and counted our own requests against
+   *  it, which is an estimate and must not be presented as confirmed. */
+  usedSource: 'provider' | 'local' | null;
+  /** What behaviour suggests, for providers that publish nothing. Empty when
+   *  there is no evidence, or when the provider reports its own numbers and
+   *  guessing would add nothing. Never merged into `limit`/`remaining` — an
+   *  estimate of the window is not a measurement of the balance. */
+  inferred: InferredWindowSummary[];
+}
+
+export interface InferredWindowSummary {
+  period: string;
+  method: string;
+  samples: number;
+  confidence: number;
+  note: string;
+}
+
+export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuotaOverviewRow[] {
+  let db;
+  try {
+    db = getDb();
+  } catch {
+    return [];
+  }
+
+  const platforms = (db.prepare(
+    'SELECT DISTINCT platform FROM api_keys WHERE enabled = 1 ORDER BY platform',
+  ).all() as { platform: string }[]).map(r => r.platform);
+
+  const measured = getQuotaForecast();
+  const states = getQuotaStateForKeys();
+  const rows: ProviderQuotaOverviewRow[] = [];
+
+  for (const platform of platforms) {
+    // 1. Pools the PROVIDER reported on. Its own remaining figure beats any
+    //    local count, so these are taken as-is.
+    const reported = measured.filter(m => m.platform === platform);
+    for (const pool of reported) {
+      const state = states.find(s => s.platform === platform && s.quotaPoolKey === pool.pool);
+      rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true, usedSource: 'provider', inferred: [] });
+    }
+
+    // 2. Limits we KNOW but the provider never reports — an env cap, a catalog
+    //    figure, an operator policy. Previously these read as Unknown despite
+    //    the limit being in hand: nothing was counting local usage against it.
+    //    Only request-metric axes; token windows are not reliably comparable
+    //    to the request counters.
+    const seenAxes = new Set(reported.map(r => r.pool));
+    for (const quota of resolveEffectiveQuotas(platform, null, now)) {
+      if (quota.metric !== 'requests') continue;
+      if (quota.source === 'provider_header' || quota.source === 'provider_api') continue;
+      const poolLabel = `${platform}::${quota.period.kind === 'rolling' ? `rolling-${Math.round(quota.period.windowMs / 1000)}s` : quota.period.kind}`;
+      if (seenAxes.has(poolLabel)) continue;
+      seenAxes.add(poolLabel);
+
+      const windowMs = quota.window.periodStartMs == null
+        ? (quota.period.kind === 'rolling' ? quota.period.windowMs : null)
+        : Math.max(1, now - quota.window.periodStartMs);
+      if (windowMs == null) continue;
+
+      const used = countPlatformUsageInWindow(platform, 'request', windowMs, now);
+      const remaining = Math.max(0, quota.limit - used);
+      const secondsUntilReset = quota.window.resetAtMs == null
+        ? null
+        : Math.max(0, Math.floor((quota.window.resetAtMs - now) / 1000));
+      const remainingPct = Math.max(0, Math.min(100, Math.round((remaining / quota.limit) * 100)));
+
+      rows.push({
+        platform,
+        pool: poolLabel,
+        used,
+        remaining,
+        limit: quota.limit,
+        remaining_pct: remainingPct,
+        reset_at: quota.window.resetAtMs == null ? null : new Date(quota.window.resetAtMs).toISOString(),
+        seconds_until_reset: secondsUntilReset,
+        low_balance: remaining / quota.limit < LOW_BALANCE_THRESHOLD,
+        source: quota.source,
+        confidence: quota.confidence,
+        metered: true,
+        // The limit is declared; the consumption is ours. Marked so the panel
+        // never implies the provider confirmed this number.
+        usedSource: 'local',
+        inferred: [],
+      });
+    }
+
+    // 3. Nothing measurable at all. Report the strongest observation we have,
+    //    so the row says "we called it and learned nothing" instead of vanishing.
+    if (!rows.some(r => r.platform === platform)) {
+      const seen = states.filter(s => s.platform === platform);
+      const best = seen.find(s => s.source === 'header') ?? seen.find(s => s.source === 'error_body') ?? seen[0];
+      rows.push({
+        platform,
+        pool: best?.quotaPoolKey ?? null,
+        used: null, remaining: null, limit: null, remaining_pct: null,
+        reset_at: null, seconds_until_reset: null, low_balance: false,
+        source: best?.source ?? null,
+        confidence: best?.confidence ?? null,
+        metered: false,
+        usedSource: null,
+        inferred: [],
+      });
+    }
+  }
+
+  // Behavioural inference, only where it adds something. A provider reporting
+  // its own remaining figure needs no estimate, and running this for every
+  // platform would scan the request history on every dashboard poll.
+  for (const row of rows) {
+    if (row.metered && row.usedSource === 'provider') continue;
+    row.inferred = inferredWindowsFor(row.platform, now).map(w => ({
+      period: w.period,
+      method: w.method,
+      samples: w.samples,
+      confidence: w.confidence,
+      note: w.note,
+    }));
+  }
+
+  // Measured pools first, then unknowns — the rows a reader can act on lead.
+  return rows.sort((a, b) => (Number(b.metered) - Number(a.metered)) || a.platform.localeCompare(b.platform));
+}
+
+/** Inference reads the whole request history for a platform, and the dashboard
+ *  polls. A minute of staleness is invisible in an estimate whose own window is
+ *  measured in factors. */
+const INFERENCE_TTL_MS = 60_000;
+const inferenceCache = new Map<string, { at: number; windows: InferredWindow[] }>();
+
+function inferredWindowsFor(platform: string, now: number): InferredWindow[] {
+  const hit = inferenceCache.get(platform);
+  if (hit && now - hit.at < INFERENCE_TTL_MS) return hit.windows;
+  let windows: InferredWindow[] = [];
+  try {
+    windows = inferQuotaShape(platform).windows;
+  } catch {
+    windows = [];
+  }
+  inferenceCache.set(platform, { at: now, windows });
+  return windows;
+}
+
+/** Test seam: drop the memoised inferences. */
+export function invalidateQuotaInference(): void {
+  inferenceCache.clear();
 }

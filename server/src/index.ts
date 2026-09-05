@@ -6,6 +6,7 @@ import { restoreProxySettings, flushProxyCache } from './lib/proxy.js';
 import { startWakeDetect } from './lib/wake-detect.js';
 import { startCatalogSync } from './services/catalog-sync.js';
 import { startCooldownProbe } from './services/cooldown-probe.js';
+import { startBurnRecoveryPoller } from './services/quota-burn.js';
 import { startCustomModelSync } from './services/custom-model-sync.js';
 import { installProcessSafetyNet } from './lib/process-safety-net.js';
 import { NodeScheduler } from './lib/scheduler.js';
@@ -82,6 +83,7 @@ async function main() {
     startHealthChecker(scheduler);
     startCatalogSync(scheduler);
     startCooldownProbe(scheduler);
+    startBurnRecoveryPoller(scheduler);
     startDbBackupPump(getDb(), scheduler, config.dbPath ?? undefined);
     startBackupScheduler(scheduler);
     startCustomModelSync(getDb(), scheduler);
