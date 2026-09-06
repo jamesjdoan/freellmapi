@@ -39,6 +39,7 @@ interface ProviderOverviewRow extends QuotaForecastEntry {
   inferred: InferredWindow[];
   metric: string | null;
   unit: string | null;
+  derivedAllowance: { metric: string; limit: number; low: number; high: number; samples: number } | null;
 }
 
 interface QuotaForecastEntry {
@@ -102,6 +103,15 @@ function formatAmount(value: number | null, unit: string | null): string {
   if (value == null) return '—';
   if (unit === 'cents') return `$${(value / 100).toFixed(2)}`;
   if (unit === 'per_10k') return `${(value / 100).toFixed(1)}%`;
+  return String(value);
+}
+
+/** 25087353 -> "25.1M". An allowance carrying a ±20% error bar does not want
+ *  eight significant figures. */
+function formatCompact(value: number): string {
+  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
   return String(value);
 }
 
@@ -264,7 +274,24 @@ export default function QuotaPage() {
                     </TableCell>
                     <TableCell className="text-right">{formatAmount(p.used, p.unit)}</TableCell>
                     <TableCell className="text-right">{formatAmount(p.remaining, p.unit)}</TableCell>
-                    <TableCell className="text-right">{formatAmount(p.limit, p.unit)}</TableCell>
+                    {/* For a pool the provider reports only as a fraction, the
+                        stored limit is a synthetic scale — showing "100.0%" as
+                        a ceiling states nothing. The derived allowance is a
+                        real figure when we have one, and a dash is honest when
+                        we do not. */}
+                    <TableCell className="text-right">
+                      {p.unit === 'per_10k'
+                        ? p.derivedAllowance
+                          ? <span title={t('quota.derivedAllowanceHint', {
+                              low: formatCompact(p.derivedAllowance.low),
+                              high: formatCompact(p.derivedAllowance.high),
+                              samples: p.derivedAllowance.samples,
+                            })}>
+                              ~{formatCompact(p.derivedAllowance.limit)} {t(`quota.metric_${p.derivedAllowance.metric}`)}
+                            </span>
+                          : '—'
+                        : formatAmount(p.limit, p.unit)}
+                    </TableCell>
                     <TableCell className="text-right">{formatCountdown(p.seconds_until_reset)}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {p.inferred.length === 0 ? '—' : p.inferred.map(w => (

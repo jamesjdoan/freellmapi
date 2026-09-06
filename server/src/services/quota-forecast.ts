@@ -2,7 +2,7 @@ import type { QuotaObservationView } from './provider-quota.js';
 import { getQuotaStateForKeys } from './provider-quota.js';
 import { parseStoredUtc } from './quota-clock.js';
 import { getDb } from '../db/index.js';
-import { inferQuotaShape, type InferredWindow } from './quota-inference.js';
+import { inferQuotaShape, inferAllowanceFromFraction, type InferredWindow, type InferredAllowance } from './quota-inference.js';
 import { resolveEffectiveQuotas } from './quota-policy.js';
 import { countPlatformUsageInWindow } from './ratelimit.js';
 
@@ -161,6 +161,13 @@ export interface ProviderQuotaOverviewRow {
   metric: string | null;
   /** Denomination of the numbers: 'cents', 'per_10k', or null for a count. */
   unit: string | null;
+  /**
+   * What the allowance actually holds, for a pool the provider only reports as
+   * a fraction. Derived by dividing our own measured usage by the fraction it
+   * consumed, so the 'limit' column has something real to show instead of the
+   * synthetic 100%. Null until three usable intervals exist.
+   */
+  derivedAllowance: InferredAllowance | null;
   /** What behaviour suggests, for providers that publish nothing. Empty when
    *  there is no evidence, or when the provider reports its own numbers and
    *  guessing would add nothing. Never merged into `limit`/`remaining` — an
@@ -199,7 +206,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
     const seenMeasured = new Set<string>(reported.map(r => r.pool ?? ''));
     for (const pool of reported) {
       const state = states.find(s => s.platform === platform && s.quotaPoolKey === pool.pool);
-      rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true, usedSource: 'provider', inferred: [], metric: 'requests', unit: null });
+      rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true, usedSource: 'provider', inferred: [], metric: 'requests', unit: null, derivedAllowance: null });
     }
 
     // 1b. Pools the provider measured in some OTHER unit — Ollama Cloud reports
@@ -232,6 +239,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         inferred: [],
         metric: state.metric,
         unit: state.unit ?? null,
+        derivedAllowance: state.unit === 'per_10k' ? allowanceFor(platform, state.quotaPoolKey, now) : null,
       });
     }
 
@@ -279,6 +287,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         inferred: [],
         metric: quota.metric,
         unit: null,
+        derivedAllowance: null,
       });
     }
 
@@ -299,6 +308,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         inferred: [],
         metric: null,
         unit: null,
+        derivedAllowance: null,
       });
     }
   }
@@ -343,4 +353,33 @@ function inferredWindowsFor(platform: string, now: number): InferredWindow[] {
 /** Test seam: drop the memoised inferences. */
 export function invalidateQuotaInference(): void {
   inferenceCache.clear();
+}
+
+/** Deriving an allowance walks the observation series and counts request rows,
+ *  and the dashboard polls. A minute of staleness is invisible in a figure
+ *  whose own error bar is tens of percent. */
+const ALLOWANCE_TTL_MS = 60_000;
+const allowanceCache = new Map<string, { at: number; value: InferredAllowance | null }>();
+
+function allowanceFor(platform: string, quotaPoolKey: string, now: number): InferredAllowance | null {
+  const cacheKey = `${platform}:${quotaPoolKey}`;
+  const hit = allowanceCache.get(cacheKey);
+  if (hit && now - hit.at < ALLOWANCE_TTL_MS) return hit.value;
+  let value: InferredAllowance | null = null;
+  try {
+    const all = inferAllowanceFromFraction(platform, quotaPoolKey);
+    // Tokens over requests: Ollama meters GPU time, so a request count depends
+    // entirely on how big the requests were, while tokens at least track the
+    // work done.
+    value = all.find(a => a.metric === 'total_tokens') ?? all[0] ?? null;
+  } catch {
+    value = null;
+  }
+  allowanceCache.set(cacheKey, { at: now, value });
+  return value;
+}
+
+/** Test seam: drop the memoised allowance derivations. */
+export function invalidateDerivedAllowances(): void {
+  allowanceCache.clear();
 }

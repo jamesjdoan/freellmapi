@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initDb, getDb } from '../../db/index.js';
-import { inferWindowFromRefill, inferWindowFromResets, inferWindowsFromRecovery, inferQuotaShape } from '../../services/quota-inference.js';
+import { inferAllowanceFromFraction, inferWindowFromRefill, inferWindowFromResets, inferWindowsFromRecovery, inferQuotaShape } from '../../services/quota-inference.js';
 
 // These tests encode the two behavioural estimators against series whose true
 // window is known by construction, plus the cases where the honest answer is
@@ -243,5 +243,128 @@ describe('reset interval', () => {
     expect(shape).toBeDefined();
     // The rate estimator would have called this sub-hourly off the jump size.
     expect(shape!.impliedSeconds).toBeGreaterThan(3 * 3600);
+  });
+});
+
+/**
+ * Ollama Cloud says what FRACTION of an allowance is left and never says how
+ * big it is. But we know what we spent between two readings, so the size
+ * follows: consume f of the pool with t tokens and the pool holds t/f tokens.
+ *
+ * Measured on real traffic: a median of 25.1M tokens per session window across
+ * five intervals, spread 18.7M-27.7M.
+ */
+describe('deriving an allowance from a reported fraction', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare('DELETE FROM provider_quota_observations').run();
+    getDb().prepare('DELETE FROM requests').run();
+  });
+
+  function seedFractionSeries(steps: { minute: number; remaining: number }[]): void {
+    const insert = getDb().prepare(`
+      INSERT INTO provider_quota_observations
+        (id, platform, key_id, quota_pool_key, metric, unit, limit_value, remaining_value, source, confidence, observed_at)
+      VALUES (?, 'ollama', 1, 'ollama::session', 'credits', 'per_10k', 10000, ?, 'quota_api', 0.9, ?)
+    `);
+    const base = Date.UTC(2026, 0, 20);
+    steps.forEach((s, i) => insert.run(`f-${i}`, s.remaining, isoAt(base + s.minute * 60_000)));
+  }
+
+  function seedRequest(minute: number, tokens: number, status: 'success' | 'error' = 'success'): void {
+    getDb().prepare(`
+      INSERT INTO requests (platform, model_id, status, input_tokens, output_tokens, latency_ms, error, created_at)
+      VALUES ('ollama', 'm', ?, ?, 0, 10, ?, ?)
+    `).run(status, tokens, status === 'error' ? 'empty completion' : null,
+      isoAt(Date.UTC(2026, 0, 20) + minute * 60_000));
+  }
+
+  it('divides measured usage by the fraction it consumed', () => {
+    // 1% of the pool per 250k tokens implies a 25M-token allowance.
+    seedFractionSeries([
+      { minute: 0, remaining: 10_000 },
+      { minute: 10, remaining: 9_900 },
+      { minute: 20, remaining: 9_800 },
+      { minute: 30, remaining: 9_700 },
+    ]);
+    [5, 15, 25].forEach(m => seedRequest(m, 250_000));
+
+    const tokens = inferAllowanceFromFraction('ollama', 'ollama::session')
+      .find(a => a.metric === 'total_tokens');
+    expect(tokens).toBeDefined();
+    expect(tokens!.limit).toBe(25_000_000);
+    expect(tokens!.samples).toBe(3);
+  });
+
+  it('counts failed requests, because the provider did', () => {
+    // Ten calls returning "stream produced no content" still sent ~215k input
+    // tokens each and the fraction dropped for every one. Counting successes
+    // only would inflate the implied allowance without bound.
+    seedFractionSeries([
+      { minute: 0, remaining: 10_000 },
+      { minute: 10, remaining: 9_900 },
+      { minute: 20, remaining: 9_800 },
+      { minute: 30, remaining: 9_700 },
+    ]);
+    [5, 15, 25].forEach(m => seedRequest(m, 250_000, 'error'));
+
+    expect(inferAllowanceFromFraction('ollama', 'ollama::session')
+      .find(a => a.metric === 'total_tokens')!.limit).toBe(25_000_000);
+  });
+
+  it('reports the spread, not just the middle', () => {
+    seedFractionSeries([
+      { minute: 0, remaining: 10_000 },
+      { minute: 10, remaining: 9_900 },
+      { minute: 20, remaining: 9_800 },
+      { minute: 30, remaining: 9_700 },
+    ]);
+    seedRequest(5, 200_000);
+    seedRequest(15, 250_000);
+    seedRequest(25, 300_000);
+    const tokens = inferAllowanceFromFraction('ollama', 'ollama::session')
+      .find(a => a.metric === 'total_tokens')!;
+    // An allowance derived this way carries a real error bar and must show it.
+    expect(tokens.low).toBe(20_000_000);
+    expect(tokens.high).toBe(30_000_000);
+    expect(tokens.limit).toBe(25_000_000);
+  });
+
+  it('ignores intervals where the pool went up or held still', () => {
+    // A rise is a reset and a flat reading says nothing about size; neither is
+    // a measurement of the allowance.
+    seedFractionSeries([
+      { minute: 0, remaining: 5_000 },
+      { minute: 10, remaining: 10_000 },   // reset
+      { minute: 20, remaining: 10_000 },   // idle
+    ]);
+    [5, 15].forEach(m => seedRequest(m, 250_000));
+    expect(inferAllowanceFromFraction('ollama', 'ollama::session')).toEqual([]);
+  });
+
+  it('declines below three intervals rather than reporting a pair', () => {
+    seedFractionSeries([
+      { minute: 0, remaining: 10_000 },
+      { minute: 10, remaining: 9_900 },
+      { minute: 20, remaining: 9_800 },
+    ]);
+    [5, 15].forEach(m => seedRequest(m, 250_000));
+    expect(inferAllowanceFromFraction('ollama', 'ollama::session')).toEqual([]);
+  });
+
+  it('excludes burn-test traffic, which spends on purpose', () => {
+    seedFractionSeries([
+      { minute: 0, remaining: 10_000 },
+      { minute: 10, remaining: 9_900 },
+      { minute: 20, remaining: 9_800 },
+      { minute: 30, remaining: 9_700 },
+    ]);
+    const insert = getDb().prepare(`
+      INSERT INTO requests (platform, model_id, status, input_tokens, output_tokens, latency_ms, request_type, created_at)
+      VALUES ('ollama', 'm', 'success', 250000, 0, 10, 'burn_test', ?)
+    `);
+    [5, 15, 25].forEach(m => insert.run(isoAt(Date.UTC(2026, 0, 20) + m * 60_000)));
+    expect(inferAllowanceFromFraction('ollama', 'ollama::session')).toEqual([]);
   });
 });
