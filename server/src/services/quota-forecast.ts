@@ -2,7 +2,7 @@ import type { QuotaObservationView } from './provider-quota.js';
 import { getQuotaStateForKeys } from './provider-quota.js';
 import { parseStoredUtc } from './quota-clock.js';
 import { getDb } from '../db/index.js';
-import { inferQuotaShape, inferAllowanceFromFraction, type InferredWindow, type InferredAllowance } from './quota-inference.js';
+import { inferQuotaShape, inferAllowanceFromFraction, inferWindowFromResets, type InferredWindow, type InferredAllowance } from './quota-inference.js';
 import { resolveEffectiveQuotas } from './quota-policy.js';
 import { countPlatformUsageInWindow } from './ratelimit.js';
 
@@ -168,6 +168,13 @@ export interface ProviderQuotaOverviewRow {
    * synthetic 100%. Null until three usable intervals exist.
    */
   derivedAllowance: InferredAllowance | null;
+  /**
+   * Where `seconds_until_reset` came from. 'provider' is a reset the provider
+   * sent; 'inferred' is predicted from observed reset boundaries, which is the
+   * only countdown available for a pool whose 429 carries no reset time and
+   * whose retry-after header is empty.
+   */
+  resetSource: 'provider' | 'inferred' | null;
   /** What behaviour suggests, for providers that publish nothing. Empty when
    *  there is no evidence, or when the provider reports its own numbers and
    *  guessing would add nothing. Never merged into `limit`/`remaining` — an
@@ -206,7 +213,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
     const seenMeasured = new Set<string>(reported.map(r => r.pool ?? ''));
     for (const pool of reported) {
       const state = states.find(s => s.platform === platform && s.quotaPoolKey === pool.pool);
-      rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true, usedSource: 'provider', inferred: [], metric: 'requests', unit: null, derivedAllowance: null });
+      rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true, usedSource: 'provider', inferred: [], metric: 'requests', unit: null, derivedAllowance: null, resetSource: pool.reset_at ? 'provider' : null });
     }
 
     // 1b. Pools the provider measured in some OTHER unit — Ollama Cloud reports
@@ -221,6 +228,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
       if (state.source !== 'quota_api' && state.source !== 'header') continue;
       if (seenMeasured.has(state.quotaPoolKey)) continue;
       seenMeasured.add(state.quotaPoolKey);
+      const predicted = predictedResetFor(platform, state.quotaPoolKey, state.metric, now);
       const remainingPct = Math.max(0, Math.min(100, Math.round((state.remaining / state.limit) * 100)));
       rows.push({
         platform,
@@ -229,8 +237,12 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         remaining: state.remaining,
         limit: state.limit,
         remaining_pct: remainingPct,
-        reset_at: state.resetAt ?? null,
-        seconds_until_reset: null,
+        reset_at: state.resetAt ?? (predicted == null ? null : new Date(predicted).toISOString()),
+        // A predicted countdown, when the provider sends none. Marked via
+        // resetSource so it is never mistaken for the provider's own.
+        seconds_until_reset: state.resetAt != null || predicted == null
+          ? null
+          : Math.max(0, Math.floor((predicted - now) / 1000)),
         low_balance: state.remaining / state.limit < LOW_BALANCE_THRESHOLD,
         source: state.source,
         confidence: state.confidence ?? null,
@@ -240,6 +252,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         metric: state.metric,
         unit: state.unit ?? null,
         derivedAllowance: state.unit === 'per_10k' ? allowanceFor(platform, state.quotaPoolKey, now) : null,
+        resetSource: state.resetAt ? 'provider' : (predicted == null ? null : 'inferred'),
       });
     }
 
@@ -288,6 +301,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         metric: quota.metric,
         unit: null,
         derivedAllowance: null,
+        resetSource: quota.window.resetAtMs == null ? null : 'provider',
       });
     }
 
@@ -309,6 +323,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         metric: null,
         unit: null,
         derivedAllowance: null,
+        resetSource: null,
       });
     }
   }
@@ -385,4 +400,28 @@ function allowanceFor(platform: string, quotaPoolKey: string, now: number): Infe
 /** Test seam: drop the memoised allowance derivations. */
 export function invalidateDerivedAllowances(): void {
   allowanceCache.clear();
+}
+
+/** The next reset predicted from observed boundaries, memoised like the rest —
+ *  it walks an observation series and the dashboard polls. */
+const RESET_TTL_MS = 60_000;
+const predictedResetCache = new Map<string, { at: number; value: number | null }>();
+
+function predictedResetFor(platform: string, quotaPoolKey: string, metric: string, now: number): number | null {
+  const cacheKey = `${platform}:${quotaPoolKey}:${metric}`;
+  const hit = predictedResetCache.get(cacheKey);
+  if (hit && now - hit.at < RESET_TTL_MS) return hit.value;
+  let value: number | null = null;
+  try {
+    value = inferWindowFromResets(platform, quotaPoolKey, metric)?.nextResetAtMs ?? null;
+  } catch {
+    value = null;
+  }
+  predictedResetCache.set(cacheKey, { at: now, value });
+  return value;
+}
+
+/** Test seam: drop the memoised reset predictions. */
+export function invalidatePredictedResets(): void {
+  predictedResetCache.clear();
 }

@@ -457,3 +457,75 @@ describe('pricing the derived allowance', () => {
       .some(a => a.metric === 'credit_usd')).toBe(false);
   });
 });
+
+/**
+ * Two observed resets give a period AND a phase, so the next one follows.
+ * Ollama's session resets landed at 07:02:23 and 12:02:49 UTC — 5.01h apart,
+ * both at two minutes past — which is a countdown the provider itself never
+ * sends: its 429 carries no reset time and its retry-after header is empty.
+ */
+describe('predicting the next reset', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare('DELETE FROM provider_quota_observations').run();
+  });
+
+  /** Consumption then a step back to full, `everyMs` apart, ending `agoMs` ago. */
+  function seedResets(everyMs: number, cycles: number, agoMs: number): void {
+    const insert = getDb().prepare(`
+      INSERT INTO provider_quota_observations
+        (id, platform, key_id, quota_pool_key, metric, limit_value, remaining_value, source, confidence, observed_at)
+      VALUES (?, 'ollama', 1, 'ollama::session', 'credits', 10000, ?, 'quota_api', 0.9, ?)
+    `);
+    const lastReset = Date.now() - agoMs;
+    let n = 0;
+    for (let c = cycles - 1; c >= 0; c--) {
+      const resetAt = lastReset - c * everyMs;
+      insert.run(`x${n++}`, 2_000, isoAt(resetAt - everyMs * 0.2));  // spent
+      insert.run(`x${n++}`, 10_000, isoAt(resetAt));                 // reset
+    }
+  }
+
+  it('predicts a reset one period after the last observed boundary', () => {
+    // Last reset an hour ago on a 5h window: the next is 4h out.
+    seedResets(5 * 3_600_000, 3, 3_600_000);
+    const inferred = inferWindowFromResets('ollama', 'ollama::session', 'credits')!;
+    const minutesAway = (inferred.nextResetAtMs! - Date.now()) / 60_000;
+    expect(minutesAway).toBeGreaterThan(230);
+    expect(minutesAway).toBeLessThan(250);
+  });
+
+  it('rolls forward past boundaries that have already gone by', () => {
+    // Last observed reset was 12h ago on a 5h window — two have passed since,
+    // so the prediction must be the NEXT one, not a time in the past.
+    seedResets(5 * 3_600_000, 3, 12 * 3_600_000);
+    const inferred = inferWindowFromResets('ollama', 'ollama::session', 'credits')!;
+    expect(inferred.nextResetAtMs!).toBeGreaterThan(Date.now());
+    expect((inferred.nextResetAtMs! - Date.now()) / 3_600_000).toBeLessThan(5);
+  });
+
+  it('offers no prediction from a single boundary', () => {
+    // One boundary is a phase with no period; nothing to add to it.
+    seedResets(5 * 3_600_000, 1, 3_600_000);
+    expect(inferWindowFromResets('ollama', 'ollama::session', 'credits')).toBeNull();
+  });
+
+  it('says nothing about a reset when it only inferred a rate', () => {
+    // inferWindowFromRefill can size a window without ever seeing one end.
+    const insert = getDb().prepare(`
+      INSERT INTO provider_quota_observations
+        (id, platform, key_id, quota_pool_key, metric, limit_value, remaining_value, source, confidence, observed_at)
+      VALUES (?, 'groq', 1, 'groq::m', 'tokens', 8000, ?, 'header', 1, ?)
+    `);
+    const start = Date.UTC(2026, 0, 1);
+    // Enough alternations to clear the estimator's five-gain minimum; a
+    // continuously refilling bucket never steps back to full, so no boundary
+    // is ever observed.
+    [6000, 5000, 6200, 5200, 6400, 5400, 6600, 5600, 6800, 5800, 7000, 6000]
+      .forEach((remaining, i) => insert.run(`g${i}`, remaining, isoAt(start + i * 20_000)));
+    const inferred = inferWindowFromRefill('groq', 'groq::m', 'tokens');
+    expect(inferred).not.toBeNull();
+    expect(inferred!.nextResetAtMs ?? null).toBeNull();
+  });
+});

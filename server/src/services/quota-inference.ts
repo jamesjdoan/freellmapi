@@ -41,6 +41,19 @@ export interface InferredWindow {
   /** Deliberately capped well below anything stated. These are inferences. */
   confidence: number;
   note: string;
+  /**
+   * When the window is predicted to turn over next, for an estimator that
+   * measured actual boundaries rather than a rate.
+   *
+   * Two observed resets give a period AND a phase, so the next one follows.
+   * Ollama's session resets landed at 07:02:23 and 12:02:49 UTC - 5.01h apart,
+   * both at two minutes past - which is a countdown the provider itself never
+   * sends: its 429 carries no reset time and its retry-after header is empty.
+   *
+   * Null for the rate-based estimators, which can size a window without ever
+   * seeing one end.
+   */
+  nextResetAtMs?: number | null;
 }
 
 /** How far a measurement may sit from a standard window and still be called it.
@@ -211,11 +224,19 @@ export function inferWindowFromResets(
   if (!(median > 0)) return null;
 
   const classified = classifyMeasuredWindow(median);
+  // Phase, from the most recent boundary. Each boundary is only known to
+  // within the polling gap, so the prediction inherits that error - which is
+  // minutes against a five-hour window.
+  const lastReset = resetAt[resetAt.length - 1]!;
+  let nextReset = lastReset + median * 1000;
+  const now = Date.now();
+  while (nextReset <= now) nextReset += median * 1000;
   return {
     ...classified,
     impliedSeconds: median,
     method: 'reset_interval',
     samples: intervals.length,
+    nextResetAtMs: nextReset,
     // A timed boundary is direct evidence, unlike a rate extrapolated from
     // consumption — so it earns the top of the inference band.
     confidence: confidenceFor(intervals.length, 0.3),
