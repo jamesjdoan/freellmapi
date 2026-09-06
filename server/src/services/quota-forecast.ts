@@ -159,6 +159,8 @@ export interface ProviderQuotaOverviewRow {
    * questions.
    */
   metric: string | null;
+  /** Denomination of the numbers: 'cents', 'per_10k', or null for a count. */
+  unit: string | null;
   /** What behaviour suggests, for providers that publish nothing. Empty when
    *  there is no evidence, or when the provider reports its own numbers and
    *  guessing would add nothing. Never merged into `limit`/`remaining` — an
@@ -197,7 +199,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
     const seenMeasured = new Set<string>(reported.map(r => r.pool ?? ''));
     for (const pool of reported) {
       const state = states.find(s => s.platform === platform && s.quotaPoolKey === pool.pool);
-      rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true, usedSource: 'provider', inferred: [], metric: 'requests' });
+      rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true, usedSource: 'provider', inferred: [], metric: 'requests', unit: null });
     }
 
     // 1b. Pools the provider measured in some OTHER unit — Ollama Cloud reports
@@ -229,6 +231,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         usedSource: 'provider',
         inferred: [],
         metric: state.metric,
+        unit: state.unit ?? null,
       });
     }
 
@@ -275,6 +278,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         usedSource: 'local',
         inferred: [],
         metric: quota.metric,
+        unit: null,
       });
     }
 
@@ -294,6 +298,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         usedSource: null,
         inferred: [],
         metric: null,
+        unit: null,
       });
     }
   }
