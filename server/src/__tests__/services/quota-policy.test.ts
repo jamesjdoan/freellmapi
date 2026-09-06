@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { invalidateShadowCounts } from '../../services/ratelimit.js';
+
+
 import { initDb, getDb } from '../../db/index.js';
 import {
   listQuotaPolicies,
@@ -6,6 +9,7 @@ import {
   deleteQuotaPolicy,
   resolveEffectiveQuotas,
   conservativeMonthlyBudget,
+  invalidateSharedPoolCache,
   periodForPolicy,
   type EffectiveQuota,
 } from '../../services/quota-policy.js';
@@ -350,5 +354,97 @@ describe('documented monthly token pools', () => {
     expect(monthly!.limit).toBe(10_000_000);
     // A range is not a measurement, and must never outrank one.
     expect(monthly!.confidence).toBeLessThan(0.4);
+  });
+});
+
+/**
+ * Ollama Cloud bills ONE dollar balance at per-model token rates
+ * (ollama.com/pricing), so the catalogue's six per-model budgets are six
+ * descriptions of one allowance, not six allowances. Cross-checking those
+ * ranges against the published rates puts them all at roughly $3-5 of starter
+ * credit, which is what makes them the same pool.
+ *
+ * Tokens are not additive across models priced differently — 1M
+ * nemotron-3-ultra tokens cost about eight times 1M gpt-oss:20b tokens — so
+ * the only correct reduction is the sum of per-model fractions.
+ */
+describe('a credit pool shared across models', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    // 'testpool' has no seeded catalogue rows, so nothing FK-bound to unpick —
+    // deleting seeded models violates fallback_config and profile_models.
+    getDb().prepare('DELETE FROM rate_limit_usage').run();
+    invalidateSharedPoolCache();
+    invalidateShadowCounts();
+  });
+
+  function seedModel(modelId: string, budget: string): void {
+    getDb().prepare(`
+      INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, monthly_token_budget, enabled)
+      VALUES ('testpool', ?, ?, 50, 50, ?, 1)
+    `).run(modelId, modelId, budget);
+  }
+
+  function spendTokens(modelId: string, tokens: number): void {
+    getDb().prepare(`
+      INSERT INTO rate_limit_usage (platform, model_id, key_id, kind, tokens, created_at_ms, created_at)
+      VALUES ('testpool', ?, 1, 'tokens', ?, ?, datetime('now'))
+    `).run(modelId, tokens, Date.now());
+    invalidateSharedPoolCache();
+    invalidateShadowCounts();
+  }
+
+  // The monthly quota carries the POOL's consumption, expressed in this
+  // model's tokens — one allowance, several descriptions of it.
+  const poolOf = (modelId: string) => resolveEffectiveQuotas('testpool', modelId, Date.now())
+    .find(q => q.metric === 'total_tokens' && q.period.kind === 'calendar_month');
+
+  it('charges one model’s spend against the pool every model draws on', () => {
+    seedModel('cheap-model', '~20-30M');   // 20M low end
+    seedModel('dear-model', '~5-10M');     //  5M low end
+    // Half of the cheap model's budget is half the pool.
+    spendTokens('cheap-model', 10_000_000);
+
+    const pool = poolOf('dear-model');
+    expect(pool).toBeDefined();
+    // The dear model has spent nothing itself, yet only half the pool is left —
+    // which is the whole point.
+    expect(pool!.derivedUsed! / pool!.limit).toBeCloseTo(0.5, 2);
+  });
+
+  it('sums fractions rather than raw tokens', () => {
+    seedModel('cheap-model', '~20-30M');
+    seedModel('dear-model', '~5-10M');
+    spendTokens('cheap-model', 5_000_000);   // 0.25 of the pool
+    spendTokens('dear-model', 1_000_000);    // 0.20 of the pool
+    // Raw tokens would say 6M of 25M = 24%. Fractions say 45%, and the dear
+    // model's tokens are the expensive ones.
+    const cheap = poolOf('cheap-model')!;
+    expect(cheap.derivedUsed! / cheap.limit).toBeCloseTo(0.45, 2);
+  });
+
+  it('never reports more than the pool as spent', () => {
+    seedModel('cheap-model', '~20-30M');
+    seedModel('dear-model', '~5-10M');
+    spendTokens('cheap-model', 40_000_000);
+    spendTokens('dear-model', 40_000_000);
+    const capped = poolOf('cheap-model')!;
+    expect(capped.derivedUsed).toBe(capped.limit);
+  });
+
+  it('leaves a single budgeted model to the ordinary counter', () => {
+    // One model is not a pool worth reducing: derivedUsed stays null and the
+    // generic per-model count applies, which says the same thing.
+    seedModel('only-model', '~10-20M');
+    const quota = poolOf('only-model');
+    expect(quota).toBeDefined();
+    expect(quota!.derivedUsed).toBeNull();
+  });
+
+  it('produces no monthly quota when no model documents a budget', () => {
+    seedModel('a', '');
+    seedModel('b', '');
+    expect(poolOf('a')).toBeUndefined();
   });
 });

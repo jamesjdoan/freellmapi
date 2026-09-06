@@ -5,6 +5,7 @@ import {
   getProviderDailyRequestCap,
   getProviderMinuteRequestCap,
   getProviderDailyTokenCap,
+  countTokensInWindow,
 } from './ratelimit.js';
 import {
   resolveQuotaWindow,
@@ -94,6 +95,18 @@ export interface EffectiveQuota {
    * "usage counted since period start".
    */
   reportedRemaining: number | null;
+  /**
+   * Consumption this policy worked out itself, because no single counter can
+   * express it. Distinct from reportedRemaining, which is only ever what the
+   * provider measured.
+   *
+   * Needed for a pool shared across models priced differently: Ollama Cloud
+   * bills one dollar balance at per-model token rates, so tokens are not
+   * additive across models — 1M nemotron-3-ultra tokens cost about eight times
+   * 1M gpt-oss:20b tokens. Summing raw tokens would understate the spend and
+   * summing per-model fractions is the only correct reduction.
+   */
+  derivedUsed: number | null;
   period: QuotaPeriod;
   window: QuotaWindow;
   source: EffectiveQuotaSource;
@@ -313,6 +326,54 @@ function policySpecificity(policy: QuotaPolicy): number {
  * Infinity - an unbounded limit makes headroom meaningless (always 100%), which
  * is worse than having no opinion.
  */
+const POOL_TTL_MS = 5_000;
+const poolFractionCache = new Map<string, { at: number; fraction: number | null }>();
+
+/**
+ * How much of a platform's shared credit pool has been spent, as a fraction.
+ *
+ * Each model's documented budget answers "how many tokens of THIS model would
+ * the whole pool buy". So spending t tokens on model k consumes t/budget_k of
+ * the pool, and the pool's total consumption is the sum of those fractions.
+ * That reduction is what makes tokens comparable across models the provider
+ * prices differently.
+ *
+ * Without it every model reports its own budget independently: spend the entire
+ * pool on one model and the other five still read full.
+ */
+function sharedPoolFractionUsed(platform: string, windowMs: number, now: number): number | null {
+  const cacheKey = `${platform}:${windowMs}`;
+  const hit = poolFractionCache.get(cacheKey);
+  if (hit && now - hit.at < POOL_TTL_MS) return hit.fraction;
+
+  let fraction: number | null = null;
+  try {
+    const siblings = getDb().prepare(
+      "SELECT model_id, monthly_token_budget FROM models WHERE platform = ? AND enabled = 1",
+    ).all(platform) as { model_id: string; monthly_token_budget: string | null }[];
+    let total = 0;
+    let counted = 0;
+    for (const sibling of siblings) {
+      const budget = conservativeMonthlyBudget(sibling.monthly_token_budget);
+      if (budget == null) continue;
+      counted++;
+      total += countTokensInWindow(platform, sibling.model_id, windowMs, now) / budget;
+    }
+    // One model with a budget is not a pool worth modelling — the per-model
+    // quota already says the same thing.
+    fraction = counted >= 2 ? Math.min(1, total) : null;
+  } catch {
+    fraction = null;
+  }
+  poolFractionCache.set(cacheKey, { at: now, fraction });
+  return fraction;
+}
+
+/** Test seam: drop the memoised pool fractions. */
+export function invalidateSharedPoolCache(): void {
+  poolFractionCache.clear();
+}
+
 export function conservativeMonthlyBudget(raw: string | null | undefined): number | null {
   if (!raw) return null;
   const text = raw.split('(')[0]!;
@@ -353,10 +414,12 @@ export function resolveEffectiveQuotas(
     confidence: number,
     subjectModelId: string | null,
     reportedRemaining: number | null = null,
+    derivedUsed: number | null = null,
   ): void => {
     if (!Number.isFinite(limit) || limit <= 0) return;
     considerCandidate(best, {
       platform, modelId: subjectModelId, endpointScope, metric, scope, limit, reportedRemaining,
+      derivedUsed,
       period, window: resolveQuotaWindow(period, now), source, confidence,
     });
   };
@@ -398,7 +461,18 @@ export function resolveEffectiveQuotas(
       // monthly pool is the one thing worth knowing.
       const monthly = conservativeMonthlyBudget(row.monthly_token_budget);
       if (monthly != null) {
-        add('total_tokens', 'model', monthly, { kind: 'calendar_month', timezone: 'UTC' }, 'catalog', 0.25, modelId);
+        const period: QuotaPeriod = { kind: 'calendar_month', timezone: 'UTC' };
+        // Consumption is the POOL's, not this model's. Ollama Cloud bills one
+        // dollar balance, so the catalogue's per-model budgets are several
+        // descriptions of a single allowance: spend it all on one model and the
+        // rest would otherwise still read full. Expressed in this model's own
+        // tokens so limit and used stay in the same unit.
+        const window = resolveQuotaWindow(period, now);
+        const spent = window.periodStartMs == null
+          ? null
+          : sharedPoolFractionUsed(platform, Math.max(1, now - window.periodStartMs), now);
+        add('total_tokens', 'model', monthly, period, 'catalog', 0.25, modelId, null,
+          spent == null ? null : Math.round(spent * monthly));
       }
       if (row.tpd_limit != null) add('total_tokens', 'model', row.tpd_limit, { kind: 'rolling', windowMs: DAY_MS }, 'catalog', 0.4, modelId);
     }

@@ -157,9 +157,14 @@ export function scoreQuotaCandidate(
     // often the ONLY usable figure: a provider_reported window has no period
     // start, so there is no span to count usage over. Skipping those meant the
     // highest-confidence source we have was ignored entirely.
+    // Provider-measured first, then a figure the policy computed itself (a pool
+    // shared across differently-priced models cannot be read off one counter),
+    // then the generic per-subject count.
     const consumed = quota.reportedRemaining != null
       ? quota.limit - quota.reportedRemaining
-      : used(quota);
+      : quota.derivedUsed != null
+        ? quota.derivedUsed
+        : used(quota);
     if (consumed == null || quota.limit <= 0) continue;
     const headroom = Math.max(0, Math.min(1, 1 - consumed / quota.limit));
     if (worstHeadroom == null || headroom < worstHeadroom) {
