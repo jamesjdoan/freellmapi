@@ -629,6 +629,16 @@ export interface ProviderQuotaState {
   keyLabel?: string | null;
   quotaPoolKey: string;
   metric: QuotaMetric;
+  /**
+   * Denomination of `limit`/`remaining` when a bare count would be ambiguous:
+   * 'cents' for a currency balance, 'per_10k' for a fraction of an allowance
+   * the provider never sizes. Null means the plain count.
+   *
+   * Needed because two providers report the metric 'credits' in units that are
+   * not comparable - OpenRouter in cents of balance, Ollama in ten-thousandths
+   * of an unsized session allowance - and the pair is what can be rendered.
+   */
+  unit?: string | null;
   limit: number | null;
   remaining: number | null;
   resetAt: string | null;

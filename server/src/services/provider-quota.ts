@@ -32,6 +32,12 @@ export interface QuotaObservationInput {
   modelId?: string | null;
   quotaPoolKey?: string | null;
   metric?: QuotaMetric;
+  /**
+   * Denomination of `limit`/`remaining` when the bare count would be
+   * ambiguous: 'cents' for a currency balance, 'per_10k' for a fraction of an
+   * allowance the provider never sizes. Absent means a plain count.
+   */
+  unit?: string | null;
   limit?: number | null;
   remaining?: number | null;
   resetAt?: string | null;
@@ -513,6 +519,53 @@ export function parseQuotaObservationsFromResponse(
   return observations;
 }
 
+/**
+ * Would this observation be an exact repeat of the newest one for the same
+ * subject?
+ *
+ * Only the fields that carry information are compared. `observed_at` is
+ * excluded by definition, and confidence/notes are excluded because they are
+ * derived from the source rather than measured — a poll that returns the same
+ * numbers is the same reading whatever it says about itself.
+ *
+ * A refusal is never treated as a repeat: two 429s a minute apart are two
+ * events, and the learned-ceiling and recovery estimators both count them.
+ */
+function isRepeatObservation(db: ReturnType<typeof getDb>, row: {
+  platform: string;
+  keyId: number;
+  quotaPoolKey: string;
+  metric: string;
+  limitValue: number | null;
+  remainingValue: number | null;
+  resetAt: string | null;
+  statusCode: number | null;
+  source: QuotaObservationSource;
+}): boolean {
+  if (row.statusCode != null && row.statusCode >= 400) return false;
+  if (row.source === 'error_body') return false;
+  try {
+    const previous = db.prepare(`
+      SELECT limit_value, remaining_value, reset_at, status_code
+        FROM provider_quota_observations
+       WHERE platform = ? AND key_id = ? AND quota_pool_key = ? AND metric = ?
+       ORDER BY observed_at DESC, created_at DESC
+       LIMIT 1
+    `).get(row.platform, row.keyId, row.quotaPoolKey, row.metric) as {
+      limit_value: number | null; remaining_value: number | null;
+      reset_at: string | null; status_code: number | null;
+    } | undefined;
+    if (!previous) return false;
+    return previous.limit_value === row.limitValue
+      && previous.remaining_value === row.remainingValue
+      && previous.reset_at === row.resetAt
+      && previous.status_code === row.statusCode;
+  } catch {
+    // Unable to compare is not a reason to drop a measurement.
+    return false;
+  }
+}
+
 export function recordQuotaObservation(input: QuotaObservationInput): ProviderQuotaObservation | null {
   const context = getQuotaObservationContext();
   const platform = input.platform ?? context?.platform;
@@ -525,6 +578,7 @@ export function recordQuotaObservation(input: QuotaObservationInput): ProviderQu
   const resetStrategy = input.resetStrategy ?? 'unknown';
   const confidence = input.confidence ?? DEFAULT_CONFIDENCE[source];
   const observedAt = input.observedAt ?? isoNow();
+  const unit = input.unit ?? null;
   const limitValue = input.limit ?? null;
   const remainingValue = input.remaining ?? null;
   const resetAt = input.resetAt ?? null;
@@ -561,10 +615,11 @@ export function recordQuotaObservation(input: QuotaObservationInput): ProviderQu
   db.transaction(() => {
     db.prepare(`
       INSERT INTO provider_quota_state (
-        platform, key_id, quota_pool_key, metric, limit_value, remaining_value,
+        platform, key_id, quota_pool_key, metric, unit, limit_value, remaining_value,
         reset_at, reset_strategy, source, confidence, notes, observed_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(platform, key_id, quota_pool_key, metric) DO UPDATE SET
+        unit = COALESCE(excluded.unit, provider_quota_state.unit),
         limit_value = COALESCE(excluded.limit_value, provider_quota_state.limit_value),
         remaining_value = COALESCE(excluded.remaining_value, provider_quota_state.remaining_value),
         reset_at = COALESCE(excluded.reset_at, provider_quota_state.reset_at),
@@ -577,7 +632,7 @@ export function recordQuotaObservation(input: QuotaObservationInput): ProviderQu
         observed_at = excluded.observed_at,
         updated_at = datetime('now')
     `).run(
-      platform, keyId, quotaPoolKey, metric, limitValue, remainingValue, resetAt, resetStrategy, source, nextConfidence, nextNotes, nowSql, updatedAt,
+      platform, keyId, quotaPoolKey, metric, unit, limitValue, remainingValue, resetAt, resetStrategy, source, nextConfidence, nextNotes, nowSql, updatedAt,
     );
 
     db.prepare(`
@@ -589,17 +644,26 @@ export function recordQuotaObservation(input: QuotaObservationInput): ProviderQu
          AND metric = ?
     `).run(nextSource, platform, keyId, quotaPoolKey, metric);
 
-    db.prepare(`
-      INSERT INTO provider_quota_observations (
-        id, platform, key_id, provider_account_id, model_id, quota_pool_key, metric,
-        status_code, limit_value, remaining_value, reset_at, retry_after_ms,
-        reset_strategy, source, confidence, notes, raw_json, endpoint, observed_at, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id, platform, keyId, providerAccountId, modelId, quotaPoolKey, metric,
-      statusCode, limitValue, remainingValue, resetAt, retryAfterMs,
-      resetStrategy, source, confidence, notes, rawJson, endpoint, nowSql, nowSql,
-    );
+    // The observations table is an append-only history, so a row is only worth
+    // adding when something CHANGED. Polling a usage API every five minutes was
+    // writing an identical row each time: 82.6% of the rows for a polled pool
+    // carried no information, and they dilute the series the reset detector
+    // reads. The state row above still updates its observed_at, so "last seen"
+    // stays fresh; and a changed value keeps its own timestamp, so nothing is
+    // lost from the history either.
+    if (!isRepeatObservation(db, { platform, keyId, quotaPoolKey, metric, limitValue, remainingValue, resetAt, statusCode, source })) {
+      db.prepare(`
+        INSERT INTO provider_quota_observations (
+          id, platform, key_id, provider_account_id, model_id, quota_pool_key, metric, unit,
+          status_code, limit_value, remaining_value, reset_at, retry_after_ms,
+          reset_strategy, source, confidence, notes, raw_json, endpoint, observed_at, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, platform, keyId, providerAccountId, modelId, quotaPoolKey, metric, unit,
+        statusCode, limitValue, remainingValue, resetAt, retryAfterMs,
+        resetStrategy, source, confidence, notes, rawJson, endpoint, nowSql, nowSql,
+      );
+    }
   })();
 
   // The row just moved, so the memoised headroom for this platform is wrong —
@@ -817,6 +881,7 @@ export function getQuotaStateForKeys(): QuotaObservationView[] {
       k.label AS keyLabel,
       pqs.quota_pool_key AS quotaPoolKey,
       pqs.metric,
+      pqs.unit AS unit,
       pqs.limit_value AS "limit",
       pqs.remaining_value AS remaining,
       pqs.reset_at AS resetAt,

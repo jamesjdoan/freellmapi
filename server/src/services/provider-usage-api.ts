@@ -29,6 +29,9 @@ interface UsageObservation {
   /** Whatever unit the provider counts in, already scaled to integers. */
   limit: number;
   remaining: number;
+  /** Denomination of those integers, so a reader is displayable: 'cents' for a
+   *  currency balance, 'per_10k' for a fraction of an unsized allowance. */
+  unit: 'cents' | 'per_10k';
   notes: string;
 }
 
@@ -57,6 +60,7 @@ async function readOllamaUsage(apiKey: string): Promise<UsageObservation[]> {
       quotaPoolKey: `ollama::${window}`,
       limit: FRACTION_UNITS,
       remaining: Math.round((1 - usedFraction) * FRACTION_UNITS),
+      unit: 'per_10k',
       notes: `ollama /api/usage limits.${window}.usage=${usage}`,
     });
   }
@@ -102,6 +106,7 @@ async function readOpenRouterUsage(apiKey: string): Promise<UsageObservation[]> 
     quotaPoolKey: 'openrouter::credits',
     limit: cents(total),
     remaining: Math.max(0, cents(total) - cents(used)),
+    unit: 'cents',
     notes: `openrouter /api/v1/credits total=${total} used=${used}${tier}`,
   }];
 }
@@ -165,6 +170,7 @@ export async function pollProviderUsageApis(): Promise<number> {
           metric: 'credits',
           limit: observation.limit,
           remaining: observation.remaining,
+          unit: observation.unit,
           // The provider reports how much is left but not when it comes back.
           // Inventing a reset instant would be the one thing worse than not
           // having one.

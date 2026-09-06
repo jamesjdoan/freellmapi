@@ -38,6 +38,7 @@ interface ProviderOverviewRow extends QuotaForecastEntry {
   usedSource: 'provider' | 'local' | null;
   inferred: InferredWindow[];
   metric: string | null;
+  unit: string | null;
 }
 
 interface QuotaForecastEntry {
@@ -91,6 +92,19 @@ interface PolicyRow {
 }
 
 // Helper to format seconds to human readable
+/**
+ * A count needs no denomination; a credit figure does. Two providers report
+ * 'credits' in units that are not comparable - cents of balance, and
+ * ten-thousandths of an allowance the provider never sizes - so the unit
+ * decides, and an unknown unit stays a bare integer rather than a guess.
+ */
+function formatAmount(value: number | null, unit: string | null): string {
+  if (value == null) return '—';
+  if (unit === 'cents') return `$${(value / 100).toFixed(2)}`;
+  if (unit === 'per_10k') return `${(value / 100).toFixed(1)}%`;
+  return String(value);
+}
+
 function formatCountdown(seconds: number | null): string {
   if (seconds == null || seconds <= 0) return '—';
   const h = Math.floor(seconds / 3600);
@@ -248,16 +262,9 @@ export default function QuotaPage() {
                     <TableCell className="text-muted-foreground">
                       {p.metric ? t(`quota.metric_${p.metric}`) : '—'}
                     </TableCell>
-                    {/* Deliberately unformatted. Two providers report 'credits'
-                        in different units - OpenRouter in cents of balance,
-                        Ollama in ten-thousandths of an opaque allowance - and
-                        nothing on the row distinguishes them, so rendering
-                        either as money would be a guess. The Counts column
-                        says what the number is; Remaining % carries the
-                        meaning either way. */}
-                    <TableCell className="text-right">{p.used ?? '—'}</TableCell>
-                    <TableCell className="text-right">{p.remaining ?? '—'}</TableCell>
-                    <TableCell className="text-right">{p.limit ?? '—'}</TableCell>
+                    <TableCell className="text-right">{formatAmount(p.used, p.unit)}</TableCell>
+                    <TableCell className="text-right">{formatAmount(p.remaining, p.unit)}</TableCell>
+                    <TableCell className="text-right">{formatAmount(p.limit, p.unit)}</TableCell>
                     <TableCell className="text-right">{formatCountdown(p.seconds_until_reset)}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {p.inferred.length === 0 ? '—' : p.inferred.map(w => (
