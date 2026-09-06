@@ -7,6 +7,7 @@ import { startWakeDetect } from './lib/wake-detect.js';
 import { startCatalogSync } from './services/catalog-sync.js';
 import { startCooldownProbe } from './services/cooldown-probe.js';
 import { startBurnRecoveryPoller } from './services/quota-burn.js';
+import { startProviderUsagePolling } from './services/provider-usage-api.js';
 import { startCustomModelSync } from './services/custom-model-sync.js';
 import { installProcessSafetyNet } from './lib/process-safety-net.js';
 import { NodeScheduler } from './lib/scheduler.js';
@@ -84,6 +85,7 @@ async function main() {
     startCatalogSync(scheduler);
     startCooldownProbe(scheduler);
     startBurnRecoveryPoller(scheduler);
+    startProviderUsagePolling(scheduler);
     startDbBackupPump(getDb(), scheduler, config.dbPath ?? undefined);
     startBackupScheduler(scheduler);
     startCustomModelSync(getDb(), scheduler);

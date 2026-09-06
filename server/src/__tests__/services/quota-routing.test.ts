@@ -1,3 +1,4 @@
+import type { EffectiveQuota, EffectiveQuotaSource } from '../../services/quota-policy.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initDb, getDb } from '../../db/index.js';
 import { encrypt } from '../../lib/crypto.js';
@@ -10,6 +11,7 @@ import {
   getShadowAgreementStats,
   listRoutingDecisions,
   scoreQuotaCandidate,
+  UNKNOWN_HEADROOM,
   DEFAULT_QUOTA_ROUTING_MODE,
   UNKNOWN_HEADROOM,
 } from '../../services/quota-routing.js';
@@ -121,7 +123,13 @@ describe('quota candidate scoring', () => {
   });
 
   it('ranks a known-exhausted pool below an unmetered one', () => {
-    const exhausted = scoreQuotaCandidate([quota(100, 1000)], () => 100, Date.now());
+    // "Known" now has to mean measured. An operator-declared limit is a
+    // declaration, and reaching it is arithmetic against someone's estimate -
+    // that case is covered under "confirming exhaustion before diverting",
+    // where it earns one more attempt. A provider reporting the pool spent is
+    // knowledge, and ranks below a provider we know nothing about.
+    const measured: EffectiveQuota = { ...quota(100, 1000), source: 'provider_header' };
+    const exhausted = scoreQuotaCandidate([measured], () => 100, Date.now());
     const unmetered = scoreQuotaCandidate([quota(100, 1000)], () => null, Date.now());
     expect(exhausted.score).toBe(0);
     expect(unmetered.score!).toBeGreaterThan(exhausted.score!);
@@ -414,5 +422,52 @@ describe('liveness gate', () => {
     // Naming a favourite among dead routes is the failure this gate exists to
     // prevent.
     expect(evaluateShadowDecision(peers(), noQuota)).toBeNull();
+  });
+});
+
+/**
+ * "Always run one extra prompt to ensure it's used before divert."
+ *
+ * A headroom of zero computed against an estimated ceiling is arithmetic, not
+ * knowledge. Diverting on it means the last of a free allowance is never spent
+ * — and the estimate is never corrected, because nothing ever reaches the
+ * provider to be refused. A real 429 lays down a cooldown; that is the proof,
+ * and it also benches the route, so the extra attempt is self-limiting to one.
+ */
+describe('confirming exhaustion before diverting', () => {
+  const spentQuota = (source: EffectiveQuotaSource): EffectiveQuota => ({
+    platform: 'nvidia', modelId: 'm', endpointScope: null,
+    metric: 'requests', scope: 'model', limit: 40,
+    reportedRemaining: null, derivedUsed: null,
+    period: { kind: 'rolling', windowMs: 60_000 },
+    window: { periodStartMs: Date.now() - 60_000, resetAtMs: Date.now() + 60_000 },
+    source, confidence: 0.5,
+  });
+
+  it('keeps an unconfirmed zero in play rather than writing it off', () => {
+    // 40 of 40 counted locally against an env cap: we believe it is spent.
+    const scored = scoreQuotaCandidate([spentQuota('provider_cap_env')], () => 40, Date.now());
+    expect(scored.headroom).toBe(UNKNOWN_HEADROOM);
+    // Enough to still beat a scarce alternative held back at 0.3, so the next
+    // request goes there and finds out.
+    expect(scored.score!).toBeGreaterThan(0.3);
+  });
+
+  it('believes a zero the provider itself reported', () => {
+    const scored = scoreQuotaCandidate([spentQuota('provider_header')], () => 40, Date.now());
+    expect(scored.headroom).toBe(0);
+    expect(scored.score).toBe(0);
+  });
+
+  it('believes an estimated zero once a refusal is on record', () => {
+    // The cooldown from a real 429 is the confirmation.
+    const scored = scoreQuotaCandidate([spentQuota('catalog')], () => 40, Date.now(), 1, true);
+    expect(scored.headroom).toBe(0);
+  });
+
+  it('leaves a partially-spent allowance alone', () => {
+    // The rule is about zero specifically; ordinary headroom must not move.
+    const scored = scoreQuotaCandidate([spentQuota('catalog')], () => 10, Date.now());
+    expect(scored.headroom).toBeCloseTo(0.75, 3);
   });
 });
