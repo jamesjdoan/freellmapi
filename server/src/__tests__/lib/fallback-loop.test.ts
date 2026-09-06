@@ -398,7 +398,13 @@ describe('runFallbackLoop: auth rotation (401 is key-fatal, not request-fatal)',
     expect(dispatch).toHaveBeenCalledTimes(2);      // rotated instead of 502
     expect(onFatal).not.toHaveBeenCalled();
     expect(state.skipKeys.has(`fake:fake-model:${badRoute.keyId}`)).toBe(true);
-    expect(mockCheckKeyHealth).toHaveBeenCalledWith(badRoute.keyId);
+    // The upstream message travels with the revalidation: some providers serve
+    // their model list unauthenticated, so a catalogue GET cannot fail and this
+    // 401 is the only real evidence about the credential.
+    expect(mockCheckKeyHealth).toHaveBeenCalledWith(
+      badRoute.keyId,
+      expect.objectContaining({ upstreamRejection: expect.stringContaining('Invalid API Key') }),
+    );
     // Benched to cover the window until revalidation flips the key status.
     const row = getDb().prepare('SELECT expires_at_ms FROM rate_limit_cooldowns WHERE platform = ? AND key_id = ?').get('fake', badRoute.keyId) as { expires_at_ms: number };
     expect(row.expires_at_ms - Date.now()).toBeGreaterThan(AUTH_FAILURE_COOLDOWN_MS - 10_000);

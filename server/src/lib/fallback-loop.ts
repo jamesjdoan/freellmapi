@@ -363,13 +363,16 @@ export const AUTH_FAILURE_COOLDOWN_MS = 5 * 60 * 1000;
 const REVALIDATION_DEDUPE_MS = 30_000;
 const lastRevalidation = new Map<number, number>();
 
-function triggerKeyRevalidation(platform: string, keyId: number): void {
+function triggerKeyRevalidation(platform: string, keyId: number, upstreamRejection: string): void {
   const now = Date.now();
   const last = lastRevalidation.get(keyId) ?? 0;
   if (now - last < REVALIDATION_DEDUPE_MS) return;
   lastRevalidation.set(keyId, now);
   console.warn(`[FallbackLoop] Upstream 401 from ${platform} key ${keyId}; revalidating it now instead of waiting for the health cycle`);
-  void checkKeyHealth(keyId).catch(err => {
+  // Pass the rejection through: if the validate endpoint turns out to be
+  // unfalsifiable (a public model list), this 401 is the only real evidence
+  // about the credential and must not be discarded as inconclusive.
+  void checkKeyHealth(keyId, { upstreamRejection }).catch(err => {
     console.error(`[FallbackLoop] Immediate revalidation of key ${keyId} failed:`, err?.message);
   });
 }
@@ -380,10 +383,14 @@ function triggerKeyRevalidation(platform: string, keyId: number): void {
  * immediate revalidation. Deliberately NO model penalty and NO limit-learning —
  * a bad key says nothing about the model's health.
  */
-export function recordAuthFailure(route: RouteResult, state: FallbackState): void {
+export function recordAuthFailure(route: RouteResult, state: FallbackState, err?: unknown): void {
   state.skipKeys.add(`${route.platform}:${route.modelId}:${route.keyId}`);
   setCooldown(route.platform, route.modelId, route.keyId, AUTH_FAILURE_COOLDOWN_MS);
-  triggerKeyRevalidation(route.platform, route.keyId);
+  triggerKeyRevalidation(
+    route.platform,
+    route.keyId,
+    sanitizeProviderErrorMessage(String((err as { message?: string })?.message ?? 'upstream rejected the credential')),
+  );
 }
 
 /**
@@ -1231,7 +1238,7 @@ async function runFallbackLoopAttempts(hooks: FallbackHooks, trace: RequestTrace
       if (isKeyAuthError(err)) {
         // KEY-fatal, not request-fatal: rotate past the bad key and revalidate
         // it immediately instead of 502-ing while healthy routes sit idle.
-        recordAuthFailure(route, hooks.state);
+        recordAuthFailure(route, hooks.state, err);
         attempts.push({ platform: route.platform, modelId: route.modelId, keyOrdinal: keyOrdinal(route), errorClass: 'auth' });
         traceAttempt('auth', err);
         lastError = err;

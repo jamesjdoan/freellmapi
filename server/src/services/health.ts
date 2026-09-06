@@ -80,7 +80,16 @@ function recordInvalidFailure(keyId: number, platform?: string): void {
   }
 }
 
-export async function checkKeyHealth(keyId: number): Promise<KeyStatus> {
+export async function checkKeyHealth(
+  keyId: number,
+  opts: {
+    /** The 401 from a real completion that prompted this check, when one did.
+     *  A provider refusing an actual inference call is stronger evidence about
+     *  the credential than any catalogue GET, so it decides the outcome when
+     *  the GET turns out to prove nothing. */
+    upstreamRejection?: string;
+  } = {},
+): Promise<KeyStatus> {
   const db = getDb();
   const row = db.prepare('SELECT * FROM api_keys WHERE id = ?').get(keyId) as any;
   if (!row) return 'error';
@@ -101,6 +110,39 @@ export async function checkKeyHealth(keyId: number): Promise<KeyStatus> {
       endpoint: 'models',
       origin: 'health',
     }));
+    // The check ran but carries no information about this key: the endpoint
+    // serves unauthenticated callers too. Touch only last_checked_at. Writing
+    // 'healthy' here is what erased the real 401 a completion had already
+    // recorded, and writing 'invalid' would condemn a key on no evidence.
+    if (typeof validation === 'object' && validation.valid === null) {
+      // A live rejection outranks a check that cannot fail. Without this the
+      // dead Ollama key sat at 'healthy' forever: every completion 401'd, and
+      // every 401 triggered a revalidation against a public model list that
+      // certified it fine.
+      if (opts.upstreamRejection) {
+        const lastError = sanitizeProviderErrorMessage(opts.upstreamRejection);
+        db.prepare("UPDATE api_keys SET status = 'invalid', last_health_error = ?, last_checked_at = datetime('now') WHERE id = ?")
+          .run(lastError, keyId);
+        providerLog(
+          'warn',
+          `[Health] Key ${keyId} (${row.platform}) rejected upstream and cannot be verified against ${row.base_url ?? 'the provider'}: ${lastError}`,
+          { provider: row.platform, event: 'key_invalid' },
+        );
+        recordInvalidFailure(keyId, row.platform);
+        return 'invalid';
+      }
+      // Nothing to go on either way: touch only last_checked_at. Writing
+      // 'healthy' would manufacture confidence, 'invalid' would condemn a key
+      // on no evidence.
+      db.prepare("UPDATE api_keys SET last_checked_at = datetime('now') WHERE id = ?").run(keyId);
+      providerLog(
+        'warn',
+        `[Health] Key ${keyId} (${row.platform}) unverifiable: ${validation.reason}`,
+        { provider: row.platform, event: 'key_unverifiable' },
+      );
+      return (row.status as KeyStatus | null) ?? 'healthy';
+    }
+
     const isValid = typeof validation === 'boolean' ? validation : validation.valid;
     const lastError = isValid
       ? null
@@ -184,7 +226,12 @@ export async function probeKeyValidity(keyId: number): Promise<KeyProbeOutcome> 
       endpoint: 'models',
       origin: 'probe',
     }));
+    // An unverifiable endpoint is the same kind of non-answer as a transport
+    // failure: it says nothing about the credential, so it must not be read as
+    // a rejection. This path clears cooldowns on 'valid' and condemns on
+    // 'invalid'; neither is warranted here.
     const isValid = typeof validation === 'boolean' ? validation : validation.valid;
+    if (isValid === null) return 'error';
     return isValid ? 'valid' : 'invalid';
   } catch {
     // Transport error (DNS/timeout/TLS): inconclusive, same as checkKeyHealth's

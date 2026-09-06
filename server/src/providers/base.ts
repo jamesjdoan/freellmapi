@@ -212,7 +212,24 @@ export interface KeyValidationFailure {
   error: string;
 }
 
-export type KeyValidationResult = boolean | KeyValidationFailure;
+/**
+ * The check ran but proves nothing about the key.
+ *
+ * A 2xx from a catalogue endpoint only means the key is good if that endpoint
+ * would have REJECTED a request without one. Ollama Cloud's /v1/models returns
+ * 200 with no Authorization header at all, so validation there could never
+ * fail - and a real 401 from a completion triggers a revalidation that then
+ * certified the dead key as healthy, erasing the only true signal we had.
+ *
+ * Reporting this instead of `true` leaves the recorded status alone rather than
+ * overwriting evidence with a measurement that carries none.
+ */
+export interface KeyValidationInconclusive {
+  valid: null;
+  reason: string;
+}
+
+export type KeyValidationResult = boolean | KeyValidationFailure | KeyValidationInconclusive;
 
 export abstract class BaseProvider {
   abstract readonly platform: Platform;
