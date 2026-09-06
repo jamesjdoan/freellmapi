@@ -302,6 +302,116 @@ export function inferWindowsFromRecovery(platform: string): InferredWindow[] {
   return windows;
 }
 
+export interface InferredAllowance {
+  quotaPoolKey: string;
+  metric: 'requests' | 'total_tokens';
+  /** Median implied size of the allowance, in `metric` units. */
+  limit: number;
+  /** Range across the sampled intervals — the honest error bar. */
+  low: number;
+  high: number;
+  samples: number;
+  confidence: number;
+  note: string;
+}
+
+/**
+ * Work out how big an allowance really is, when the provider only says what
+ * FRACTION of it is left.
+ *
+ * Ollama Cloud reports `limits.session.usage = 0.212` and never states the
+ * size. But we know what we spent between two readings, so the arithmetic is
+ * direct: consume f of the pool with t tokens and the pool holds t/f tokens.
+ * Repeat over several intervals and the spread says how much to trust it.
+ *
+ * Measured on real traffic across five intervals: a median of 25.1M tokens per
+ * session window, spread 18.7M-27.7M. Tight enough to be a measurement.
+ *
+ * Two things it must get right:
+ *
+ * FAILED REQUESTS COUNT. Ten calls to nemotron-3-super returned "stream
+ * produced no content" while sending ~215k input tokens each, and the session
+ * fraction dropped for every one. The provider ran the model; that it returned
+ * nothing is our problem, not a refund. Counting successes only would have
+ * inflated the implied allowance without bound.
+ *
+ * THE UNIT IS MODEL-SPECIFIC. Ollama meters GPU time, so a token is not a
+ * fixed cost - 1M tokens of a 120b model spends more than 1M of a 20b. The
+ * figure is therefore only valid for the traffic mix that produced it, which is
+ * why the note carries the mix and the confidence stays low.
+ */
+export function inferAllowanceFromFraction(
+  platform: string,
+  quotaPoolKey: string,
+): InferredAllowance[] {
+  interface Row { observed_at: string; remaining_value: number; limit_value: number }
+  let rows: Row[];
+  try {
+    rows = getDb().prepare(`
+      SELECT observed_at, remaining_value, limit_value
+        FROM provider_quota_observations
+       WHERE platform = ? AND quota_pool_key = ?
+         AND remaining_value IS NOT NULL AND limit_value IS NOT NULL AND limit_value > 0
+       ORDER BY observed_at
+    `).all(platform, quotaPoolKey) as Row[];
+  } catch {
+    return [];
+  }
+  if (rows.length < 2) return [];
+
+  const countUsage = getDb().prepare(`
+    SELECT COUNT(*) AS requests,
+           COALESCE(SUM(input_tokens + output_tokens), 0) AS tokens
+      FROM requests
+     WHERE platform = ? AND created_at > ? AND created_at <= ?
+       AND request_type <> 'burn_test'
+  `);
+
+  const perRequest: number[] = [];
+  const perToken: number[] = [];
+  for (let i = 1; i < rows.length; i++) {
+    const before = rows[i - 1]!;
+    const after = rows[i]!;
+    const consumed = (before.remaining_value - after.remaining_value) / before.limit_value;
+    // Only intervals where the pool actually moved down. An increase is a
+    // reset, and a flat reading says nothing about size.
+    if (!(consumed > 0)) continue;
+    let usage: { requests: number; tokens: number };
+    try {
+      usage = countUsage.get(platform, before.observed_at, after.observed_at) as { requests: number; tokens: number };
+    } catch {
+      continue;
+    }
+    if (usage.requests > 0) perRequest.push(usage.requests / consumed);
+    if (usage.tokens > 0) perToken.push(usage.tokens / consumed);
+  }
+
+  const median = (values: number[]): number => {
+    const sorted = [...values].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)]!;
+  };
+
+  const out: InferredAllowance[] = [];
+  // Three intervals is the fewest that can show a spread rather than a pair of
+  // numbers that happen to differ.
+  for (const [metric, values] of [['requests', perRequest], ['total_tokens', perToken]] as const) {
+    if (values.length < 3) continue;
+    out.push({
+      quotaPoolKey,
+      metric,
+      limit: Math.round(median(values)),
+      low: Math.round(Math.min(...values)),
+      high: Math.round(Math.max(...values)),
+      samples: values.length,
+      // Derived from our own counting against someone else's fraction, and
+      // only valid for the traffic mix that produced it.
+      confidence: confidenceFor(values.length, 0.15),
+      note: `${values.length} intervals, implied ${Math.round(median(values)).toLocaleString()} ${metric}`,
+    });
+  }
+  return out;
+}
+
 export interface QuotaShape {
   platform: string;
   windows: InferredWindow[];
