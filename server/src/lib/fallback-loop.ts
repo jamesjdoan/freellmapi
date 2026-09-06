@@ -40,6 +40,7 @@ import {
   isPaymentRequiredError,
   isModelNotFoundError,
   isModelAccessForbiddenError,
+  isModelScopedAuthError,
   isProviderBadRequestError,
   isProviderDegradedError,
   isProviderLevelError,
@@ -307,7 +308,10 @@ export function recordRetryableFailure(route: RouteResult, err: any, state: Fall
   // Context-too-large is MODEL-level too: a sibling key serves the same model
   // with the same context window (and, for Groq-style per-key TPM 413s, the
   // same tier ceiling), so it would reject the same request identically.
-  if (isModelNotFoundError(err) || isModelAccessForbiddenError(err) || isContextTooLargeError(err) || err?.skipModelForRequest === true) {
+  // A 401 naming the model belongs here too: every key on the platform would
+  // be told the same thing, and the credential is not implicated.
+  if (isModelNotFoundError(err) || isModelAccessForbiddenError(err) || isModelScopedAuthError(err)
+    || isContextTooLargeError(err) || err?.skipModelForRequest === true) {
     state.skipModels.add(route.modelDbId);
   }
   // A model-level 404/410 that says the model is GONE (not merely missing right
