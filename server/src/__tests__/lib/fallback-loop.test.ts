@@ -889,12 +889,20 @@ describe('a costly failed attempt meters its tokens', () => {
     "SELECT COALESCE(SUM(tokens),0) t FROM rate_limit_usage WHERE platform = 'fake' AND model_id = ? AND kind = 'tokens'",
   ).get(route.modelId) as { t: number }).t;
 
-  it('records what the prefill spent', () => {
+  const requestsFor = (route: RouteResult) => (getDb().prepare(
+    "SELECT COUNT(*) n FROM rate_limit_usage WHERE platform = 'fake' AND model_id = ? AND kind = 'request'",
+  ).get(route.modelId) as { n: number }).n;
+
+  it('records what the prefill spent, alongside the request', () => {
     const route = fakeRoute();
     recordRetryableFailure(route, Object.assign(new Error('empty completion'), {
       skipBench: true, wastedInputTokens: 219_384,
     }), newFallbackState());
+    // The two halves are metered from one guard and have to move together: the
+    // request half alone was the original F9 bug, and the token half alone
+    // would report spend against an uncounted call.
     expect(tokensFor(route)).toBe(219_384);
+    expect(requestsFor(route)).toBe(1);
   });
 
   it('meters nothing when the surface reported no size', () => {
