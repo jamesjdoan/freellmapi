@@ -186,9 +186,41 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
     // 1. Pools the PROVIDER reported on. Its own remaining figure beats any
     //    local count, so these are taken as-is.
     const reported = measured.filter(m => m.platform === platform);
+    const seenMeasured = new Set<string>(reported.map(r => r.pool ?? ''));
     for (const pool of reported) {
       const state = states.find(s => s.platform === platform && s.quotaPoolKey === pool.pool);
       rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true, usedSource: 'provider', inferred: [] });
+    }
+
+    // 1b. Pools the provider measured in some OTHER unit — Ollama Cloud reports
+    //     credit usage, not requests. The forecast deliberately keeps only
+    //     request windows, because token resets vary too much between providers
+    //     to predict; but a provider handing us limit AND remaining needs no
+    //     prediction, and dropping it made a measured pool read "Unknown"
+    //     beside estimates that read as facts.
+    for (const state of states) {
+      if (state.platform !== platform) continue;
+      if (state.limit == null || state.remaining == null) continue;
+      if (state.source !== 'quota_api' && state.source !== 'header') continue;
+      if (seenMeasured.has(state.quotaPoolKey)) continue;
+      seenMeasured.add(state.quotaPoolKey);
+      const remainingPct = Math.max(0, Math.min(100, Math.round((state.remaining / state.limit) * 100)));
+      rows.push({
+        platform,
+        pool: state.quotaPoolKey,
+        used: Math.max(0, state.limit - state.remaining),
+        remaining: state.remaining,
+        limit: state.limit,
+        remaining_pct: remainingPct,
+        reset_at: state.resetAt ?? null,
+        seconds_until_reset: null,
+        low_balance: state.remaining / state.limit < LOW_BALANCE_THRESHOLD,
+        source: state.source,
+        confidence: state.confidence ?? null,
+        metered: true,
+        usedSource: 'provider',
+        inferred: [],
+      });
     }
 
     // 2. Limits we KNOW but the provider never reports — an env cap, a catalog
