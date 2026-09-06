@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getProvider } from '../../providers/index.js';
+import { resetAuthEnforcementProbes } from '../../providers/openai-compat.js';
 
 const completion = {
   id: 'chatcmpl-radeon',
@@ -11,7 +12,12 @@ const completion = {
 };
 
 describe('AMD Radeon Cloud provider', () => {
-  afterEach(() => vi.restoreAllMocks());
+  // The unauthenticated control probe is memoised per URL for the life of the
+  // process, so a verdict from one test would otherwise decide the next.
+  afterEach(() => {
+    vi.restoreAllMocks();
+    resetAuthEnforcementProbes();
+  });
 
   it('uses the documented endpoint, bearer auth, safe knobs, and one tool call at a time', async () => {
     const provider = getProvider('radeon');
@@ -53,11 +59,15 @@ describe('AMD Radeon Cloud provider', () => {
 
   it('validates credentials against the authenticated models endpoint', async () => {
     const provider = getProvider('radeon');
-    let url = '';
-    let init: RequestInit | undefined;
+    const calls: { url: string; authorization: string | null }[] = [];
     vi.spyOn(global, 'fetch').mockImplementation(async (input, requestInit) => {
-      url = String(input);
-      init = requestInit;
+      const authorization = new Headers(requestInit?.headers).get('authorization');
+      calls.push({ url: String(input), authorization });
+      // The real endpoint reads the header: no credential, no catalogue. The
+      // unauthenticated control probe (openai-compat.ts) depends on that — a
+      // mock that serves everyone would make validation inconclusive, which is
+      // the correct verdict for an endpoint that ignores auth.
+      if (!authorization) return new Response(null, { status: 401 });
       return new Response(JSON.stringify({ data: [] }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
@@ -65,8 +75,8 @@ describe('AMD Radeon Cloud provider', () => {
     });
 
     await expect(provider!.validateKey('rc-' + 'b'.repeat(48))).resolves.toBe(true);
-    expect(url).toBe('https://developer.amd.com.cn/radeon/api/v1/models');
-    expect(new Headers(init?.headers).get('authorization')).toMatch(/^Bearer rc-/);
+    expect(calls[0]?.url).toBe('https://developer.amd.com.cn/radeon/api/v1/models');
+    expect(calls[0]?.authorization).toMatch(/^Bearer rc-/);
   });
 
   it('coalesces Qwen system instructions into one leading message', async () => {

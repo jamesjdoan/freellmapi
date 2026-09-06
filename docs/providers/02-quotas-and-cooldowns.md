@@ -22,6 +22,7 @@ Per-model windows cannot describe every provider's economics. `resolveQuotaPolic
 - Google keys identify a project, while each Gemini model retains its independently published project/model allowance.
 - Hugging Face Router consumes one shared credits pool.
 - NVIDIA, SambaNova and several aggregators use shared provider/account pools.
+- Radeon Cloud reports both an RPM ceiling and one recurring daily allowance denominated in currency, so `radeon::daily-free` carries the `requests` and `credits` metrics together.
 - Unknown promotional capacity stays unknown; the router does not invent a limit.
 - A private or loopback custom endpoint is unmetered for external API quota.
 

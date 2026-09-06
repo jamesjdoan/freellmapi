@@ -332,10 +332,13 @@ describe('provider-quota: parse from response headers (shared parseRetryAfterMs)
     });
     const obs = parseQuotaObservationsFromResponse(resp, { platform: 'radeon', keyId: 9 });
     expect(obs.find(o => o.metric === 'requests')).toMatchObject({
-      quotaPoolKey: 'radeon::daily-free', limit: 30, remaining: 29,
+      quotaPoolKey: 'radeon::daily-free', limit: 30, remaining: 29, unit: null,
     });
+    // Radeon denominates its allowance in whole USD. It is recorded in cents,
+    // the denomination OpenRouter's balance already uses, so the two are
+    // comparable and the dashboard renders $7.50 rather than a bare 7.5.
     expect(obs.find(o => o.metric === 'credits')).toMatchObject({
-      quotaPoolKey: 'radeon::daily-free', limit: 10, remaining: 7.5,
+      quotaPoolKey: 'radeon::daily-free', limit: 1000, remaining: 750, unit: 'cents',
     });
   });
 

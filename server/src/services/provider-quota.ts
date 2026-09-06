@@ -276,7 +276,22 @@ function isSharedPool(platform: Platform): boolean {
   return resolveQuotaPolicy(platform).scope !== 'model';
 }
 
-type HeaderSpec = { metric: QuotaMetric; limit: string; remaining?: string; reset?: string; strategy?: QuotaResetStrategy };
+// `unit`/`scale` exist because a header can report a metric in a denomination
+// the bare number does not disclose. Radeon sends its `credits` allowance in
+// whole USD while OpenRouter's reader records cents; without a declared unit
+// the two land in the same column and 7.5 dollars compares as 7.5 cents (the
+// mismatch GOTCHAS records for OpenRouter vs Ollama). `scale` converts the
+// parsed number into `unit` — 100 turns dollars into cents — so there is one
+// currency denomination and every consumer keeps working unchanged.
+type HeaderSpec = {
+  metric: QuotaMetric;
+  limit: string;
+  remaining?: string;
+  reset?: string;
+  strategy?: QuotaResetStrategy;
+  unit?: string;
+  scale?: number;
+};
 
 const HEADER_SPECS: Partial<Record<Platform, HeaderSpec[]>> = {
   groq: [
@@ -293,7 +308,7 @@ const HEADER_SPECS: Partial<Record<Platform, HeaderSpec[]>> = {
   ],
   radeon: [
     { metric: 'requests', limit: 'x-ratelimit-limit-user-rpm', remaining: 'x-ratelimit-remaining-user-rpm', reset: 'x-ratelimit-reset', strategy: 'provider_reported' },
-    { metric: 'credits', limit: 'x-ratelimit-limit-user-daily-usd', remaining: 'x-ratelimit-remaining-user-daily-usd', reset: 'x-ratelimit-reset-user-daily-usd', strategy: 'provider_reported' },
+    { metric: 'credits', limit: 'x-ratelimit-limit-user-daily-usd', remaining: 'x-ratelimit-remaining-user-daily-usd', reset: 'x-ratelimit-reset-user-daily-usd', strategy: 'provider_reported', unit: 'cents', scale: 100 },
   ],
   // ModelScope reportedly returns `modelscope-ratelimit-*`-style headers on
   // authenticated responses. UNCONFIRMED: no real token exists for this
@@ -397,9 +412,16 @@ function maybeAddObservation(
   strategy: QuotaResetStrategy,
   rawJson: string | null,
   statusCode: number | null,
+  denomination?: Pick<HeaderSpec, 'unit' | 'scale'>,
 ): void {
-  const limit = parseHeaderNumber(limitRaw);
-  const remaining = parseHeaderNumber(remainingRaw ?? null);
+  // Convert into the declared unit before anything reads the number: the
+  // observation is stored and compared against other providers' values for the
+  // same metric, so a dollars-vs-cents mismatch is not recoverable later.
+  const scale = denomination?.scale;
+  const denominate = (value: number | null): number | null =>
+    value === null || scale === undefined ? value : Math.round(value * scale);
+  const limit = denominate(parseHeaderNumber(limitRaw));
+  const remaining = denominate(parseHeaderNumber(remainingRaw ?? null));
   const resetAt = parseResetAtFromHeader(resetRaw ?? null);
   // A reset the parser could not read is still evidence: keep the observation
   // when the raw header was present, so the unparsed value reaches the log
@@ -409,6 +431,7 @@ function maybeAddObservation(
   observations.push({
     ...base,
     metric,
+    unit: denomination?.unit ?? null,
     limit,
     remaining,
     resetAt,
@@ -449,6 +472,7 @@ export function parseQuotaObservationsFromResponse(
         spec.strategy ?? 'provider_reported',
         captureRawHeaders(headers, [spec.limit, spec.remaining, spec.reset]),
         response.status,
+        spec,
       );
     }
   }
