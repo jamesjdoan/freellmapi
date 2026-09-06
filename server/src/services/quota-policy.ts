@@ -272,6 +272,7 @@ interface ModelLimitRow {
   rpd_limit: number | null;
   tpm_limit: number | null;
   tpd_limit: number | null;
+  monthly_token_budget: string | null;
 }
 
 interface ObservationRow {
@@ -298,6 +299,37 @@ function policySpecificity(policy: QuotaPolicy): number {
  * Collapsing them to "the limit" is what makes a dashboard say 999/1000 while
  * the request is actually being rejected on tokens-per-minute.
  */
+/**
+ * The LOW end of a documented token range, in tokens.
+ *
+ * `models.monthly_token_budget` is prose, not data: real values are '~10-20M',
+ * '~5-10M', 'unlimited'. profiles.ts reads the same column for ranking and
+ * takes the MAX of the range, which is right for "which model is roomiest" and
+ * wrong for a ceiling - claiming 20M when the allowance might be 10M would
+ * report headroom that does not exist and spend past the real limit.
+ *
+ * So: the minimum, treated as "at least this much", carried at low confidence
+ * because a range is not a measurement. 'unlimited' yields null rather than
+ * Infinity - an unbounded limit makes headroom meaningless (always 100%), which
+ * is worse than having no opinion.
+ */
+export function conservativeMonthlyBudget(raw: string | null | undefined): number | null {
+  if (!raw) return null;
+  const text = raw.split('(')[0]!;
+  if (/unlimited|∞/i.test(text)) return null;
+  const numbers = text.match(/[\d.]+/g);
+  if (!numbers) return null;
+  const low = Math.min(...numbers.map(Number).filter(n => Number.isFinite(n) && n > 0));
+  if (!Number.isFinite(low)) return null;
+  const upper = text.toUpperCase();
+  const multiplier = upper.includes('B') ? 1_000_000_000
+    : upper.includes('M') ? 1_000_000
+    : upper.includes('K') ? 1_000
+    : 1;
+  const tokens = Math.floor(low * multiplier);
+  return tokens > 0 ? tokens : null;
+}
+
 export function resolveEffectiveQuotas(
   platform: string,
   modelId: string | null,
@@ -354,12 +386,20 @@ export function resolveEffectiveQuotas(
   // ── 3. Catalog limits (per model, rolling — the semantics the gates use) ──
   if (modelId) {
     const row = db.prepare(
-      'SELECT rpm_limit, tpm_limit, rpd_limit, tpd_limit FROM models WHERE platform = ? AND model_id = ? LIMIT 1',
+      'SELECT rpm_limit, tpm_limit, rpd_limit, tpd_limit, monthly_token_budget FROM models WHERE platform = ? AND model_id = ? LIMIT 1',
     ).get(platform, modelId) as ModelLimitRow | undefined;
     if (row) {
       if (row.rpm_limit != null) add('requests', 'model', row.rpm_limit, { kind: 'rolling', windowMs: MINUTE_MS }, 'catalog', 0.4, modelId);
       if (row.rpd_limit != null) add('requests', 'model', row.rpd_limit, { kind: 'rolling', windowMs: DAY_MS }, 'catalog', 0.4, modelId);
       if (row.tpm_limit != null) add('total_tokens', 'model', row.tpm_limit, { kind: 'rolling', windowMs: MINUTE_MS }, 'catalog', 0.4, modelId);
+      // A documented monthly pool, e.g. Ollama Cloud's '~10-20M'. Without this
+      // such a provider has no numeric quota at all, so scoring pins it at
+      // UNKNOWN_HEADROOM forever - it can never be seen filling up, which for a
+      // monthly pool is the one thing worth knowing.
+      const monthly = conservativeMonthlyBudget(row.monthly_token_budget);
+      if (monthly != null) {
+        add('total_tokens', 'model', monthly, { kind: 'calendar_month', timezone: 'UTC' }, 'catalog', 0.25, modelId);
+      }
       if (row.tpd_limit != null) add('total_tokens', 'model', row.tpd_limit, { kind: 'rolling', windowMs: DAY_MS }, 'catalog', 0.4, modelId);
     }
   }
