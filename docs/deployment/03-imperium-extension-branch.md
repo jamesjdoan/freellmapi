@@ -8,8 +8,10 @@ The Imperium provider-routing work is maintained as a bolt-on branch. It is not 
 | --- | --- |
 | Upstream remote | `https://github.com/tashfeenahmed/freellmapi.git` (`origin`) |
 | Fork remote | `https://github.com/jamesjdoan/freellmapi.git` (`fork`) |
-| Extension branch | `codex/provider-routing-controls` |
-| Extension worktree | `/Users/jamesdoan/Code/Instrumenta/worktrees/freellmapi-provider-routing` |
+| Upstream base | `v0.9.7` (`1edb8d5`) |
+| Extension branch | `docs/freellm-assert-start-on-redeploy` — carries the whole extension, 66 commits on `v0.9.7` |
+| Publishable subset | `codex/provider-routing-controls` — an ancestor of the above, still on the `v0.9.4` base |
+| Extension worktree | `/Users/jamesdoan/Code/Instrumenta/worktrees/freellmapi-provider-routing` (holds the `codex/…` subset, not the live branch) |
 | Compose deployment | `/Users/jamesdoan/Code/Instrumenta/imperium/freellmapi/freellmapi` |
 | Local Docker image | `jamesjdoan/freellmapi:provider-routing` |
 | Persistent volume | `freellmapi_freellmapi-data` |
@@ -19,9 +21,11 @@ The override selects the local extension image with `pull_policy: never`. The st
 
 ## Safe upstream refresh
 
-1. Fetch `origin` in the extension worktree.
-2. Rebase `codex/provider-routing-controls` onto the selected upstream `origin/main` revision. This updates the base beneath the extension; it does not merge the extension into upstream.
-3. Resolve any conflicts on the extension branch and run the repository test suite plus production build.
+1. Fetch `origin --tags`.
+2. Rebase the extension branch onto the release **tag**, not `origin/main`: `git rebase --rebase-merges --onto vX.Y.Z <current base>`. This updates the base beneath the extension; it does not merge the extension into upstream. Two reasons for the exact command:
+   - `origin/main` runs ahead of the tag with work that is not in any release — the per-language `docs/{en,zh-cn}` move after `v0.9.7` rewrites all 60 locale files and every doc path the extension has edited. The tag has none of that.
+   - `--rebase-merges` is required, not cosmetic. The branch carries two reconciliation merges (`Merge branch 'main' into quota-integration`, `Merge quota-integration`) whose resolutions chose one of two diverged quota lineages. A default rebase drops merge commits and replays both lineages flat, silently discarding those choices.
+3. Resolve conflicts, then check the one invariant that proves nothing was lost: `git diff <old tip>..<new tip>` must contain only the upstream delta for that release plus whatever you deliberately added. Then run the repository test suite plus production build.
 4. Push the rebased branch to `fork` with lease protection only after explicit approval.
 5. Build `jamesjdoan/freellmapi:provider-routing` from the extension worktree, passing the new commit SHA as `FREELLMAPI_COMMIT_SHA`.
 6. Stop the Compose service and archive the complete named volume while SQLite is quiescent.
