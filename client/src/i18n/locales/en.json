@@ -888,7 +888,17 @@
     "metric_tokens": "tokens",
     "period_provider_defined": "provider-defined",
     "derivedAllowanceHint": "Derived from measured usage against the reported fraction: {low}–{high} across {samples} intervals",
-    "metric_credit_usd": "credit"
+    "metric_credit_usd": "credit",
+    "colPeriod": "Period",
+    "policyEditorHint": "Declare a limit and its reset for a provider that does not report one. Operator policies outrank documentation and catalogue figures, and are outranked by anything the provider measures.",
+    "policyWindowHours": "Window (hours)",
+    "policyAnchorDay": "Reset day of month",
+    "policyTimezone": "Timezone",
+    "policySave": "Save policy",
+    "policyDelete": "Delete policy",
+    "policyDeleteConfirm": "Delete",
+    "resetInferredMark": "(est.)",
+    "resetInferredHint": "Predicted from observed reset boundaries — this provider sends no reset time. Accurate to within the polling interval."
   },
   "logs": {
     "title": "Logs",

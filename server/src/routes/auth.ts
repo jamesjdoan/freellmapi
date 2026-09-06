@@ -88,7 +88,7 @@ function isLoopbackRemote(req: Request): boolean {
 authRouter.get('/status', (req: Request, res: Response) => {
   const session = validateSession(bearer(req));
   res.json({
-    needsSetup: userCount() === 0,
+    needsSetup: (() => { const c = userCount(); console.log("userCount:", c); return c === 0; })(),
     authenticated: !!session,
     email: session?.email ?? null,
   });

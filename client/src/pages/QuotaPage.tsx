@@ -1,12 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { Clock, FileText, Flame, Server, Shield } from 'lucide-react';
+import { Clock, FileText, Flame, Server, Shield, Trash2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { useI18n } from '@/i18n';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { ConfirmButton } from '@/components/confirm-button';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useState } from 'react';
 import { formatSqliteUtcToLocalTime } from '@/lib/utils';
 
 // Define interfaces based on API contracts
@@ -40,6 +44,7 @@ interface ProviderOverviewRow extends QuotaForecastEntry {
   metric: string | null;
   unit: string | null;
   derivedAllowance: { metric: string; limit: number; low: number; high: number; samples: number } | null;
+  resetSource: 'provider' | 'inferred' | null;
 }
 
 interface QuotaForecastEntry {
@@ -169,6 +174,110 @@ function PanelState({ loading, error, empty, emptyKey, children }: {
   return <>{children}</>;
 }
 
+/** Period kinds the API accepts, and what each additionally requires. */
+const PERIOD_KINDS = ['rolling', 'calendar_day', 'calendar_week', 'calendar_month', 'billing_cycle'] as const;
+const METRICS = ['requests', 'input_tokens', 'output_tokens', 'total_tokens', 'credits'] as const;
+const SCOPES = ['provider_account', 'provider_key', 'model', 'shared_pool'] as const;
+
+/**
+ * Operator quota policies — the only place a reset time can be declared for a
+ * provider that does not report one.
+ *
+ * The conditional requirements are enforced here as well as server-side, so a
+ * rolling window without a length is unsubmittable rather than a 400: the API
+ * rejects `rolling` with no periodMs and `billing_cycle` with no anchorDay.
+ */
+function PolicyEditor({ platforms, onSaved }: { platforms: string[]; onSaved: () => void }) {
+  const { t } = useI18n();
+  const [platform, setPlatform] = useState(platforms[0] ?? '');
+  const [modelId, setModelId] = useState('');
+  const [metric, setMetric] = useState<string>('requests');
+  const [scope, setScope] = useState<string>('provider_account');
+  const [limit, setLimit] = useState('');
+  const [periodKind, setPeriodKind] = useState<string>('calendar_day');
+  const [periodHours, setPeriodHours] = useState('');
+  const [timezone, setTimezone] = useState('');
+  const [anchorDay, setAnchorDay] = useState('');
+
+  const save = useMutation({
+    mutationFn: () => apiFetch('/api/quota/policies', {
+      method: 'PUT',
+      body: JSON.stringify({
+        platform,
+        modelId: modelId.trim() || null,
+        metric,
+        scope,
+        limit: Number(limit),
+        periodKind,
+        // The API wants milliseconds; hours is the unit an operator thinks in,
+        // and Ollama's measured session window is 5h.
+        periodMs: periodKind === 'rolling' ? Math.round(Number(periodHours) * 3_600_000) : null,
+        timezone: timezone.trim() || null,
+        anchorDay: periodKind === 'billing_cycle' ? Number(anchorDay) : null,
+      }),
+    }),
+    onSuccess: () => { setLimit(''); onSaved(); },
+  });
+
+  const positive = (value: string): boolean => Number(value) > 0 && Number.isFinite(Number(value));
+  const incomplete = !platform || !positive(limit)
+    || (periodKind === 'rolling' && !positive(periodHours))
+    || (periodKind === 'billing_cycle' && !(Number(anchorDay) >= 1 && Number(anchorDay) <= 31));
+
+  const field = (label: string, control: ReactNode) => (
+    <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+      {label}
+      {control}
+    </label>
+  );
+  const dropdown = (value: string, set: (v: string) => void, options: readonly string[], label: string) => (
+    <Select value={value} onValueChange={(v) => set(v ?? value)}>
+      <SelectTrigger size="sm" aria-label={label}>
+        <SelectValue>{(v: string) => v || value}</SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {options.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
+
+  return (
+    <div className="mt-4 space-y-3 border-t pt-4">
+      <p className="text-xs text-muted-foreground">{t('quota.policyEditorHint')}</p>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {field(t('quota.colProvider'), dropdown(platform, setPlatform, platforms, t('quota.colProvider')))}
+        {field(t('quota.colModel'), (
+          <Input value={modelId} onChange={e => setModelId(e.target.value)}
+            placeholder={t('quota.allModels')} className="h-8 text-sm" />
+        ))}
+        {field(t('quota.colMetric'), dropdown(metric, setMetric, METRICS, t('quota.colMetric')))}
+        {field(t('quota.colScope'), dropdown(scope, setScope, SCOPES, t('quota.colScope')))}
+        {field(t('quota.colLimit'), (
+          <Input value={limit} onChange={e => setLimit(e.target.value)} inputMode="numeric"
+            placeholder="1000" className="h-8 text-sm" />
+        ))}
+        {field(t('quota.colPeriod'), dropdown(periodKind, setPeriodKind, PERIOD_KINDS, t('quota.colPeriod')))}
+        {periodKind === 'rolling' && field(t('quota.policyWindowHours'), (
+          <Input value={periodHours} onChange={e => setPeriodHours(e.target.value)} inputMode="decimal"
+            placeholder="5" className="h-8 text-sm" />
+        ))}
+        {periodKind === 'billing_cycle' && field(t('quota.policyAnchorDay'), (
+          <Input value={anchorDay} onChange={e => setAnchorDay(e.target.value)} inputMode="numeric"
+            placeholder="8" className="h-8 text-sm" />
+        ))}
+        {periodKind !== 'rolling' && field(t('quota.policyTimezone'), (
+          <Input value={timezone} onChange={e => setTimezone(e.target.value)}
+            placeholder="UTC" className="h-8 text-sm" />
+        ))}
+      </div>
+      {save.error ? <p className="text-sm text-destructive">{(save.error as Error).message}</p> : null}
+      <Button size="sm" disabled={incomplete || save.isPending} onClick={() => save.mutate()}>
+        {t('quota.policySave')}
+      </Button>
+    </div>
+  );
+}
+
 export default function QuotaPage() {
   const { t } = useI18n();
 
@@ -231,6 +340,10 @@ export default function QuotaPage() {
       body: JSON.stringify({ platform, maxRequests: 120, maxSeconds: 180, maxPeriod: 'day', confirm: true }),
     }),
     onSuccess: invalidateBurn,
+  });
+  const deletePolicy = useMutation({
+    mutationFn: (id: string) => apiFetch(`/api/quota/policies/${id}`, { method: 'DELETE' }),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['quota', 'policies'] }); },
   });
   const cancelBurn = useMutation({
     mutationFn: (id: string) => apiFetch(`/api/quota/burn/${id}/cancel`, { method: 'POST' }),
@@ -298,7 +411,16 @@ export default function QuotaPage() {
                           : '—'
                         : formatAmount(p.limit, p.unit)}
                     </TableCell>
-                    <TableCell className="text-right">{formatCountdown(p.seconds_until_reset)}</TableCell>
+                    {/* A predicted countdown is marked, because for these
+                        pools the provider sends no reset at all: its 429
+                        carries none and retry-after is empty. */}
+                    <TableCell className="text-right">
+                      {formatCountdown(p.seconds_until_reset)}
+                      {p.resetSource === 'inferred' && p.seconds_until_reset != null
+                        ? <span className="ml-1 text-xs text-muted-foreground"
+                            title={t('quota.resetInferredHint')}>{t('quota.resetInferredMark')}</span>
+                        : null}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">
                       {p.inferred.length === 0 ? '—' : p.inferred.map(w => (
                         // Always prefixed and always carrying its sample count:
@@ -424,6 +546,7 @@ export default function QuotaPage() {
                 <TableHead>{t('quota.colScope')}</TableHead>
                 <TableHead className="text-right">{t('quota.colLimit')}</TableHead>
                 <TableHead>{t('quota.colSource')}</TableHead>
+                <TableHead className="text-right">{t('quota.colAction')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -435,11 +558,25 @@ export default function QuotaPage() {
                   <TableCell>{p.scope}</TableCell>
                   <TableCell className="text-right">{p.limit ?? '—'}</TableCell>
                   <TableCell className="text-muted-foreground">{p.source}</TableCell>
+                  <TableCell className="text-right">
+                    {/* Only an operator declaration can be deleted; a derived
+                        row would just be rebuilt on the next resolve. */}
+                    {p.source === 'operator' ? (
+                      <ConfirmButton onConfirm={() => deletePolicy.mutate(p.id)}
+                        confirmLabel={t('quota.policyDeleteConfirm')} aria-label={t('quota.policyDelete')}>
+                        <Trash2 className="size-4" aria-hidden="true" />
+                      </ConfirmButton>
+                    ) : null}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </PanelState>
+        <PolicyEditor
+          platforms={[...new Set(providers.map(r => r.platform))]}
+          onSaved={() => { void queryClient.invalidateQueries({ queryKey: ['quota', 'policies'] }); }}
+        />
       </Panel>
 
       <Panel icon={Flame} title={t('quota.burnTitle')}>
