@@ -87,10 +87,8 @@ function isLoopbackRemote(req: Request): boolean {
 // Has the dashboard been set up yet, and is this caller authenticated?
 authRouter.get('/status', (req: Request, res: Response) => {
   const session = validateSession(bearer(req));
-  const uc = userCount();
-  console.log('[DEBUG] /api/auth/status userCount:', uc, 'needsSetup:', uc === 0);
   res.json({
-    needsSetup: uc === 0,
+    needsSetup: userCount() === 0,
     authenticated: !!session,
     email: session?.email ?? null,
   });
