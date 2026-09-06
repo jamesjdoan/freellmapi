@@ -1311,6 +1311,24 @@ export function setCooldown(
   persistCooldown(platform, modelId, keyId, expiresAtMs, source, now);
 }
 
+/**
+ * Has this provider/model actually refused recently, by any key?
+ *
+ * Every 429 lays down a cooldown, so an active one is the provider's own word
+ * that the allowance is spent. Distinct from a locally computed headroom of
+ * zero, which is only our arithmetic against a limit we may have estimated.
+ */
+export function hasActiveCooldown(platform: string, modelId: string, now = Date.now()): boolean {
+  try {
+    const row = getDb().prepare(
+      'SELECT 1 AS hit FROM rate_limit_cooldowns WHERE platform = ? AND model_id = ? AND expires_at_ms > ? LIMIT 1',
+    ).get(platform, modelId, now) as { hit: number } | undefined;
+    return row !== undefined;
+  } catch {
+    return false;
+  }
+}
+
 export function isOnCooldown(platform: string, modelId: string, keyId: number): boolean {
   const key = `${platform}:${modelId}:${keyId}:cooldown`;
   const now = Date.now();

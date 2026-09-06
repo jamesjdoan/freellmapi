@@ -1,8 +1,9 @@
 import { getDb, getSetting, setSetting } from '../db/index.js';
 import type { Db } from '../db/types.js';
 import { normalizeGroupKey } from './model-groups.js';
-import { resolveEffectiveQuotas, type EffectiveQuota } from './quota-policy.js';
+import { resolveEffectiveQuotas, type EffectiveQuota, type EffectiveQuotaSource } from './quota-policy.js';
 import { quotaPacing } from './quota-clock.js';
+import { hasActiveCooldown } from './ratelimit.js';
 
 // Quota-aware provider selection, in shadow (ADR ARCH-20260905, W3).
 //
@@ -144,11 +145,21 @@ export interface ShadowDecision {
  */
 export const UNKNOWN_HEADROOM = 0.5;
 
+/** Sources whose zero is a measurement rather than an inference. */
+const MEASURED_SOURCES = new Set<EffectiveQuotaSource>(['provider_header', 'provider_api']);
+
 export function scoreQuotaCandidate(
   quotas: EffectiveQuota[],
   used: (q: EffectiveQuota) => number | null,
   now: number,
   reservationWeight = 1,
+  /**
+   * Whether the provider has actually refused - an active cooldown from a real
+   * 429. Without it, a headroom of zero is our own arithmetic against a limit
+   * we may have estimated, and diverting on it means never finding out whether
+   * the allowance was really spent.
+   */
+  exhaustionConfirmed = false,
 ): Pick<ScoredCandidate, 'score' | 'headroom' | 'paceDelta'> {
   let worstHeadroom: number | null = null;
   let bindingPace: number | null = null;
@@ -166,7 +177,16 @@ export function scoreQuotaCandidate(
         ? quota.derivedUsed
         : used(quota);
     if (consumed == null || quota.limit <= 0) continue;
-    const headroom = Math.max(0, Math.min(1, 1 - consumed / quota.limit));
+    let headroom = Math.max(0, Math.min(1, 1 - consumed / quota.limit));
+    // Spend the last of an allowance before believing it is gone. A measured
+    // zero (a provider reporting remaining=0, or a refusal on record) is a
+    // fact; a zero we computed against an estimated ceiling is a guess, and
+    // acting on it diverts traffic that would have been served. Treating it as
+    // unknown sends exactly one more request - which either succeeds, or 429s
+    // and lays down the cooldown that confirms it.
+    if (headroom === 0 && !exhaustionConfirmed && !MEASURED_SOURCES.has(quota.source)) {
+      headroom = UNKNOWN_HEADROOM;
+    }
     if (worstHeadroom == null || headroom < worstHeadroom) {
       worstHeadroom = headroom;
       bindingPace = quotaPacing(quota.window, now, consumed, quota.limit).paceDelta;
@@ -286,6 +306,7 @@ export function evaluateShadowDecision(
       quota => usedFor(candidate.platform, candidate.modelId, quota),
       now,
       weights[candidate.platform.toLowerCase()] ?? 1,
+      hasActiveCooldown(candidate.platform, candidate.modelId, now),
     );
     return { platform: candidate.platform, modelId: candidate.modelId, endpointScope: candidate.endpointScope, score, headroom, paceDelta };
   });

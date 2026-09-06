@@ -511,7 +511,12 @@ export function resolveEffectiveQuotas(
   `).all(platform) as ObservationRow[];
   for (const obs of observations) {
     if (obs.limit_value == null) continue;
-    const metric: QuotaPolicyMetric = obs.metric === 'tokens' ? 'total_tokens' : 'requests';
+    // 'credits' is its own axis: a provider metering dollars of usage is not
+    // counting requests, and collapsing it to 'requests' would put an opaque
+    // allowance in competition with a real request limit.
+    const metric: QuotaPolicyMetric = obs.metric === 'tokens' ? 'total_tokens'
+      : obs.metric === 'credits' ? 'credits'
+      : 'requests';
     // Same zone-less-UTC trap as the forecast: Date.parse would read this as
     // local time and shift every provider-reported reset by the host offset.
     const resetMs = parseStoredUtc(obs.reset_at) ?? NaN;
