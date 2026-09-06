@@ -43,6 +43,40 @@ export function isMoonshotEndpoint(baseUrl: string): boolean {
  * Covers: Groq, Cerebras, NVIDIA NIM, Mistral, OpenRouter,
  * GitHub Models, Fireworks AI.
  */
+/**
+ * Whether a catalogue endpoint actually reads the Authorization header, keyed by
+ * URL. This is a property of the endpoint rather than of any key, so it is
+ * probed at most once per process: an unauthenticated control request, and if
+ * that succeeds too then a 2xx with a key proves nothing.
+ *
+ * Without this, a provider whose model list is public (Ollama Cloud) had
+ * unfalsifiable key validation - every key healthy forever, including revoked
+ * ones, and a real 401 from a completion was erased by the revalidation it
+ * triggered.
+ */
+const authEnforcement = new Map<string, Promise<boolean>>();
+
+function endpointEnforcesAuth(url: string, probeWithoutKey: () => Promise<Response>): Promise<boolean> {
+  const cached = authEnforcement.get(url);
+  if (cached) return cached;
+  const probe = probeWithoutKey().then(
+    // Anything other than a rejection means the endpoint served us without a
+    // credential, so it cannot be used to judge one.
+    res => res.status === 401 || res.status === 403,
+    // A transport failure is not evidence either way. Assume the endpoint does
+    // enforce auth so a network blip cannot mark every key unverifiable, and do
+    // not memoise it.
+    () => { authEnforcement.delete(url); return true; },
+  );
+  authEnforcement.set(url, probe);
+  return probe;
+}
+
+/** Test seam: drop the memoised probes. */
+export function resetAuthEnforcementProbes(): void {
+  authEnforcement.clear();
+}
+
 export class OpenAICompatProvider extends BaseProvider {
   readonly platform: Platform;
   readonly name: string;
@@ -475,8 +509,22 @@ export class OpenAICompatProvider extends BaseProvider {
   }
 
   async validateKey(apiKey: string, quotaContext?: QuotaObservationContext): Promise<KeyValidationResult> {
-    const res = await this.fetchCatalogEndpoint(this.validateUrl ?? this.modelsUrl, apiKey, quotaContext);
-    return this.validationResult(res);
+    const url = this.validateUrl ?? this.modelsUrl;
+    const res = await this.fetchCatalogEndpoint(url, apiKey, quotaContext);
+    const result = await this.validationResult(res);
+    // A rejection is conclusive on its own - the endpoint clearly reads the
+    // header it just refused.
+    if (result !== true) return result;
+    if (await endpointEnforcesAuth(url, () => this.fetchWithTimeout(url, {
+      method: 'GET',
+      headers: { ...this.extraHeaders },
+    }, 30000, { timeoutBounds: 'request' }))) {
+      return true;
+    }
+    return {
+      valid: null,
+      reason: `${this.name} returns ${res.status} for an unauthenticated request, so this check cannot tell a live key from a dead one`,
+    };
   }
 }
 
