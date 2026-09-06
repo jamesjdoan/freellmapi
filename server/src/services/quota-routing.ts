@@ -195,6 +195,63 @@ function describePreference(best: ScoredCandidate, weight: number): string {
 }
 
 /**
+ * Is this provider/model actually serving right now?
+ *
+ * Quota headroom says nothing about whether a route works. NVIDIA's
+ * openai/gpt-oss-120b served 415 requests, then returned
+ * "410: reached its end of life" on every attempt afterwards — and because its
+ * allowance was consequently untouched, headroom scoring rated it a perfect 1.0
+ * and shadow recommended it 8 times out of 8 while the live router had already
+ * routed around it.
+ *
+ * Deliberately a GATE and not a reliability score. The incumbent router already
+ * owns reliability ranking with its own decay-weighted stats and weights; a
+ * second, differently-shaped reliability model here would duplicate it and
+ * could disagree with it. What quota-aware selection needs is narrower: choose
+ * between providers that are VIABLE, and a route returning nothing but errors
+ * is not one.
+ */
+const LIVENESS_WINDOW_MS = 30 * 60_000;
+/** Below this, "no successes" is a quiet period rather than evidence of death. */
+const LIVENESS_MIN_FAILURES = 3;
+const LIVENESS_TTL_MS = 30_000;
+
+interface LivenessEntry { at: number; serving: boolean }
+const livenessCache = new Map<string, LivenessEntry>();
+
+function isServing(platform: string, modelId: string, now: number): boolean {
+  const cacheKey = `${platform}:${modelId}`;
+  const hit = livenessCache.get(cacheKey);
+  if (hit && now - hit.at < LIVENESS_TTL_MS) return hit.serving;
+
+  let serving = true;
+  try {
+    const since = new Date(now - LIVENESS_WINDOW_MS).toISOString().replace('T', ' ').replace('Z', '');
+    const row = getDb().prepare(`
+      SELECT SUM(status = 'success') AS ok, SUM(status = 'error') AS bad
+        FROM requests
+       WHERE platform = ? AND model_id = ? AND created_at >= ?
+         AND request_type <> 'burn_test'
+    `).get(platform, modelId, since) as { ok: number | null; bad: number | null };
+    const ok = row?.ok ?? 0;
+    const bad = row?.bad ?? 0;
+    // Silence is not evidence: a model nobody has called is unknown, not dead,
+    // and gating it would quietly exclude every provider during a quiet spell.
+    serving = ok > 0 || bad < LIVENESS_MIN_FAILURES;
+  } catch {
+    // No signal is not a reason to exclude a candidate.
+    serving = true;
+  }
+  livenessCache.set(cacheKey, { at: now, serving });
+  return serving;
+}
+
+/** Test seam: drop the memoised liveness reads. */
+export function invalidateLiveness(): void {
+  livenessCache.clear();
+}
+
+/**
  * Which provider quota-aware scoring would prefer among candidates serving one
  * logical model. Pure apart from the quota reads; makes no routing change.
  */
@@ -207,7 +264,17 @@ export function evaluateShadowDecision(
 
   const logicalModel = normalizeGroupKey(candidates[0]!.displayName);
   const weights = getReservationWeights();
-  const scored: ScoredCandidate[] = candidates.map(candidate => {
+
+  // Viability before economy. A route that is only producing errors must not be
+  // preferred for having an untouched allowance.
+  const viable = candidates.filter(candidate => isServing(candidate.platform, candidate.modelId, now));
+  if (viable.length === 0) {
+    // Nothing here is serving. Naming a favourite among dead routes is exactly
+    // the failure this gate exists to prevent, so decline to have an opinion.
+    return null;
+  }
+
+  const scored: ScoredCandidate[] = viable.map(candidate => {
     const quotas = resolveEffectiveQuotas(candidate.platform, candidate.modelId, now, candidate.endpointScope ?? null);
     const { score, headroom, paceDelta } = scoreQuotaCandidate(
       quotas,

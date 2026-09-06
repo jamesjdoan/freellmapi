@@ -5,6 +5,7 @@ import {
   getQuotaRoutingMode,
   setQuotaRoutingMode,
   evaluateShadowDecision,
+  invalidateLiveness,
   recordRoutingDecision,
   getShadowAgreementStats,
   listRoutingDecisions,
@@ -329,5 +330,89 @@ describe('shadow mode never alters selection', () => {
     const routed = routeRequest(100);
     routed.release?.();
     expect(routed.platform).toBe('groq');
+  });
+});
+
+/**
+ * Quota headroom says nothing about whether a route works, and a dead route's
+ * allowance stays untouched — so headroom rates it perfect. Observed in
+ * production: NVIDIA's openai/gpt-oss-120b returned "410: reached its end of
+ * life" on every attempt, and shadow recommended it 8 times out of 8 while the
+ * live router had already routed around it.
+ */
+describe('liveness gate', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare('DELETE FROM requests').run();
+    invalidateLiveness();
+  });
+
+  const noQuota = () => null;
+  const peers = (): QuotaCandidate[] => ([
+    { platform: 'nvidia', modelId: 'openai/gpt-oss-120b', displayName: 'GPT OSS 120B' },
+    { platform: 'groq', modelId: 'openai/gpt-oss-120b', displayName: 'GPT OSS 120B' },
+  ]);
+
+  function seed(platform: string, modelId: string, outcome: 'success' | 'error', n: number, ageMinutes = 1): void {
+    const at = new Date(Date.now() - ageMinutes * 60_000).toISOString().replace('T', ' ').replace('Z', '');
+    const stmt = getDb().prepare(`
+      INSERT INTO requests (platform, model_id, status, input_tokens, output_tokens, latency_ms, error, created_at)
+      VALUES (?, ?, ?, 0, 0, 10, ?, ?)
+    `);
+    for (let i = 0; i < n; i++) stmt.run(platform, modelId, outcome, outcome === 'error' ? 'HTTP 410 end of life' : null, at);
+  }
+
+  it('excludes a route that is only producing errors', () => {
+    seed('nvidia', 'openai/gpt-oss-120b', 'error', 5);
+    seed('groq', 'openai/gpt-oss-120b', 'success', 3);
+    const decision = evaluateShadowDecision(peers(), noQuota);
+    expect(decision!.preferred!.platform).toBe('groq');
+    // The dead route is not merely outranked, it is not a candidate.
+    expect(decision!.candidates.map(c => c.platform)).toEqual(['groq']);
+  });
+
+  it('keeps a route that is failing but still serving', () => {
+    // Flaky is not dead, and reliability ranking belongs to the incumbent
+    // router — this gate only removes routes producing nothing at all.
+    seed('nvidia', 'openai/gpt-oss-120b', 'error', 5);
+    seed('nvidia', 'openai/gpt-oss-120b', 'success', 1);
+    seed('groq', 'openai/gpt-oss-120b', 'success', 3);
+    const platforms = evaluateShadowDecision(peers(), noQuota)!.candidates.map(c => c.platform).sort();
+    expect(platforms).toEqual(['groq', 'nvidia']);
+  });
+
+  it('treats silence as unknown, not as death', () => {
+    // No traffic at all for either. Gating on absence would exclude every
+    // candidate during a quiet spell.
+    const platforms = evaluateShadowDecision(peers(), noQuota)!.candidates.map(c => c.platform).sort();
+    expect(platforms).toEqual(['groq', 'nvidia']);
+  });
+
+  it('ignores failures older than the window', () => {
+    seed('nvidia', 'openai/gpt-oss-120b', 'error', 9, 120);
+    const platforms = evaluateShadowDecision(peers(), noQuota)!.candidates.map(c => c.platform).sort();
+    expect(platforms).toEqual(['groq', 'nvidia']);
+  });
+
+  it('does not read burn-test traffic as death', () => {
+    // A burn run reaches the limit on purpose; its refusals say nothing about
+    // whether the route works.
+    const at = new Date().toISOString().replace('T', ' ').replace('Z', '');
+    const stmt = getDb().prepare(`
+      INSERT INTO requests (platform, model_id, status, input_tokens, output_tokens, latency_ms, error, request_type, created_at)
+      VALUES ('nvidia', 'openai/gpt-oss-120b', 'error', 0, 0, 10, 'HTTP 429', 'burn_test', ?)
+    `);
+    for (let i = 0; i < 9; i++) stmt.run(at);
+    const platforms = evaluateShadowDecision(peers(), noQuota)!.candidates.map(c => c.platform).sort();
+    expect(platforms).toEqual(['groq', 'nvidia']);
+  });
+
+  it('declines to have an opinion when nothing is serving', () => {
+    seed('nvidia', 'openai/gpt-oss-120b', 'error', 5);
+    seed('groq', 'openai/gpt-oss-120b', 'error', 5);
+    // Naming a favourite among dead routes is the failure this gate exists to
+    // prevent.
+    expect(evaluateShadowDecision(peers(), noQuota)).toBeNull();
   });
 });
