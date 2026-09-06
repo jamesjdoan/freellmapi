@@ -1035,7 +1035,8 @@ async function streamCompletion(
       // cooldown/penalty (not a provider-health signal).
       throw Object.assign(
         new Error(`empty completion from ${route.displayName} (stream produced no content and no tool calls)`),
-        upstreamFinish === 'length' ? { skipBench: true } : {},
+        // Same estimator this surface uses for its own accounting (line ~524).
+        upstreamFinish === 'length' ? { skipBench: true, wastedInputTokens: estimateTokens(messages) } : {},
       );
     }
 

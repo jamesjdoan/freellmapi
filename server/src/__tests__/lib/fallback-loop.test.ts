@@ -808,3 +808,66 @@ describe('runFallbackLoop: client disconnect + attempt log', () => {
     expect(attemptLog[0].errorClass).toBe('rate_limited');
   });
 });
+
+/**
+ * The skipBench exemption is priced, not just counted.
+ *
+ * It exists because benching a healthy reasoning model for spending its output
+ * budget on hidden reasoning cost a 90s cooldown per truncated turn. That holds
+ * while a retry is cheap. In production it was not: nemotron-3-super on Ollama
+ * returned nothing to ~215k-token prompts and, being exempt, was retried —
+ * about 2.3M input tokens and roughly a quarter of a session allowance spent on
+ * empty responses.
+ */
+describe('the skipBench exemption is bounded by what it wastes', () => {
+  const emptyErr = (route: RouteResult, wastedInputTokens?: number) =>
+    Object.assign(new Error(`empty completion from ${route.displayName}`), {
+      skipBench: true,
+      ...(wastedInputTokens == null ? {} : { wastedInputTokens }),
+    });
+  const cooldownFor = (route: RouteResult) =>
+    getDb().prepare('SELECT 1 FROM rate_limit_cooldowns WHERE platform = ? AND key_id = ?').get('fake', route.keyId);
+
+  it('lifts on the first attempt that wastes more than the budget', () => {
+    const route = fakeRoute();
+    // One 215k-token prefill returning nothing. Under the count-only rule this
+    // was attempt 1 of 3 and cost two more prefills to learn nothing.
+    expect(recordRetryableFailure(route, emptyErr(route, 215_000), newFallbackState())).toBe(false);
+    expect(cooldownFor(route)).toBeDefined();
+  });
+
+  it('still gives an ordinary truncated turn its attempts', () => {
+    // The case the exemption was built for: a small prompt, cheap to retry.
+    const route = fakeRoute();
+    for (let i = 1; i < EMPTY_COMPLETION_STREAK_LIMIT; i++) {
+      expect(recordRetryableFailure(route, emptyErr(route, 2_000), newFallbackState())).toBe(true);
+    }
+    expect(cooldownFor(route)).toBeUndefined();
+  });
+
+  it('adds up waste across attempts', () => {
+    // Neither attempt alone exceeds the budget; together they do, and the
+    // second is where it lifts rather than at some later count.
+    const route = fakeRoute();
+    expect(recordRetryableFailure(route, emptyErr(route, 60_000), newFallbackState())).toBe(true);
+    expect(recordRetryableFailure(route, emptyErr(route, 60_000), newFallbackState())).toBe(false);
+  });
+
+  it('a success clears the wasted total, not just the count', () => {
+    const route = fakeRoute();
+    recordRetryableFailure(route, emptyErr(route, 60_000), newFallbackState());
+    recordUpstreamSuccess(route, 0);
+    // The model demonstrably works now, so it is not still carrying a debt.
+    expect(recordRetryableFailure(route, emptyErr(route, 60_000), newFallbackState())).toBe(true);
+  });
+
+  it('falls back to counting when the surface reports no size', () => {
+    // An error without wastedInputTokens must behave exactly as before rather
+    // than becoming unbounded or benching immediately.
+    const route = fakeRoute();
+    for (let i = 1; i < EMPTY_COMPLETION_STREAK_LIMIT; i++) {
+      expect(recordRetryableFailure(route, emptyErr(route), newFallbackState())).toBe(true);
+    }
+    expect(recordRetryableFailure(route, emptyErr(route), newFallbackState())).toBe(false);
+  });
+});
