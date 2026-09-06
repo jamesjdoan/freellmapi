@@ -41,7 +41,12 @@ function seedProvider(platform: string, priority: number): void {
     INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, size_label,
       rpm_limit, rpd_limit, tpm_limit, tpd_limit, monthly_token_budget, context_window, enabled,
       supports_vision, supports_tools)
-    VALUES (?, ?, ?, 1, 1, 'Frontier', NULL, NULL, NULL, NULL, '~1M', 128000, 1, 0, 1)
+    -- monthly_token_budget is '' (the column is NOT NULL, so empty means "no
+    -- documented pool") because "unmetered" in these tests has to really be
+    -- unmetered. It used to read '~1M' as inert filler; once quota-policy began
+    -- reading documented monthly pools that filler became a real quota, and
+    -- silently gave every provider a limit these tests assume it lacks.
+    VALUES (?, ?, ?, 1, 1, 'Frontier', NULL, NULL, NULL, NULL, '', 128000, 1, 0, 1)
   `).run(platform, MODEL_ID, `Nemotron 3 Ultra (${platform})`).lastInsertRowid);
 
   db.prepare('INSERT INTO fallback_config (model_db_id, priority, enabled) VALUES (?, ?, 1)').run(modelDbId, priority);

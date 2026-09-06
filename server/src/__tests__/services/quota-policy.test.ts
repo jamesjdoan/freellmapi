@@ -5,6 +5,7 @@ import {
   upsertQuotaPolicy,
   deleteQuotaPolicy,
   resolveEffectiveQuotas,
+  conservativeMonthlyBudget,
   periodForPolicy,
   type EffectiveQuota,
 } from '../../services/quota-policy.js';
@@ -294,5 +295,60 @@ describe('learned ceilings from refusals', () => {
     // limit of nothing.
     recordLearnedCeiling({ platform: 'opencode', keyId: 1, quotaPoolKey: 'opencode::promo', observedRequests: 0 });
     expect(getLearnedCeiling('opencode')).toBeNull();
+  });
+});
+
+/**
+ * `models.monthly_token_budget` is prose: real values are '~10-20M', '~5-10M',
+ * 'unlimited'. Without reading it, Ollama Cloud had no numeric quota at all and
+ * shadow scoring pinned it at UNKNOWN_HEADROOM on every request — it could
+ * never be seen filling up, which for a monthly pool is the one thing worth
+ * knowing. Observed as 23 of 23 disagreements on one logical model.
+ */
+describe('documented monthly token pools', () => {
+  it('reads the low end of a range, not the high one', () => {
+    // profiles.ts takes the MAX for ranking. As a ceiling that over-promises:
+    // claiming 20M when the allowance may be 10M reports headroom that does
+    // not exist.
+    expect(conservativeMonthlyBudget('~10-20M')).toBe(10_000_000);
+    expect(conservativeMonthlyBudget('~5-10M')).toBe(5_000_000);
+  });
+
+  it('handles single values and other magnitudes', () => {
+    expect(conservativeMonthlyBudget('500K')).toBe(500_000);
+    expect(conservativeMonthlyBudget('2B')).toBe(2_000_000_000);
+    expect(conservativeMonthlyBudget('750000')).toBe(750_000);
+  });
+
+  it('declines to turn "unlimited" into a limit', () => {
+    // An unbounded ceiling makes headroom permanently 100%, which is worse
+    // than having no opinion.
+    expect(conservativeMonthlyBudget('unlimited')).toBeNull();
+    expect(conservativeMonthlyBudget('∞')).toBeNull();
+  });
+
+  it('ignores trailing notes in parentheses', () => {
+    expect(conservativeMonthlyBudget('~10-20M (shared across models)')).toBe(10_000_000);
+  });
+
+  it('returns null for anything it cannot read', () => {
+    for (const raw of [null, undefined, '', 'see docs', 'n/a']) {
+      expect(conservativeMonthlyBudget(raw)).toBeNull();
+    }
+  });
+
+  it('becomes a monthly quota the scorer can actually use', () => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare(`
+      INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, monthly_token_budget, enabled)
+      VALUES ('ollama', 'monthly-pool-test', 'Monthly Pool Test', 50, 50, '~10-20M', 1)
+    `).run();
+    const quotas = resolveEffectiveQuotas('ollama', 'monthly-pool-test', Date.parse('2026-03-10T05:00:00Z'));
+    const monthly = quotas.find(q => q.metric === 'total_tokens' && q.period.kind === 'calendar_month');
+    expect(monthly).toBeDefined();
+    expect(monthly!.limit).toBe(10_000_000);
+    // A range is not a measurement, and must never outrank one.
+    expect(monthly!.confidence).toBeLessThan(0.4);
   });
 });
