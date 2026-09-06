@@ -93,7 +93,9 @@ describe('provider usage APIs', () => {
   });
 
   it('only claims the providers it can actually read', () => {
-    // A registry, so adding one is a reader and nothing else.
-    expect(platformsWithUsageApi()).toEqual(['ollama']);
+    // A registry, so adding one is a reader and nothing else. Both of these
+    // were found by probing: Ollama's /api/usage is undocumented, OpenRouter's
+    // /api/v1/credits is not.
+    expect(platformsWithUsageApi().sort()).toEqual(['ollama', 'openrouter']);
   });
 });

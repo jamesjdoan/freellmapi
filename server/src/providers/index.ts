@@ -161,6 +161,11 @@ register(new OpenAICompatProvider({
   platform: 'huggingface',
   name: 'HuggingFace Router',
   baseUrl: 'https://router.huggingface.co/v1',
+  // The router serves /v1/models to anyone, so validating against it could
+  // never fail and every HF key read as unverifiable forever. whoami-v2 does
+  // read the header — 200 with a real token, 401 with a bad one and 401 with
+  // none — so it can actually tell a live credential from a revoked one.
+  validateUrl: 'https://huggingface.co/api/whoami-v2',
 }));
 
 // Moonshot direct integration was dropped in V4 (paid-only); MiniMax direct
