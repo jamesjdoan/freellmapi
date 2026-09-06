@@ -1,5 +1,6 @@
 import { getDb } from '../db/index.js';
 import { parseStoredUtc } from './quota-clock.js';
+import { ollamaCallCostUsd } from '../data/ollama-model-rates.js';
 
 // Estimating quota shape from behaviour, for the providers that state nothing.
 //
@@ -304,7 +305,9 @@ export function inferWindowsFromRecovery(platform: string): InferredWindow[] {
 
 export interface InferredAllowance {
   quotaPoolKey: string;
-  metric: 'requests' | 'total_tokens';
+  /** 'credit_usd' is the only one of these that holds still across traffic
+   *  mixes; see the note on inferAllowanceFromFraction. */
+  metric: 'requests' | 'total_tokens' | 'credit_usd';
   /** Median implied size of the allowance, in `metric` units. */
   limit: number;
   /** Range across the sampled intervals — the honest error bar. */
@@ -369,6 +372,16 @@ export function inferAllowanceFromFraction(
 
   const perRequest: number[] = [];
   const perToken: number[] = [];
+  const perDollar: number[] = [];
+  const priceInterval = getDb().prepare(`
+    SELECT model_id,
+           COALESCE(SUM(input_tokens), 0) AS input_tokens,
+           COALESCE(SUM(output_tokens), 0) AS output_tokens
+      FROM requests
+     WHERE platform = ? AND created_at > ? AND created_at <= ?
+       AND request_type <> 'burn_test'
+     GROUP BY model_id
+  `);
   for (let i = 1; i < rows.length; i++) {
     const before = rows[i - 1]!;
     const after = rows[i]!;
@@ -384,6 +397,27 @@ export function inferAllowanceFromFraction(
     }
     if (usage.requests > 0) perRequest.push(usage.requests / consumed);
     if (usage.tokens > 0) perToken.push(usage.tokens / consumed);
+
+    // The same spend priced at the provider's published per-model rates. This
+    // is the figure that survives a change of traffic mix, because it is what
+    // the provider is actually metering.
+    if (platform === 'ollama') {
+      try {
+        const perModel = priceInterval.all(platform, before.observed_at, after.observed_at) as
+          { model_id: string; input_tokens: number; output_tokens: number }[];
+        let dollars = 0;
+        let priced = true;
+        for (const row of perModel) {
+          const cost = ollamaCallCostUsd(row.model_id, row.input_tokens, row.output_tokens,
+            new Date(parseStoredUtc(after.observed_at) ?? Date.now()));
+          // One unpriced model makes the interval's total wrong rather than
+          // merely incomplete, so the whole interval is dropped.
+          if (cost == null) { priced = false; break; }
+          dollars += cost;
+        }
+        if (priced && dollars > 0) perDollar.push(dollars / consumed);
+      } catch { /* pricing is additive: losing it leaves the token estimate */ }
+    }
   }
 
   const median = (values: number[]): number => {
@@ -394,19 +428,26 @@ export function inferAllowanceFromFraction(
   const out: InferredAllowance[] = [];
   // Three intervals is the fewest that can show a spread rather than a pair of
   // numbers that happen to differ.
-  for (const [metric, values] of [['requests', perRequest], ['total_tokens', perToken]] as const) {
+  for (const [metric, values] of [
+    ['credit_usd', perDollar], ['total_tokens', perToken], ['requests', perRequest],
+  ] as const) {
     if (values.length < 3) continue;
     out.push({
       quotaPoolKey,
       metric,
-      limit: Math.round(median(values)),
-      low: Math.round(Math.min(...values)),
-      high: Math.round(Math.max(...values)),
+      // Dollars are kept in cents so the integer column can hold them.
+      limit: metric === 'credit_usd' ? Math.round(median(values) * 100) : Math.round(median(values)),
+      low: metric === 'credit_usd' ? Math.round(Math.min(...values) * 100) : Math.round(Math.min(...values)),
+      high: metric === 'credit_usd' ? Math.round(Math.max(...values) * 100) : Math.round(Math.max(...values)),
       samples: values.length,
       // Derived from our own counting against someone else's fraction, and
       // only valid for the traffic mix that produced it.
       confidence: confidenceFor(values.length, 0.15),
-      note: `${values.length} intervals, implied ${Math.round(median(values)).toLocaleString()} ${metric}`,
+      // Dollars hold still across mixes and tokens do not, so only the dollar
+      // figure gets the higher confidence.
+      note: metric === 'credit_usd'
+        ? `${values.length} intervals, implied $${median(values).toFixed(2)} of credit`
+        : `${values.length} intervals, implied ${Math.round(median(values)).toLocaleString()} ${metric} at the sampled traffic mix`,
     });
   }
   return out;

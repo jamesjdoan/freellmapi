@@ -887,7 +887,8 @@
     "metric_credits": "credit balance",
     "metric_tokens": "tokens",
     "period_provider_defined": "provider-defined",
-    "derivedAllowanceHint": "Derived from measured usage against the reported fraction: {low}–{high} across {samples} intervals"
+    "derivedAllowanceHint": "Derived from measured usage against the reported fraction: {low}–{high} across {samples} intervals",
+    "metric_credit_usd": "credit"
   },
   "logs": {
     "title": "Logs",

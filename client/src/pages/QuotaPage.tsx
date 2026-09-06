@@ -115,6 +115,11 @@ function formatCompact(value: number): string {
   return String(value);
 }
 
+/** A derived allowance in credit arrives in cents; anything else is a count. */
+function formatAllowance(value: number, metric: string): string {
+  return metric === 'credit_usd' ? `$${(value / 100).toFixed(2)}` : formatCompact(value);
+}
+
 function formatCountdown(seconds: number | null): string {
   if (seconds == null || seconds <= 0) return '—';
   const h = Math.floor(seconds / 3600);
@@ -283,11 +288,12 @@ export default function QuotaPage() {
                       {p.unit === 'per_10k'
                         ? p.derivedAllowance
                           ? <span title={t('quota.derivedAllowanceHint', {
-                              low: formatCompact(p.derivedAllowance.low),
-                              high: formatCompact(p.derivedAllowance.high),
+                              low: formatAllowance(p.derivedAllowance.low, p.derivedAllowance.metric),
+                              high: formatAllowance(p.derivedAllowance.high, p.derivedAllowance.metric),
                               samples: p.derivedAllowance.samples,
                             })}>
-                              ~{formatCompact(p.derivedAllowance.limit)} {t(`quota.metric_${p.derivedAllowance.metric}`)}
+                              ~{formatAllowance(p.derivedAllowance.limit, p.derivedAllowance.metric)}
+                              {p.derivedAllowance.metric === 'credit_usd' ? '' : ` ${t(`quota.metric_${p.derivedAllowance.metric}`)}`}
                             </span>
                           : '—'
                         : formatAmount(p.limit, p.unit)}
