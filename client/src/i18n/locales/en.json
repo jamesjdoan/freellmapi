@@ -878,7 +878,15 @@
     "burnPhase_recovering": "Awaiting reset",
     "burnPhase_complete": "Complete",
     "burnPhase_cancelled": "Stopped",
-    "burnPhase_failed": "Failed"
+    "burnPhase_failed": "Failed",
+    "colCounts": "Counts",
+    "metric_requests": "requests",
+    "metric_total_tokens": "tokens",
+    "metric_input_tokens": "input tokens",
+    "metric_output_tokens": "output tokens",
+    "metric_credits": "credit balance",
+    "metric_tokens": "tokens",
+    "period_provider_defined": "provider-defined"
   },
   "logs": {
     "title": "Logs",

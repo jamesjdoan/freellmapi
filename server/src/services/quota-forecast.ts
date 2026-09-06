@@ -151,6 +151,14 @@ export interface ProviderQuotaOverviewRow {
    *  'local' = we hold a declared limit and counted our own requests against
    *  it, which is an estimate and must not be presented as confirmed. */
   usedSource: 'provider' | 'local' | null;
+  /**
+   * What the numbers COUNT. Without it a credit balance and a request
+   * allowance sit in the same column looking identical: OpenRouter's
+   * openrouter::credits reads 1200 (cents of balance) beside a 1000/day
+   * free-model request cap, and nothing on the row says they answer different
+   * questions.
+   */
+  metric: string | null;
   /** What behaviour suggests, for providers that publish nothing. Empty when
    *  there is no evidence, or when the provider reports its own numbers and
    *  guessing would add nothing. Never merged into `limit`/`remaining` — an
@@ -189,7 +197,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
     const seenMeasured = new Set<string>(reported.map(r => r.pool ?? ''));
     for (const pool of reported) {
       const state = states.find(s => s.platform === platform && s.quotaPoolKey === pool.pool);
-      rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true, usedSource: 'provider', inferred: [] });
+      rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true, usedSource: 'provider', inferred: [], metric: 'requests' });
     }
 
     // 1b. Pools the provider measured in some OTHER unit — Ollama Cloud reports
@@ -220,6 +228,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         metered: true,
         usedSource: 'provider',
         inferred: [],
+        metric: state.metric,
       });
     }
 
@@ -265,6 +274,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         // never implies the provider confirmed this number.
         usedSource: 'local',
         inferred: [],
+        metric: quota.metric,
       });
     }
 
@@ -283,6 +293,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         metered: false,
         usedSource: null,
         inferred: [],
+        metric: null,
       });
     }
   }
