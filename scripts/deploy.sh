@@ -77,7 +77,24 @@ docker tag "$build_tag" "$image_repo:$live_tag" || fail "could not promote $buil
 
 # ── 4. Start it ─────────────────────────────────────────────────────────────
 step "recreating $container"
-( cd "$compose_dir" && docker compose up -d ) || fail "compose up failed"
+# `up -d` removes the old container and immediately rebinds the host port, and
+# Docker does not always release it in time: seen twice, failing with
+# "ports are not available ... address already in use" while the port was free
+# a second later. Retried a few times, so the transient race resolves itself
+# while a genuine conflict - something else actually listening - still fails.
+compose_attempts="${DEPLOY_COMPOSE_ATTEMPTS:-4}"
+compose_ok=0
+for attempt in $(seq 1 "$compose_attempts"); do
+  if ( cd "$compose_dir" && docker compose up -d ); then compose_ok=1; break; fi
+  if (( attempt < compose_attempts )); then
+    echo "    compose up failed (attempt $attempt/$compose_attempts), retrying"
+    sleep "${DEPLOY_COMPOSE_BACKOFF:-4}"
+  fi
+done
+if (( compose_ok == 0 )); then
+  holder="$(lsof -nP -iTCP:3001 -sTCP:LISTEN 2>/dev/null | tail -1 || true)"
+  fail "compose up failed after $compose_attempts attempts${holder:+ — port 3001 held by: $holder}"
+fi
 
 # ── 5. Verify. The step the old command skipped ─────────────────────────────
 step "waiting for $container to serve"

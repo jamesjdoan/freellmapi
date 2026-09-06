@@ -26,7 +26,15 @@ case "$1" in
   build) exit \${STUB_BUILD_EXIT:-0} ;;
   tag)   exit 0 ;;
   run)   exit 0 ;;
-  compose) exit \${STUB_COMPOSE_EXIT:-0} ;;
+  compose)
+    # STUB_COMPOSE_FAIL_FIRST makes the first call fail and later ones succeed,
+    # which is the transient port race.
+    if [[ -n "\${STUB_COMPOSE_FAIL_FIRST:-}" ]]; then
+      marker="\${TMPDIR:-/tmp}/stub-compose-called"
+      if [[ ! -f "$marker" ]]; then touch "$marker"; exit 1; fi
+      rm -f "$marker"; exit 0
+    fi
+    exit \${STUB_COMPOSE_EXIT:-0} ;;
   inspect)
     # 'docker inspect <name> --format ...' for container state or image id
     if [[ "$*" == *".State.Status"* ]]; then echo "\${STUB_STATE:-running}"; exit 0; fi
@@ -73,6 +81,8 @@ async function runDeploy(bin, env = {}) {
         // clock into the suite.
         DEPLOY_WAIT_SECONDS: '1',
         DEPLOY_POLL_SECONDS: '0.1',
+        DEPLOY_COMPOSE_ATTEMPTS: '2',
+        DEPLOY_COMPOSE_BACKOFF: '0.1',
         ...env,
       },
     });
@@ -94,8 +104,19 @@ test('fails when compose cannot start the container', async (t) => {
   const { bin } = await sandbox(t);
   const result = await runDeploy(bin, { STUB_COMPOSE_EXIT: '1' });
   assert.equal(result.ok, false);
-  assert.match(result.stderr, /compose up failed/);
+  assert.match(result.stderr, /compose up failed after 2 attempts/);
   assert.doesNotMatch(result.stdout, /deployed/);
+});
+
+test('retries a compose failure that clears on its own', async (t) => {
+  const { bin } = await sandbox(t);
+  // `up -d` removes the old container and immediately rebinds the host port;
+  // Docker does not always release it in time. Seen twice for real, with the
+  // port free a second later.
+  const result = await runDeploy(bin, { STUB_COMPOSE_FAIL_FIRST: '1' });
+  assert.equal(result.ok, true, result.stderr);
+  assert.match(result.stdout, /retrying/);
+  assert.match(result.stdout, /deployed/);
 });
 
 test('fails when the container is created but never runs — the original bug', async (t) => {
