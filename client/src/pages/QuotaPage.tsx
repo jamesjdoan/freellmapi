@@ -37,6 +37,7 @@ interface ProviderOverviewRow extends QuotaForecastEntry {
   metered: boolean;
   usedSource: 'provider' | 'local' | null;
   inferred: InferredWindow[];
+  metric: string | null;
 }
 
 interface QuotaForecastEntry {
@@ -225,6 +226,7 @@ export default function QuotaPage() {
               <TableRow>
                 <TableHead>{t('quota.colProvider')}</TableHead>
                 <TableHead>{t('quota.colPool')}</TableHead>
+                <TableHead>{t('quota.colCounts')}</TableHead>
                 <TableHead className="text-right">{t('quota.colUsed')}</TableHead>
                 <TableHead className="text-right">{t('quota.colRemaining')}</TableHead>
                 <TableHead className="text-right">{t('quota.colLimit')}</TableHead>
@@ -243,6 +245,16 @@ export default function QuotaPage() {
                   <TableRow key={`${p.platform}:${p.pool ?? 'unknown'}`}>
                     <TableCell className="font-medium">{p.platform}</TableCell>
                     <TableCell className="text-muted-foreground">{p.pool ?? '—'}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {p.metric ? t(`quota.metric_${p.metric}`) : '—'}
+                    </TableCell>
+                    {/* Deliberately unformatted. Two providers report 'credits'
+                        in different units - OpenRouter in cents of balance,
+                        Ollama in ten-thousandths of an opaque allowance - and
+                        nothing on the row distinguishes them, so rendering
+                        either as money would be a guess. The Counts column
+                        says what the number is; Remaining % carries the
+                        meaning either way. */}
                     <TableCell className="text-right">{p.used ?? '—'}</TableCell>
                     <TableCell className="text-right">{p.remaining ?? '—'}</TableCell>
                     <TableCell className="text-right">{p.limit ?? '—'}</TableCell>
