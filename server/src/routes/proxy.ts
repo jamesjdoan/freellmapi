@@ -1245,7 +1245,7 @@ proxyRouter.post('/completions', async (req: Request, res: Response) => {
             // but skip the cooldown/penalty: not a provider-health signal.
             throw Object.assign(
               new Error(`empty completion from ${route.displayName} (legacy stream produced no text)`),
-              upstreamFinish === 'length' ? { skipBench: true } : {},
+              upstreamFinish === 'length' ? { skipBench: true, wastedInputTokens: estimatedInputTokens } : {},
             );
           }
 
@@ -2356,7 +2356,7 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
             // the cooldown/penalty (not a provider-health signal).
             throw Object.assign(
               new Error(`empty completion from ${route.displayName} (stream produced no content and no tool calls)`),
-              upstreamFinish === 'length' ? { skipBench: true } : {},
+              upstreamFinish === 'length' ? { skipBench: true, wastedInputTokens: estimatedInputTokens } : {},
             );
           }
           // #809: a bare "safe"/"unsafe" classification word streamed by a
@@ -2365,7 +2365,7 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
           if (isUpstreamClassificationOutput(heldText, route.platform) && completedCalls.length === 0) {
             throw Object.assign(
               new Error(`empty completion from ${route.displayName} (upstream classification output)`),
-              upstreamFinish === 'length' ? { skipBench: true } : {},
+              upstreamFinish === 'length' ? { skipBench: true, wastedInputTokens: estimatedInputTokens } : {},
             );
           }
 

@@ -235,10 +235,28 @@ export function cooldownDecisionForError(route: RouteResult, err: any): Cooldown
 // toward the breaker). Format violations (skipModelForRequest) never accrue:
 // they are model behavior for THIS request's response_format, not key health.
 export const EMPTY_COMPLETION_STREAK_LIMIT = 3;
+/**
+ * How much prompt the skipBench exemption may waste on one model+key before it
+ * stops applying, regardless of how few attempts that took.
+ *
+ * The exemption exists because benching a healthy reasoning model for spending
+ * its output budget on hidden reasoning cost a 90s cooldown per truncated turn.
+ * That reasoning holds while a retry is cheap. It does not hold at scale:
+ * nemotron-3-super on Ollama returned nothing to ~215k-token prompts and, being
+ * exempt, was retried - about 2.3M input tokens and roughly a quarter of a
+ * session allowance spent on empty responses.
+ *
+ * So the exemption is priced, not just counted. 100k is above any single
+ * ordinary prompt, so a normal truncated turn still gets its three attempts,
+ * while one enormous one exhausts the exemption immediately.
+ */
+export const EMPTY_COMPLETION_WASTE_BUDGET = 100_000;
 const emptyCompletionStreaks = new Map<string, number>(); // "platform:modelId:keyId"
+const emptyCompletionWaste = new Map<string, number>(); // same key, input tokens burned
 
 export function resetEmptyCompletionStreaks(): void {
   emptyCompletionStreaks.clear();
+  emptyCompletionWaste.clear();
 }
 
 /** Drop every model's sliding failure window. Module state outlives a test
@@ -259,12 +277,20 @@ function consumeSkipBenchExemption(route: RouteResult, err: any): boolean {
     // A normally-penalized failure breaks the streak: the cooldown ladder is
     // already handling whatever is wrong with this model+key.
     emptyCompletionStreaks.delete(key);
+    emptyCompletionWaste.delete(key);
     return false;
   }
   if (err?.skipModelForRequest === true) return true;
   const streak = (emptyCompletionStreaks.get(key) ?? 0) + 1;
   emptyCompletionStreaks.set(key, streak);
-  return streak < EMPTY_COMPLETION_STREAK_LIMIT;
+  // What this attempt threw away. The provider prefilled the prompt and
+  // returned nothing, so the prompt is the cost of having tried.
+  const wasted = typeof err?.wastedInputTokens === 'number' && Number.isFinite(err.wastedInputTokens)
+    ? Math.max(0, err.wastedInputTokens)
+    : 0;
+  const totalWasted = (emptyCompletionWaste.get(key) ?? 0) + wasted;
+  emptyCompletionWaste.set(key, totalWasted);
+  return streak < EMPTY_COMPLETION_STREAK_LIMIT && totalWasted < EMPTY_COMPLETION_WASTE_BUDGET;
 }
 
 /**
@@ -447,6 +473,7 @@ export function recordUpstreamSuccess(route: RouteResult, rateLimitTokens: numbe
   // A served request proves the model+key can complete: the empty-completion
   // streak (#751) starts over.
   emptyCompletionStreaks.delete(`${route.platform}:${route.modelId}:${route.keyId}`);
+  emptyCompletionWaste.delete(`${route.platform}:${route.modelId}:${route.keyId}`);
   // A served request is the strongest possible evidence the model works, so
   // clear any model-level failure streak that could bench it later.
   clearModelFailure(route);

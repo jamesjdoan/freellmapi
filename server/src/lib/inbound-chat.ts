@@ -261,7 +261,7 @@ export async function runInboundChat(
         if (!text && !reasoning && toolCalls.length === 0) {
           throw Object.assign(
             new Error(`empty completion from ${route.displayName}`),
-            result.choices?.[0]?.finish_reason === 'length' ? { skipBench: true } : {},
+            result.choices?.[0]?.finish_reason === 'length' ? { skipBench: true, wastedInputTokens: estimatedInputTokens } : {},
           );
         }
         // #809: a bare "safe"/"unsafe" classification word from a relay is an
@@ -270,7 +270,7 @@ export async function runInboundChat(
         if (isUpstreamClassificationOutput(text, route.platform) && toolCalls.length === 0) {
           throw Object.assign(
             new Error(`empty completion from ${route.displayName} (upstream classification output)`),
-            result.choices?.[0]?.finish_reason === 'length' ? { skipBench: true } : {},
+            result.choices?.[0]?.finish_reason === 'length' ? { skipBench: true, wastedInputTokens: estimatedInputTokens } : {},
           );
         }
         if (wantsTools && text && toolCalls.length === 0) {
@@ -475,7 +475,7 @@ export async function runInboundChat(
           if (clientGone) return 'committed';
           throw Object.assign(
             new Error(`empty completion from ${route.displayName}`),
-            finishReason === 'length' ? { skipBench: true } : {},
+            finishReason === 'length' ? { skipBench: true, wastedInputTokens: estimatedInputTokens } : {},
           );
         }
         // #809: bare "safe"/"unsafe" classification output from a relay is an
@@ -485,7 +485,7 @@ export async function runInboundChat(
           if (clientGone) return 'committed';
           throw Object.assign(
             new Error(`empty completion from ${route.displayName} (upstream classification output)`),
-            finishReason === 'length' ? { skipBench: true } : {},
+            finishReason === 'length' ? { skipBench: true, wastedInputTokens: estimatedInputTokens } : {},
           );
         }
 
