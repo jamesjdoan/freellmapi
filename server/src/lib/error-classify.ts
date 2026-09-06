@@ -328,9 +328,38 @@ export function isAbortLikeError(err: any): boolean {
 //     ordinary payload rejections never classify as key-auth.
 //   - any other status → not key-auth (e.g. a 403 stays model-forbidden).
 //   - no status at all → key-specific OR generic auth substrings.
+/**
+ * A 401/403 whose body blames the MODEL rather than the credential.
+ *
+ * Observed live: OpenCode Zen answers a model it does not serve with
+ * `401: Model north-mini-code-free is not supported`. The status code is simply
+ * wrong on their side — a 404 would be correct — but taken at face value it
+ * reads as "your key is bad", and one such response condemned a whole key that
+ * had nothing wrong with it.
+ *
+ * Same class of provider sloppiness that isModelAccessForbiddenError already
+ * absorbs one status code over, where "user is not allowed to access model X"
+ * arrives as a 400.
+ *
+ * A message naming the credential wins: providers that mention both are
+ * telling us about the key.
+ */
+export function isModelScopedAuthError(err: any): boolean {
+  const msg = (err?.message ?? '').toLowerCase();
+  if (!msg.includes('model')) return false;
+  if (msg.includes('api key') || msg.includes('api_key') || msg.includes('apikey')
+    || msg.includes('unauthorized') || msg.includes('credential')
+    || msg.includes('authentication')) return false;
+  return msg.includes('not supported') || msg.includes('unsupported')
+    || msg.includes('not found') || msg.includes('does not exist')
+    || msg.includes('unknown model') || msg.includes('no such model')
+    || msg.includes('not available');
+}
+
 export function isKeyAuthError(err: any): boolean {
   const status = typeof err?.status === 'number' ? err.status : 0;
-  if (status === 401) return true;
+  // A 401 that names the model is evidence about the model, not the key.
+  if (status === 401) return !isModelScopedAuthError(err);
   const msg = (err?.message ?? '').toLowerCase();
   const keySpecific = msg.includes('api key not valid')
     || msg.includes('api key expired')
