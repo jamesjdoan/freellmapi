@@ -368,10 +368,13 @@ function allowanceFor(platform: string, quotaPoolKey: string, now: number): Infe
   let value: InferredAllowance | null = null;
   try {
     const all = inferAllowanceFromFraction(platform, quotaPoolKey);
-    // Tokens over requests: Ollama meters GPU time, so a request count depends
-    // entirely on how big the requests were, while tokens at least track the
-    // work done.
-    value = all.find(a => a.metric === 'total_tokens') ?? all[0] ?? null;
+    // Dollars first: measured on real traffic, the token figure swung 4.9x
+    // between traffic mixes while the priced one moved 1.3x, because dollars
+    // are what the provider is metering. Tokens are the fallback for a mix we
+    // cannot price.
+    value = all.find(a => a.metric === 'credit_usd')
+      ?? all.find(a => a.metric === 'total_tokens')
+      ?? all[0] ?? null;
   } catch {
     value = null;
   }

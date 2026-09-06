@@ -368,3 +368,86 @@ describe('deriving an allowance from a reported fraction', () => {
     expect(inferAllowanceFromFraction('ollama', 'ollama::session')).toEqual([]);
   });
 });
+
+/**
+ * The token-denominated allowance is not stable. Measured on real traffic it
+ * swung 4.9x between mixes — 71.9M tokens from a nemotron-3-super-heavy sample,
+ * 14.8M from an ultra-heavy one — because ultra's input costs 6.7x super's.
+ * Priced at the published rates the same spend moved 1.3x, so the dollar figure
+ * is the one worth showing.
+ */
+describe('pricing the derived allowance', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare('DELETE FROM provider_quota_observations').run();
+    getDb().prepare('DELETE FROM requests').run();
+  });
+
+  function seedSeries(steps: number[]): void {
+    const insert = getDb().prepare(`
+      INSERT INTO provider_quota_observations
+        (id, platform, key_id, quota_pool_key, metric, unit, limit_value, remaining_value, source, confidence, observed_at)
+      VALUES (?, 'ollama', 1, 'ollama::weekly', 'credits', 'per_10k', 10000, ?, 'quota_api', 0.9, ?)
+    `);
+    steps.forEach((remaining, i) =>
+      insert.run(`p-${i}`, remaining, isoAt(Date.UTC(2026, 0, 25) + i * 10 * 60_000)));
+  }
+
+  function seedCall(minute: number, modelId: string, inputTokens: number): void {
+    getDb().prepare(`
+      INSERT INTO requests (platform, model_id, status, input_tokens, output_tokens, latency_ms, created_at)
+      VALUES ('ollama', ?, 'success', ?, 0, 10, ?)
+    `).run(modelId, inputTokens, isoAt(Date.UTC(2026, 0, 25) + minute * 60_000));
+  }
+
+  it('derives the allowance in credit, and prefers it', () => {
+    // 1% of the pool per 1M nemotron-3-super input tokens = $0.015, so the
+    // pool holds $1.50.
+    seedSeries([10_000, 9_900, 9_800, 9_700]);
+    [5, 15, 25].forEach(m => seedCall(m, 'nemotron-3-super', 1_000_000));
+
+    const all = inferAllowanceFromFraction('ollama', 'ollama::weekly');
+    const credit = all.find(a => a.metric === 'credit_usd');
+    expect(credit).toBeDefined();
+    // Held in cents so an integer column can carry it.
+    expect(credit!.limit).toBe(150);
+    // Dollars lead, because they are what the provider meters.
+    expect(all[0]!.metric).toBe('credit_usd');
+  });
+
+  it('gives the same credit answer from a completely different mix', () => {
+    // The whole point: ultra costs 6.7x super per input token, so the token
+    // figure moves and the priced one does not. Same $0.015 of spend per 1%.
+    seedSeries([10_000, 9_900, 9_800, 9_700]);
+    [5, 15, 25].forEach(m => seedCall(m, 'nemotron-3-ultra', 150_000));
+
+    const all = inferAllowanceFromFraction('ollama', 'ollama::weekly');
+    expect(all.find(a => a.metric === 'credit_usd')!.limit).toBe(150);
+    // ...while the token figure for this mix is 6.7x smaller than the last.
+    expect(all.find(a => a.metric === 'total_tokens')!.limit).toBe(15_000_000);
+  });
+
+  it('drops an interval it cannot price rather than half-pricing it', () => {
+    // One unpriced model makes the interval's total wrong, not merely
+    // incomplete.
+    seedSeries([10_000, 9_900, 9_800, 9_700]);
+    [5, 15, 25].forEach(m => seedCall(m, 'some-unlisted-model', 1_000_000));
+
+    const all = inferAllowanceFromFraction('ollama', 'ollama::weekly');
+    expect(all.some(a => a.metric === 'credit_usd')).toBe(false);
+    // The token estimate still stands; it needs no rate.
+    expect(all.some(a => a.metric === 'total_tokens')).toBe(true);
+  });
+
+  it('does not price a platform with no published rates', () => {
+    getDb().prepare(`
+      INSERT INTO provider_quota_observations
+        (id, platform, key_id, quota_pool_key, metric, limit_value, remaining_value, source, confidence, observed_at)
+      VALUES (?, 'openrouter', 1, 'openrouter::credits', 'credits', 1200, ?, 'quota_api', 0.9, ?)
+    `);
+    // Only Ollama has a rate table; nothing else should acquire one by accident.
+    expect(inferAllowanceFromFraction('openrouter', 'openrouter::credits')
+      .some(a => a.metric === 'credit_usd')).toBe(false);
+  });
+});
