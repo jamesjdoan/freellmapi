@@ -120,3 +120,56 @@ describe('unverifiable key validation', () => {
     expect(keyRow(id).enabled).toBe(1);
   });
 });
+
+/**
+ * The mirror of the unverifiable path. Where validation can never conclude, a
+ * completed inference is the only thing that can, so it has to be able to
+ * promote a key — otherwise a working Ollama or NVIDIA key reads 'unknown'
+ * forever. Observed with a real key: six models answering, status still
+ * 'unknown', because promotion only looked at 'error'.
+ */
+describe('a served request promotes a key the check cannot judge', () => {
+  let nextId = 9500;
+
+  beforeAll(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+  });
+
+  function seed(status: string, lastError: string | null = null): number {
+    const id = ++nextId;
+    const enc = encrypt(`promote-${id}`);
+    getDb().prepare(`
+      INSERT INTO api_keys (id, platform, label, encrypted_key, iv, auth_tag, enabled, status, last_health_error)
+      VALUES (?, 'ollama', ?, ?, ?, ?, 1, ?, ?)
+    `).run(id, `k${id}`, enc.encrypted, enc.iv, enc.authTag, status, lastError);
+    return id;
+  }
+
+  const statusOf = (id: number) => (getDb()
+    .prepare('SELECT status FROM api_keys WHERE id = ?').get(id) as { status: string }).status;
+
+  it('promotes unknown, so an unverifiable provider is not stuck there', async () => {
+    const { markKeyHealthyFromRequest } = await import('../../services/health.js');
+    const id = seed('unknown');
+    markKeyHealthyFromRequest(id);
+    expect(statusOf(id)).toBe('healthy');
+  });
+
+  it('still promotes a key stranded by a transport blip', async () => {
+    const { markKeyHealthyFromRequest } = await import('../../services/health.js');
+    const id = seed('error', 'ECONNRESET');
+    markKeyHealthyFromRequest(id);
+    expect(statusOf(id)).toBe('healthy');
+  });
+
+  it('does not resurrect a credential the provider explicitly rejected', async () => {
+    const { markKeyHealthyFromRequest } = await import('../../services/health.js');
+    const id = seed('invalid', 'HTTP 401 Unauthorized');
+    markKeyHealthyFromRequest(id);
+    // Routing never selects an invalid key, so this cannot fire in practice —
+    // but widening it to 'invalid' would let one stray success undo a
+    // confirmed rejection.
+    expect(statusOf(id)).toBe('invalid');
+  });
+});

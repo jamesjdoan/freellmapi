@@ -241,17 +241,27 @@ export async function probeKeyValidity(keyId: number): Promise<KeyProbeOutcome> 
 }
 
 /**
- * Promote a key out of 'error' after it successfully served a live request.
+ * Promote a key to 'healthy' after it successfully served a live request.
  *
- * Serving traffic is stronger evidence than any probe, so a key stuck at 'error'
- * from an earlier transport blip should not have to wait for the next health pass
- * to become routable again. Deliberately narrow: 'invalid' means a provider
- * confirmed the credential is bad, and only a real validateKey pass clears that.
+ * Serving traffic is stronger evidence than any probe, so a key stuck at
+ * 'error' from an earlier transport blip should not have to wait for the next
+ * health pass to become routable again.
+ *
+ * 'unknown' is included for the same reason the unverifiable path exists: where
+ * a provider serves its model list without a credential (Ollama Cloud, NVIDIA
+ * NIM), validation can never conclude, so a freshly added key would read
+ * 'unknown' forever even once it had demonstrably answered. A completed
+ * inference is the strongest evidence available about a credential — it is what
+ * makes a real 401 decisive over an unfalsifiable 200, and the same logic has
+ * to apply to a real success.
+ *
+ * Still deliberately narrow: 'invalid' means a provider explicitly rejected the
+ * credential, and only a real validateKey pass clears that.
  */
 export function markKeyHealthyFromRequest(keyId: number): void {
   try {
     getDb()
-      .prepare("UPDATE api_keys SET status = 'healthy', last_health_error = NULL WHERE id = ? AND status = 'error'")
+      .prepare("UPDATE api_keys SET status = 'healthy', last_health_error = NULL WHERE id = ? AND status IN ('error', 'unknown')")
       .run(keyId);
     failureCount.delete(keyId);
   } catch {
