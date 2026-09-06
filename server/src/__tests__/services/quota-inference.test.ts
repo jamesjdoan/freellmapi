@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initDb, getDb } from '../../db/index.js';
-import { inferWindowFromRefill, inferWindowsFromRecovery, inferQuotaShape } from '../../services/quota-inference.js';
+import { inferWindowFromRefill, inferWindowFromResets, inferWindowsFromRecovery, inferQuotaShape } from '../../services/quota-inference.js';
 
 // These tests encode the two behavioural estimators against series whose true
 // window is known by construction, plus the cases where the honest answer is
@@ -165,5 +165,83 @@ describe('quota inference', () => {
     it('reports an empty shape for a platform with no evidence either way', () => {
       expect(inferQuotaShape('ollama').windows).toEqual([]);
     });
+  });
+});
+
+/**
+ * Ollama Cloud's session and weekly allowances, read from its usage API, reset
+ * in a step rather than refilling. The rate estimator is the wrong model for
+ * that: a 1450-unit jump seen across a 5-minute poll implies a 34-minute window
+ * for one that is really hours long. What identifies the window is how often
+ * the step happens.
+ */
+describe('reset interval', () => {
+  function seedSeries(pool: string, points: { minutesAgo: number; remaining: number }[], limit = 10_000): void {
+    const insert = getDb().prepare(`
+      INSERT INTO provider_quota_observations
+        (id, platform, key_id, quota_pool_key, metric, limit_value, remaining_value, source, confidence, observed_at)
+      VALUES (?, 'ollama', 1, ?, 'credits', ?, ?, 'quota_api', 0.9, ?)
+    `);
+    const base = Date.UTC(2026, 0, 10);
+    points.forEach((p, i) => insert.run(`r-${pool}-${i}`, pool, limit, p.remaining,
+      isoAt(base + p.minutesAgo * 60_000)));
+  }
+
+  /** Consumption then a jump back to full, repeated every `everyMinutes`. */
+  function cyclingSeries(everyMinutes: number, cycles: number): { minutesAgo: number; remaining: number }[] {
+    const out: { minutesAgo: number; remaining: number }[] = [];
+    for (let c = 0; c < cycles; c++) {
+      const start = c * everyMinutes;
+      out.push({ minutesAgo: start, remaining: 10_000 });          // freshly reset
+      out.push({ minutesAgo: start + everyMinutes * 0.4, remaining: 6_000 });
+      out.push({ minutesAgo: start + everyMinutes * 0.8, remaining: 3_000 });  // spent
+    }
+    return out;
+  }
+
+  it('measures a five-hour window as its own, not rounded to a day', () => {
+    // 5h sits almost equidistant from 'hour' and 'day' in log space and is
+    // neither. Naming one would state something false.
+    seedSeries('ollama::session', cyclingSeries(300, 4));
+    const inferred = inferWindowFromResets('ollama', 'ollama::session', 'credits');
+    expect(inferred).not.toBeNull();
+    expect(inferred!.period).toBe('provider_defined');
+    expect(inferred!.impliedSeconds).toBeCloseTo(5 * 3600, -2);
+    expect(inferred!.method).toBe('reset_interval');
+  });
+
+  it('names a standard window when the measurement matches one', () => {
+    seedSeries('ollama::hourly', cyclingSeries(60, 4));
+    expect(inferWindowFromResets('ollama', 'ollama::hourly', 'credits')!.period).toBe('hour');
+  });
+
+  it('needs two resets before it will claim a period', () => {
+    // One boundary is a boundary, not an interval.
+    seedSeries('ollama::thin', [
+      { minutesAgo: 0, remaining: 3_000 },
+      { minutesAgo: 30, remaining: 10_000 },
+    ]);
+    expect(inferWindowFromResets('ollama', 'ollama::thin', 'credits')).toBeNull();
+  });
+
+  it('does not read a trickle upward as a reset', () => {
+    // A leaky bucket recovering while idle never steps back to full from far
+    // below it, and must not be mistaken for a period boundary.
+    seedSeries('ollama::trickle', [
+      { minutesAgo: 0, remaining: 5_000 },
+      { minutesAgo: 10, remaining: 5_400 },
+      { minutesAgo: 20, remaining: 5_900 },
+      { minutesAgo: 30, remaining: 6_300 },
+      { minutesAgo: 40, remaining: 6_800 },
+    ]);
+    expect(inferWindowFromResets('ollama', 'ollama::trickle', 'credits')).toBeNull();
+  });
+
+  it('outranks the rate estimator, which mismodels a step reset', () => {
+    seedSeries('ollama::session2', cyclingSeries(300, 4));
+    const shape = inferQuotaShape('ollama').windows.find(w => w.method === 'reset_interval');
+    expect(shape).toBeDefined();
+    // The rate estimator would have called this sub-hourly off the jump size.
+    expect(shape!.impliedSeconds).toBeGreaterThan(3 * 3600);
   });
 });

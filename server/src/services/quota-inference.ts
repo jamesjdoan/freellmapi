@@ -25,8 +25,8 @@ const STANDARD_PERIODS = [
   { period: 'month' as const, seconds: 2_592_000 },
 ];
 
-export type InferredPeriod = (typeof STANDARD_PERIODS)[number]['period'];
-export type InferenceMethod = 'refill_rate' | 'recovery_time';
+export type InferredPeriod = (typeof STANDARD_PERIODS)[number]['period'] | 'provider_defined';
+export type InferenceMethod = 'refill_rate' | 'recovery_time' | 'reset_interval';
 
 export interface InferredWindow {
   period: InferredPeriod;
@@ -42,7 +42,24 @@ export interface InferredWindow {
   note: string;
 }
 
-function snapToPeriod(seconds: number): { period: InferredPeriod; seconds: number } {
+/** How far a measurement may sit from a standard window and still be called it.
+ *  A factor of two either way; beyond that the provider has picked its own. */
+const SNAP_TOLERANCE = Math.log(2);
+
+/**
+ * Like snapToPeriod, but for a DIRECT measurement rather than a rate estimate.
+ * A 5-hour session window is nearly equidistant from 'hour' and 'day' in log
+ * space and is neither; rounding it to one would state something false, so it
+ * comes back as provider_defined with the measured length intact.
+ */
+function classifyMeasuredWindow(seconds: number): { period: InferredPeriod; seconds: number } {
+  const snapped = snapToPeriod(seconds);
+  return Math.abs(Math.log(seconds / snapped.seconds)) <= SNAP_TOLERANCE
+    ? snapped
+    : { period: 'provider_defined', seconds: Math.round(seconds) };
+}
+
+function snapToPeriod(seconds: number): { period: (typeof STANDARD_PERIODS)[number]['period']; seconds: number } {
   let best = STANDARD_PERIODS[0]!;
   let bestDistance = Infinity;
   for (const candidate of STANDARD_PERIODS) {
@@ -126,6 +143,77 @@ export function inferWindowFromRefill(
     samples: gains.length,
     confidence: confidenceFor(gains.length, 0.2),
     note: `refill ~${rate.toPrecision(3)}/s against a limit of ${limit}`,
+  };
+}
+
+/**
+ * Infer the window by timing the gaps between resets.
+ *
+ * For a pool that refills continuously, the rate identifies the window
+ * (inferWindowFromRefill). For one that resets in a step — Ollama Cloud's
+ * session and weekly allowances, read from its usage API — the rate says
+ * nothing: a jump of 1450 units observed across a 5-minute poll implies a
+ * 34-minute window for one that is really hours long. What identifies THAT
+ * window is how often the step happens.
+ *
+ * A reset is a jump to at least RESET_FLOOR of the limit from below
+ * RESET_CEILING of it — a step back to full, not a trickle upward, so a leaky
+ * bucket recovering while idle is not mistaken for a period boundary.
+ */
+const RESET_FLOOR = 0.9;
+const RESET_CEILING = 0.7;
+
+export function inferWindowFromResets(
+  platform: string,
+  quotaPoolKey: string,
+  metric: string,
+): InferredWindow | null {
+  let points: RemainingPoint[];
+  try {
+    const rows = getDb().prepare(`
+      SELECT observed_at, remaining_value, limit_value
+        FROM provider_quota_observations
+       WHERE platform = ? AND quota_pool_key = ? AND metric = ?
+         AND remaining_value IS NOT NULL AND limit_value IS NOT NULL AND limit_value > 0
+       ORDER BY observed_at
+    `).all(platform, quotaPoolKey, metric) as { observed_at: string; remaining_value: number; limit_value: number }[];
+    points = rows.flatMap(r => {
+      const at = parseStoredUtc(r.observed_at);
+      return at == null ? [] : [{ at, remaining: r.remaining_value, limit: r.limit_value }];
+    });
+  } catch {
+    return null;
+  }
+
+  const resetAt: number[] = [];
+  for (let i = 1; i < points.length; i++) {
+    const previous = points[i - 1]!;
+    const current = points[i]!;
+    if (previous.remaining < RESET_CEILING * previous.limit
+      && current.remaining >= RESET_FLOOR * current.limit) {
+      resetAt.push(current.at);
+    }
+  }
+  // One reset gives a boundary but no period. Two give one interval, which is
+  // the fewest that can measure anything.
+  if (resetAt.length < 2) return null;
+
+  const intervals: number[] = [];
+  for (let i = 1; i < resetAt.length; i++) intervals.push((resetAt[i]! - resetAt[i - 1]!) / 1000);
+  intervals.sort((a, b) => a - b);
+  const median = intervals[Math.floor(intervals.length / 2)]!;
+  if (!(median > 0)) return null;
+
+  const classified = classifyMeasuredWindow(median);
+  return {
+    ...classified,
+    impliedSeconds: median,
+    method: 'reset_interval',
+    samples: intervals.length,
+    // A timed boundary is direct evidence, unlike a rate extrapolated from
+    // consumption — so it earns the top of the inference band.
+    confidence: confidenceFor(intervals.length, 0.3),
+    note: `${resetAt.length} resets observed, median ${Math.round(median)}s apart`,
   };
 }
 
@@ -232,7 +320,10 @@ export function inferQuotaShape(platform: string): QuotaShape {
        WHERE platform = ? AND remaining_value IS NOT NULL AND limit_value IS NOT NULL
     `).all(platform) as { quota_pool_key: string; metric: string }[];
     for (const pool of pools) {
-      const inferred = inferWindowFromRefill(platform, pool.quota_pool_key, pool.metric);
+      // A timed reset boundary beats a rate extrapolated from consumption, and
+      // is the only estimator that works for a pool resetting in a step.
+      const inferred = inferWindowFromResets(platform, pool.quota_pool_key, pool.metric)
+        ?? inferWindowFromRefill(platform, pool.quota_pool_key, pool.metric);
       if (inferred) windows.push(inferred);
     }
   } catch {

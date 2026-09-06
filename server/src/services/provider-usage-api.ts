@@ -26,8 +26,9 @@ const FRACTION_UNITS = 10_000;
 
 interface UsageObservation {
   quotaPoolKey: string;
-  /** 0..1 of the allowance consumed. */
-  usedFraction: number;
+  /** Whatever unit the provider counts in, already scaled to integers. */
+  limit: number;
+  remaining: number;
   notes: string;
 }
 
@@ -51,17 +52,63 @@ async function readOllamaUsage(apiKey: string): Promise<UsageObservation[]> {
     // 0 is a legitimate reading — a freshly reset window — so only a
     // non-number is missing data.
     if (typeof usage !== 'number' || !Number.isFinite(usage)) continue;
+    const usedFraction = Math.max(0, Math.min(1, usage));
     out.push({
       quotaPoolKey: `ollama::${window}`,
-      usedFraction: Math.max(0, Math.min(1, usage)),
+      limit: FRACTION_UNITS,
+      remaining: Math.round((1 - usedFraction) * FRACTION_UNITS),
       notes: `ollama /api/usage limits.${window}.usage=${usage}`,
     });
   }
   return out;
 }
 
+/**
+ * OpenRouter. Documented, unlike Ollama's: /api/v1/credits returns the credit
+ * balance in dollars, and /api/v1/auth/key returns spend per period.
+ *
+ * Recorded in cents, because the columns are integers and a balance is not.
+ *
+ * `is_free_tier` is the field that decides which free-model request allowance
+ * applies - 50 a day on the free tier, 1000 once the account holds credit - so
+ * it is captured in the note rather than guessed at.
+ */
+async function readOpenRouterUsage(apiKey: string): Promise<UsageObservation[]> {
+  const headers = { Authorization: `Bearer ${apiKey}` };
+  const res = await fetch('https://openrouter.ai/api/v1/credits', {
+    headers, signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) return [];
+  const body = await res.json() as { data?: { total_credits?: unknown; total_usage?: unknown } };
+  const total = body?.data?.total_credits;
+  const used = body?.data?.total_usage;
+  if (typeof total !== 'number' || !Number.isFinite(total) || total <= 0) return [];
+  if (typeof used !== 'number' || !Number.isFinite(used)) return [];
+
+  let tier = '';
+  try {
+    const keyRes = await fetch('https://openrouter.ai/api/v1/auth/key', {
+      headers, signal: AbortSignal.timeout(15_000),
+    });
+    if (keyRes.ok) {
+      const keyBody = await keyRes.json() as { data?: { is_free_tier?: unknown; usage_daily?: unknown } };
+      // Never the key label or id - those identify the credential.
+      tier = ` is_free_tier=${keyBody?.data?.is_free_tier} usage_daily=${keyBody?.data?.usage_daily}`;
+    }
+  } catch { /* the balance alone is still worth recording */ }
+
+  const cents = (dollars: number): number => Math.round(dollars * 100);
+  return [{
+    quotaPoolKey: 'openrouter::credits',
+    limit: cents(total),
+    remaining: Math.max(0, cents(total) - cents(used)),
+    notes: `openrouter /api/v1/credits total=${total} used=${used}${tier}`,
+  }];
+}
+
 const USAGE_READERS: Partial<Record<Platform, (apiKey: string) => Promise<UsageObservation[]>>> = {
   ollama: readOllamaUsage,
+  openrouter: readOpenRouterUsage,
 };
 
 export function platformsWithUsageApi(): Platform[] {
@@ -108,7 +155,6 @@ export async function pollProviderUsageApis(): Promise<number> {
       continue;
     }
     for (const observation of observations) {
-      const remaining = Math.round((1 - observation.usedFraction) * FRACTION_UNITS);
       try {
         recordQuotaObservation({
           platform: row.platform as Platform,
@@ -117,8 +163,8 @@ export async function pollProviderUsageApis(): Promise<number> {
           // The allowance is credit, not requests or tokens: Ollama meters
           // dollars of usage at per-model token rates.
           metric: 'credits',
-          limit: FRACTION_UNITS,
-          remaining,
+          limit: observation.limit,
+          remaining: observation.remaining,
           // The provider reports how much is left but not when it comes back.
           // Inventing a reset instant would be the one thing worse than not
           // having one.
