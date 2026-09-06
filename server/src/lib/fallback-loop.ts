@@ -1353,12 +1353,34 @@ async function runFallbackLoopAttempts(hooks: FallbackHooks, trace: RequestTrace
  * a refusal is a statement about the request that was rejected, and attributing
  * it to a token ceiling would be a guess on top of a guess.
  */
+/**
+ * Does this refusal name a spend limit rather than a call limit?
+ *
+ * A request ceiling can only be learned from a refusal about requests. Ollama
+ * Cloud meters GPU time and says "you have reached your session usage limit";
+ * counting the calls that happened to precede that produces a number with no
+ * meaning, on a window (a day) that is not even the one that refused.
+ */
+function isUsageDenominatedRefusal(err: unknown): boolean {
+  const message = String((err as { message?: unknown } | null)?.message ?? '').toLowerCase();
+  return message.includes('usage limit')
+    || message.includes('credit')
+    || message.includes('out of funds')
+    || message.includes('insufficient balance');
+}
+
 function noteLearnedCeiling(route: RouteResult, err: unknown): void {
   try {
     const cls = classifyAttemptError(err);
     if (cls !== 'rate_limited' && cls !== 'daily_quota_exhausted') return;
     if (resolveEffectiveQuotas(route.platform, route.modelId)
       .some(q => q.metric === 'requests' && q.source !== 'learned_429')) return;
+    // Only learn a REQUEST ceiling from a refusal about requests. Ollama Cloud
+    // answers an exhausted session with "you have reached your session usage
+    // limit", which is credit spent, not calls made - and learning it as a
+    // request cap invented a 201-per-day limit that would keep reading
+    // exhausted for hours after the session itself had reset.
+    if (isUsageDenominatedRefusal(err)) return;
 
     recordLearnedCeiling({
       platform: route.platform as Platform,

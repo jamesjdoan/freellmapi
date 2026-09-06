@@ -282,19 +282,23 @@ describe('deriving an allowance from a reported fraction', () => {
 
   it('divides measured usage by the fraction it consumed', () => {
     // 1% of the pool per 250k tokens implies a 25M-token allowance.
+    // 3% of the pool per 250k tokens across one run: 750k spent for 9% of the
+    // pool implies 8.33M. A run has to move at least 5% before dividing by it
+    // means anything.
     seedFractionSeries([
       { minute: 0, remaining: 10_000 },
-      { minute: 10, remaining: 9_900 },
-      { minute: 20, remaining: 9_800 },
-      { minute: 30, remaining: 9_700 },
+      { minute: 10, remaining: 9_700 },
+      { minute: 20, remaining: 9_400 },
+      { minute: 30, remaining: 9_100 },
     ]);
     [5, 15, 25].forEach(m => seedRequest(m, 250_000));
 
     const tokens = inferAllowanceFromFraction('ollama', 'ollama::session')
       .find(a => a.metric === 'total_tokens');
     expect(tokens).toBeDefined();
-    expect(tokens!.limit).toBe(25_000_000);
-    expect(tokens!.samples).toBe(3);
+    expect(tokens!.limit).toBeCloseTo(8_333_333, -3);
+    // One run, aggregated - not three separate divisions.
+    expect(tokens!.samples).toBe(1);
   });
 
   it('counts failed requests, because the provider did', () => {
@@ -303,32 +307,33 @@ describe('deriving an allowance from a reported fraction', () => {
     // only would inflate the implied allowance without bound.
     seedFractionSeries([
       { minute: 0, remaining: 10_000 },
-      { minute: 10, remaining: 9_900 },
-      { minute: 20, remaining: 9_800 },
-      { minute: 30, remaining: 9_700 },
+      { minute: 10, remaining: 9_700 },
+      { minute: 20, remaining: 9_400 },
+      { minute: 30, remaining: 9_100 },
     ]);
     [5, 15, 25].forEach(m => seedRequest(m, 250_000, 'error'));
 
     expect(inferAllowanceFromFraction('ollama', 'ollama::session')
-      .find(a => a.metric === 'total_tokens')!.limit).toBe(25_000_000);
+      .find(a => a.metric === 'total_tokens')!.limit).toBeCloseTo(8_333_333, -3);
   });
 
-  it('reports the spread, not just the middle', () => {
+  it('reports the spread across runs, not within one', () => {
+    // Two runs split by a reset. Within a run the spend is summed, because a
+    // call misattributed between two polls is still inside the same run; the
+    // error bar comes from comparing whole runs.
     seedFractionSeries([
       { minute: 0, remaining: 10_000 },
-      { minute: 10, remaining: 9_900 },
-      { minute: 20, remaining: 9_800 },
-      { minute: 30, remaining: 9_700 },
+      { minute: 10, remaining: 9_000 },   // run A: 10% for 1M tokens -> 10M
+      { minute: 20, remaining: 10_000 },  // reset
+      { minute: 30, remaining: 9_000 },   // run B: 10% for 2M tokens -> 20M
     ]);
-    seedRequest(5, 200_000);
-    seedRequest(15, 250_000);
-    seedRequest(25, 300_000);
+    seedRequest(5, 1_000_000);
+    seedRequest(25, 2_000_000);
     const tokens = inferAllowanceFromFraction('ollama', 'ollama::session')
       .find(a => a.metric === 'total_tokens')!;
-    // An allowance derived this way carries a real error bar and must show it.
-    expect(tokens.low).toBe(20_000_000);
-    expect(tokens.high).toBe(30_000_000);
-    expect(tokens.limit).toBe(25_000_000);
+    expect(tokens.samples).toBe(2);
+    expect(tokens.low).toBeCloseTo(10_000_000, -4);
+    expect(tokens.high).toBeCloseTo(20_000_000, -4);
   });
 
   it('ignores intervals where the pool went up or held still', () => {
@@ -343,7 +348,9 @@ describe('deriving an allowance from a reported fraction', () => {
     expect(inferAllowanceFromFraction('ollama', 'ollama::session')).toEqual([]);
   });
 
-  it('declines below three intervals rather than reporting a pair', () => {
+  it('declines a run too small to divide by', () => {
+    // 2% of the pool: the provider's 0.01% granularity and the attribution of
+    // calls to polls both matter more than the signal at that size.
     seedFractionSeries([
       { minute: 0, remaining: 10_000 },
       { minute: 10, remaining: 9_900 },
@@ -356,9 +363,9 @@ describe('deriving an allowance from a reported fraction', () => {
   it('excludes burn-test traffic, which spends on purpose', () => {
     seedFractionSeries([
       { minute: 0, remaining: 10_000 },
-      { minute: 10, remaining: 9_900 },
-      { minute: 20, remaining: 9_800 },
-      { minute: 30, remaining: 9_700 },
+      { minute: 10, remaining: 9_700 },
+      { minute: 20, remaining: 9_400 },
+      { minute: 30, remaining: 9_100 },
     ]);
     const insert = getDb().prepare(`
       INSERT INTO requests (platform, model_id, status, input_tokens, output_tokens, latency_ms, request_type, created_at)
@@ -402,16 +409,16 @@ describe('pricing the derived allowance', () => {
   }
 
   it('derives the allowance in credit, and prefers it', () => {
-    // 1% of the pool per 1M nemotron-3-super input tokens = $0.015, so the
-    // pool holds $1.50.
-    seedSeries([10_000, 9_900, 9_800, 9_700]);
+    // 3% of the pool per 1M nemotron-3-super input tokens = $0.015, so 9% of
+    // the pool costs $0.045 and the pool holds $0.50.
+    seedSeries([10_000, 9_700, 9_400, 9_100]);
     [5, 15, 25].forEach(m => seedCall(m, 'nemotron-3-super', 1_000_000));
 
     const all = inferAllowanceFromFraction('ollama', 'ollama::weekly');
     const credit = all.find(a => a.metric === 'credit_usd');
     expect(credit).toBeDefined();
     // Held in cents so an integer column can carry it.
-    expect(credit!.limit).toBe(150);
+    expect(credit!.limit).toBe(50);
     // Dollars lead, because they are what the provider meters.
     expect(all[0]!.metric).toBe('credit_usd');
   });
@@ -419,19 +426,18 @@ describe('pricing the derived allowance', () => {
   it('gives the same credit answer from a completely different mix', () => {
     // The whole point: ultra costs 6.7x super per input token, so the token
     // figure moves and the priced one does not. Same $0.015 of spend per 1%.
-    seedSeries([10_000, 9_900, 9_800, 9_700]);
+    seedSeries([10_000, 9_700, 9_400, 9_100]);
     [5, 15, 25].forEach(m => seedCall(m, 'nemotron-3-ultra', 150_000));
 
     const all = inferAllowanceFromFraction('ollama', 'ollama::weekly');
-    expect(all.find(a => a.metric === 'credit_usd')!.limit).toBe(150);
+    expect(all.find(a => a.metric === 'credit_usd')!.limit).toBe(50);
     // ...while the token figure for this mix is 6.7x smaller than the last.
-    expect(all.find(a => a.metric === 'total_tokens')!.limit).toBe(15_000_000);
+    expect(all.find(a => a.metric === 'total_tokens')!.limit).toBeCloseTo(5_000_000, -4);
   });
 
-  it('drops an interval it cannot price rather than half-pricing it', () => {
-    // One unpriced model makes the interval's total wrong, not merely
-    // incomplete.
-    seedSeries([10_000, 9_900, 9_800, 9_700]);
+  it('drops a run it cannot price rather than half-pricing it', () => {
+    // One unpriced model makes the run's total wrong, not merely incomplete.
+    seedSeries([10_000, 9_700, 9_400, 9_100]);
     [5, 15, 25].forEach(m => seedCall(m, 'some-unlisted-model', 1_000_000));
 
     const all = inferAllowanceFromFraction('ollama', 'ollama::weekly');
