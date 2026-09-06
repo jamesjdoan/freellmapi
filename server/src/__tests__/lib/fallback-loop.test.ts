@@ -871,3 +871,45 @@ describe('the skipBench exemption is bounded by what it wastes', () => {
     expect(recordRetryableFailure(route, emptyErr(route), newFallbackState())).toBe(false);
   });
 });
+
+/**
+ * An empty completion after a 219k-token prefill was metered as one request and
+ * zero tokens, while Ollama's usage API showed the allowance dropping for it —
+ * so local counting understated the spend on exactly the attempts that cost the
+ * most (ADR ARCH-20260905, F9, token half).
+ */
+describe('a costly failed attempt meters its tokens', () => {
+  beforeEach(() => {
+    // Usage rows accumulate across cases in this file, and the priced-exemption
+    // cases above now meter tokens too.
+    getDb().prepare('DELETE FROM rate_limit_usage').run();
+  });
+
+  const tokensFor = (route: RouteResult) => (getDb().prepare(
+    "SELECT COALESCE(SUM(tokens),0) t FROM rate_limit_usage WHERE platform = 'fake' AND model_id = ? AND kind = 'tokens'",
+  ).get(route.modelId) as { t: number }).t;
+
+  it('records what the prefill spent', () => {
+    const route = fakeRoute();
+    recordRetryableFailure(route, Object.assign(new Error('empty completion'), {
+      skipBench: true, wastedInputTokens: 219_384,
+    }), newFallbackState());
+    expect(tokensFor(route)).toBe(219_384);
+  });
+
+  it('meters nothing when the surface reported no size', () => {
+    // Estimating here would invent usage; the request count already stands.
+    const route = fakeRoute();
+    recordRetryableFailure(route, Object.assign(new Error('empty completion'), { skipBench: true }), newFallbackState());
+    expect(tokensFor(route)).toBe(0);
+  });
+
+  it('meters nothing for a failure the provider never charged for', () => {
+    // A 401 is refused before generation, so it consumed no allowance.
+    const route = fakeRoute();
+    recordRetryableFailure(route, Object.assign(new Error('unauthorized'), {
+      status: 401, wastedInputTokens: 219_384,
+    }), newFallbackState());
+    expect(tokensFor(route)).toBe(0);
+  });
+});

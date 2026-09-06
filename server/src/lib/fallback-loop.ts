@@ -458,6 +458,16 @@ const QUOTA_CONSUMING_ERROR_CLASSES: Partial<Record<AttemptErrorClass, true>> = 
 function recordFailedAttemptUsage(route: RouteResult, err: unknown): void {
   if (!QUOTA_CONSUMING_ERROR_CLASSES[classifyAttemptError(err)]) return;
   recordRequest(route.platform, route.modelId, route.keyId);
+  // Count the tokens too, when the surface reported them. An empty completion
+  // after a 219k-token prefill was being metered as one request and zero
+  // tokens, while Ollama's own usage API showed the allowance dropping for it -
+  // so local counting understated the spend on exactly the attempts that cost
+  // the most. Only what the surface measured is metered; nothing is estimated
+  // here.
+  const wasted = (err as { wastedInputTokens?: unknown } | null)?.wastedInputTokens;
+  if (typeof wasted === 'number' && Number.isFinite(wasted) && wasted > 0) {
+    recordTokens(route.platform, route.modelId, route.keyId, Math.round(wasted));
+  }
 }
 
 /**
