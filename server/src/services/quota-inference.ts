@@ -179,6 +179,28 @@ export function inferWindowFromRefill(
  *  attribution of calls to polls both matter more than the signal. */
 const MIN_RUN_FRACTION = 0.05;
 
+/**
+ * How far apart two readings may be before the interval between them cannot be
+ * used to size the pool.
+ *
+ * The danger is not the gap itself - spend and fraction are both aggregated
+ * over the same span, so a quiet stretch is harmless. It is a RESET hidden
+ * inside one. Read 25% then, five hours later, 10%: the pool actually refilled
+ * to 100% and burned 90%, but the difference says 15%, so the whole run's spend
+ * gets divided by a sixth of the fraction it really consumed and the allowance
+ * comes out several times too large.
+ *
+ * Today's outage produced exactly that shape and escaped only because the
+ * reading after it happened to be HIGHER, which the reset branch already
+ * discards. A slightly different timing would have inflated the estimate
+ * silently.
+ *
+ * Six times the poller's five-minute interval. The cost of being strict is a
+ * fragmented run, not a wrong number - and during an idle stretch there is no
+ * spend to attribute anyway, because unchanged readings are not recorded.
+ */
+const MAX_RUN_GAP_MS = 30 * 60_000;
+
 const RESET_FLOOR = 0.9;
 const RESET_CEILING = 0.7;
 
@@ -450,6 +472,15 @@ export function inferAllowanceFromFraction(
   for (let i = 1; i < rows.length; i++) {
     const before = rows[i - 1]!;
     const after = rows[i]!;
+    const beforeAt = parseStoredUtc(before.observed_at);
+    const afterAt = parseStoredUtc(after.observed_at);
+    // A gap long enough to hide a reset ends the run: what happened inside it
+    // is unmeasurable, and carrying the spend across would divide it by a
+    // fraction that never accounted for the refill.
+    if (beforeAt == null || afterAt == null || afterAt - beforeAt > MAX_RUN_GAP_MS) {
+      closeRun();
+      continue;
+    }
     const consumed = (before.remaining_value - after.remaining_value) / before.limit_value;
     // A rise is a reset: the run ends and a new one starts.
     if (consumed < 0) { closeRun(); continue; }

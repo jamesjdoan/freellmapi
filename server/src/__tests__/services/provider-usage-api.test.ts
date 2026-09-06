@@ -139,6 +139,23 @@ describe('repeat observations', () => {
     expect(countRows()).toBe(1);
   });
 
+  it('records an unchanged reading once the series has gone quiet', async () => {
+    // Row spacing is what later tells an idle stretch from an outage: two
+    // guards reject a reset bracketed by distant readings. With repeats
+    // suppressed outright, a quiet afternoon looked exactly like downtime.
+    stubUsage({ limits: { session: { usage: 0.121 } } });
+    await pollProviderUsageApis();
+    expect(countRows()).toBe(1);
+    // Backdate the only row past the heartbeat.
+    getDb().prepare(`
+      UPDATE provider_quota_observations
+         SET observed_at = datetime('now', '-20 minutes')
+       WHERE quota_pool_key = 'ollama::session'
+    `).run();
+    await pollProviderUsageApis();
+    expect(countRows()).toBe(2);
+  });
+
   it('appends as soon as the number moves', async () => {
     stubUsage({ limits: { session: { usage: 0.121 } } });
     await pollProviderUsageApis();

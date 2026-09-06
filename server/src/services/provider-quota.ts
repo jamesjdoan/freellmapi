@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { getDb } from '../db/index.js';
+import { parseStoredUtc } from './quota-clock.js';
 import type { Db } from '../db/types.js';
 // Single shared Retry-After parser (was duplicated here and in providers/base.ts).
 import { parseRetryAfterMs } from '../providers/base.js';
@@ -531,6 +532,24 @@ export function parseQuotaObservationsFromResponse(
  * A refusal is never treated as a repeat: two 429s a minute apart are two
  * events, and the learned-ceiling and recovery estimators both count them.
  */
+/**
+ * How stale the newest row may get before an unchanged reading is recorded
+ * anyway.
+ *
+ * Deduping repeats saved 82.6% of the rows for a polled pool, and then broke
+ * something subtler: two later guards use the spacing between rows to decide
+ * whether we were WATCHING at a given moment - a reset bracketed by readings
+ * far apart cannot be timed, and a run spanning such a gap cannot size a pool.
+ * With repeats suppressed, an idle stretch looks identical to an outage, so a
+ * reset after a quiet afternoon would be discarded despite a perfectly healthy
+ * poller.
+ *
+ * A heartbeat restores the proxy: shorter than the 20-minute boundary bracket,
+ * so an idle period never masquerades as downtime, while still dropping the
+ * great majority of repeats.
+ */
+const OBSERVATION_HEARTBEAT_MS = 15 * 60_000;
+
 function isRepeatObservation(db: ReturnType<typeof getDb>, row: {
   platform: string;
   keyId: number;
@@ -541,25 +560,33 @@ function isRepeatObservation(db: ReturnType<typeof getDb>, row: {
   resetAt: string | null;
   statusCode: number | null;
   source: QuotaObservationSource;
+  observedAt: string;
 }): boolean {
   if (row.statusCode != null && row.statusCode >= 400) return false;
   if (row.source === 'error_body') return false;
   try {
     const previous = db.prepare(`
-      SELECT limit_value, remaining_value, reset_at, status_code
+      SELECT limit_value, remaining_value, reset_at, status_code, observed_at
         FROM provider_quota_observations
        WHERE platform = ? AND key_id = ? AND quota_pool_key = ? AND metric = ?
        ORDER BY observed_at DESC, created_at DESC
        LIMIT 1
     `).get(row.platform, row.keyId, row.quotaPoolKey, row.metric) as {
       limit_value: number | null; remaining_value: number | null;
-      reset_at: string | null; status_code: number | null;
+      reset_at: string | null; status_code: number | null; observed_at: string;
     } | undefined;
     if (!previous) return false;
-    return previous.limit_value === row.limitValue
+    const identical = previous.limit_value === row.limitValue
       && previous.remaining_value === row.remainingValue
       && previous.reset_at === row.resetAt
       && previous.status_code === row.statusCode;
+    if (!identical) return false;
+    // Identical, but record it anyway if the series has gone quiet: the gap
+    // between rows is what later tells an idle stretch from an outage.
+    const previousAt = parseStoredUtc(previous.observed_at);
+    const nowAt = parseStoredUtc(row.observedAt);
+    if (previousAt == null || nowAt == null) return true;
+    return nowAt - previousAt < OBSERVATION_HEARTBEAT_MS;
   } catch {
     // Unable to compare is not a reason to drop a measurement.
     return false;
@@ -651,7 +678,7 @@ export function recordQuotaObservation(input: QuotaObservationInput): ProviderQu
     // reads. The state row above still updates its observed_at, so "last seen"
     // stays fresh; and a changed value keeps its own timestamp, so nothing is
     // lost from the history either.
-    if (!isRepeatObservation(db, { platform, keyId, quotaPoolKey, metric, limitValue, remainingValue, resetAt, statusCode, source })) {
+    if (!isRepeatObservation(db, { platform, keyId, quotaPoolKey, metric, limitValue, remainingValue, resetAt, statusCode, source, observedAt: nowSql })) {
       db.prepare(`
         INSERT INTO provider_quota_observations (
           id, platform, key_id, provider_account_id, model_id, quota_pool_key, metric, unit,

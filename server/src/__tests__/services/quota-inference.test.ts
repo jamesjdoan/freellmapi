@@ -624,3 +624,95 @@ describe('resets that happened while nobody was looking', () => {
       .toBeNull();
   });
 });
+
+/**
+ * A polling gap is harmless in itself — spend and fraction are both aggregated
+ * over the same span. What is not harmless is a RESET hidden inside one: the
+ * fraction difference then understates consumption, and the run's spend gets
+ * divided by a fraction that never accounted for the refill.
+ *
+ * Today's outage produced exactly that shape and escaped only because the
+ * reading after it happened to be HIGHER, which the reset branch already
+ * discards. Slightly different timing would have inflated the estimate
+ * silently.
+ */
+describe('runs that span a polling gap', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare('DELETE FROM provider_quota_observations').run();
+    getDb().prepare('DELETE FROM requests').run();
+  });
+
+  let n = 0;
+  const base = Date.UTC(2026, 2, 1);
+  function obs(atMs: number, remaining: number): void {
+    getDb().prepare(`
+      INSERT INTO provider_quota_observations
+        (id, platform, key_id, quota_pool_key, metric, unit, limit_value, remaining_value, source, confidence, observed_at)
+      VALUES (?, 'ollama', 1, 'ollama::session', 'credits', 'per_10k', 10000, ?, 'quota_api', 0.9, ?)
+    `).run(`gap${n++}`, remaining, isoAt(atMs));
+  }
+  function call(atMs: number, tokens: number): void {
+    getDb().prepare(`
+      INSERT INTO requests (platform, model_id, status, input_tokens, output_tokens, latency_ms, created_at)
+      VALUES ('ollama', 'nemotron-3-super', 'success', ?, 0, 10, ?)
+    `).run(tokens, isoAt(atMs));
+  }
+
+  const tokensOf = () => inferAllowanceFromFraction('ollama', 'ollama::session')
+    .find(a => a.metric === 'total_tokens');
+
+  it('will not size the pool across a gap that could hide a reset', () => {
+    // 10% apparently consumed over five hours. If the pool reset inside that
+    // window the real consumption was far larger, and dividing by 10% would
+    // overstate the allowance several times over.
+    obs(base, 9_000);
+    obs(base + 5 * 3_600_000, 8_000);
+    call(base + 60_000, 1_000_000);
+    expect(tokensOf()).toBeUndefined();
+  });
+
+  it('still sizes it from readings taken close together', () => {
+    // The same 10%, observed across three polls five minutes apart.
+    obs(base, 10_000);
+    obs(base + 300_000, 9_600);
+    obs(base + 600_000, 9_200);
+    obs(base + 900_000, 9_000);
+    call(base + 60_000, 500_000);
+    call(base + 360_000, 500_000);
+    // 1M tokens for 10% of the pool implies 10M.
+    expect(tokensOf()!.limit).toBeCloseTo(10_000_000, -5);
+  });
+
+  it('splits into separate runs rather than discarding everything', () => {
+    // Two well-observed stretches with an outage between them. Both are usable
+    // on their own; only the interval spanning the gap is not.
+    for (const start of [base, base + 8 * 3_600_000]) {
+      obs(start, 10_000);
+      obs(start + 300_000, 9_500);
+      obs(start + 600_000, 9_000);
+      call(start + 60_000, 500_000);
+      call(start + 360_000, 500_000);
+    }
+    const tokens = tokensOf()!;
+    expect(tokens.samples).toBe(2);
+    expect(tokens.limit).toBeCloseTo(10_000_000, -5);
+  });
+
+  it('does not attribute spend that happened during the gap', () => {
+    // Calls inside the outage belong to no measurable run: counting them
+    // against the fraction observed either side is the error being prevented.
+    obs(base, 10_000);
+    obs(base + 300_000, 9_000);
+    obs(base + 6 * 3_600_000, 8_000);
+    obs(base + 6 * 3_600_000 + 300_000, 7_000);
+    call(base + 60_000, 1_000_000);
+    call(base + 3 * 3_600_000, 9_000_000);   // during the outage
+    call(base + 6 * 3_600_000 + 60_000, 1_000_000);
+    const tokens = tokensOf();
+    // Each surviving run is 10% for 1M tokens, so 10M — the 9M burned in the
+    // gap must not appear in either.
+    if (tokens) expect(tokens.limit).toBeCloseTo(10_000_000, -5);
+  });
+});
