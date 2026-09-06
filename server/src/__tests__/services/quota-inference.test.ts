@@ -176,6 +176,12 @@ describe('quota inference', () => {
  * the step happens.
  */
 describe('reset interval', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare('DELETE FROM provider_quota_observations').run();
+  });
+
   function seedSeries(pool: string, points: { minutesAgo: number; remaining: number }[], limit = 10_000): void {
     const insert = getDb().prepare(`
       INSERT INTO provider_quota_observations
@@ -195,6 +201,10 @@ describe('reset interval', () => {
       out.push({ minutesAgo: start, remaining: 10_000 });          // freshly reset
       out.push({ minutesAgo: start + everyMinutes * 0.4, remaining: 6_000 });
       out.push({ minutesAgo: start + everyMinutes * 0.8, remaining: 3_000 });  // spent
+      // Five minutes before the next reset, which is what the poller records.
+      // Without it the boundary is only bracketed by a reading hours back, and
+      // a boundary seen across a gap that size cannot be timed.
+      out.push({ minutesAgo: start + everyMinutes - 5, remaining: 2_800 });
     }
     return out;
   }
@@ -482,7 +492,8 @@ describe('predicting the next reset', () => {
     let n = 0;
     for (let c = cycles - 1; c >= 0; c--) {
       const resetAt = lastReset - c * everyMs;
-      insert.run(`x${n++}`, 2_000, isoAt(resetAt - everyMs * 0.2));  // spent
+      // Five minutes before the reset, which is what the poller records.
+      insert.run(`x${n++}`, 2_000, isoAt(resetAt - 300_000));  // spent
       insert.run(`x${n++}`, 10_000, isoAt(resetAt));                 // reset
     }
   }
@@ -527,5 +538,89 @@ describe('predicting the next reset', () => {
     const inferred = inferWindowFromRefill('groq', 'groq::m', 'tokens');
     expect(inferred).not.toBeNull();
     expect(inferred!.nextResetAtMs ?? null).toBeNull();
+  });
+});
+
+/**
+ * A step from spent to full says a reset HAPPENED. It says when only if we were
+ * watching either side of it.
+ *
+ * This container was down from 15:52 to 20:39 across a failed deploy, and the
+ * first reading afterwards — a full pool — was taken as the reset instant. Two
+ * such artefacts turned a 5h period into a measured 8.61h; worse, an earlier
+ * reading of 5.01h that appeared to confirm the documented five hours had also
+ * run from one gap to another, matching only because the gap happened to be
+ * about one period long.
+ */
+describe('resets that happened while nobody was looking', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare('DELETE FROM provider_quota_observations').run();
+  });
+
+  let seq = 0;
+  function seed(points: { atMs: number; remaining: number }[]): void {
+    const insert = getDb().prepare(`
+      INSERT INTO provider_quota_observations
+        (id, platform, key_id, quota_pool_key, metric, limit_value, remaining_value, source, confidence, observed_at)
+      VALUES (?, 'ollama', 1, 'ollama::session', 'credits', 10000, ?, 'quota_api', 0.9, ?)
+    `);
+    for (const p of points) insert.run(`b${seq++}`, p.remaining, isoAt(p.atMs));
+  }
+
+  const base = Date.UTC(2026, 1, 1);
+  const H = 3_600_000;
+
+  it('refuses to time a boundary seen across a polling outage', () => {
+    // Spent at T, full again five hours later with nothing in between: the
+    // reset is somewhere in that gap and its instant is unknown.
+    seed([
+      { atMs: base, remaining: 2_500 },
+      { atMs: base + 5 * H, remaining: 10_000 },
+      { atMs: base + 10 * H, remaining: 2_500 },
+      { atMs: base + 15 * H, remaining: 10_000 },
+    ]);
+    expect(inferWindowFromResets('ollama', 'ollama::session', 'credits')).toBeNull();
+  });
+
+  it('times a boundary observed within a polling interval', () => {
+    // The same two resets, each caught 5 minutes after it happened.
+    seed([
+      { atMs: base, remaining: 2_500 },
+      { atMs: base + 5 * H, remaining: 2_400 },
+      { atMs: base + 5 * H + 300_000, remaining: 10_000 },
+      { atMs: base + 10 * H, remaining: 2_500 },
+      { atMs: base + 10 * H + 300_000, remaining: 10_000 },
+    ]);
+    const inferred = inferWindowFromResets('ollama', 'ollama::session', 'credits')!;
+    expect(inferred.impliedSeconds).toBeCloseTo(5 * 3600, -2);
+  });
+
+  it('says how many resets it could not time', () => {
+    // Two timed, one lost to an outage — the note has to admit the third.
+    seed([
+      { atMs: base, remaining: 2_400 },
+      { atMs: base + 300_000, remaining: 10_000 },
+      { atMs: base + 5 * H, remaining: 2_400 },
+      { atMs: base + 5 * H + 300_000, remaining: 10_000 },
+      { atMs: base + 8 * H, remaining: 2_400 },
+      { atMs: base + 14 * H, remaining: 10_000 },
+    ]);
+    const inferred = inferWindowFromResets('ollama', 'ollama::session', 'credits')!;
+    expect(inferred.samples).toBe(1);
+    expect(inferred.note).toMatch(/1 more happened during a polling gap/);
+  });
+
+  it('will not predict a next reset it could not time', () => {
+    // A phase from an unobserved boundary would be wrong by up to the gap.
+    seed([
+      { atMs: base, remaining: 2_500 },
+      { atMs: base + 5 * H, remaining: 10_000 },
+      { atMs: base + 10 * H, remaining: 2_500 },
+      { atMs: base + 15 * H, remaining: 10_000 },
+    ]);
+    expect(inferWindowFromResets('ollama', 'ollama::session', 'credits')?.nextResetAtMs ?? null)
+      .toBeNull();
   });
 });

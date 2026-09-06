@@ -182,6 +182,24 @@ const MIN_RUN_FRACTION = 0.05;
 const RESET_FLOOR = 0.9;
 const RESET_CEILING = 0.7;
 
+/**
+ * How far apart the two readings bracketing a reset may be before the boundary
+ * time is unusable.
+ *
+ * A step from spent to full tells us a reset HAPPENED. It only tells us WHEN
+ * if we were watching closely either side of it. The usage poller runs every
+ * five minutes and only records a change, so a real boundary is captured within
+ * about one interval; a longer gap means the poller was not running.
+ *
+ * Learned the hard way. This container was down from 15:52 to 20:39 across a
+ * failed deploy, and the first reading afterwards - full pool - was taken as
+ * the reset instant. Two such artefacts turned a 5h period into a measured
+ * 8.61h, and an earlier 5.01h reading that appeared to confirm the documented
+ * five hours turned out to run from one gap to another, matching only because
+ * the gap was about one period long.
+ */
+const MAX_BOUNDARY_GAP_MS = 20 * 60_000;
+
 export function inferWindowFromResets(
   platform: string,
   quotaPoolKey: string,
@@ -205,17 +223,22 @@ export function inferWindowFromResets(
   }
 
   const resetAt: number[] = [];
+  let unobserved = 0;
   for (let i = 1; i < points.length; i++) {
     const previous = points[i - 1]!;
     const current = points[i]!;
     if (previous.remaining < RESET_CEILING * previous.limit
       && current.remaining >= RESET_FLOOR * current.limit) {
+      // A reset we did not watch happen has no usable timestamp: the first
+      // reading after an outage is when we LOOKED, not when the pool refilled.
+      if (current.at - previous.at > MAX_BOUNDARY_GAP_MS) { unobserved++; continue; }
       resetAt.push(current.at);
     }
   }
   // One reset gives a boundary but no period. Two give one interval, which is
   // the fewest that can measure anything.
   if (resetAt.length < 2) return null;
+  void unobserved;
 
   const intervals: number[] = [];
   for (let i = 1; i < resetAt.length; i++) intervals.push((resetAt[i]! - resetAt[i - 1]!) / 1000);
@@ -240,7 +263,9 @@ export function inferWindowFromResets(
     // A timed boundary is direct evidence, unlike a rate extrapolated from
     // consumption — so it earns the top of the inference band.
     confidence: confidenceFor(intervals.length, 0.3),
-    note: `${resetAt.length} resets observed, median ${Math.round(median)}s apart`,
+    note: unobserved === 0
+      ? `${resetAt.length} resets observed, median ${Math.round(median)}s apart`
+      : `${resetAt.length} resets timed, median ${Math.round(median)}s apart; ${unobserved} more happened during a polling gap and could not be timed`,
   };
 }
 
