@@ -1,5 +1,68 @@
 # Session Handoff
 
+## Session 2026-09-07 — JD-MBP (MacBook Pro M2 Max)
+
+**Branch:** `docs/freellm-assert-start-on-redeploy` (NOT main — see below)
+
+**What was done:** Delivered phases A–G of the quota-ledger ADR against live traffic.
+Quota-aware routing is built and recording but has never routed: `quota_routing_mode` is
+unset and defaults to `shadow` (`services/quota-routing.ts:34`). 822 shadow decisions,
+470 agreed.
+
+Beyond the ADR, four things the plan did not anticipate:
+
+- **Provider usage APIs exist and are undocumented.** Probing all seven providers found
+  Ollama `/api/usage` (session + weekly fractions) and OpenRouter `/api/v1/credits` +
+  `/api/v1/auth/key` (`is_free_tier: false` → the 1000/day allowance, confirmed rather than
+  assumed), plus HuggingFace `whoami-v2` — a real validation endpoint, which fixes keys
+  reading `unverifiable` forever because `/v1/models` serves anyone. `services/provider-usage-api.ts`
+  polls every 300s. Three provider-measured pools are now live in the ledger.
+- **Ollama's allowance is derived in credit, not tokens.** It meters GPU time and reports only
+  a fraction, so the token figure swung 4.9× between model mixes (71.9M vs 14.8M). Priced
+  against `data/ollama-model-rates.ts` the same spend collapses to $2.00 vs $1.53. Free tier
+  binds on a **5h session + 7d weekly** window, not the monthly cycle.
+- **Two router defects found by driving real traffic.** `isKeyAuthError` treated OpenCode Zen's
+  `401: Model X is not supported` as a credential failure and condemned the key, dropping the
+  provider while 6 of 11 models worked. And `skipBench` on `finish_reason === 'length'`
+  forgave a reasoning model burning a 215K-token prefill on hidden reasoning three times over,
+  metered as 1 request / 0 tokens. Both fixed; failed attempts now meter their tokens.
+- **`scripts/deploy.sh` + 9 tests**, written because the ad-hoc `compose up -d | tail -1`
+  reported success on a failed deploy all session. It caught its own bug on first use, then
+  caught a real port race twice more.
+
+**Two claims retracted after checking them.** "18,026s confirms the documented 5 hours to
+0.14%" was coincidence — two of the three apparent boundaries were polling artefacts from a
+4.9h outage my own deploys caused. With the boundary-gap guard in place **no period is
+currently measurable** and the estimator says so. Also: the run-aggregation guard exists
+because a reset hidden in a polling gap inflates a derived allowance several-fold.
+
+264 test files green. Deployed and independently verified by the script:
+`main-20260907-074108`, container healthy, `/api/health` answering 401.
+
+**Branch correction:** you checked out `docs/freellm-assert-start-on-redeploy` at 06:52 and
+committed `5cfd71c` thirteen seconds later. My last five commits landed there, not on `main`
+(tip `7463c45`), and four of my status reports said "main" wrongly. The deployed image is
+correct — it builds from the working tree.
+
+**What's next:**
+
+1. **Leave the container alone ~10h.** Two resets each bracketed within 20 min make the session
+   period measurable for the first time. Every deploy restarts the series. Usage *helps* — a
+   reset is only visible as a step from <70% to ≥90%, so an idle pool at 100% shows nothing.
+   Check: `sqlite3 … "SELECT observed_at, remaining_value FROM provider_quota_observations
+   WHERE quota_pool_key='ollama::session' ORDER BY observed_at DESC LIMIT 8"`.
+2. **Decide where the five commits land, then push.** `fork/main` is a clean 91-ahead
+   fast-forward, 0 behind. `origin` is `tashfeenahmed/freellmapi` — upstream, not yours.
+3. **Active mode is a decision, not a task.** Shadow's disagreement is concentrated where NVIDIA
+   hits its 40 RPM cap and on the exhausted Ollama session (right 4-for-4 there). Worth
+   understanding before flipping.
+4. **Unverified at the surface:** the policy editor has never been rendered in a browser (no
+   dashboard login) and the burn test has only run against stub providers.
+5. **Unidentified:** the client looping 215K-token prompts sends no agent header — it arrives
+   as `unknown` from the Docker host gateway `192.168.65.1`.
+
+**In progress:** —
+
 ## Latest session — 2026-09-05 (MacBook Pro M2 Max)
 
 **Branch:** main
