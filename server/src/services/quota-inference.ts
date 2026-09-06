@@ -161,6 +161,11 @@ export function inferWindowFromRefill(
  * RESET_CEILING of it — a step back to full, not a trickle upward, so a leaky
  * bucket recovering while idle is not mistaken for a period boundary.
  */
+/** A run has to move a real part of the pool before dividing by it means
+ *  anything: below 5%, the provider's 0.01% reporting granularity and the
+ *  attribution of calls to polls both matter more than the signal. */
+const MIN_RUN_FRACTION = 0.05;
+
 const RESET_FLOOR = 0.9;
 const RESET_CEILING = 0.7;
 
@@ -362,6 +367,23 @@ export function inferAllowanceFromFraction(
   }
   if (rows.length < 2) return [];
 
+  // Aggregated over whole RUNS between resets, not per polling interval.
+  //
+  // Per-interval division looked reasonable and was not: with a 5-minute poll,
+  // a call landing either side of a boundary is attributed to the wrong
+  // interval, and dividing a misattributed spend by a 0.9% fraction swings the
+  // implied pool wildly. On real data that produced a $0.75-$7.65 range on a
+  // pool independently measured at $1.53-$2.00. Summing spend and fraction
+  // across a run first cancels the boundary error, because a call misplaced
+  // between two intervals is still inside the same run.
+  interface Run { requests: number; tokens: number; dollars: number | null; fraction: number }
+  const runs: Run[] = [];
+  let run: Run = { requests: 0, tokens: 0, dollars: 0, fraction: 0 };
+  const closeRun = (): void => {
+    if (run.fraction >= MIN_RUN_FRACTION) runs.push(run);
+    run = { requests: 0, tokens: 0, dollars: 0, fraction: 0 };
+  };
+
   const countUsage = getDb().prepare(`
     SELECT COUNT(*) AS requests,
            COALESCE(SUM(input_tokens + output_tokens), 0) AS tokens
@@ -369,10 +391,6 @@ export function inferAllowanceFromFraction(
      WHERE platform = ? AND created_at > ? AND created_at <= ?
        AND request_type <> 'burn_test'
   `);
-
-  const perRequest: number[] = [];
-  const perToken: number[] = [];
-  const perDollar: number[] = [];
   const priceInterval = getDb().prepare(`
     SELECT model_id,
            COALESCE(SUM(input_tokens), 0) AS input_tokens,
@@ -382,72 +400,82 @@ export function inferAllowanceFromFraction(
        AND request_type <> 'burn_test'
      GROUP BY model_id
   `);
+
   for (let i = 1; i < rows.length; i++) {
     const before = rows[i - 1]!;
     const after = rows[i]!;
     const consumed = (before.remaining_value - after.remaining_value) / before.limit_value;
-    // Only intervals where the pool actually moved down. An increase is a
-    // reset, and a flat reading says nothing about size.
-    if (!(consumed > 0)) continue;
+    // A rise is a reset: the run ends and a new one starts.
+    if (consumed < 0) { closeRun(); continue; }
+    if (consumed === 0) continue;
+
     let usage: { requests: number; tokens: number };
     try {
       usage = countUsage.get(platform, before.observed_at, after.observed_at) as { requests: number; tokens: number };
     } catch {
       continue;
     }
-    if (usage.requests > 0) perRequest.push(usage.requests / consumed);
-    if (usage.tokens > 0) perToken.push(usage.tokens / consumed);
+    run.fraction += consumed;
+    run.requests += usage.requests;
+    run.tokens += usage.tokens;
 
-    // The same spend priced at the provider's published per-model rates. This
-    // is the figure that survives a change of traffic mix, because it is what
-    // the provider is actually metering.
-    if (platform === 'ollama') {
+    if (platform === 'ollama' && run.dollars != null) {
       try {
         const perModel = priceInterval.all(platform, before.observed_at, after.observed_at) as
           { model_id: string; input_tokens: number; output_tokens: number }[];
         let dollars = 0;
-        let priced = true;
-        for (const row of perModel) {
-          const cost = ollamaCallCostUsd(row.model_id, row.input_tokens, row.output_tokens,
+        for (const modelRow of perModel) {
+          const cost = ollamaCallCostUsd(modelRow.model_id, modelRow.input_tokens, modelRow.output_tokens,
             new Date(parseStoredUtc(after.observed_at) ?? Date.now()));
-          // One unpriced model makes the interval's total wrong rather than
-          // merely incomplete, so the whole interval is dropped.
-          if (cost == null) { priced = false; break; }
+          // One unpriced model makes the run's total wrong rather than merely
+          // incomplete, so the run forfeits its dollar figure and keeps tokens.
+          if (cost == null) { run.dollars = null; break; }
           dollars += cost;
         }
-        if (priced && dollars > 0) perDollar.push(dollars / consumed);
-      } catch { /* pricing is additive: losing it leaves the token estimate */ }
+        if (run.dollars != null) run.dollars += dollars;
+      } catch {
+        run.dollars = null;
+      }
+    } else if (platform !== 'ollama') {
+      run.dollars = null;
     }
   }
+  closeRun();
+  if (runs.length === 0) return [];
 
+  const estimates = (pick: (r: Run) => number | null): number[] =>
+    runs.flatMap(r => {
+      const spent = pick(r);
+      return spent == null || spent <= 0 ? [] : [spent / r.fraction];
+    });
   const median = (values: number[]): number => {
     const sorted = [...values].sort((a, b) => a - b);
     return sorted[Math.floor(sorted.length / 2)]!;
   };
 
   const out: InferredAllowance[] = [];
-  // Three intervals is the fewest that can show a spread rather than a pair of
-  // numbers that happen to differ.
   for (const [metric, values] of [
-    ['credit_usd', perDollar], ['total_tokens', perToken], ['requests', perRequest],
+    ['credit_usd', estimates(r => r.dollars)],
+    ['total_tokens', estimates(r => r.tokens)],
+    ['requests', estimates(r => r.requests)],
   ] as const) {
-    if (values.length < 3) continue;
+    if (values.length === 0) continue;
+    const scale = (value: number): number =>
+      metric === 'credit_usd' ? Math.round(value * 100) : Math.round(value);
     out.push({
       quotaPoolKey,
       metric,
-      // Dollars are kept in cents so the integer column can hold them.
-      limit: metric === 'credit_usd' ? Math.round(median(values) * 100) : Math.round(median(values)),
-      low: metric === 'credit_usd' ? Math.round(Math.min(...values) * 100) : Math.round(Math.min(...values)),
-      high: metric === 'credit_usd' ? Math.round(Math.max(...values) * 100) : Math.round(Math.max(...values)),
+      limit: scale(median(values)),
+      low: scale(Math.min(...values)),
+      high: scale(Math.max(...values)),
       samples: values.length,
-      // Derived from our own counting against someone else's fraction, and
-      // only valid for the traffic mix that produced it.
-      confidence: confidenceFor(values.length, 0.15),
-      // Dollars hold still across mixes and tokens do not, so only the dollar
-      // figure gets the higher confidence.
+      // One run is a real measurement over a long span, not a thin sample, so
+      // the floor is higher than a per-interval count would justify - but it
+      // is still an inference from our own counting.
+      confidence: confidenceFor(values.length * 10, 0.2),
       note: metric === 'credit_usd'
-        ? `${values.length} intervals, implied $${median(values).toFixed(2)} of credit`
-        : `${values.length} intervals, implied ${Math.round(median(values)).toLocaleString()} ${metric} at the sampled traffic mix`,
+        ? `${values.length} run(s), implied $${median(values).toFixed(2)} of credit`
+        : `${values.length} run(s), implied ${Math.round(median(values)).toLocaleString()} ${metric} at the sampled traffic mix`,
     });
   }
   return out;
