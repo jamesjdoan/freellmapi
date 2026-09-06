@@ -16,6 +16,7 @@ This checkout is the Imperium-maintained FreeLLMAPI extension, not upstream `mai
 
 - Keep changes on `codex/provider-routing-controls`; do not merge into upstream `main` unless explicitly requested.
 - Rebase the extension branch onto upstream releases, validate it, rebuild the local image, then recreate the existing container with its existing data volume.
+- Finish a redeploy with `docker compose up -d` and confirm `docker compose ps` reads `Up (healthy)` with a published port. A container left in `Created` stays down through reboots — `restart: unless-stopped` never starts one that has not run — and the harness roles pointed at FreeLLM fall back silently rather than erroring.
 - Preserve public unified model IDs and automatic-routing defaults.
 - Preferred provider order remains soft: health, capability, key scope, cooldown and known quota exhaustion still win.
 - The Extensions registry is navigation/documentation metadata, never a second settings store.
