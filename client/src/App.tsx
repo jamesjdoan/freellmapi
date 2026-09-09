@@ -70,7 +70,6 @@ const navItems = [
   { to: '/models', labelKey: 'nav.models' },
   { to: '/playground', labelKey: 'nav.playground' },
   { to: '/keys', labelKey: 'nav.keys' },
-  { to: '/agents', labelKey: 'nav.agents' },
   { to: '/analytics', labelKey: 'nav.analytics' },
   { to: "/quota", labelKey: "nav.quota" },
   { to: '/premium', labelKey: 'nav.premium' },
@@ -107,6 +106,14 @@ const navMenus: Record<
     ariaKey: 'nav.modelsMenu',
     items: modelItems,
     isActive: (pathname) => pathname.startsWith('/models'),
+  },
+  '/playground': {
+    ariaKey: 'nav.playgroundMenu',
+    items: [
+      { to: '/playground', labelKey: 'nav.playground' },
+      { to: '/agents', labelKey: 'nav.agents' },
+    ],
+    isActive: (pathname) => pathname === '/playground' || pathname === '/agents',
   },
   '/analytics': {
     ariaKey: 'nav.analyticsMenu',
@@ -305,6 +312,13 @@ function Navbar() {
                 <MoreHorizontal />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => navigate('/playground')}>
+                  {t('nav.playground')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/agents')}>
+                  {t('nav.agents')}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <AccountMenuItems
                   showUpgrade={showUpgrade}
                   upgradeLabel={t('nav.upgrade')}

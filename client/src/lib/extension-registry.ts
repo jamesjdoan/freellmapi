@@ -100,6 +100,16 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
     ],
   },
   {
+    id: 'nav-playground-agents-menu',
+    title: 'Condensed top navigation',
+    summary: 'Playground and Agents share one top-bar entry so the bar keeps six items instead of seven. The label still navigates to the Playground; the chevron on desktop and the submenu on mobile reach Agents.',
+    settingsLocation: 'Navigation: Playground entry (chevron on desktop, submenu on mobile)',
+    destinations: [
+      { kind: 'internal', label: 'Open playground', href: '/playground' },
+      { kind: 'internal', label: 'Open agents', href: '/agents' },
+    ],
+  },
+  {
     id: 'separate-extension-branch',
     title: 'Separate extension branch',
     summary: 'Imperium changes stay on their own fork branch and are rebased onto upstream releases instead of merged into upstream main.',

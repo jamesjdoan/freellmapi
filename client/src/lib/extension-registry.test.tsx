@@ -16,6 +16,7 @@ describe('Imperium extension registry', () => {
       'free-catalogue-copy',
       'quota-pool-routing',
       'quota-capacity-dashboard',
+      'nav-playground-agents-menu',
       'separate-extension-branch',
     ])
     expect(new Set(IMPERIUM_EXTENSIONS.map(feature => feature.id)).size).toBe(IMPERIUM_EXTENSIONS.length)
