@@ -24,3 +24,6 @@ update-hermes.sh
 
 # Monetization planning — private, never committed
 monetization/
+
+# Vestigial upstream clone; shares the Compose project name with this repo
+freellmapi/

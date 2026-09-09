@@ -12,12 +12,14 @@ The Imperium provider-routing work is maintained as a bolt-on branch. It is not 
 | Extension branch | `docs/freellm-assert-start-on-redeploy` — carries the whole extension, 66 commits on `v0.9.7` |
 | Publishable subset | `codex/provider-routing-controls` — an ancestor of the above, still on the `v0.9.4` base |
 | Extension worktree | `/Users/jamesdoan/Code/Instrumenta/worktrees/freellmapi-provider-routing` (holds the `codex/…` subset, not the live branch) |
-| Compose deployment | `/Users/jamesdoan/Code/Instrumenta/imperium/freellmapi/freellmapi` |
-| Local Docker image | `jamesjdoan/freellmapi:provider-routing` |
+| Compose deployment | `/Users/jamesdoan/Code/Instrumenta/freellmapi` — confirmed from the live container's `com.docker.compose.project.working_dir` label, not from this table |
+| Live image | `ghcr.io/tashfeenahmed/freellmapi:latest` (`ba22f5c8`), built locally from the extension checkout and tagged with the upstream name |
+| Local Docker image | `jamesjdoan/freellmapi:provider-routing` — built, but not what the running container uses |
 | Persistent volume | `freellmapi_freellmapi-data` |
-| Compose override | `docker-compose.override.yml` in the deployment directory |
+| Compose override | none in the deployment directory; the stock `docker-compose.yml` is used as-is |
+| Vestigial clone | `freellmapi/` — an upstream `main` checkout whose directory basename gives it the **same** Compose project name, so `docker compose` run there targets this same container and volume. Its `.env` is a symlink to the deployment `.env` so the two can never hold different keys again. |
 
-The override selects the local extension image with `pull_policy: never`. The stock `docker-compose.yml`, deployment `.env`, encryption key and named data volume remain unchanged.
+The stock `docker-compose.yml`, deployment `.env`, encryption key and named data volume remain unchanged by an image rebuild.
 
 ## Safe upstream refresh
 
@@ -32,8 +34,40 @@ The override selects the local extension image with `pull_policy: never`. The st
 7. Recreate the service from the deployment directory with `docker compose up -d --no-build freellmapi`.
 8. Confirm the service actually started: `docker compose ps` must read `Up (healthy)` with a published port. Step 7 creating a container is not step 7 starting one — an `up -d` interrupted between create and start, or a bare `docker compose create`, leaves it in `Created`, where it stays down through reboots.
 9. Verify container health, the reported extension commit, authenticated `/v1/models`, a real chat completion and the Extensions dashboard panel.
+10. Prove the provider keys still decrypt under the key the new container was created with — see below. A container recreate bakes `ENCRYPTION_KEY` in at create time, so a healthy container with a published port can still be unable to read a single stored key.
 
 Do not use the stock dashboard’s `docker compose pull` instruction for this custom image. It updates the upstream image, not the separately built extension.
+
+## Encryption key drift
+
+Provider API keys are AES-256-GCM ciphertext in `api_keys`, keyed solely by `ENCRYPTION_KEY`. Docker fixes a container's environment at **create** time, so the value a running container holds is whichever `.env` the last `docker compose up -d` read — not whatever `.env` says today. On 2026-09-07 a recreate from this directory picked up a different key from the one the stored ciphertext was written under, and all seven keys failed to decrypt for eleven hours. The dashboard stayed `Up (healthy)` on a published port the whole time; the only symptoms were `decrypt-error:1` in the health log, every key stuck at `status='error'`, and `no_providers_configured` on every completion.
+
+Two aggravating details, both fixed but worth knowing:
+
+- The vestigial `freellmapi/` clone carries its own `docker-compose.yml` and, because of its directory name, the same Compose project. `docker compose up -d` run there recreates *this* container against *this* volume using *that* `.env`. Its `.env` is now a symlink, so the values cannot diverge.
+- Four providers (nvidia, openrouter, opencode, ollama) return 200 to an unauthenticated probe, so `checkKey` reports them unverifiable and deliberately preserves the previous status (`server/src/services/health.ts:143`). A key marked `error` during a decrypt outage therefore stays `error` after the key is corrected, and routing keeps skipping it. Clear those rows explicitly; a health cycle will not.
+
+Preflight, after any recreate — this decrypts every stored key with the key the container actually holds and prints one line per row:
+
+```sh
+docker compose exec -T freellmapi node -e '
+const crypto = require("crypto");
+const key = Buffer.from(process.env.ENCRYPTION_KEY.trim(), "hex");
+const db = require("better-sqlite3")("/app/server/data/freeapi.db", { readonly: true });
+let ok = 0, bad = 0;
+for (const r of db.prepare("select id, platform, encrypted_key, iv, auth_tag from api_keys").all()) {
+  try {
+    const d = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(r.iv, "hex"), { authTagLength: 16 });
+    d.setAuthTag(Buffer.from(r.auth_tag, "hex"));
+    Buffer.concat([d.update(Buffer.from(r.encrypted_key, "hex")), d.final()]);
+    ok++;
+  } catch { bad++; console.log(r.id, r.platform, "DECRYPT FAILED"); }
+}
+console.log("ok=" + ok, "fail=" + bad);
+'
+```
+
+`fail` must be `0`. Anything else means the container holds the wrong key: find the `.env` whose key does decrypt, correct the deployment `.env`, and recreate. Never re-enter the provider keys before checking this — the old ciphertext is recoverable, a re-entry is not.
 
 ## Persistence and reboot
 
