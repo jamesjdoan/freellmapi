@@ -44,6 +44,7 @@ const ROUTING_DECISION_ENDPOINT_FILENAME = '20260905_000003_routing_decision_end
 const QUOTA_POLICY_ENDPOINT_FILENAME = '20260905_000004_quota_policy_endpoint.ts';
 const QUOTA_BURN_RUN_FILENAME = '20260906_000001_quota_burn_run.ts';
 const QUOTA_UNIT_FILENAME = '20260906_000002_quota_unit.ts';
+const ATTEMPT_ROUTING_TRACE_FILENAME = '20260909_000001_request_attempt_routing_trace.ts';
 
 interface SchemaRow {
   type: string;
@@ -134,6 +135,7 @@ describe('migration round trip', () => {
         QUOTA_POLICY_ENDPOINT_FILENAME,
         QUOTA_BURN_RUN_FILENAME,
         QUOTA_UNIT_FILENAME,
+        ATTEMPT_ROUTING_TRACE_FILENAME,
       ]);
     } finally {
       db.close();

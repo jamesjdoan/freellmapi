@@ -15,6 +15,7 @@ This domain holds the implementation deep-dives for FreeLLMAPI's server-side arc
 | [`05-catalog-sync.md`](05-catalog-sync.md) | Live signed catalog sync from freellmapi.co, model-age gate (30 days), premium/free tiers, migration seeding vs hosted catalog |
 | [`06-observability.md`](06-observability.md) | Observability internals: server-logs ingest path, structured provider logs, boot preload, request analytics, log redaction, attempt tracing, health/routing-trace headers, desktop `freeapi.log` file logger. The operator-facing log viewer and polling API live in [logs/](../logs/01-server-logs-viewer.md). |
 | [`07-quota-ledger-and-shadow-routing.md`](07-quota-ledger-and-shadow-routing.md) | Quota ledger with operator‑configured limits, shadow decision log, scarcity scoring, raw header capture, and quota‑aware provider selection |
+| [`08-capability-chains-and-quota-domains.md`](08-capability-chains-and-quota-domains.md) | The eight `auto:*` capability classes and their contracts, quota-domain resolution (independent pools vs shared allowances), admission gating vs scarcity ranking, reset-urgency harvesting, in-flight provider diversity, the per-hop decision trace (`request_attempts.routing_json`) and how to verify routing after the fact, OpenRouter paid-balance safety, the curated routing set and its applier, harness alias mapping |
 | [`CHANGELOG.md`](CHANGELOG.md) | Doc revision history for this domain, seeded from architecture-relevant commits |
 
 ## How deep-dives fit

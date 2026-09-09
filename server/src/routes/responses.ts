@@ -768,6 +768,7 @@ responsesRouter.post('/responses', async (req: Request, res: Response) => {
 
   await runFallbackLoop({
     maxRetries: MAX_RETRIES,
+    requestedModel: requestedModelLabel,
     state,
     attemptLog,
     clientGone: () => clientGone,

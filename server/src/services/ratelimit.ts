@@ -115,6 +115,27 @@ export function inFlightForKey(platform: string, keyId: number, now = Date.now()
   return count;
 }
 
+/**
+ * Every attempt this process currently has in the air, as (platform, modelId).
+ *
+ * The lease map already knows which requests are genuinely concurrent — that is
+ * why it exists — so provider spreading reads it rather than keeping a second,
+ * weaker record of "recently routed". The difference matters: a sequential
+ * caller never has two leases open and so is never spread, while parallel
+ * workers always do. A recency window cannot tell those two apart, and would
+ * tax the single-stream case for nothing.
+ */
+export function inFlightRoutes(now = Date.now()): { platform: string; modelId: string; tokens: number }[] {
+  pruneLeases(now);
+  const out: { platform: string; modelId: string; tokens: number }[] = [];
+  for (const lease of leases.values()) {
+    // `tokens` is the estimate the lease reserved, which is what a token-metered
+    // quota domain has to count against itself before the real figure is known.
+    out.push({ platform: lease.platform, modelId: lease.modelId, tokens: lease.tokens });
+  }
+  return out;
+}
+
 /** False when this key already has its allowed number of requests in the air.
  *  Always true when no cap is configured, which is the default. */
 export function canUseKeyConcurrency(platform: string, keyId: number, now = Date.now()): boolean {
@@ -236,9 +257,13 @@ function recordUsage(
 //
 // Memoised on the same reasoning as the routing window snapshot: quota moves on
 // the timescale of a rate-limit window, not a request, so a few seconds of
-// staleness is invisible here while the query count collapses to roughly one
-// per model per burst. This feeds a recorded comparison, never a gate — the
-// hard checks below still read live counts.
+// staleness is invisible to a RANKING caller while the query count collapses to
+// roughly one per model per burst.
+//
+// `fresh` exists for the callers where that is not true. An admission gate that
+// answers from a five-second-old count is not enforcing a limit, it is
+// enforcing a limit per five seconds — the second request inside the window
+// sees the first one's pre-write number and both are let through.
 //
 // Keyed on the Db handle like the other memos: reconnecting (tests, a restore)
 // hands back a different object, and a count from the previous database must
@@ -246,7 +271,14 @@ function recordUsage(
 const SHADOW_COUNT_TTL_MS = 5_000;
 const shadowCountCache = new Map<string, { db: unknown; at: number; value: number }>();
 
-function countAcrossKeys(platform: string, modelId: string, kind: 'request' | 'tokens', windowMs: number, now: number): number {
+function countAcrossKeys(
+  platform: string,
+  modelId: string,
+  kind: 'request' | 'tokens',
+  windowMs: number,
+  now: number,
+  fresh = false,
+): number {
   // Bucket the window so a continuously-sliding width does not defeat the cache.
   const bucket = Math.round(windowMs / 1000);
   const cacheKey = `${platform}:${modelId}:${kind}:${bucket}`;
@@ -255,7 +287,7 @@ function countAcrossKeys(platform: string, modelId: string, kind: 'request' | 't
   const value = withDb(db => {
     handle = db;
     const hit = shadowCountCache.get(cacheKey);
-    if (hit && hit.db === db && now - hit.at < SHADOW_COUNT_TTL_MS) return hit.value;
+    if (!fresh && hit && hit.db === db && now - hit.at < SHADOW_COUNT_TTL_MS) return hit.value;
     const row = db.prepare(`
       SELECT COUNT(*) AS requests, COALESCE(SUM(tokens), 0) AS tokens
         FROM rate_limit_usage
@@ -267,20 +299,21 @@ function countAcrossKeys(platform: string, modelId: string, kind: 'request' | 't
     return kind === 'request' ? row.requests : row.tokens;
   }) ?? 0;
 
+  // A fresh read still refreshes the memo — it is the newest value anyone has.
   if (handle !== undefined) shadowCountCache.set(cacheKey, { db: handle, at: now, value });
   return value;
 }
 
 /** Requests this account made against one model, across every key, in the last
- *  `windowMs`. For the shadow comparison only — not a gate. */
-export function countRequestsInWindow(platform: string, modelId: string, windowMs: number, now = Date.now()): number {
-  return countAcrossKeys(platform, modelId, 'request', windowMs, now);
+ *  `windowMs`. `fresh` bypasses the 5s memo for admission callers. */
+export function countRequestsInWindow(platform: string, modelId: string, windowMs: number, now = Date.now(), fresh = false): number {
+  return countAcrossKeys(platform, modelId, 'request', windowMs, now, fresh);
 }
 
 /** Tokens this account spent on one model, across every key, in the last
- *  `windowMs`. For the shadow comparison only — not a gate. */
-export function countTokensInWindow(platform: string, modelId: string, windowMs: number, now = Date.now()): number {
-  return countAcrossKeys(platform, modelId, 'tokens', windowMs, now);
+ *  `windowMs`. `fresh` bypasses the 5s memo for admission callers. */
+export function countTokensInWindow(platform: string, modelId: string, windowMs: number, now = Date.now(), fresh = false): number {
+  return countAcrossKeys(platform, modelId, 'tokens', windowMs, now, fresh);
 }
 
 /**
@@ -294,14 +327,15 @@ export function countTokensInWindow(platform: string, modelId: string, windowMs:
  * providers and never count anything against it, which is why they read as
  * Unknown on the dashboard despite the limit being known.
  *
- * Same 5s memo and the same rule as its siblings: this informs a display and a
- * shadow comparison, never a gate.
+ * Same 5s memo and the same `fresh` escape hatch as its siblings: a display or
+ * a shadow comparison tolerates a stale count, an admission gate does not.
  */
 export function countPlatformUsageInWindow(
   platform: string,
   kind: 'request' | 'tokens',
   windowMs: number,
   now = Date.now(),
+  fresh = false,
 ): number {
   const bucket = Math.round(windowMs / 1000);
   const cacheKey = `platform:${platform}:${kind}:${bucket}`;
@@ -310,7 +344,7 @@ export function countPlatformUsageInWindow(
   const value = withDb(db => {
     handle = db;
     const hit = shadowCountCache.get(cacheKey);
-    if (hit && hit.db === db && now - hit.at < SHADOW_COUNT_TTL_MS) return hit.value;
+    if (!fresh && hit && hit.db === db && now - hit.at < SHADOW_COUNT_TTL_MS) return hit.value;
     const row = db.prepare(`
       SELECT COUNT(*) AS requests, COALESCE(SUM(tokens), 0) AS tokens
         FROM rate_limit_usage

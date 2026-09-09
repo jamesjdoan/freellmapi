@@ -279,10 +279,19 @@ describe('shadow mode never alters selection', () => {
     addPeer('groq', 'shared', 1);    // priority 1 — the incumbent's pick
     addPeer('nvidia', 'shared', 2);
 
-    // Make Groq look terrible on quota and NVIDIA pristine.
+    // Groq is measurably tighter than NVIDIA, but not tight enough for the live
+    // scarcity guardrail to demote it: at 8 of 10 spent it still has 20%
+    // headroom, which is where HEADROOM_RAMP_START starts protecting, so its
+    // routing position is untouched. Shadow scoring has no such threshold — it
+    // ranks on raw headroom — so it prefers NVIDIA at 100%.
+    //
+    // That gap is the whole point of the test: the two rankers disagree and the
+    // incumbent still serves, which is what shadow mode means. Picking a spread
+    // the guardrail also reacts to would prove nothing, because both would move
+    // for the same reason.
     upsertQuotaPolicy({ platform: 'groq', modelId: null, scope: 'provider_account', metric: 'requests', limit: 10, periodKind: 'calendar_day', periodMs: null, timezone: 'UTC', anchorDay: null });
     upsertQuotaPolicy({ platform: 'nvidia', modelId: null, scope: 'provider_account', metric: 'requests', limit: 10000, periodKind: 'calendar_day', periodMs: null, timezone: 'UTC', anchorDay: null });
-    spendRequests('groq', 'shared', groqKey, 9);
+    spendRequests('groq', 'shared', groqKey, 8);
 
     setQuotaRoutingMode('shadow');
     const routed = routeRequest(100);

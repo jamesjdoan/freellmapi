@@ -473,6 +473,215 @@ function clampUnit(n: number | undefined, fallback: number): number {
   return n;
 }
 
+// ── Guardrail: shared quota-domain scarcity ─────────────────────────────────
+// The two guardrails above both measure ONE model's own meters. Neither can see
+// the domain a model shares with its siblings, and on the free tiers this
+// deployment actually runs on that domain is usually the binding one:
+//
+//   nvidia::credit-pool   one allowance behind kimi-k3, deepseek-v4-pro and
+//                         every nemotron — three "independent" chain members
+//                         drawing on one balance
+//   ollama::weekly        one weekly dollar balance behind every Ollama Cloud
+//                         model, priced per model
+//   openrouter::free      one shared free-request pool behind every :free route
+//
+// `poolHeadroom` is the remaining fraction on the binding axis of every quota
+// domain that governs a route — the worst axis across account, model, daily,
+// weekly and credit pools, which is what "available only if ALL governing
+// domains permit it" means once it is expressed as a rank rather than a gate.
+//
+// Null is NOT 1. An unmeasured pool is not an unlimited one: a provider we have
+// never observed could be drained or untouched, so it sorts between the two
+// rather than winning by default. This is the same constant and the same
+// argument as UNKNOWN_HEADROOM in quota-routing.ts, kept in step deliberately —
+// they are one policy read by two callers.
+export const UNKNOWN_POOL_PRESSURE = 0.5;
+
+/**
+ * Reset-urgency harvesting.
+ *
+ * Free allowance that expires unused was never reserved for anything — it was
+ * simply wasted. A calendar-day pool sitting at 80% unused with 45 minutes left
+ * on its window is the most attractive place in the fleet to spend right now,
+ * and nothing else in the scorer can say so: scarcity has no opinion about a
+ * pool that is 80% full, and reliability and speed do not know what a window is.
+ *
+ * So this is a genuine PREFERENCE and it is allowed above 1, unlike every other
+ * multiplier here. The first cut expressed harvesting only as relief from the
+ * scarcity penalty, which kept the "guardrails only demote" invariant intact
+ * and was dead exactly where it mattered: at 80% headroom the penalty is
+ * already zero, so there was nothing to relax and the case the design exists
+ * for produced no effect at all.
+ *
+ * It is bounded hard at HARVEST_MAX_BOOST. Scores are only ever compared with
+ * each other — never thresholded — so exceeding 1 is safe for ordering, but a
+ * large boost would let an expiring window outrank a materially better model,
+ * and "use it before it expires" is not worth a worse answer. At 8% it shades
+ * near-peers and nothing else.
+ *
+ * Both conditions must hold. Time alone is not enough: a pool that spent its
+ * allowance on schedule has nothing left to harvest, and steering more traffic
+ * at it just brings the 429 forward. Unspent allowance alone is not enough
+ * either: a rolling RPM window refills continuously, so there is no deadline to
+ * beat and `msToReset` is correctly null for it.
+ */
+/**
+ * "About to expire" is relative to the pool's OWN period, not to a fixed number
+ * of minutes. Forty-five minutes left is nearly over for a daily window and
+ * barely started for a weekly one, and a fixed one-hour horizon rated the
+ * brief's own example — a daily pool 80% unused with 45 minutes to go — at a
+ * quarter of the available boost, which was not enough to change any decision.
+ * The last quarter of a period is the harvest window; for a calendar day that
+ * is the final six hours.
+ */
+export const HARVEST_WINDOW_FRACTION = 0.25;
+/** Fallback horizon when the period length is unknown but a reset instant is
+ *  not — a provider-reported reset with no stated window. */
+export const HARVEST_FALLBACK_WINDOW_MS = 60 * 60_000;
+/** Below this pace deficit there is no unspent allowance worth harvesting. */
+export const HARVEST_MIN_PACE_DEFICIT = 0.15;
+/**
+ * At or beyond this deficit the allowance counts as fully unspent.
+ *
+ * Normalising the deficit over its full 0..1 range looked principled and was
+ * unreachable: a deficit of 1.0 means an entirely untouched pool at the exact
+ * instant its window closes. Half the window going unspent is already the
+ * strong case this feature is for, so that is where the term saturates.
+ */
+export const HARVEST_FULL_PACE_DEFICIT = 0.5;
+/** Ceiling on the preference. Deliberately small — see above. */
+export const HARVEST_MAX_BOOST = 0.08;
+
+export interface PoolPressureInput {
+  /** Remaining fraction on the binding axis across every governing domain.
+   *  Null = no domain published a limit we could measure. */
+  headroom: number | null;
+  /** usedFraction - elapsedFraction on that binding axis. Negative means the
+   *  allowance is going unspent relative to the window. Null when the window
+   *  has no start (a provider-reported remaining with no period). */
+  paceDelta: number | null;
+  /** Milliseconds until the binding window resets. Null when unknown — and
+   *  unknown must never be read as imminent, or an unmeasured pool would
+   *  harvest a preference it has not earned. */
+  msToReset: number | null;
+  /** Length of the binding window, when it has one. Null for a rolling pool or
+   *  a provider-reported reset with no stated period. */
+  windowMs?: number | null;
+  /** Operator's hold-back multiplier for this pool (0..1], 1 = no reservation. */
+  reservationWeight?: number;
+}
+
+/**
+ * Quota-domain multiplier for one route: scarcity, then reset urgency.
+ *
+ * Scarcity rides the same `headroomRamp` and the same operator-tuned thresholds
+ * as the other two guardrails, so an operator tunes demotion once and it means
+ * the same thing on all three meters. The reservation weight then scales it:
+ * two pools at 50% are not equally cheap to spend when one of them is
+ * OpenRouter's 50/day, and only the operator can say which.
+ *
+ * Harvest is applied last and multiplicatively, so it does both jobs with one
+ * number: on a nearly-spent pool it partly offsets the scarcity penalty, and on
+ * a healthy pool with an expiring window it lifts the route above its peers.
+ */
+export function poolPressureFactor(input: PoolPressureInput, opts?: HeadroomThresholds): number {
+  const parts = poolPressureParts(input, opts);
+  return parts.scarcity * parts.harvest;
+}
+
+/**
+ * The two halves kept apart, because they belong in different places in the
+ * score. Scarcity is a GUARDRAIL and joins the `min` over the other quota
+ * meters — the binding constraint wins, and taking a min of three penalties is
+ * how the floor keeps meaning what the operator set it to. Harvest is a
+ * PREFERENCE and must not go through that `min`, or a boost above 1 would be
+ * clipped straight back to 1 by the two meters that have no opinion.
+ */
+export function poolPressureParts(
+  input: PoolPressureInput,
+  opts?: HeadroomThresholds,
+): { scarcity: number; harvest: number } {
+  const weight = input.reservationWeight === undefined || !Number.isFinite(input.reservationWeight)
+    ? 1
+    : Math.max(0, Math.min(1, input.reservationWeight));
+
+  const base = input.headroom === null || !Number.isFinite(input.headroom)
+    ? UNKNOWN_POOL_PRESSURE
+    : headroomRamp(input.headroom, opts);
+
+  return {
+    scarcity: Math.max(0, Math.min(1, base * weight)),
+    harvest: 1 + HARVEST_MAX_BOOST * harvestUrgency(input),
+  };
+}
+
+/**
+ * How much of the harvest boost this pool has earned, 0..1.
+ *
+ * The unused share is read from the pace DEFICIT rather than from headroom, so
+ * "unspent" means unspent relative to the window: a daily pool at 80%
+ * remaining two minutes into the day is exactly on pace and has earned
+ * nothing, while the same 80% with 45 minutes left is 80% about to evaporate.
+ */
+function harvestUrgency(input: PoolPressureInput): number {
+  const { paceDelta, msToReset } = input;
+  if (paceDelta === null || msToReset === null) return 0;
+  if (!Number.isFinite(paceDelta) || !Number.isFinite(msToReset)) return 0;
+  if (msToReset <= 0) return 0;
+
+  const period = input.windowMs != null && Number.isFinite(input.windowMs) && input.windowMs > 0
+    ? input.windowMs * HARVEST_WINDOW_FRACTION
+    : HARVEST_FALLBACK_WINDOW_MS;
+  if (msToReset >= period) return 0;
+
+  const deficit = -paceDelta; // negative paceDelta = under-spent
+  if (deficit <= HARVEST_MIN_PACE_DEFICIT) return 0;
+  const unspent = Math.min(1,
+    (deficit - HARVEST_MIN_PACE_DEFICIT) / (HARVEST_FULL_PACE_DEFICIT - HARVEST_MIN_PACE_DEFICIT));
+  const imminence = 1 - msToReset / period;
+  return Math.max(0, Math.min(1, unspent * imminence));
+}
+
+// ── Preference: provider diversity across concurrent work ───────────────────
+// Parallel workers with no skip state between them all see the same scored
+// chain and all pick its head, so three subagents launched together contend for
+// one allowance while two comparable pools sit idle. Spreading them is worth
+// real throughput.
+//
+// It is a PREFERENCE and deliberately weak. A difficult request must not be
+// handed to a materially worse model for the sake of variety, so the most this
+// can do is shade a close call: at DIVERSITY_MAX_DAMP = 0.12 a route that just
+// served every one of the last few requests keeps 88% of its score, which
+// reorders peers within a few points of each other and cannot move a route past
+// a genuinely better one.
+//
+// Keyed by QUOTA DOMAIN, not by provider name, because contention is a property
+// of the allowance: Kimi and DeepSeek on NVIDIA share one pool and spreading
+// across them buys nothing, while the same model on Groq and on OVH are two
+// independent pools and spreading across them buys everything.
+export const DIVERSITY_MAX_DAMP = 0.12;
+
+/**
+ * The same preference denominated in priority positions.
+ *
+ * Just over one, so a fully contended route slides past exactly one idle
+ * neighbour and never past two. Exactly 1.0 would only ever produce a tie,
+ * which the raw-priority tiebreaker then resolves back in favour of the
+ * contended route — the feature would compute a number and change nothing.
+ */
+export const DIVERSITY_MAX_POSITIONS = 1.25;
+
+/**
+ * `recentShare` is this pool's share of recent selections (0 = untouched,
+ * 1 = it served all of them). Null when nothing has been routed recently, which
+ * is no reason to prefer or avoid anything.
+ */
+export function diversityFactor(recentShare: number | null, maxDamp = DIVERSITY_MAX_DAMP): number {
+  if (recentShare === null || !Number.isFinite(recentShare)) return 1;
+  const share = Math.max(0, Math.min(1, recentShare));
+  return 1 - share * Math.max(0, Math.min(1, maxDamp));
+}
+
 // ── Guardrail: live rate-limit penalty ──────────────────────────────────────
 // Maps the existing 0..MAX_PENALTY 429 penalty to a multiplier. At max penalty a
 // model keeps 40% of its score — demoted hard but never fully excluded, so it
@@ -483,6 +692,50 @@ export const RATE_LIMIT_MAX_DAMP = 0.6;
 export function rateLimitFactor(penalty: number): number {
   const p = Math.min(Math.max(0, penalty), MAX_PENALTY);
   return 1 - (p / MAX_PENALTY) * RATE_LIMIT_MAX_DAMP;
+}
+
+// ── Priority mode: scarcity denominated in positions ────────────────────────
+// Manual ('priority') strategy never reaches combineScore, so none of the
+// multipliers above touch it. That is not an argument for leaving it
+// quota-blind: it is the strategy this deployment actually runs, and the 429
+// penalty above already establishes that an operator's manual order yields to
+// a supply signal — a model refusing every request does not stay pinned at the
+// head of the chain just because someone put it there.
+//
+// Exhausted quota is the same class of signal, one request earlier, so it is
+// expressed in the same currency: positions, on the same 0..MAX_PENALTY scale,
+// so the two are directly comparable and an operator reasoning about
+// "effective priority" has one number to read rather than two.
+//
+// Takes the SCARCITY half only. The harvest half is a preference, not a
+// guardrail, and reusing the penalty's scale for it produced a promotion of
+// 0.8 positions — enough to compute, never enough to overtake the neighbour it
+// was supposed to overtake. It gets its own scale below, for the same reason
+// and with the same cap as spreading.
+export function pressurePenaltyPositions(scarcity: number, maxPositions = MAX_PENALTY): number {
+  if (!Number.isFinite(scarcity)) return 0;
+  const f = Math.max(0, Math.min(1, scarcity));
+  return (1 - f) * Math.max(0, maxPositions);
+}
+
+/**
+ * Reset-urgency harvesting denominated in priority positions.
+ *
+ * `harvest` is the [1, 1+HARVEST_MAX_BOOST] multiplier; this maps its full
+ * range onto at most HARVEST_MAX_POSITIONS, so a pool about to lose an unspent
+ * allowance moves up past exactly one neighbour and never past two. Returned
+ * negative because positions are a cost and this is a promotion.
+ */
+export const HARVEST_MAX_POSITIONS = 1.25;
+
+export function harvestPromotionPositions(harvest: number, maxPositions = HARVEST_MAX_POSITIONS): number {
+  if (!Number.isFinite(harvest) || HARVEST_MAX_BOOST <= 0) return 0;
+  const earned = Math.max(0, Math.min(1, (harvest - 1) / HARVEST_MAX_BOOST));
+  const positions = earned * Math.max(0, maxPositions);
+  // Guard the sign flip: `-0` compares equal to 0 under `===` but not under
+  // Object.is, and a caller asserting "no promotion" should not have to know
+  // which of the two it is looking at.
+  return positions === 0 ? 0 : -positions;
 }
 
 // ── Beta sampler (Marsaglia & Tsang via two Gamma draws) ────────────────────
@@ -517,14 +770,33 @@ export interface ScoreInputs {
   reliability: number;   // [0,1] — sampled (routing) or expected (display)
   speed: number;         // [0,1]
   intelligence: number;  // [0,1]
-  headroom: number;      // [floor,1] multiplier
+  headroom: number;      // [floor,1] multiplier — the binding quota meter
   rateLimit: number;     // [floor,1] multiplier
+  /**
+   * Bounded steering that is NOT a guardrail: spreading concurrent work off a
+   * contended pool (≤ 1) and harvesting an allowance about to expire unused
+   * (≥ 1), multiplied together.
+   *
+   * Deliberately outside the guardrail `min`. Both terms are small on purpose —
+   * together they span roughly [0.88, 1.08] — because their whole job is to
+   * decide between near-peers. Neither may move a route past a materially
+   * better one, and the caps are what guarantee that.
+   *
+   * Optional so existing callers (dashboard display scores, tests that score
+   * one model in isolation) keep their exact previous value.
+   */
+  preference?: number;
 }
 
 /**
- * Convex base (∈[0,1]) × the two guardrail multipliers. The weights are assumed
- * to sum to 1; if a caller passes a non-normalized vector we renormalize so the
- * base never escapes [0,1].
+ * Convex base (∈[0,1]) × the guardrail multipliers × the preference term.
+ * The weights are assumed to sum to 1; if a caller passes a non-normalized
+ * vector we renormalize so the base never escapes [0,1].
+ *
+ * Guardrails are ≤ 1 by construction and can only demote. The preference term
+ * is the one exception and is capped tightly for exactly that reason. The
+ * result is compared against other routes and never against a threshold, so it
+ * is free to exceed 1 by a few percent.
  */
 export function combineScore(inputs: ScoreInputs, weights: RoutingWeights): number {
   const wSum = weights.reliability + weights.speed + weights.intelligence || 1;
@@ -532,5 +804,5 @@ export function combineScore(inputs: ScoreInputs, weights: RoutingWeights): numb
     (weights.reliability * inputs.reliability +
       weights.speed * inputs.speed +
       weights.intelligence * inputs.intelligence) / wSum;
-  return base * inputs.headroom * inputs.rateLimit;
+  return base * inputs.headroom * inputs.rateLimit * (inputs.preference ?? 1);
 }

@@ -317,10 +317,17 @@ proxyRouter.get('/models', (req: Request, res: Response) => {
   const onlyAvailable = q === '1' || q === 'true' || q === 'yes';
   const listed = onlyAvailable ? allListed.filter(m => m.available === 1) : allListed;
 
-  // Named fallback chains (#960/#895): every user-defined profile is exposed
-  // as an `auto:<name>` model so a client can pick a specific fallback chain
-  // per request (auto:my-group) instead of only the active one. Available iff
-  // at least one model in that profile's chain can serve a request right now.
+  // Named fallback chains (#960/#895): every profile is exposed as an
+  // `auto:<name>` model so a client can pick a specific fallback chain per
+  // request (auto:my-group) instead of only the active one. Available iff at
+  // least one model in that profile's chain can serve a request right now.
+  //
+  // The default profile is listed alongside the custom ones. `resolveRoutingChain`
+  // has always resolved `auto:default` by name — the filter here was the only
+  // thing keeping it out of discovery, so a client reading this listing to find
+  // out what it may send saw seven of the eight capability classes and had to
+  // be told about the eighth out of band. Emitting it costs one row and makes
+  // the listing agree with what the router accepts.
   const profileRows = getDb().prepare(`
     SELECT p.id, p.name,
            EXISTS (
@@ -339,7 +346,7 @@ proxyRouter.get('/models', (req: Request, res: Response) => {
             JOIN models m2 ON m2.id = pm2.model_db_id AND m2.enabled = 1
             WHERE pm2.profile_id = p.id AND pm2.enabled = 1) AS max_ctx
     FROM profiles p
-    WHERE p.type = 'custom'
+    WHERE p.type IN ('custom', 'default')
     ORDER BY p.sort_order, p.id
   `).all() as { id: number; name: string; usable: number; max_ctx: number | null }[];
 
@@ -1134,6 +1141,7 @@ proxyRouter.post('/completions', async (req: Request, res: Response) => {
   // shared; only the text_completion request/stream translation lives here.
   await runFallbackLoop({
     maxRetries: MAX_RETRIES,
+    requestedModel: requestedModelLabel,
     state,
     attemptLog,
     clientGone: () => clientGone,
@@ -2011,6 +2019,7 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
 
   await runFallbackLoop({
     maxRetries: MAX_RETRIES,
+    requestedModel: requestedModelLabel,
     state,
     attemptLog,
     clientGone: () => clientGone,

@@ -129,12 +129,18 @@ export function persistRequestAttempts(trace: RequestTrace): void {
   try {
     const db = getDb();
     const insert = db.prepare(`
-      INSERT INTO request_attempts (request_id, ordinal, platform, model_id, key_ordinal, key_label, outcome, start_offset_ms, duration_ms, error_summary)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO request_attempts (request_id, ordinal, platform, model_id, key_ordinal, key_label, outcome, start_offset_ms, duration_ms, error_summary, routing_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const tx = db.transaction(() => {
       for (const r of trace.records) {
-        insert.run(trace.lastRequestRowId, r.ordinal, r.platform, r.modelId, r.keyOrdinal, r.keyLabel, r.outcome, r.startOffsetMs, r.durationMs, r.errorSummary);
+        // Serialised here rather than at capture time so the record the loop
+        // carries stays a typed object for anything that wants to read it.
+        insert.run(
+          trace.lastRequestRowId, r.ordinal, r.platform, r.modelId, r.keyOrdinal, r.keyLabel,
+          r.outcome, r.startOffsetMs, r.durationMs, r.errorSummary,
+          r.routing ? JSON.stringify(r.routing) : null,
+        );
       }
     });
     tx();

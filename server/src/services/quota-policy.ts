@@ -261,18 +261,29 @@ export function deleteQuotaPolicy(id: number): boolean {
 }
 
 /** Key an effective quota by what it actually constrains: the same metric over
- *  a different period is a different limit, and both bind at once. */
-function axisKey(metric: QuotaPolicyMetric, period: QuotaPeriod): string {
+ *  a different period is a different limit, and so is the same metric over a
+ *  different SUBJECT.
+ *
+ *  Scope was missing from this key and it cost the resolver its main job. Groq
+ *  publishes a per-model daily allowance and an account-wide one; both are
+ *  `requests` over a rolling day, so they collided, the more specific model
+ *  policy won, and the account limit vanished from the result. Every consumer
+ *  then read "1000 requests left on gpt-oss-120b" while the account pool those
+ *  requests also spend was one short of refusing — exactly the "model has
+ *  capacity but the account is exhausted" case shared-domain resolution exists
+ *  to catch. They are two constraints and both bind, so they are two axes. */
+function axisKey(metric: QuotaPolicyMetric, period: QuotaPeriod, scope: QuotaPolicyScope): string {
+  const subject = scope === 'provider_account' || scope === 'shared_pool' ? 'account' : 'model';
   return period.kind === 'rolling'
-    ? `${metric}:rolling:${period.windowMs}`
-    : `${metric}:${period.kind}`;
+    ? `${subject}:${metric}:rolling:${period.windowMs}`
+    : `${subject}:${metric}:${period.kind}`;
 }
 
 function considerCandidate(
   best: Map<string, EffectiveQuota>,
   candidate: EffectiveQuota,
 ): void {
-  const key = axisKey(candidate.metric, candidate.period);
+  const key = axisKey(candidate.metric, candidate.period, candidate.scope);
   const held = best.get(key);
   // Strictly greater: the first source to claim an axis at a given rank keeps
   // it, so iteration order within a rank is not load-bearing.

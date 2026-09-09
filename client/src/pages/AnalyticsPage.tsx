@@ -290,6 +290,89 @@ interface RequestAttempt {
   startOffsetMs: number
   durationMs: number
   errorSummary: string | null
+  // What the router was looking at when it chose this hop, captured at the
+  // decision (see server/src/lib/attempt-trace.ts). Null for hops recorded
+  // before the trace existed. The rank pair is the load-bearing part: a
+  // multiplier that reordered nothing reads very differently from one that
+  // decided the route, and only rankBefore/rankAfter tells them apart.
+  routing: {
+    strategy: string
+    poolKey: string | null
+    scarcity: number
+    harvest: number
+    diversity: number
+    inFlightShare: number | null
+    scoringRank: number
+    scoringRankWithoutQuotaTerms: number
+    selectionRank: number
+    selectionOverride: 'explore' | 'sticky' | 'pinned' | null
+    skipped: string[]
+  } | null
+}
+
+/**
+ * Why the router picked this hop — rendered only when something actually had
+ * an opinion.
+ *
+ * The common case is that every signal is neutral: quota is comfortable, the
+ * window is not expiring, nothing else is in flight, and the rank did not
+ * move. Printing `scarcity 1.00 · harvest 1.00 · diversity 1.00` on every row
+ * of every ladder would bury the handful of rows where one of them decided the
+ * route, so a fully neutral trace renders nothing at all.
+ *
+ * The rank pair leads when it moved, because that is the only part that
+ * distinguishes "this signal was computed" from "this signal chose the route".
+ */
+function RoutingTraceLine({ routing }: { routing: RequestAttempt['routing'] }) {
+  const { t } = useI18n()
+  if (!routing) return null
+
+  const parts: string[] = []
+  // An override is named FIRST and the rank move is suppressed under it: a
+  // sticky pin or an exploration probe puts a route first for reasons that have
+  // nothing to do with quota, and reporting a scoring-stage move alongside it
+  // would credit the quota terms for someone else's decision.
+  if (routing.selectionOverride) {
+    parts.push(t(`analytics.routingOverride.${routing.selectionOverride}`))
+  } else if (routing.scoringRank !== routing.scoringRankWithoutQuotaTerms) {
+    parts.push(t('analytics.routingRankMove', {
+      from: routing.scoringRankWithoutQuotaTerms,
+      to: routing.scoringRank,
+    }))
+  }
+  // Thresholds, not equality: these are floats off a ramp, and a value a
+  // hair under 1 is arithmetic noise rather than a decision worth reporting.
+  if (routing.scarcity < 0.995) parts.push(t('analytics.routingScarcity', { pct: Math.round(routing.scarcity * 100) }))
+  if (routing.harvest > 1.005) parts.push(t('analytics.routingHarvest'))
+  if (routing.diversity < 0.995) parts.push(t('analytics.routingDiversity', { pct: Math.round((1 - routing.diversity) * 100) }))
+  if (routing.inFlightShare !== null && routing.inFlightShare > 0) {
+    parts.push(t('analytics.routingInFlight', { pct: Math.round(routing.inFlightShare * 100) }))
+  }
+  const skipped = routing.skipped ?? []
+  if (parts.length === 0 && skipped.length === 0) return null
+
+  return (
+    <div className="mt-1 pl-8 text-xs text-muted-foreground break-words">
+      {parts.length > 0 && (
+        <p>
+          {routing.poolKey && <span className="font-mono">{routing.poolKey}</span>}
+          {routing.poolKey && ' — '}
+          {parts.join(' · ')}
+        </p>
+      )}
+      {/* Verbatim reasons the candidates ahead of this one were passed over.
+          On a request that SUCCEEDED this is the only evidence an admission
+          block happened at all — a 200 looks the same whether the gate was
+          right or misfiring. */}
+      {skipped.length > 0 && (
+        <ul className="mt-1 space-y-0.5">
+          {skipped.map((line, i) => (
+            <li key={i} className="font-mono text-[11px] opacity-80">{line}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
 }
 
 interface RequestDetail extends Omit<RecentCallRow, 'attemptCount'> {
@@ -499,6 +582,7 @@ function RequestDetailDialog({ requestId, onClose }: { requestId: number | null;
                       {a.errorSummary && (
                         <p className="mt-1 pl-8 text-xs text-destructive/90 break-words">{a.errorSummary}</p>
                       )}
+                      <RoutingTraceLine routing={a.routing} />
                     </li>
                   ))}
                 </ol>

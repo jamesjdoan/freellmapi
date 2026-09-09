@@ -4,6 +4,20 @@ import { getDb } from '../db/index.js';
 import { FALLBACK_INPUT_PER_M, FALLBACK_OUTPUT_PER_M } from '../db/model-pricing.js';
 import { providerIdFor, providerDisplayName } from '../lib/provider-identity.js';
 import { normalizeBaseUrl } from '../lib/endpoint-scope.js';
+import type { RoutingDecisionTrace } from '../lib/attempt-trace.js';
+
+/** Decode a stored routing trace. A row from before the column existed, or one
+ *  whose JSON is unreadable, yields null — a diagnostic that cannot be parsed
+ *  must not take the request drill-down down with it. */
+function parseRoutingTrace(raw: string | null | undefined): RoutingDecisionTrace | null {
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? (parsed as RoutingDecisionTrace) : null;
+  } catch {
+    return null;
+  }
+}
 
 export const analyticsRouter = Router();
 
@@ -742,7 +756,7 @@ analyticsRouter.get('/requests/:id', (req: Request, res: Response) => {
   }
 
   const attempts = db.prepare(`
-    SELECT ordinal, platform, model_id, key_ordinal, key_label, outcome, start_offset_ms, duration_ms, error_summary
+    SELECT ordinal, platform, model_id, key_ordinal, key_label, outcome, start_offset_ms, duration_ms, error_summary, routing_json
     FROM request_attempts
     WHERE request_id = ?
     ORDER BY ordinal ASC
@@ -774,6 +788,11 @@ analyticsRouter.get('/requests/:id', (req: Request, res: Response) => {
       keyOrdinal: a.key_ordinal,
       keyLabel: a.key_label ?? null,
       outcome: a.outcome,
+      // What the router was looking at when it picked this hop. Null for rows
+      // written before the trace existed, and for a route built without one.
+      // Parsed here so the client gets an object rather than a JSON string;
+      // a malformed row degrades to null instead of failing the whole drill-down.
+      routing: parseRoutingTrace(a.routing_json),
       startOffsetMs: a.start_offset_ms,
       durationMs: a.duration_ms,
       // Short, redacted per-hop error text (null for successful hops and for

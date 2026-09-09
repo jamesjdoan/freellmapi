@@ -185,8 +185,14 @@ describe('Virtual "auto" model', () => {
     expect(typeof auto.context_window).toBe('number');
     expect(auto.context_window).toBeGreaterThan(0);
 
-    // Every real model mirrors context_window into context_length.
-    const connected = body.data.filter((m: any) => m.id !== 'auto' && m.available);
+    // Every real model mirrors context_window into context_length. Chain
+    // aliases are excluded: `auto`, `auto:default` and every `auto:<profile>`
+    // are routing entry points whose advertised window is the MAXIMUM over
+    // their members, so counting one as a peer would compare the ceiling
+    // against itself.
+    interface ListedModel { id: string; available?: boolean; context_window: number | null; context_length: number | null }
+    const connected = (body.data as ListedModel[])
+      .filter(m => !m.id.startsWith('auto') && m.available);
     expect(connected.length).toBeGreaterThan(0);
     for (const m of connected) {
       expect(m.context_length).toBe(m.context_window);
@@ -194,7 +200,7 @@ describe('Virtual "auto" model', () => {
 
     // Auto's advertised ceiling is the max window among connected models.
     const maxConnected = Math.max(
-      ...connected.filter((m: any) => m.context_window != null).map((m: any) => m.context_window),
+      ...connected.flatMap(m => (m.context_window == null ? [] : [m.context_window])),
     );
     expect(auto.context_window).toBe(maxConnected);
   });

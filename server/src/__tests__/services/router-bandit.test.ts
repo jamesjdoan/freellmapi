@@ -73,6 +73,12 @@ function pickCounts(runs: number): Record<string, number> {
   const counts: Record<string, number> = {};
   for (let i = 0; i < runs; i++) {
     const r = routeRequest(100);
+    // The fallback loop releases in a `finally` on every path, so a test that
+    // measures sequential selection has to as well. Holding all N leases open
+    // does not model N sequential requests — it models N SIMULTANEOUS ones,
+    // and the router now (correctly) spreads those across independent quota
+    // pools rather than piling them onto the chain head.
+    r.release?.();
     counts[r.modelId] = (counts[r.modelId] ?? 0) + 1;
   }
   return counts;

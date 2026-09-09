@@ -4,6 +4,8 @@ import { parseStoredUtc } from './quota-clock.js';
 import { getDb } from '../db/index.js';
 import { inferQuotaShape, inferAllowanceFromFraction, inferWindowFromResets, type InferredWindow, type InferredAllowance } from './quota-inference.js';
 import { resolveEffectiveQuotas } from './quota-policy.js';
+import { resolveQuotaPolicy, consumesPaidBalance, legacyPoolKey } from './provider-quota.js';
+import type { Platform } from '@freellmapi/shared/types.js';
 import { countPlatformUsageInWindow } from './ratelimit.js';
 
 // Daily free-tier balance forecast (#1104). Free tiers reset on a per-account
@@ -159,6 +161,20 @@ export interface ProviderQuotaOverviewRow {
    * questions.
    */
   metric: string | null;
+  /**
+   * The routed models that draw on this pool, display names, alphabetical.
+   *
+   * The panel showed `ollama::weekly 540/10000` and never said which models
+   * spend it, which is the one thing a reader needs to act: a pool at 5% is a
+   * different problem depending on whether one overflow route or four chain
+   * heads are behind it. It is also where a shared allowance stops looking like
+   * depth — three NVIDIA models on `nvidia::credit-pool` render as three names
+   * on ONE row, which is exactly what they are.
+   *
+   * Only ENABLED chain members, because a catalogue model nobody routes to
+   * cannot drain anything. Empty for a pool no routed model resolves to.
+   */
+  members: string[];
   /** Denomination of the numbers: 'cents', 'per_10k', or null for a count. */
   unit: string | null;
   /**
@@ -213,7 +229,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
     const seenMeasured = new Set<string>(reported.map(r => r.pool ?? ''));
     for (const pool of reported) {
       const state = states.find(s => s.platform === platform && s.quotaPoolKey === pool.pool);
-      rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true, usedSource: 'provider', inferred: [], metric: 'requests', unit: null, derivedAllowance: null, resetSource: pool.reset_at ? 'provider' : null });
+      rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true, usedSource: 'provider', inferred: [], members: [], metric: 'requests', unit: null, derivedAllowance: null, resetSource: pool.reset_at ? 'provider' : null });
     }
 
     // 1b. Pools the provider measured in some OTHER unit — Ollama Cloud reports
@@ -249,6 +265,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         metered: true,
         usedSource: 'provider',
         inferred: [],
+        members: [],
         metric: state.metric,
         unit: state.unit ?? null,
         derivedAllowance: state.unit === 'per_10k' ? allowanceFor(platform, state.quotaPoolKey, now) : null,
@@ -283,6 +300,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
 
       rows.push({
         platform,
+        members: [],
         pool: poolLabel,
         used,
         remaining,
@@ -320,6 +338,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         metered: false,
         usedSource: null,
         inferred: [],
+        members: [],
         metric: null,
         unit: null,
         derivedAllowance: null,
@@ -342,8 +361,115 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
     }));
   }
 
+  // Who actually spends each pool. One query for the whole panel, then a map
+  // lookup per row — resolveQuotaPolicy is pure, so this is the same answer the
+  // router reaches at request time rather than a second guess at it.
+  // Pools that a later split retired. `groq::account` and `google::project`
+  // predate the move to per-model identities: every observation under them
+  // carries a model id and the SAME limits the per-model rows now report, and
+  // nothing has written to them since the cutover. Listing them beside the live
+  // rows invents an account-wide cap that does not exist — and the platform-wide
+  // membership fallback then attributed every routed model to it, which is
+  // exactly how a phantom pool comes to look like a real shared ceiling.
+  //
+  // Superseded only where the replacement has actually been observed:
+  // `legacyPoolKey` is still the deliberate read-compat path for an install that
+  // has not yet recorded a per-model row, and dropping the legacy row there
+  // would hide the only figure in hand.
+  const superseded = new Set<string>();
+  for (const state of states) {
+    const legacy = legacyPoolKey(state.platform as Platform, state.quotaPoolKey);
+    if (legacy) superseded.add(`${state.platform}\u0000${legacy}`);
+  }
+  const liveRows = rows.filter(r => r.pool == null || !superseded.has(`${r.platform}\u0000${r.pool}`));
+  rows.length = 0;
+  rows.push(...liveRows);
+
+  const { byPool, byPlatform } = routedMembers();
+  for (const row of rows) {
+    // Two kinds of row, two correct answers.
+    //
+    // A provider-reported row names a real quota pool (`groq::model::<id>`,
+    // `ollama::weekly`), so its members are the models that resolve to exactly
+    // that pool — which is how a per-model allowance stays on its own row.
+    //
+    // A locally-limited row names a WINDOW, not a pool: `nvidia::calendar_day`,
+    // `nvidia::rolling-60s`. Those axes are account-scoped by construction —
+    // an env RPM cap or an operator's provider-wide daily limit — so every
+    // routed model on the platform spends them, and platform-wide is the
+    // truthful membership rather than the empty set string matching produces.
+    row.members = row.pool == null
+      ? []
+      : (byPool.get(row.pool) ?? platformMembersFor(row.pool, byPlatform.get(row.platform) ?? []));
+  }
+
   // Measured pools first, then unknowns — the rows a reader can act on lead.
   return rows.sort((a, b) => (Number(b.metered) - Number(a.metered)) || a.platform.localeCompare(b.platform));
+}
+
+/**
+ * Narrow the platform-wide fallback to the models that can actually spend a
+ * given axis.
+ *
+ * One pool needs it. `openrouter::credits` is the operator's paid balance, and
+ * OpenRouter serves free and paid capacity through the SAME credential — so
+ * falling back to "every routed OpenRouter model" listed six `:free` routes as
+ * spenders of a $12 balance that none of them can touch. That is the identical
+ * free/paid conflation the admission gate had to be fixed for twice, and
+ * `consumesPaidBalance` is the predicate that already answers it.
+ *
+ * Deliberately keyed on `::credits` and nothing else. Ollama's weekly balance
+ * is also denominated in credits but has no free/paid split — every Ollama
+ * model spends it — so a broader rule would have emptied the very row that
+ * motivated showing membership at all.
+ */
+function platformMembersFor(pool: string, platformMembers: readonly PlatformMember[]): string[] {
+  const eligible = pool.endsWith('::credits')
+    ? platformMembers.filter(m => consumesPaidBalance(m.platform as Platform, m.modelId))
+    : platformMembers;
+  return eligible.map(m => m.displayName);
+}
+
+interface PlatformMember { platform: string; modelId: string; displayName: string }
+
+/**
+ * Routed models grouped by the quota pool they draw on.
+ *
+ * Enabled chain members only. `resolveQuotaPolicy` is the same pure function
+ * the router uses to pick a pool, so the grouping cannot disagree with the
+ * accounting — deriving it from the pool-key STRING instead would break the
+ * first time a provider's identity changes shape, which has already happened
+ * once (Groq moved from `groq::account` to `groq::model::<id>`).
+ */
+function routedMembers(): { byPool: Map<string, string[]>; byPlatform: Map<string, PlatformMember[]> } {
+  const byPool = new Map<string, string[]>();
+  // Platform-wide members keep their identity, not just a label: narrowing a
+  // credit pool needs the model id the predicate is written against.
+  const byPlatform = new Map<string, PlatformMember[]>();
+  try {
+    const rows = getDb().prepare(`
+      SELECT DISTINCT m.platform, m.model_id, m.display_name
+        FROM profile_models pm
+        JOIN models m ON m.id = pm.model_db_id
+       WHERE pm.enabled = 1 AND m.enabled = 1
+    `).all() as { platform: string; model_id: string; display_name: string }[];
+    for (const row of rows) {
+      const poolKey = resolveQuotaPolicy(row.platform as Platform, row.model_id).poolKey;
+      const pooled = byPool.get(poolKey);
+      if (pooled) pooled.push(row.display_name);
+      else byPool.set(poolKey, [row.display_name]);
+
+      const member: PlatformMember = { platform: row.platform, modelId: row.model_id, displayName: row.display_name };
+      const platformed = byPlatform.get(row.platform);
+      if (platformed) platformed.push(member);
+      else byPlatform.set(row.platform, [member]);
+    }
+    for (const list of byPool.values()) list.sort((a, b) => a.localeCompare(b));
+    for (const list of byPlatform.values()) list.sort((a, b) => a.displayName.localeCompare(b.displayName));
+  } catch {
+    // A panel annotation is never a reason the panel fails to render.
+  }
+  return { byPool, byPlatform };
 }
 
 /** Inference reads the whole request history for a platform, and the dashboard

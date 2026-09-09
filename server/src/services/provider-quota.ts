@@ -153,7 +153,7 @@ function modelPool(platform: Platform, modelId?: string | null, prefix = 'model'
 /** Pool names used before quota scope became explicit. Only providers whose
  * corrected economics required a new identity need a read fallback. Once an
  * exact new-pool observation exists for a key, it takes precedence. */
-function legacyPoolKey(platform: Platform, poolKey: string): string | null {
+export function legacyPoolKey(platform: Platform, poolKey: string): string | null {
   if (platform === 'groq' && poolKey.startsWith('groq::model::')) return 'groq::account';
   if (platform === 'google' && poolKey.startsWith('google::project-model::')) return 'google::project';
   return null;
@@ -250,6 +250,30 @@ export function resolveQuotaPolicy(
   if (platform === 'volcengine') return policy(normalizedModelId ? `volcengine::${normalizedModelId}` : 'volcengine::account', 'model', 'metered', ['tokens'], 'fixed_calendar', 'day');
   if (platform === 'custom') return policy(normalizedModelId ? `custom::${normalizedModelId}` : 'custom::account', 'model', 'unknown', [], 'unknown');
   return policy(normalizedModelId ? `${platform}::${normalizedModelId}` : `${platform}::account`, normalizedModelId ? 'model' : 'account', 'unknown', [], 'unknown');
+}
+
+/**
+ * True when serving this route draws down a MONETARY balance the operator paid
+ * for, as opposed to a free grant that refills on its own.
+ *
+ * The distinction is not "does this pool count credits". Hugging Face's router
+ * credits and Sail's monthly credit are free grants denominated in currency;
+ * spending them costs nothing and they come back. OpenRouter is the one
+ * provider here where the same key serves both: `<model>:free` draws on the
+ * shared free-request pool, and the identical model without the suffix bills
+ * the account's real balance (observed at `openrouter::credits`, 1200 cents on
+ * this install). Nothing in the routing path distinguished them — the pools
+ * were tracked apart but both were equally routable — so one catalogue sync
+ * that added a paid twin of a free model was all it would have taken to spend
+ * real money on what the operator configured as free capacity.
+ *
+ * Deliberately narrow. A provider is on this list only where paid and free
+ * capacity are reachable through ONE credential and told apart by the model id;
+ * guessing at other providers' billing would either block free routes or, far
+ * worse, wave paid ones through on a wrong guess.
+ */
+export function consumesPaidBalance(platform: Platform, modelId?: string | null): boolean {
+  return platform === 'openrouter' && !(modelId?.trim() ?? '').endsWith(':free');
 }
 
 /**

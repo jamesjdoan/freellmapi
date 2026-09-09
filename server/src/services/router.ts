@@ -22,7 +22,8 @@ import {
   type KeySelectionStrategy,
   reliabilityPosterior, expectedReliability, sampleBeta,
   speedScore, intelligenceScore, intelligenceComposite, headroomFactor, rateWindowHeadroomFactor,
-  rateLimitFactor, combineScore,
+  rateLimitFactor, combineScore, pressurePenaltyPositions, harvestPromotionPositions,
+  diversityFactor, DIVERSITY_MAX_DAMP, DIVERSITY_MAX_POSITIONS,
   peakAdjustedWeights, taskAdjustedWeights, TASK_WEIGHT_SHARE, isValidPeakHour, isValidTimezone,
   DEFAULT_PEAK_HOURS, type PeakHoursConfig,
   observedSpeedRank, TIMEOUT_LATENCY_CAP_MS,
@@ -39,9 +40,11 @@ import { customEndpointKeyIds } from './custom-endpoint.js';
 import { isDegraded } from './degradation.js';
 import { modelStatsKey, endpointScopeForBaseUrl } from '../lib/endpoint-scope.js';
 import { parseModelScope, scopeAllows } from '../lib/model-scope.js';
-import { getKeyQuotaHeadroom, inferQuotaPoolKey, isQuotaPoolAvailable, resolveQuotaPolicy } from './provider-quota.js';
+import { getKeyQuotaHeadroom, inferQuotaPoolKey, isQuotaPoolAvailable, resolveQuotaPolicy, consumesPaidBalance } from './provider-quota.js';
 import { normalizeGroupKey } from './model-groups.js';
 import { getQuotaRoutingMode, evaluateShadowDecision, recordRoutingDecision, type QuotaRoutingMode, type QuotaCandidate } from './quota-routing.js';
+import { quotaPressure, quotaDomainsAdmit, inFlightPoolShare } from './quota-pressure.js';
+import type { RoutingDecisionTrace } from '../lib/attempt-trace.js';
 import type { BaseProvider } from '../providers/base.js';
 import type { Platform } from '@freellmapi/shared/types.js';
 import type { Db } from '../db/types.js';
@@ -103,11 +106,13 @@ export function summarizeExhaustion(
     else if (l.includes('no tool-calling support')) bump('model lacks tool-calling');
     else if (l.includes('drops response_format')) bump('platform cannot honor response_format');
     else if (/ruled out|already-failed/.test(l)) bump('failed earlier this request');
+    else if (l.includes('quota-domain-exhausted')) bump('quota allowance spent');
     else if (/cooldown|rpm|rpd|tpm|tpd|provider-daily-cap|quota-exhausted/.test(l)) bump('rate-limited or on cooldown');
     else bump('unavailable');
   }
   // Most actionable buckets first.
   const order = [
+    'quota allowance spent',
     'rate-limited or on cooldown',
     'no usable key configured',
     'prompt too large for the model',
@@ -233,6 +238,16 @@ export interface RouteResult {
    * rather than destroy the error being propagated.
    */
   release?: () => void;
+  /**
+   * What the ordering was looking at when it chose THIS route (see
+   * RoutingDecisionTrace). Rides the route because the decision is the only
+   * moment the counterfactual rank exists — a later snapshot of the same
+   * scores is a different decision on different quota.
+   *
+   * Optional: a RouteResult built by a test double or a future construction
+   * path simply carries no trace, and the ladder record stores null.
+   */
+  routingTrace?: RoutingDecisionTrace;
 }
 
 // ── Routing token estimate: cap the reserved OUTPUT, not the full max_tokens ──
@@ -999,6 +1014,29 @@ interface ScoredEntry {
   headroom: number;
   rateLimit: number;
   score: number;
+  /**
+   * The score this model would have had WITHOUT the quota-domain guardrail and
+   * the two preference terms — same reliability, speed, intelligence and
+   * rate-limit penalty, same sampled draw.
+   *
+   * Reported so a decision trace can say "diversity moved this from #2 to #1"
+   * rather than only "diversity was 0.88". A multiplier that changed no
+   * ordering is a different fact from one that changed the answer, and only
+   * the counterfactual rank distinguishes them.
+   */
+  baselineScore: number;
+  /** The pressure and spreading inputs, for the trace. */
+  signals: RoutingSignals;
+}
+
+/** The decision-time inputs both ordering branches produce, before they are
+ *  paired with a rank to become a RoutingDecisionTrace. */
+interface RoutingSignals {
+  scarcity: number;
+  harvest: number;
+  diversity: number;
+  poolKey: string | null;
+  inFlightShare: number | null;
 }
 
 // Enabled + healthy/unknown key count per platform, for pooled-budget scaling.
@@ -1065,22 +1103,58 @@ function scoreChainEntry(
     headroomCfg,
   );
 
-  // The WORSE of the two, not their product: both express the same "this model
-  // is close to burning out" opinion on different meters, and multiplying them
-  // would push a model that is low on both to floor², below the floor the
-  // operator configured. Taking the binding constraint keeps the floor meaning
-  // what it says — the same rule getKeyQuotaHeadroom applies across metrics.
-  const headroom = Math.min(monthlyHeadroom, windowHeadroom);
+  // The third meter, and on this deployment usually the binding one: the quota
+  // DOMAINS this route shares with its siblings. The two guardrails above both
+  // read one model's own counters, so a chain holding kimi-k3, deepseek-v4-pro
+  // and nemotron-3-ultra scores three routes at full headroom while all three
+  // draw down the single `nvidia::credit-pool` balance behind them. Resolved
+  // through the same precedence chain the shadow ledger uses (live header >
+  // provider API > operator > catalog > env cap > learned 429) and reduced to
+  // the worst axis across every governing domain.
+  const pressure = quotaPressure(entry.platform, entry.model_id, entry.endpoint_scope ?? '', headroomCfg);
+
+  // The WORST of the three, not their product: all three express the same "this
+  // model is close to burning out" opinion on different meters, and multiplying
+  // them would push a model that is low on all three to floor³, far below the
+  // floor the operator configured. Taking the binding constraint keeps the
+  // floor meaning what it says — the same rule getKeyQuotaHeadroom applies
+  // across metrics.
+  const headroom = Math.min(monthlyHeadroom, windowHeadroom, pressure.scarcity);
   const rl = rateLimitFactor(getPenalty(entry.model_db_id));
+
+  // Steering, not guarding, so deliberately OUTSIDE that `min`. Spreading damps
+  // a pool other workers are already hammering; harvesting lifts one whose
+  // window is about to reset with its allowance unspent. Putting either through
+  // the min would be wrong in both directions — it would report a busy-but-full
+  // pool as "low on quota", and it would clip the harvest boost straight back
+  // to 1 against the two meters that have no opinion.
+  const inFlightShare = inFlightPoolShare(entry.platform, entry.model_id);
+  const diversity = diversityFactor(inFlightShare);
+  const preference = diversity * pressure.harvest;
 
   // Per-model env overrides (#738) scale the final score so a slow or
   // poor-quality model is demoted without being disabled outright — a manual
   // 'priority' chain can still select it.
+  const axes = { reliability, speed, intelligence, rateLimit: rl };
   const score = applyModelWeightOverride(
-    combineScore({ reliability, speed, intelligence, headroom, rateLimit: rl }, weights),
+    combineScore({ ...axes, headroom, preference }, weights),
     entry.model_id,
   );
-  return { axes: { reliability, speed, intelligence }, headroom, rateLimit: rl, score };
+  // The same draw, the same weights, without the quota-domain guardrail or
+  // either preference — so a trace can report the RANK the new terms changed,
+  // not just the multipliers they produced.
+  const baselineScore = applyModelWeightOverride(
+    combineScore({ ...axes, headroom: Math.min(monthlyHeadroom, windowHeadroom) }, weights),
+    entry.model_id,
+  );
+  return {
+    axes: { reliability, speed, intelligence },
+    headroom,
+    rateLimit: rl,
+    score,
+    baselineScore,
+    signals: { scarcity: pressure.scarcity, harvest: pressure.harvest, diversity, poolKey: pressure.poolKey, inFlightShare },
+  };
 }
 
 /**
@@ -1095,8 +1169,20 @@ function scoreChainEntry(
  * STABLE ranking under the chosen strategy — the fusion panel, which should be a
  * faithful reflection of the user's picked strategy, not a re-sampled draw each
  * request. Priority mode is deterministic either way.
+ *
+ * `traces`, when supplied, is filled with one RoutingDecisionTrace per chain
+ * member, keyed by model_db_id. It is written here rather than reconstructed by
+ * the caller because this is the only place the counterfactual rank exists: the
+ * ordering without the quota-domain and spreading terms is computed as a
+ * by-product of applying them, and is gone the moment this function returns.
  */
-function orderChain(chain: ChainRow[], strategy: RoutingStrategy, sampled = true, task?: 'code' | 'chat'): ChainRow[] {
+function orderChain(
+  chain: ChainRow[],
+  strategy: RoutingStrategy,
+  sampled = true,
+  task?: 'code' | 'chat',
+  traces?: Map<number, RoutingDecisionTrace>,
+): ChainRow[] {
   // Tier first, always: it is the one ordering input that score must not be able
   // to override (see ChainRow.match_tier). Zero for every chain built anywhere
   // else, so this is a no-op outside slug-fallback resolution.
@@ -1132,12 +1218,58 @@ function orderChain(chain: ChainRow[], strategy: RoutingStrategy, sampled = true
     // the order the user arranged (tier still dominates as the outer sort key,
     // and the raw priority remains the tiebreaker); the difference is that one
     // penalty position now means what it says — one position.
-    return chain
+    //
+    // Quota pressure rides the same currency (see pressurePenaltyPositions): a
+    // route whose shared pool is nearly spent slides down the manual order by
+    // the same kind of positions a 429 costs it, so 'priority' stops being the
+    // one strategy that walks straight into an exhausted allowance. The signed
+    // result also carries reset-urgency harvesting, which moves a route with an
+    // expiring unspent allowance UP by under one position.
+    //
+    // Spreading is applied here too, and capped at DIVERSITY_MAX_POSITIONS so
+    // it can only ever swap ADJACENT peers. Leaving it out was the same mistake
+    // as leaving quota out: 'priority' is the strategy this deployment runs, so
+    // "diversity is a tie-break and manual order is the operator's tie-break"
+    // amounted to shipping the feature switched off in the only place it was
+    // going to run. A manual order is a statement about preference between
+    // models, not an instruction to pile three concurrent workers onto one
+    // allowance while an equivalent pool sits idle — and one position is a
+    // small enough move that the operator's ordering still decides everything
+    // except which of two neighbours takes the current request.
+    const headroomCfgPriority = getHeadroomThresholds();
+    const scoredByPriority = chain
       .map((e, i) => ({ e, i }))
       .sort((a, b) => a.e.priority - b.e.priority || a.i - b.i)
-      .map(({ e, i }, rank) => ({ e, i, eff: rank + 1 + getPenalty(e.model_db_id) }))
-      .sort((a, b) => tier(a.e) - tier(b.e) || preference(a.e) - preference(b.e) || a.eff - b.eff || a.e.priority - b.e.priority || a.i - b.i)
-      .map(x => x.e);
+      .map(({ e, i }, rank) => {
+        const pressure = quotaPressure(e.platform, e.model_id, e.endpoint_scope ?? '', headroomCfgPriority);
+        const inFlightShare = inFlightPoolShare(e.platform, e.model_id);
+        const diversity = diversityFactor(inFlightShare);
+        // The order the operator arranged, plus only the pre-existing 429
+        // penalty. Kept so the trace can report the rank the new terms moved.
+        const baseEff = rank + 1 + getPenalty(e.model_db_id);
+        return {
+          e,
+          i,
+          baseEff,
+          eff: baseEff
+            + pressurePenaltyPositions(pressure.scarcity)
+            + harvestPromotionPositions(pressure.harvest)
+            + (1 - diversity) / DIVERSITY_MAX_DAMP * DIVERSITY_MAX_POSITIONS,
+          signals: { scarcity: pressure.scarcity, harvest: pressure.harvest, diversity, poolKey: pressure.poolKey, inFlightShare },
+        };
+      });
+
+    const outer = (a: { e: ChainRow }, b: { e: ChainRow }) =>
+      tier(a.e) - tier(b.e) || preference(a.e) - preference(b.e);
+    const ordered = [...scoredByPriority]
+      .sort((a, b) => outer(a, b) || a.eff - b.eff || a.e.priority - b.e.priority || a.i - b.i);
+
+    if (traces) {
+      const baselineOrder = [...scoredByPriority]
+        .sort((a, b) => outer(a, b) || a.baseEff - b.baseEff || a.e.priority - b.e.priority || a.i - b.i);
+      recordTraces(traces, strategy, ordered, baselineOrder);
+    }
+    return ordered.map(x => x.e);
   }
 
   // Task-type bias (#1127): a client-declared/derived task type moves part of
@@ -1157,12 +1289,87 @@ function orderChain(chain: ChainRow[], strategy: RoutingStrategy, sampled = true
   const keyCounts = usableKeyCountsByPlatform(getDb());
   const headroomCfg = getHeadroomThresholds();
 
-  return chain
-    .map(e => ({ e, s: scoreChainEntry(e, weights, intelMin, intelMax, sampled, keyCounts, headroomCfg).score }))
-    // Higher score first WITHIN a tier; manual priority breaks ties so the chain
-    // still matters.
-    .sort((a, b) => tier(a.e) - tier(b.e) || preference(a.e) - preference(b.e) || b.s - a.s || a.e.priority - b.e.priority)
-    .map(x => x.e);
+  const scored = chain.map(e => ({ e, s: scoreChainEntry(e, weights, intelMin, intelMax, sampled, keyCounts, headroomCfg) }));
+  const outer = (a: { e: ChainRow }, b: { e: ChainRow }) =>
+    tier(a.e) - tier(b.e) || preference(a.e) - preference(b.e);
+  // Higher score first WITHIN a tier; manual priority breaks ties so the chain
+  // still matters.
+  const ordered = [...scored]
+    .sort((a, b) => outer(a, b) || b.s.score - a.s.score || a.e.priority - b.e.priority);
+
+  if (traces) {
+    // The same sampled draw re-ranked on the counterfactual score, so the two
+    // orders differ only by the terms under test — not by a fresh Thompson
+    // sample, which would make every trace look like the terms moved something.
+    const baselineOrder = [...scored]
+      .sort((a, b) => outer(a, b) || b.s.baselineScore - a.s.baselineScore || a.e.priority - b.e.priority);
+    recordTraces(traces, strategy, ordered, baselineOrder);
+  }
+  return ordered.map(x => x.e);
+}
+
+/**
+ * Write one trace per chain member: the signals, and the rank the new terms
+ * moved it from and to.
+ *
+ * Both orderings are passed in already sorted. The caller computes them from
+ * one scoring pass, so the counterfactual is the same draw with two terms
+ * removed rather than a second, independent evaluation.
+ */
+function recordTraces(
+  traces: Map<number, RoutingDecisionTrace>,
+  strategy: RoutingStrategy,
+  ordered: { e: ChainRow; signals?: RoutingSignals; s?: { signals: RoutingSignals } }[],
+  baselineOrder: { e: ChainRow }[],
+): void {
+  const rankBefore = new Map<number, number>();
+  baselineOrder.forEach((x, i) => rankBefore.set(x.e.model_db_id, i + 1));
+  ordered.forEach((x, i) => {
+    const signals = x.signals ?? x.s?.signals;
+    if (!signals) return;
+    traces.set(x.e.model_db_id, {
+      strategy,
+      poolKey: signals.poolKey,
+      scarcity: signals.scarcity,
+      harvest: signals.harvest,
+      diversity: signals.diversity,
+      inFlightShare: signals.inFlightShare,
+      scoringRank: i + 1,
+      scoringRankWithoutQuotaTerms: rankBefore.get(x.e.model_db_id) ?? i + 1,
+      // Filled by routeRequest, which owns every stage after scoring.
+      selectionRank: 0,
+      selectionOverride: null,
+      skipped: [],
+    });
+  });
+}
+
+/**
+ * Cap on the passed-over dispositions carried in one trace.
+ *
+ * The chain is small (single digits after curation) but nothing guarantees
+ * that, and this JSON is written on every request. Ten lines covers any real
+ * chain and bounds the column regardless.
+ */
+const MAX_TRACED_SKIPS = 10;
+
+/**
+ * Mark a route as promoted ahead of its scored position.
+ *
+ * Scoring produced a rank; three later stages can override it. Recording which
+ * one did is what keeps `scoringRank` from being read as "where this was
+ * attempted" — a sticky pin puts a route first for reasons that have nothing to
+ * do with quota, and a trace that omitted the override would credit the quota
+ * terms for it.
+ */
+function noteSelectionOverride(
+  traces: Map<number, RoutingDecisionTrace>,
+  row: ChainRow | undefined,
+  override: 'explore' | 'sticky' | 'pinned',
+): void {
+  if (!row) return;
+  const trace = traces.get(row.model_db_id);
+  if (trace) trace.selectionOverride = override;
 }
 
 /**
@@ -1195,12 +1402,25 @@ const GLOBAL_SORT_ALIASES: Record<string, string> = {
   balanced: 'balanced',
 };
 
-/** Drop providers the operator has excluded from automatic selection. Applied
- *  to the auto chain only — see AUTOROUTE_DISABLED_PLATFORMS_KEY. */
+/** Settings key for the paid-balance opt-in below. Absent/false = free only. */
+const ALLOW_PAID_BALANCE_KEY = 'routing_allow_paid_balance';
+
+/** Drop providers the operator has excluded from automatic selection, and any
+ *  route that would spend real money.
+ *
+ *  Applied to the auto chain only — see AUTOROUTE_DISABLED_PLATFORMS_KEY. That
+ *  is the correct scope for the credit guard too: a request that NAMES a paid
+ *  model is an explicit instruction and still routes. What must never happen is
+ *  `auto:coding` quietly picking one because the catalogue grew a paid twin of
+ *  a free route and it happened to score well. Opt in with
+ *  `routing_allow_paid_balance = true`. */
 function withoutAutorouteDisabled(rows: ChainRow[]): ChainRow[] {
   const excluded = getAutorouteDisabledPlatforms();
-  if (excluded.length === 0) return rows;
-  return rows.filter(row => !excluded.includes(row.platform.toLowerCase()));
+  const allowPaid = (getSetting(ALLOW_PAID_BALANCE_KEY) ?? '').trim().toLowerCase() === 'true';
+  return rows.filter(row =>
+    !excluded.includes(row.platform.toLowerCase())
+    && (allowPaid || !consumesPaidBalance(row.platform as Platform, row.model_id)),
+  );
 }
 
 /**
@@ -1559,6 +1779,21 @@ function selectKeyForModel(entry: ChainRow, estimatedTokens: number, skipKeys?: 
     if (!canMakeRequest(entry.platform, entry.model_id, key.id, limits)) { note('rpm/rpd-limit'); continue; }
     if (!canUseTokens(entry.platform, entry.model_id, key.id, estimatedTokens, limits)) { note('tpm/tpd-limit'); continue; }
     if (!canUseProviderTokens(entry.platform, key.id, entry.model_id, estimatedTokens)) { note('provider-daily-token-cap'); continue; }
+    // Every governing quota domain, resolved through the precedence chain, not
+    // just the counters this file happens to keep.
+    //
+    // The gates above are each hard-wired to one meter: `canUseProvider` reads
+    // its own env-cap counters, `canMakeRequest` reads the model's rpm/rpd.
+    // None of them can see a limit an operator typed into `quota_policy`, so a
+    // fully spent account allowance was purely advisory — it demoted the route
+    // in the scorer and then served it anyway the moment the alternatives ran
+    // out, which is exactly when a spent pool is guaranteed to refuse.
+    //
+    // Only a limit the provider measured or a human stated closes the route
+    // here; shipped catalogue guesses and ceilings inferred from one 429 stay
+    // advisory (see ENFORCEABLE_SOURCES).
+    const domains = quotaDomainsAdmit(entry.platform, entry.model_id, entry.endpoint_scope ?? '', estimatedTokens);
+    if (!domains.ok) { note(`quota-domain-exhausted(${domains.blockedBy ?? 'unknown'})`); continue; }
 
     let decryptedKey: string;
     try {
@@ -2117,7 +2352,11 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
 
   const chain = (prefetchedChain ?? getActiveChain(db)).filter(e => e.enabled);
 
-  const sortedChain = orderChain(chain, strategy, true, task);
+  // One trace per candidate, written during ordering. Held for the whole
+  // routeRequest call because the route that finally clears the gates may not
+  // be the one ordering put first.
+  const traces = new Map<number, RoutingDecisionTrace>();
+  const sortedChain = orderChain(chain, strategy, true, task, traces);
 
   // Exploration toggle (#685/#707 follow-up): when enabled, give a model with
   // no reliability/speed samples a guaranteed chance to be tried, so it stops
@@ -2163,6 +2402,7 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
       if (idx > 0) {
         const [probeRow] = sortedChain.splice(idx, 1);
         sortedChain.unshift(probeRow);
+        noteSelectionOverride(traces, probeRow, 'explore');
       }
     }
   }
@@ -2174,6 +2414,7 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
       if (idx > 0) {
         const [preferred] = sortedChain.splice(idx, 1);
         sortedChain.unshift(preferred);
+        noteSelectionOverride(traces, preferred, 'sticky');
       }
     } else {
       // The requested model is not in the current routing chain (e.g. it's a
@@ -2191,6 +2432,7 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
       
       if (pinnedRow) {
         sortedChain.unshift(pinnedRow);
+        noteSelectionOverride(traces, pinnedRow, 'pinned');
       }
     }
   }
@@ -2214,7 +2456,12 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
   }
   servingChain.push(...marginDeferred);
 
+  // 1-based position in the walk, counting every candidate looked at — so a
+  // route reached third says so even when the two before it were rejected by
+  // different gates.
+  let considered = 0;
   for (const entry of servingChain) {
+    considered++;
     const label = `${entry.platform}/${entry.model_id}`;
     // Models the caller has ruled out for this request — e.g. a 404
     // "model removed upstream" already seen this request: trying the same
@@ -2284,6 +2531,20 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
     // the sorted chain for THIS request (no explicit penalty needed).
     const route = selectKeyForModel(entry, estimatedTokens, skipKeys, diag);
     if (route) {
+      // The trace for the model that actually cleared every gate — not the one
+      // ordering ranked first. Those differ whenever a higher-ranked candidate
+      // was benched, and the record has to describe the route that served.
+      const trace = traces.get(entry.model_db_id);
+      if (trace) {
+        // Where in the walk this route was reached, and the verbatim reasons
+        // every candidate before it was passed over. Those lines are the only
+        // record that an admission block happened at all on a request that
+        // then SUCCEEDED — without them "the gate is working" and "the gate is
+        // misfiring" are indistinguishable from a 200.
+        trace.selectionRank = considered;
+        trace.skipped = diag.slice(0, MAX_TRACED_SKIPS);
+      }
+      route.routingTrace = trace;
       // Shadow only (W3): the route above is already decided and is returned
       // untouched whatever this concludes. It runs after selection precisely so
       // it CANNOT influence it — there is no code path from here back into the

@@ -57,7 +57,7 @@ import { resolveEffectiveQuotas } from '../services/quota-policy.js';
 import { DAY_MS } from '../services/quota-clock.js';
 import { countPlatformUsageInWindow } from '../services/ratelimit.js';
 import { newBreaker, recordBreakerFailure } from './guardrails.js';
-import { getRequestTrace, newRequestTrace, runWithRequestTrace, type AttemptOutcome, type AttemptTraceRecord, type RequestTrace } from './attempt-trace.js';
+import { getRequestTrace, newRequestTrace, noteSkippedCandidates, runWithRequestTrace, type AttemptOutcome, type AttemptTraceRecord, type RequestTrace } from './attempt-trace.js';
 import { logRequest, persistRequestAttempts } from './request-log.js';
 import { withKeyProxy } from './proxy.js';
 
@@ -662,9 +662,36 @@ export function setFallbackHeaders(
 
   // Checked before the setting so the overwhelmingly common no-failover request
   // never pays for a settings read.
-  const records = getRequestTrace()?.records;
-  if (records && records.length > 0 && isFallbackDetailHeaderEnabled()) {
+  const trace = getRequestTrace();
+  const records = trace?.records;
+  const detailEnabled = ((records && records.length > 0) || (trace?.skipped.length ?? 0) > 0)
+    && isFallbackDetailHeaderEnabled();
+  if (records && records.length > 0 && detailEnabled) {
     res.setHeader('X-Fallback-Detail', safeHeaderValue(formatAttemptDetail(records), DETAIL_HEADER_MAX_LENGTH));
+  }
+
+  // Candidates the router passed over — which is NOT what X-Fallback-Trail
+  // carries. The trail lists hops that were dispatched and failed; a route
+  // refused by a gate is never dispatched, so it can never appear there, and a
+  // request that succeeded on the next candidate told the caller nothing at
+  // all. That is the case where "the gate is working" and "the gate is
+  // misfiring" look identical from a 200.
+  //
+  // Behind the same opt-in as X-Fallback-Detail: these lines name quota scope,
+  // metric and which source stated the limit, which is operator diagnostics
+  // rather than something every API client should be handed by default.
+  if (detailEnabled && trace && trace.skipped.length > 0) {
+    // The router's diagnostics are written for humans and use an em-dash.
+    // safeHeaderValue percent-escapes non-ASCII (headers must be latin-1), so
+    // shipping it verbatim rendered `%E2%80%94` in the middle of every line.
+    // Folded to an ASCII hyphen here rather than in the diagnostics themselves,
+    // which are also read in the error body and the dashboard where the real
+    // dash belongs.
+    const value = trace.skipped
+      .slice(0, TRAIL_MAX_SHOWN)
+      .map(line => line.replace(/\u2014/g, '-'))
+      .join('; ') + (trace.skipped.length > TRAIL_MAX_SHOWN ? `; +${trace.skipped.length - TRAIL_MAX_SHOWN} more` : '');
+    res.setHeader('X-Fallback-Skipped', safeHeaderValue(value, TRAIL_HEADER_MAX_LENGTH));
   }
 }
 
@@ -914,8 +941,44 @@ function classifyRoutingDiagLine(line: string): RoutingDiagClass {
   // which would otherwise misread as a transient window.
   if (l.includes('< estimated')) return 'too_large';
   if (/no provider registered|no enabled\+healthy key|no usable key|decrypt-error|no-resolved-provider|custom-key-mismatch/.test(l)) return 'config';
+  // 'quota-domain-exhausted' belongs here, not in 'other'. It IS time-bound —
+  // the allowance is spent for a window that resets — so the caller should get
+  // a 429 with a retry hint rather than the generic routing_exhausted code it
+  // fell into by default. Matched explicitly because the string contains
+  // "domain-exhausted", not "quota-exhausted", so no existing pattern caught it.
+  if (l.includes('quota-domain-exhausted')) return 'time_bound';
   if (/cooldown|rpm|rpd|tpm|tpd|provider-daily-cap|provider-minute-cap|provider-daily-token-cap|key-concurrency/.test(l)) return 'time_bound';
   return 'other';
+}
+
+/** Cap on the disposition text stored in `requests.error`. Ten short lines of
+ *  `platform/model: reason`; the column is read by a human, not parsed. */
+const REFUSAL_DIAG_MAX_LINES = 10;
+const REFUSAL_DIAG_MAX_LENGTH = 1000;
+
+/**
+ * Persist the one row that explains a request refused before any upstream ran.
+ *
+ * Swallows every failure: a refusal that cannot be logged must still return the
+ * client's error, and this is diagnostics, not the response.
+ */
+function logRoutingRefusal(
+  hooks: FallbackHooks,
+  routeErr: any,
+  exhaustion: ExhaustionBody,
+  startedAt: number,
+): void {
+  try {
+    const diag: string[] = Array.isArray(routeErr?.diagnostics) ? routeErr.diagnostics : [];
+    const detail = diag.slice(0, REFUSAL_DIAG_MAX_LINES).join(' | ').slice(0, REFUSAL_DIAG_MAX_LENGTH);
+    const error = detail ? `${exhaustion.code}: ${detail}` : `${exhaustion.code}: ${exhaustion.message}`;
+    logRequest(
+      'routing', hooks.requestedModel ?? '(auto)', null, 'error',
+      0, 0, Date.now() - startedAt, error, null, hooks.requestedModel ?? null,
+    );
+  } catch {
+    // Intentionally silent — see above.
+  }
 }
 
 export function routingExhaustionBody(routeErr: any): ExhaustionBody {
@@ -1024,6 +1087,12 @@ export interface FallbackHooks {
   // timedOut exhaustion without benching the model+key (see the
   // isHedgeAbortError branch below). Absent = pre-v2 behavior.
   abortInFlight?: () => void;
+  /**
+   * What the client asked for ('auto:coding', a pinned model id). Used only to
+   * label the row logged when routing is refused before any upstream is tried;
+   * absent surfaces fall back to '(auto)'.
+   */
+  requestedModel?: string;
   // Skip state; recordRetryableFailure / recordAuthFailure (called by the loop)
   // mutate it, and the surface's route() reads it to exclude failed keys/models.
   state: FallbackState;
@@ -1173,9 +1242,27 @@ async function runFallbackLoopAttempts(hooks: FallbackHooks, trace: RequestTrace
       const exhaustion = lastError
         ? exhaustedRetryError(lastError, undefined, { attempts })
         : routingExhaustionBody(routeErr);
+      // A refusal decided before any upstream was tried used to leave NO trace
+      // in the database: no `requests` row, no attempts, only a console line.
+      // So a request the quota gate correctly turned away and one it wrongly
+      // turned away looked identical from the dashboard — nothing at all.
+      //
+      // Logged with platform 'routing' rather than an invented provider,
+      // because no provider was involved; `logRequest` documents keyId null for
+      // exactly this class of rejection. The verbatim per-candidate
+      // dispositions ride in the error column, which is what names the scope,
+      // metric and source of an admission block.
+      if (!lastError) logRoutingRefusal(hooks, routeErr, exhaustion, startedAt);
       hooks.onRoutingExhausted(lastError, routeErr, exhaustion, { attempts, timedOut: false });
       return;
     }
+
+    // Why the candidates ahead of this one were passed over. Noted BEFORE
+    // dispatch: the served hop's own record is pushed only after the attempt
+    // finishes, and headers flush before that, so reading it off `records`
+    // would always come back empty on a successful request — the exact case
+    // this exists for.
+    noteSkippedCandidates(route.routingTrace?.skipped ?? []);
 
     // Per-attempt trace record: pushed exactly once per dispatched attempt, on
     // whichever exit the attempt takes. startOffsetMs/durationMs bracket the
@@ -1192,6 +1279,7 @@ async function runFallbackLoopAttempts(hooks: FallbackHooks, trace: RequestTrace
         modelId: route.modelId,
         keyOrdinal: keyOrdinal(route),
         keyLabel: route.keyLabel ?? null,
+        routing: route.routingTrace ?? null,
         outcome,
         startOffsetMs: attemptStartedAt - startedAt,
         durationMs: Date.now() - attemptStartedAt,

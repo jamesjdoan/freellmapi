@@ -6,6 +6,7 @@ import { apiFetch } from '@/lib/api';
 import { useI18n } from '@/i18n';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip as HoverTooltip } from '@/components/tooltip';
 import { ConfirmButton } from '@/components/confirm-button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,6 +45,8 @@ interface ProviderOverviewRow extends QuotaForecastEntry {
   metric: string | null;
   unit: string | null;
   derivedAllowance: { metric: string; limit: number; low: number; high: number; samples: number } | null;
+  /** Routed models drawing on this pool. Empty when nothing routes to it. */
+  members: string[];
   resetSource: 'provider' | 'inferred' | null;
 }
 
@@ -135,6 +138,21 @@ function formatCountdown(seconds: number | null): string {
   if (m > 0) parts.push(`${m}m`);
   if (s > 0 || parts.length === 0) parts.push(`${s}s`);
   return parts.join(' ');
+}
+
+/**
+ * The pool key without its platform prefix.
+ *
+ * The Provider column already carries `nvidia`, so `nvidia::rolling-60s` spends
+ * width repeating it on every row — width the used/remaining/limit columns need
+ * to stay readable. Only the leading `<platform>::` is dropped; the rest of the
+ * key is left exactly as the router knows it, because it is the identifier an
+ * operator matches against `quota_policy` and the routing diagnostics.
+ */
+export function poolLabel(row: { platform: string; pool: string | null }): string {
+  if (!row.pool) return '—';
+  const prefix = `${row.platform}::`;
+  return row.pool.startsWith(prefix) ? row.pool.slice(prefix.length) : row.pool;
 }
 
 /**
@@ -386,18 +404,38 @@ export default function QuotaPage() {
                 return (
                   <TableRow key={`${p.platform}:${p.pool ?? 'unknown'}`}>
                     <TableCell className="font-medium">{p.platform}</TableCell>
-                    <TableCell className="text-muted-foreground">{p.pool ?? '—'}</TableCell>
+                    {/* The pool key drops its platform prefix: the Provider
+                        column to the left already says `nvidia`, and repeating
+                        it in `nvidia::rolling-60s` on every row costs width the
+                        numbers need.
+
+                        Membership is a COUNT with the names on hover, not an
+                        inline list. Spelling out seven NVIDIA models here wrapped
+                        the cell to four lines and squeezed used/remaining/limit
+                        down to unreadable — the panel's whole job. The count is
+                        the part that is scanned ("is this one route or seven?");
+                        the names are what you ask for once. */}
+                    <TableCell className="text-muted-foreground">
+                      <div className="whitespace-nowrap">{poolLabel(p)}</div>
+                      {p.members.length > 0 && (
+                        <HoverTooltip text={p.members.join('\n')}>
+                          <span className="text-xs opacity-75 underline decoration-dotted underline-offset-2">
+                            {p.members.length === 1 ? t('quota.poolMembersOne') : t('quota.poolMembers', { count: p.members.length })}
+                          </span>
+                        </HoverTooltip>
+                      )}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">
                       {p.metric ? t(`quota.metric_${p.metric}`) : '—'}
                     </TableCell>
-                    <TableCell className="text-right">{formatAmount(p.used, p.unit)}</TableCell>
-                    <TableCell className="text-right">{formatAmount(p.remaining, p.unit)}</TableCell>
+                    <TableCell className="text-right tabular-nums whitespace-nowrap">{formatAmount(p.used, p.unit)}</TableCell>
+                    <TableCell className="text-right tabular-nums whitespace-nowrap">{formatAmount(p.remaining, p.unit)}</TableCell>
                     {/* For a pool the provider reports only as a fraction, the
                         stored limit is a synthetic scale — showing "100.0%" as
                         a ceiling states nothing. The derived allowance is a
                         real figure when we have one, and a dash is honest when
                         we do not. */}
-                    <TableCell className="text-right">
+                    <TableCell className="text-right tabular-nums whitespace-nowrap">
                       {p.unit === 'per_10k'
                         ? p.derivedAllowance
                           ? <span title={t('quota.derivedAllowanceHint', {
@@ -414,7 +452,7 @@ export default function QuotaPage() {
                     {/* A predicted countdown is marked, because for these
                         pools the provider sends no reset at all: its 429
                         carries none and retry-after is empty. */}
-                    <TableCell className="text-right">
+                    <TableCell className="text-right tabular-nums whitespace-nowrap">
                       {formatCountdown(p.seconds_until_reset)}
                       {p.resetSource === 'inferred' && p.seconds_until_reset != null
                         ? <span className="ml-1 text-xs text-muted-foreground"
@@ -431,9 +469,18 @@ export default function QuotaPage() {
                         </div>
                       ))}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
+                    {/* "(counted locally)" spelled out was the widest thing on
+                        the row after the member list — long enough to push the
+                        Status badge off the right edge entirely. Folded into a
+                        marker with the full wording on hover, matching what the
+                        Resets column already does for an inferred countdown. */}
+                    <TableCell className="text-muted-foreground whitespace-nowrap">
                       {p.source ?? '—'}
-                      {p.usedSource === 'local' ? ` ${t('quota.locallyCounted')}` : ''}
+                      {p.usedSource === 'local'
+                        ? <HoverTooltip text={t('quota.locallyCountedHint')}>
+                            <span className="ml-1 text-xs">{t('quota.locallyCountedMark')}</span>
+                          </HoverTooltip>
+                        : null}
                     </TableCell>
                     <TableCell><Badge variant={status.variant}>{t(status.labelKey)}</Badge></TableCell>
                   </TableRow>

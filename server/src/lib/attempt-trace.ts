@@ -26,6 +26,76 @@ import type { AttemptErrorClass } from './fallback-loop.js';
 // AttemptErrorClass — the failure class of a failed-and-failed-over attempt.
 export type AttemptOutcome = 'ok' | 'committed' | 'client_abort' | AttemptErrorClass;
 
+/**
+ * What the router was looking at when it picked this route, recorded AT
+ * DECISION TIME.
+ *
+ * A later `/api/fallback/routing` snapshot cannot answer this. It reports the
+ * scores as they are now, on quota that has since moved and with a different
+ * set of requests in flight — so it can show that the machinery exists, but it
+ * can never show that a particular past request was decided by it. The
+ * question an operator actually has ("why did THIS go to Groq") is only
+ * answerable if the inputs are captured at the moment of the choice.
+ *
+ * Every field is a number the scorer already computed and previously threw
+ * away. Nothing here is re-derived, so the record cannot disagree with the
+ * decision it describes.
+ */
+export interface RoutingDecisionTrace {
+  /** Which ordering rule ran: 'priority' or a bandit preset. */
+  strategy: string;
+  /** The quota domain this route draws on, e.g. `nvidia::credit-pool`. What
+   *  makes a shared allowance legible after the fact. */
+  poolKey: string | null;
+  /** Scarcity guardrail, ≤1. 1 = the pool had no reason to hold back. */
+  scarcity: number;
+  /** Reset-urgency preference, ≥1. >1 = an unspent allowance was expiring. */
+  harvest: number;
+  /** Spreading preference, ≤1. <1 = concurrent work was already on this pool. */
+  diversity: number;
+  /**
+   * This pool's share of the attempts in flight when the choice was made.
+   * Null when fewer than two were open — which is the common case, and the
+   * reason a "run three curls and watch them differ" test proves nothing:
+   * with no concurrency the diversity term is inert by design.
+   */
+  inFlightShare: number | null;
+  /**
+   * 1-based position after scoring, and the position the same scoring pass
+   * would have produced with the quota-domain guardrail and both preferences
+   * removed.
+   *
+   * SCORING STAGE ONLY, and named that way deliberately. `routeRequest` then
+   * reorders on top of this — the exploration probe, a sticky-session pin, an
+   * explicitly pinned model — and finally walks the result skipping anything
+   * the gates reject. So `scoringRank` is not where the route was attempted;
+   * `selectionRank` below is.
+   *
+   * The counterfactual removes the three terms TOGETHER. A move therefore
+   * proves the quota-aware terms decided the route, not which one of them did.
+   * Where exactly one of scarcity/harvest/diversity is off-neutral the
+   * attribution is unambiguous from those fields; where several are, it is not,
+   * and this record does not pretend otherwise.
+   */
+  scoringRank: number;
+  scoringRankWithoutQuotaTerms: number;
+  /** 1-based position in the walk at which this route was actually attempted,
+   *  after every reorder and after skipping gated candidates. */
+  selectionRank: number;
+  /** Set when something moved this route ahead of its scored position. */
+  selectionOverride: 'explore' | 'sticky' | 'pinned' | null;
+  /**
+   * Verbatim dispositions of the candidates passed over before this one —
+   * `platform/model: reason` lines straight from the router's diagnostics,
+   * which is where an admission block names its scope, metric and source.
+   *
+   * Recorded because a request that SUCCEEDS on hop two otherwise leaves no
+   * trace at all of why hop one was refused, and "the gate is working" and
+   * "the gate is misfiring" look identical from a successful response.
+   */
+  skipped: string[];
+}
+
 export interface AttemptTraceRecord {
   // 0-based position in the ladder; the persistence order key.
   ordinal: number;
@@ -48,11 +118,30 @@ export interface AttemptTraceRecord {
   // Short, REDACTED summary of the error that ended this attempt (see
   // lib/error-redaction.ts summarizeAttemptError — secrets scrubbed, capped at
   // 200 chars). Null for successful hops ('ok'/'committed').
+  /**
+   * The routing inputs at the moment this hop was chosen. Null for a route
+   * that arrived without them — a test double, or a surface that constructs a
+   * RouteResult directly — so its absence never breaks the ladder record.
+   */
+  routing: RoutingDecisionTrace | null;
   errorSummary: string | null;
 }
 
 export interface RequestTrace {
   records: AttemptTraceRecord[];
+  /**
+   * Verbatim dispositions of candidates the router passed over on this
+   * request, accumulated across attempts.
+   *
+   * Held here rather than read off `records` because of when headers flush: the
+   * hop currently being served is pushed to `records` only AFTER dispatch
+   * returns, so at flush time the served hop — the one carrying the skip
+   * reasons — is not in the list yet. Keeping them on the trace also means
+   * `setFallbackHeaders` reads them from the same AsyncLocalStorage scope it
+   * already reads `records` from, instead of a new parameter through five
+   * surfaces.
+   */
+  skipped: string[];
   // Rowid of the most recent `requests` row logged during this trace's run;
   // null until the first logRequest lands (e.g. a client abort on attempt 1).
   lastRequestRowId: number | null;
@@ -61,7 +150,18 @@ export interface RequestTrace {
 const storage = new AsyncLocalStorage<RequestTrace>();
 
 export function newRequestTrace(): RequestTrace {
-  return { records: [], lastRequestRowId: null };
+  return { records: [], skipped: [], lastRequestRowId: null };
+}
+
+/** Record candidates passed over before the route about to be dispatched.
+ *  Union, not replace: a later attempt skips its own set, and the caller wants
+ *  everything the request stepped around. No-op outside a trace. */
+export function noteSkippedCandidates(lines: readonly string[]): void {
+  const trace = storage.getStore();
+  if (!trace || lines.length === 0) return;
+  for (const line of lines) {
+    if (!trace.skipped.includes(line)) trace.skipped.push(line);
+  }
 }
 
 export function runWithRequestTrace<T>(trace: RequestTrace, fn: () => T): T {

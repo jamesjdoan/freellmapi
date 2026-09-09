@@ -23,6 +23,14 @@ const LOGICAL = 'nemotron 3 ultra';
 const MODEL_ID = 'nemotron-3-ultra';
 const PROVIDERS = ['nvidia', 'ollama', 'opencode', 'openrouter'] as const;
 
+/** OpenRouter names its free routes with a ':free' suffix and bills the paid
+ *  balance for anything without one, so auto chains carry only the free form.
+ *  The fixture has to use the real id or the provider is (correctly) filtered
+ *  out of the chain and the scarcity question this file asks never arises. */
+function modelIdFor(platform: string): string {
+  return platform === 'openrouter' ? `${MODEL_ID}:free` : MODEL_ID;
+}
+
 const keyIds: Record<string, number> = {};
 
 function activeProfileId(): number {
@@ -47,7 +55,7 @@ function seedProvider(platform: string, priority: number): void {
     -- reading documented monthly pools that filler became a real quota, and
     -- silently gave every provider a limit these tests assume it lacks.
     VALUES (?, ?, ?, 1, 1, 'Frontier', NULL, NULL, NULL, NULL, '', 128000, 1, 0, 1)
-  `).run(platform, MODEL_ID, `Nemotron 3 Ultra (${platform})`).lastInsertRowid);
+  `).run(platform, modelIdFor(platform), `Nemotron 3 Ultra (${platform})`).lastInsertRowid);
 
   db.prepare('INSERT INTO fallback_config (model_db_id, priority, enabled) VALUES (?, ?, 1)').run(modelDbId, priority);
   db.prepare('INSERT INTO profile_models (profile_id, model_db_id, priority, enabled) VALUES (?, ?, ?, 1)')
@@ -58,7 +66,7 @@ function spend(platform: string, n: number): void {
   const stmt = getDb().prepare(
     "INSERT INTO rate_limit_usage (platform, model_id, key_id, kind, tokens, created_at_ms) VALUES (?, ?, ?, 'request', 0, ?)",
   );
-  for (let i = 0; i < n; i++) stmt.run(platform, MODEL_ID, keyIds[platform], Date.now());
+  for (let i = 0; i < n; i++) stmt.run(platform, modelIdFor(platform), keyIds[platform], Date.now());
   invalidateShadowCounts();
 }
 
