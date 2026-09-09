@@ -8,6 +8,11 @@ server/data/
 *.db-wal
 *.db-shm
 *.bak
+# Full-volume archives taken before every redeploy. `*.db` above already covers
+# a bare SQLite file, but these are `.tar.gz` of the whole data volume — the
+# provider keys, request history and quota ledger — and matched nothing. They
+# were one `git add -A` away from being committed.
+backups/
 # Auto-generated dev encryption key (written next to the SQLite DB when
 # ENCRYPTION_KEY is unset outside production). Never commit it.
 .encryption-key
