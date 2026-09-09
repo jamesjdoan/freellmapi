@@ -1,6 +1,6 @@
 # Imperium FreeLLMAPI Extension
 
-This document is the user and maintainer map for the features carried by the separate `codex/provider-routing-controls` branch. These features are installed in the running local image but are not part of upstream FreeLLMAPI `main`.
+This document is the user and maintainer map for the features carried by the separate `docs/freellm-assert-start-on-redeploy` extension branch. These features are installed in the running local image but are not part of upstream FreeLLMAPI `main`. (`codex/provider-routing-controls` is the older publishable subset of the same work; see `docs/deployment/03-imperium-extension-branch.md`.)
 
 The dashboard’s **Extensions** button is the quickest runtime index. It lists the same features, shows that they are installed and links to the pages that own their settings.
 

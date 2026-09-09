@@ -113,12 +113,12 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
     id: 'separate-extension-branch',
     title: 'Separate extension branch',
     summary: 'Imperium changes stay on their own fork branch and are rebased onto upstream releases instead of merged into upstream main.',
-    settingsLocation: 'Deployment: codex/provider-routing-controls',
+    settingsLocation: 'Deployment: docs/freellm-assert-start-on-redeploy',
     destinations: [
       {
         kind: 'external',
         label: 'View extension branch',
-        href: 'https://github.com/jamesjdoan/freellmapi/tree/codex/provider-routing-controls',
+        href: 'https://github.com/jamesjdoan/freellmapi/tree/docs/freellm-assert-start-on-redeploy',
       },
     ],
   },

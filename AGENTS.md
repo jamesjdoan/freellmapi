@@ -14,7 +14,7 @@ This checkout is the Imperium-maintained FreeLLMAPI extension, not upstream `mai
 
 ## Hard constraints
 
-- Keep changes on `codex/provider-routing-controls`; do not merge into upstream `main` unless explicitly requested.
+- Keep changes on `docs/freellm-assert-start-on-redeploy`, the branch that carries the whole extension; do not merge into upstream `main` unless explicitly requested. `codex/provider-routing-controls` is an ancestor of it, kept as the publishable subset on the older `v0.9.4` base — it does not contain the quota-ledger subsystem (`quota-policy`, `quota-clock`, `quota-routing` and their migrations), so work built on that resolver cannot land there.
 - Rebase the extension branch onto upstream releases, validate it, rebuild the local image, then recreate the existing container with its existing data volume.
 - Finish a redeploy with `docker compose up -d` and confirm `docker compose ps` reads `Up (healthy)` with a published port. A container left in `Created` stays down through reboots — `restart: unless-stopped` never starts one that has not run — and the harness roles pointed at FreeLLM fall back silently rather than erroring.
 - Preserve public unified model IDs and automatic-routing defaults.
@@ -26,7 +26,7 @@ This checkout is the Imperium-maintained FreeLLMAPI extension, not upstream `mai
 ## Current branch and deployment
 
 - Fork: `jamesjdoan/freellmapi`
-- Branch: `codex/provider-routing-controls`
+- Branch: `docs/freellm-assert-start-on-redeploy` (publishable subset: `codex/provider-routing-controls`)
 - Local image: `jamesjdoan/freellmapi:provider-routing`
 - Dashboard: `http://127.0.0.1:3001`
 - Persistent Docker volume: `freellmapi_freellmapi-data`
