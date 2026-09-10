@@ -183,6 +183,10 @@ export default function FallbackPage() {
   // what the router reads to decide which providers one logical model fails
   // over across, so a merge here changes routing and shows up on Compare.
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set())
+  // Checkboxes are off by default: this table's primary job is reading and
+  // reordering the chain, and a checkbox on every row at rest is chrome nobody
+  // asked for. Merge mode turns them on.
+  const [mergeMode, setMergeMode] = useState(false)
   const { data: unify } = useQuery<{ overrides: { merges: AliasMerge[]; splits: unknown[] } }>({
     queryKey: ['unify'],
     queryFn: () => apiFetch('/api/settings/unify'),
@@ -280,10 +284,19 @@ export default function FallbackPage() {
     })
   }
 
+  // Deliberately over the FULL list, not the filtered one: searching is how you
+  // find the second model to merge, and a selection that evaporated when the
+  // query changed would make merging two models with dissimilar names
+  // impossible - which is exactly the case merging exists for.
   const chosenGroups = useMemo(
     () => orderedGroups.filter(g => selectedGroups.has(g.key)),
     [orderedGroups, selectedGroups],
   )
+
+  const exitMergeMode = () => {
+    setMergeMode(false)
+    setSelectedGroups(new Set())
+  }
 
   /**
    * Fold the other selected models into the first one. `keys` are the routing
@@ -322,6 +335,13 @@ export default function FallbackPage() {
     if (query && !groupMatchesQuery(g, query)) return false
     return true
   }), [orderedGroups, hideDisabled, filterVision, filterTools, minContext, query])
+  // How many picks the current filter is hiding, so the count in the bar never
+  // looks wrong.
+  const hiddenChosen = useMemo(
+    () => chosenGroups.filter(g => !visibleGroups.some(v => v.key === g.key)).length,
+    [chosenGroups, visibleGroups],
+  )
+
   const hiddenDisabledCount = useMemo(
     () => orderedGroups.filter(g => !g.members.some(m => m.enabled)).length,
     [orderedGroups],
@@ -605,6 +625,14 @@ export default function FallbackPage() {
                   {hideDisabled && hiddenDisabledCount > 0 && <span className="ml-1 tabular-nums">({hiddenDisabledCount})</span>}
                 </button>
                 <button
+                  onClick={() => (mergeMode ? exitMergeMode() : setMergeMode(true))}
+                  aria-pressed={mergeMode}
+                  title={t('models.mergeModeHint')}
+                  className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${mergeMode ? 'bg-foreground text-background border-foreground font-medium' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                >
+                  {mergeMode ? t('models.mergeModeDone') : t('models.mergeMode')}
+                </button>
+                <button
                   onClick={() => setFilterVision(v => !v)}
                   aria-pressed={filterVision}
                   className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${filterVision ? 'bg-foreground text-background border-foreground font-medium' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
@@ -688,7 +716,7 @@ export default function FallbackPage() {
                             allRows={rows}
                             rateUsage={rateUsageByModel}
                             selected={selectedGroups.has(g.key)}
-                            onSelect={toggleGroupSelected}
+                            onSelect={mergeMode ? toggleGroupSelected : undefined}
                           />
                         ))}
                       </tbody>
@@ -707,6 +735,22 @@ export default function FallbackPage() {
                         onClick={() => navigate(`/models/chat/${encodeURIComponent(g.members[0].canonicalId ?? g.members[0].modelId)}`)}
                         className={`group/row border-b last:border-0 cursor-pointer transition-colors hover:[&>td]:bg-muted/50 [&>td:first-child]:rounded-l-lg [&>td:last-child]:rounded-r-lg ${g.members.some(m => m.enabled) ? '' : 'opacity-50'}`}
                       >
+                        {/* Dragging is off while a filter is active, so this
+                            branch renders plain rows — but merging is exactly
+                            what a search is FOR here: you find one model, pick
+                            it, search again for the other. Without this the
+                            checkboxes vanished the moment you typed. */}
+                        {mergeMode && (
+                          <td className="w-6 pl-2" onClick={e => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selectedGroups.has(g.key)}
+                              onChange={() => toggleGroupSelected(g.key)}
+                              aria-label={g.label}
+                              className="size-3.5 accent-foreground cursor-pointer"
+                            />
+                          </td>
+                        )}
                         <GroupHeaderCells group={g} rank={rankByKey.get(g.key) ?? 0} onToggleGroup={handleGroupToggle} allRows={rows} rateUsage={rateUsageByModel} />
                       </tr>
                     ))}
@@ -724,11 +768,18 @@ export default function FallbackPage() {
             {/* Merging is a separate bar from the unsaved-chain one: it writes
                 immediately (the router's overrides are not part of the chain
                 draft) and saying "Save changes" for it would be a lie. */}
-            <FloatingBar show={chosenGroups.length > 0}>
+            <FloatingBar show={mergeMode}>
               <span className="text-xs text-muted-foreground">
-                {t('models.mergeSelected', { count: chosenGroups.length })}
+                {chosenGroups.length === 0
+                  ? t('models.mergePrompt')
+                  : t('models.mergeSelected', { count: chosenGroups.length })}
+                {/* Says so rather than letting the number look wrong when a
+                    pick is filtered out of view. */}
+                {hiddenChosen > 0 && (
+                  <span className="ml-1">{t('models.mergeHidden', { count: hiddenChosen })}</span>
+                )}
               </span>
-              <Button variant="outline" size="sm" onClick={() => setSelectedGroups(new Set())}>
+              <Button variant="outline" size="sm" onClick={exitMergeMode}>
                 {t('common.cancel')}
               </Button>
               <Button

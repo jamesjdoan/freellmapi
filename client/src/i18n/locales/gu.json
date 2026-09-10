@@ -293,7 +293,12 @@
     "providerRoutingPreferred": "Preferred order",
     "mergeSelected": "{count} selected",
     "mergeInto": "Merge into {name}",
-    "unmergeGroup": "Unmerge"
+    "unmergeGroup": "Unmerge",
+    "mergeMode": "Merge",
+    "mergeModeDone": "Done",
+    "mergeModeHint": "Pick two or more models that are the same model, and fold them into one. Searching keeps your picks.",
+    "mergePrompt": "Pick the models to fold together",
+    "mergeHidden": "({count} hidden by filters)"
   },
   "strategies": {
     "explore": "માપ્યા વગરના મોડલ્સ એક્સપ્લોર કરો",
