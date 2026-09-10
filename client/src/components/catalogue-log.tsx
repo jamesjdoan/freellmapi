@@ -86,6 +86,7 @@ export function CatalogueLogPanel() {
       <div className="mt-3">
         <TimeTreeLog
           recentLabel={t('catalogue.logRecent')}
+          unit="month"
           items={data.events}
           at={e => parseSqliteUtc(e.at)}
           itemKey={e => String(e.id)}

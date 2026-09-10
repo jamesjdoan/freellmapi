@@ -358,7 +358,10 @@
     }
   },
   "log": {
-"history": "Full history",
+    "history": "Full history",
+    "restOfDay": "Show {count} more from today",
+    "restOfMonth": "Show {count} more from this month",
+    "restHide": "Show fewer",
     "current": "now",
     "arrived": "{count} arrived",
     "departed": "{count} left",

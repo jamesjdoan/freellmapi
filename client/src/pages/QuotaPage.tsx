@@ -564,6 +564,7 @@ export default function QuotaPage() {
               the week summary reads as "the shadow router differed 4 times". */}
           <TimeTreeLog
             recentLabel={t('quota.divergenceRecent')}
+            unit="day"
             items={decisionsData.decisions}
             at={d => parseSqliteUtc(d.createdAt)}
             itemKey={d => String(d.id)}

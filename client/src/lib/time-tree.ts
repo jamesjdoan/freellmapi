@@ -161,28 +161,39 @@ function dayCount<T>(node: TimeTreeNode<T>): number {
   return node.children.reduce((n, c) => n + dayCount(c), 0)
 }
 
+/** Which levels open by default once the history is revealed. `month` stops
+ *  there and shows week summaries; `day` goes all the way to today's rows. */
+export type OpenDepth = 'month' | 'day'
+
+const DEPTH_ORDER: Record<TimeTreeLevel, number> = { year: 0, month: 1, week: 2, day: 3 }
+
 /**
- * The ids open on first render:
+ * The ids open when the history is first revealed:
  *
- *  - the chain down to TODAY, today's own fold included. The reader's own day
- *    is what they came to look at; making them click to it is a toll.
+ *  - the chain down to the current bucket, stopping at `openTo`. A catalogue
+ *    changes at the pace of a month, so month summaries are the useful grain;
+ *    routing decisions arrive by the dozen per day, so the day is.
  *  - everything, when the WHOLE log covers a single day. Folding one day's
- *    rows behind three nested folds is ceremony over nothing.
+ *    rows behind three nested folds hides them and offers nothing to choose
+ *    between.
  *
- * The single-day rule is deliberately whole-log rather than per-bucket. Per
+ * The single-day rule is whole-log rather than per-bucket on purpose. Per
  * bucket it fires constantly - a sparse log has one day in most of its weeks -
  * and then almost every fold is open and the condensing means nothing.
  *
- * Everything else stays shut, carrying its summary. Nothing opens for an empty
- * log: an open empty fold reads as a bug.
+ * Nothing opens for an empty log: an open empty fold reads as a bug.
  */
-export function defaultOpenIds<T>(tree: readonly TimeTreeNode<T>[]): Set<string> {
+export function defaultOpenIds<T>(
+  tree: readonly TimeTreeNode<T>[],
+  openTo: OpenDepth = 'day',
+): Set<string> {
   const open = new Set<string>()
   const totalDays = tree.reduce((n, y) => n + dayCount(y), 0)
   const openEverything = totalDays === 1
+  const limit = DEPTH_ORDER[openTo]
 
   const walk = (node: TimeTreeNode<T>, ancestors: string[]): void => {
-    if (openEverything || node.current) {
+    if (openEverything || (node.current && DEPTH_ORDER[node.level] <= limit)) {
       for (const id of ancestors) open.add(id)
       open.add(node.id)
     }
@@ -190,6 +201,27 @@ export function defaultOpenIds<T>(tree: readonly TimeTreeNode<T>[]): Set<string>
   }
   for (const year of tree) walk(year, [])
   return open
+}
+
+/**
+ * The items sharing `unit` with `now` — today's, or this month's.
+ *
+ * Drives the one-click "show the rest of today" control: past the ten in the
+ * head, the next thing a reader wants is the remainder of the period they are
+ * already looking at, not a tree.
+ */
+export function withinCurrentUnit<T>(
+  items: readonly T[],
+  at: (item: T) => Date,
+  unit: OpenDepth,
+  now: Date = new Date(),
+): T[] {
+  const sameMonth = (d: Date) => d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
+  const sameDay = (d: Date) => sameMonth(d) && d.getDate() === now.getDate()
+  const test = unit === 'day' ? sameDay : sameMonth
+  return [...items]
+    .filter(i => test(at(i)))
+    .sort((a, b) => at(b).getTime() - at(a).getTime())
 }
 
 /** Newest first, capped. The flat list shown above the fold: at this size a

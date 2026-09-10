@@ -1,22 +1,31 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useI18n } from '@/i18n'
-import { buildTimeTree, defaultOpenIds, mostRecent, type TimeTreeNode } from '@/lib/time-tree'
+import {
+  buildTimeTree,
+  defaultOpenIds,
+  mostRecent,
+  withinCurrentUnit,
+  type OpenDepth,
+  type TimeTreeNode,
+} from '@/lib/time-tree'
 
-// A long append-only log: the most recent changes in full, then the rest folded
-// into Year > Month > Week > Day.
+// A long append-only log, read in three steps rather than one.
 //
-// Shared by the catalogue log and the routing-decision (shadow) log: both are
-// streams that grow without bound and are read the same way — "what happened
-// lately", then occasionally "what happened back then". The flat head answers
-// the first and the fold answers the second.
+// Shared by the catalogue log and the routing-decision (shadow) log: both grow
+// without bound and are read the same way — "what just happened", then "the
+// rest of today", then, rarely, "what happened back then". So:
 //
-// Three rules decide what a reader sees at rest:
-//   - the newest `recentCount` rows are ALWAYS shown in full, above the fold
-//   - the fold appears only once there are more than `foldAbove` rows; below
-//     that the flat list is already the whole log and a tree over ten rows is
-//     ceremony
-//   - inside the fold, today is open, and so is any fold holding a single day
+//   1. the newest `recentCount` rows, always in full
+//   2. one click for the REST of the period already on screen — the rest of
+//      today for decisions, the rest of the month for the catalogue, since a
+//      catalogue changes at the pace of a month and decisions by the dozen
+//      per day
+//   3. `Full history`, shut until asked for, holding the whole log folded into
+//      Year > Month > Week > Day
+//
+// The section itself collapses too, because a log nobody is reading today
+// should cost one line on the page and no more.
 //
 // Every shut fold carries a summary of what it contains, so collapsing hides
 // the detail and never the fact that something happened. That is why `summary`
@@ -30,15 +39,17 @@ export interface TimeTreeLogProps<T> {
   at: (item: T) => Date
   /** One line describing a whole bucket, e.g. "+3 arrived · 1 retired". */
   summary: (items: readonly T[]) => ReactNode
-  /** One row, rendered only when its day is expanded. */
+  /** One row. */
   row: (item: T) => ReactNode
   /** Stable key per item. */
   itemKey: (item: T) => string
-  /** Injected in tests so the open-by-default day is not wall-clock bound. */
+  /** The period step 2 reveals, and how deep the history opens. */
+  unit?: OpenDepth
+  /** Injected in tests so "today" is not wall-clock bound. */
   now?: Date
   /** Newest rows always shown in full. */
   recentCount?: number
-  /** The fold only appears past this many rows. */
+  /** The history fold only exists past this many rows. */
   foldAbove?: number
   /** Heading for the flat head, e.g. "Latest changes". */
   recentLabel?: string
@@ -53,23 +64,26 @@ const LEVEL_INDENT: Record<string, string> = {
 
 export function TimeTreeLog<T>({
   items, at, summary, row, itemKey, now,
-  recentCount = 10, foldAbove = 10, recentLabel,
+  unit = 'day', recentCount = 10, foldAbove = 10, recentLabel,
 }: TimeTreeLogProps<T>) {
   const { locale, t } = useI18n()
   const tree = useMemo(() => buildTimeTree(items, at, now), [items, at, now])
   const recent = useMemo(() => mostRecent(items, at, recentCount), [items, at, recentCount])
-  // The fold keeps the WHOLE log, head included. Excluding the recent rows
-  // would make every summary above disagree with the count beside it - "2
-  // arrived" on a week that saw twelve.
-  const folded = items.length > foldAbove
-  // Seeded once from the tree rather than kept in sync with it: re-deriving on
-  // every refetch would slam shut whatever the reader had just opened.
+  const currentUnit = useMemo(() => withinCurrentUnit(items, at, unit, now), [items, at, unit, now])
+
+  const [sectionOpen, setSectionOpen] = useState(true)
+  const [restOpen, setRestOpen] = useState(false)
+  // Shut until asked for. The head answers the common question; the tree is
+  // for the rare one, and rendering it open buries the head under it.
+  const [historyOpen, setHistoryOpen] = useState(false)
+  // Seeded from the tree rather than kept in sync with it: re-deriving on every
+  // refetch would slam shut whatever the reader had just opened.
   const [open, setOpen] = useState<Set<string> | null>(null)
-  const effective = open ?? defaultOpenIds(tree)
+  const effective = open ?? defaultOpenIds(tree, unit)
 
   const toggle = (id: string) => {
     setOpen(prev => {
-      const next = new Set(prev ?? defaultOpenIds(tree))
+      const next = new Set(prev ?? defaultOpenIds(tree, unit))
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
@@ -84,8 +98,8 @@ export function TimeTreeLog<T>({
       case 'month':
         return d.toLocaleDateString(locale, { month: 'long', year: 'numeric' })
       case 'week': {
-        // A week label needs both ends: "week 37" alone means nothing to a
-        // reader, and the month above it does not bound it (weeks straddle).
+        // A week label needs both ends: "week 37" means nothing to a reader,
+        // and the month above does not bound it (weeks straddle months).
         const end = new Date(d.getTime() + 6 * 86_400_000)
         const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }
         return `${d.toLocaleDateString(locale, opts)} – ${end.toLocaleDateString(locale, opts)}`
@@ -96,6 +110,12 @@ export function TimeTreeLog<T>({
   }
 
   if (items.length === 0) return null
+
+  const folded = items.length > foldAbove
+  // Only what step 2 would actually add: the rest of the period, minus the rows
+  // already sitting in the head.
+  const shownIds = new Set(recent.map(itemKey))
+  const restOfUnit = currentUnit.filter(i => !shownIds.has(itemKey(i)))
 
   const renderNode = (node: TimeTreeNode<T>): ReactNode => {
     const isOpen = effective.has(node.id)
@@ -115,8 +135,6 @@ export function TimeTreeLog<T>({
               {t('log.current')}
             </span>
           )}
-          {/* Always visible, open or shut: a fold must never be the reason
-              something went unnoticed. */}
           <span className="ml-auto min-w-0 truncate text-right text-[11px] text-muted-foreground">
             {summary(node.items)}
           </span>
@@ -135,20 +153,56 @@ export function TimeTreeLog<T>({
   }
 
   return (
-    <div className="space-y-3">
-      <div>
-        {recentLabel && folded && (
-          <p className="mb-1 text-[11px] font-medium text-muted-foreground">{recentLabel}</p>
-        )}
-        <ul className="space-y-1">
-          {recent.map(i => <li key={itemKey(i)}>{row(i)}</li>)}
-        </ul>
-      </div>
-      {folded && (
-        <div className="border-t pt-2">
-          <p className="mb-1 text-[11px] font-medium text-muted-foreground">{t('log.history')}</p>
-          <ul className="space-y-0.5">{tree.map(renderNode)}</ul>
-        </div>
+    <div className="space-y-2">
+      {/* The section's own fold. Shows the whole log's summary while shut, so
+          collapsing it never hides that something happened. */}
+      <button
+        type="button"
+        onClick={() => setSectionOpen(o => !o)}
+        aria-expanded={sectionOpen}
+        className="flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left text-[11px] font-medium text-muted-foreground hover:bg-muted/50"
+      >
+        <ChevronDown className={`size-3 flex-shrink-0 transition-transform ${sectionOpen ? '' : '-rotate-90'}`} />
+        <span>{recentLabel ?? t('log.history')}</span>
+        <span className="ml-auto truncate text-right font-normal">{summary(items)}</span>
+      </button>
+
+      {sectionOpen && (
+        <>
+          <ul className="space-y-1">
+            {recent.map(i => <li key={itemKey(i)}>{row(i)}</li>)}
+            {restOpen && restOfUnit.map(i => <li key={itemKey(i)}>{row(i)}</li>)}
+          </ul>
+
+          {restOfUnit.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setRestOpen(o => !o)}
+              aria-expanded={restOpen}
+              className="rounded px-1 py-0.5 text-[11px] text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
+            >
+              {restOpen
+                ? t('log.restHide')
+                : t(unit === 'day' ? 'log.restOfDay' : 'log.restOfMonth', { count: restOfUnit.length })}
+            </button>
+          )}
+
+          {folded && (
+            <div className="border-t pt-1.5">
+              <button
+                type="button"
+                onClick={() => setHistoryOpen(o => !o)}
+                aria-expanded={historyOpen}
+                className="flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left text-[11px] font-medium text-muted-foreground hover:bg-muted/50"
+              >
+                <ChevronRight className={`size-3 flex-shrink-0 transition-transform ${historyOpen ? 'rotate-90' : ''}`} />
+                <span>{t('log.history')}</span>
+                <span className="ml-auto font-normal tabular-nums">{items.length}</span>
+              </button>
+              {historyOpen && <ul className="mt-1 space-y-0.5">{tree.map(renderNode)}</ul>}
+            </div>
+          )}
+        </>
       )}
     </div>
   )

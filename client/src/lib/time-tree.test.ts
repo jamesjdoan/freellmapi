@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildTimeTree, defaultOpenIds, isoWeek, mostRecent, parseSqliteUtc, startOfIsoWeek } from './time-tree'
+import { buildTimeTree, defaultOpenIds, isoWeek, mostRecent, parseSqliteUtc, startOfIsoWeek, withinCurrentUnit } from './time-tree'
 
 const at = (x: { when: Date }) => x.when
 /** Built in LOCAL time on purpose: buckets are the reader's days, so a fixture
@@ -134,5 +134,57 @@ describe('mostRecent', () => {
     const before = items.map(i => i.when.getDate())
     mostRecent(items, at, 2)
     expect(items.map(i => i.when.getDate())).toEqual(before)
+  })
+})
+
+describe('defaultOpenIds depth', () => {
+  const now = new Date(2026, 8, 10, 12)
+  const tree = () => buildTimeTree([item(2026, 9, 10), item(2026, 9, 8), item(2026, 5, 2)], at, now)
+
+  it('stops at the month when asked, leaving week summaries', () => {
+    // A catalogue changes at the pace of a month, so weeks are the grain to
+    // show; opening to the day would bury them.
+    const open = defaultOpenIds(tree(), 'month')
+    const year = tree()[0]
+    const month = year.children.find(m => m.current)!
+    expect(open.has(year.id)).toBe(true)
+    expect(open.has(month.id)).toBe(true)
+    expect(open.has(month.children.find(w => w.current)!.id)).toBe(false)
+  })
+
+  it('reaches today when asked for the day', () => {
+    const open = defaultOpenIds(tree(), 'day')
+    const month = tree()[0].children.find(m => m.current)!
+    const week = month.children.find(w => w.current)!
+    expect(open.has(week.id)).toBe(true)
+    expect(open.has(week.children.find(d => d.current)!.id)).toBe(true)
+  })
+
+  it('opens a single-day log completely regardless of depth', () => {
+    const single = buildTimeTree([item(2026, 5, 2), item(2026, 5, 2, 14)], at, now)
+    for (const depth of ['month', 'day'] as const) {
+      const open = defaultOpenIds(single, depth)
+      const week = single[0].children[0].children[0]
+      expect(open.has(week.children[0].id)).toBe(true)
+    }
+  })
+})
+
+describe('withinCurrentUnit', () => {
+  const now = new Date(2026, 8, 10, 12)
+
+  it('takes today only, newest first', () => {
+    const items = [item(2026, 9, 10, 9), item(2026, 9, 10, 15), item(2026, 9, 9)]
+    expect(withinCurrentUnit(items, at, 'day', now).map(i => i.when.getHours())).toEqual([15, 9])
+  })
+
+  it('takes the whole month when that is the unit', () => {
+    const items = [item(2026, 9, 10), item(2026, 9, 1), item(2026, 8, 31)]
+    expect(withinCurrentUnit(items, at, 'month', now)).toHaveLength(2)
+  })
+
+  it('does not match the same month in another year', () => {
+    const items = [item(2026, 9, 3), item(2025, 9, 3)]
+    expect(withinCurrentUnit(items, at, 'month', now)).toHaveLength(1)
   })
 })
