@@ -919,7 +919,8 @@
     "poolMembers": "{count} مدل",
     "poolMembersOne": "۱ مدل",
     "locallyCountedMark": "·محلی",
-    "locallyCountedHint": "ارائه‌دهنده هرگز این استخر را گزارش نکرده است؛ این شمارش از خودمان است، در برابر حدی که خودمان نگه می‌داریم."
+    "locallyCountedHint": "ارائه‌دهنده هرگز این استخر را گزارش نکرده است؛ این شمارش از خودمان است، در برابر حدی که خودمان نگه می‌داریم.",
+    "divergenceRecent": "Latest disagreements"
   },
   "logs": {
     "title": "لاگ‌ها",
@@ -1277,7 +1278,8 @@
       "retired": "retired",
       "removed": "removed",
       "relisted": "relisted"
-    }
+    },
+    "logRecent": "Latest changes"
   },
   "log": {
     "current": "now",
@@ -1285,6 +1287,7 @@
     "departed": "{count} left",
     "quiet": "nothing",
     "decisions": "{count} decisions",
-    "disagreed": "{count} disagreed"
+    "disagreed": "{count} disagreed",
+    "history": "Full history"
   }
 }

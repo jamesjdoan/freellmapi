@@ -919,7 +919,8 @@
     "poolMembers": "{count} model",
     "poolMembersOne": "1 model",
     "locallyCountedMark": "·yerel",
-    "locallyCountedHint": "Sağlayıcı bu havuzu hiç bildirmedi; sayım bizim, kendi tuttuğumuz bir sınıra karşı."
+    "locallyCountedHint": "Sağlayıcı bu havuzu hiç bildirmedi; sayım bizim, kendi tuttuğumuz bir sınıra karşı.",
+    "divergenceRecent": "Latest disagreements"
   },
   "logs": {
     "title": "Günlükler",
@@ -1277,7 +1278,8 @@
       "retired": "retired",
       "removed": "removed",
       "relisted": "relisted"
-    }
+    },
+    "logRecent": "Latest changes"
   },
   "log": {
     "current": "now",
@@ -1285,6 +1287,7 @@
     "departed": "{count} left",
     "quiet": "nothing",
     "decisions": "{count} decisions",
-    "disagreed": "{count} disagreed"
+    "disagreed": "{count} disagreed",
+    "history": "Full history"
   }
 }

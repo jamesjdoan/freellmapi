@@ -919,7 +919,8 @@
     "poolMembers": "{count} modelov",
     "poolMembersOne": "1 model",
     "locallyCountedMark": "·lokálne",
-    "locallyCountedHint": "Poskytovateľ tento pool nikdy nenahlásil; počet je náš, proti limitu, ktorý držíme sami."
+    "locallyCountedHint": "Poskytovateľ tento pool nikdy nenahlásil; počet je náš, proti limitu, ktorý držíme sami.",
+    "divergenceRecent": "Latest disagreements"
   },
   "logs": {
     "title": "Logy",
@@ -1277,7 +1278,8 @@
       "retired": "retired",
       "removed": "removed",
       "relisted": "relisted"
-    }
+    },
+    "logRecent": "Latest changes"
   },
   "log": {
     "current": "now",
@@ -1285,6 +1287,7 @@
     "departed": "{count} left",
     "quiet": "nothing",
     "decisions": "{count} decisions",
-    "disagreed": "{count} disagreed"
+    "disagreed": "{count} disagreed",
+    "history": "Full history"
   }
 }

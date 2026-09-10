@@ -919,7 +919,8 @@
     "poolMembers": "{count} modelos",
     "poolMembersOne": "1 modelo",
     "locallyCountedMark": "·local",
-    "locallyCountedHint": "El proveedor nunca informó de este grupo; el recuento es nuestro, frente a un límite que mantenemos."
+    "locallyCountedHint": "El proveedor nunca informó de este grupo; el recuento es nuestro, frente a un límite que mantenemos.",
+    "divergenceRecent": "Latest disagreements"
   },
   "logs": {
     "title": "Registros",
@@ -1277,7 +1278,8 @@
       "retired": "retired",
       "removed": "removed",
       "relisted": "relisted"
-    }
+    },
+    "logRecent": "Latest changes"
   },
   "log": {
     "current": "now",
@@ -1285,6 +1287,7 @@
     "departed": "{count} left",
     "quiet": "nothing",
     "decisions": "{count} decisions",
-    "disagreed": "{count} disagreed"
+    "disagreed": "{count} disagreed",
+    "history": "Full history"
   }
 }

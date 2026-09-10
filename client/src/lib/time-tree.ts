@@ -154,25 +154,52 @@ function upsertChild<T>(parent: TimeTreeNode<T>, id: string, make: () => TimeTre
   return made
 }
 
+/** How many days of activity sit under a node. A bucket holding a single day
+ *  is two folds wrapping one thing. */
+function dayCount<T>(node: TimeTreeNode<T>): number {
+  if (node.level === 'day') return 1
+  return node.children.reduce((n, c) => n + dayCount(c), 0)
+}
+
 /**
- * The ids open on first render: the chain from each year down to the CURRENT
- * week, and nothing else. Days stay shut even inside the open week - the day
- * summaries are the point, and expanding one is a deliberate act.
+ * The ids open on first render:
  *
- * A week only counts as current if it actually has items; an empty log opens
- * nothing rather than opening a week that is not there.
+ *  - the chain down to TODAY, today's own fold included. The reader's own day
+ *    is what they came to look at; making them click to it is a toll.
+ *  - everything, when the WHOLE log covers a single day. Folding one day's
+ *    rows behind three nested folds is ceremony over nothing.
+ *
+ * The single-day rule is deliberately whole-log rather than per-bucket. Per
+ * bucket it fires constantly - a sparse log has one day in most of its weeks -
+ * and then almost every fold is open and the condensing means nothing.
+ *
+ * Everything else stays shut, carrying its summary. Nothing opens for an empty
+ * log: an open empty fold reads as a bug.
  */
 export function defaultOpenIds<T>(tree: readonly TimeTreeNode<T>[]): Set<string> {
   const open = new Set<string>()
-  for (const year of tree) {
-    for (const month of year.children) {
-      for (const week of month.children) {
-        if (!week.current) continue
-        open.add(year.id)
-        open.add(month.id)
-        open.add(week.id)
-      }
+  const totalDays = tree.reduce((n, y) => n + dayCount(y), 0)
+  const openEverything = totalDays === 1
+
+  const walk = (node: TimeTreeNode<T>, ancestors: string[]): void => {
+    if (openEverything || node.current) {
+      for (const id of ancestors) open.add(id)
+      open.add(node.id)
     }
+    for (const child of node.children) walk(child, [...ancestors, node.id])
   }
+  for (const year of tree) walk(year, [])
   return open
+}
+
+/** Newest first, capped. The flat list shown above the fold: at this size a
+ *  reader wants to read, not navigate. */
+export function mostRecent<T>(
+  items: readonly T[],
+  at: (item: T) => Date,
+  count: number,
+): T[] {
+  return [...items]
+    .sort((a, b) => at(b).getTime() - at(a).getTime())
+    .slice(0, count)
 }

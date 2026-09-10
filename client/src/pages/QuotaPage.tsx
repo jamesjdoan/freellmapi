@@ -563,6 +563,7 @@ export default function QuotaPage() {
               it is sparse and bursty - a flat table of it reads as noise, while
               the week summary reads as "the shadow router differed 4 times". */}
           <TimeTreeLog
+            recentLabel={t('quota.divergenceRecent')}
             items={decisionsData.decisions}
             at={d => parseSqliteUtc(d.createdAt)}
             itemKey={d => String(d.id)}

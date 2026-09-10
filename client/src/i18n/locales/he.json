@@ -919,7 +919,8 @@
     "poolMembers": "{count} דגמים",
     "poolMembersOne": "דגם אחד",
     "locallyCountedMark": "·מקומי",
-    "locallyCountedHint": "הספק מעולם לא דיווח על המאגר הזה; הספירה היא שלנו, מול מגבלה שאנחנו מחזיקים."
+    "locallyCountedHint": "הספק מעולם לא דיווח על המאגר הזה; הספירה היא שלנו, מול מגבלה שאנחנו מחזיקים.",
+    "divergenceRecent": "Latest disagreements"
   },
   "logs": {
     "title": "יומן",
@@ -1277,7 +1278,8 @@
       "retired": "retired",
       "removed": "removed",
       "relisted": "relisted"
-    }
+    },
+    "logRecent": "Latest changes"
   },
   "log": {
     "current": "now",
@@ -1285,6 +1287,7 @@
     "departed": "{count} left",
     "quiet": "nothing",
     "decisions": "{count} decisions",
-    "disagreed": "{count} disagreed"
+    "disagreed": "{count} disagreed",
+    "history": "Full history"
   }
 }

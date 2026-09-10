@@ -919,7 +919,8 @@
     "poolMembers": "{count} mô hình",
     "poolMembersOne": "1 mô hình",
     "locallyCountedMark": "·cục bộ",
-    "locallyCountedHint": "Nhà cung cấp chưa bao giờ báo cáo nhóm này; số đếm là của chúng ta, so với giới hạn mà chúng ta tự giữ."
+    "locallyCountedHint": "Nhà cung cấp chưa bao giờ báo cáo nhóm này; số đếm là của chúng ta, so với giới hạn mà chúng ta tự giữ.",
+    "divergenceRecent": "Latest disagreements"
   },
   "logs": {
     "title": "Nhật ký",
@@ -1277,7 +1278,8 @@
       "retired": "retired",
       "removed": "removed",
       "relisted": "relisted"
-    }
+    },
+    "logRecent": "Latest changes"
   },
   "log": {
     "current": "now",
@@ -1285,6 +1287,7 @@
     "departed": "{count} left",
     "quiet": "nothing",
     "decisions": "{count} decisions",
-    "disagreed": "{count} disagreed"
+    "disagreed": "{count} disagreed",
+    "history": "Full history"
   }
 }

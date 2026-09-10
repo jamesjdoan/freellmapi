@@ -919,7 +919,8 @@
     "poolMembers": "{count} モデル",
     "poolMembersOne": "1 モデル",
     "locallyCountedMark": "·ローカル",
-    "locallyCountedHint": "プロバイダーはこのプールを報告していません。この件数は自前の集計で、こちらで保持している上限に対する値です。"
+    "locallyCountedHint": "プロバイダーはこのプールを報告していません。この件数は自前の集計で、こちらで保持している上限に対する値です。",
+    "divergenceRecent": "Latest disagreements"
   },
   "logs": {
     "title": "ログ",
@@ -1277,7 +1278,8 @@
       "retired": "retired",
       "removed": "removed",
       "relisted": "relisted"
-    }
+    },
+    "logRecent": "Latest changes"
   },
   "log": {
     "current": "now",
@@ -1285,6 +1287,7 @@
     "departed": "{count} left",
     "quiet": "nothing",
     "decisions": "{count} decisions",
-    "disagreed": "{count} disagreed"
+    "disagreed": "{count} disagreed",
+    "history": "Full history"
   }
 }

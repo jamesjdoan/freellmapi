@@ -919,7 +919,8 @@
     "poolMembers": "{count} modeli",
     "poolMembersOne": "1 model",
     "locallyCountedMark": "·lokalnie",
-    "locallyCountedHint": "Dostawca nigdy nie zgłosił tej puli; licznik jest nasz, wobec limitu, który sami utrzymujemy."
+    "locallyCountedHint": "Dostawca nigdy nie zgłosił tej puli; licznik jest nasz, wobec limitu, który sami utrzymujemy.",
+    "divergenceRecent": "Latest disagreements"
   },
   "logs": {
     "title": "Logi",
@@ -1277,7 +1278,8 @@
       "retired": "retired",
       "removed": "removed",
       "relisted": "relisted"
-    }
+    },
+    "logRecent": "Latest changes"
   },
   "log": {
     "current": "now",
@@ -1285,6 +1287,7 @@
     "departed": "{count} left",
     "quiet": "nothing",
     "decisions": "{count} decisions",
-    "disagreed": "{count} disagreed"
+    "disagreed": "{count} disagreed",
+    "history": "Full history"
   }
 }

@@ -919,7 +919,8 @@
     "poolMembers": "{count} ಮಾದರಿಗಳು",
     "poolMembersOne": "1 ಮಾದರಿ",
     "locallyCountedMark": "·ಸ್ಥಳೀಯ",
-    "locallyCountedHint": "ಪೂರೈಕೆದಾರರು ಈ ಪೂಲ್ ಬಗ್ಗೆ ಎಂದೂ ವರದಿ ಮಾಡಿಲ್ಲ; ಈ ಎಣಿಕೆ ನಮ್ಮದೇ, ನಾವು ಇಟ್ಟುಕೊಂಡ ಮಿತಿಗೆ ಎದುರಾಗಿ."
+    "locallyCountedHint": "ಪೂರೈಕೆದಾರರು ಈ ಪೂಲ್ ಬಗ್ಗೆ ಎಂದೂ ವರದಿ ಮಾಡಿಲ್ಲ; ಈ ಎಣಿಕೆ ನಮ್ಮದೇ, ನಾವು ಇಟ್ಟುಕೊಂಡ ಮಿತಿಗೆ ಎದುರಾಗಿ.",
+    "divergenceRecent": "Latest disagreements"
   },
   "logs": {
     "title": "ಲಾಗ್‌ಗಳು",
@@ -1277,7 +1278,8 @@
       "retired": "retired",
       "removed": "removed",
       "relisted": "relisted"
-    }
+    },
+    "logRecent": "Latest changes"
   },
   "log": {
     "current": "now",
@@ -1285,6 +1287,7 @@
     "departed": "{count} left",
     "quiet": "nothing",
     "decisions": "{count} decisions",
-    "disagreed": "{count} disagreed"
+    "disagreed": "{count} disagreed",
+    "history": "Full history"
   }
 }

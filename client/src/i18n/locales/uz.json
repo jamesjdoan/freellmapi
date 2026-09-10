@@ -919,7 +919,8 @@
     "poolMembers": "{count} model",
     "poolMembersOne": "1 model",
     "locallyCountedMark": "·mahalliy",
-    "locallyCountedHint": "Provayder bu havza haqida hech qachon xabar bermagan; hisob bizniki, o‘zimiz saqlaydigan cheklovga nisbatan."
+    "locallyCountedHint": "Provayder bu havza haqida hech qachon xabar bermagan; hisob bizniki, o‘zimiz saqlaydigan cheklovga nisbatan.",
+    "divergenceRecent": "Latest disagreements"
   },
   "logs": {
     "title": "Jurnal",
@@ -1277,7 +1278,8 @@
       "retired": "retired",
       "removed": "removed",
       "relisted": "relisted"
-    }
+    },
+    "logRecent": "Latest changes"
   },
   "log": {
     "current": "now",
@@ -1285,6 +1287,7 @@
     "departed": "{count} left",
     "quiet": "nothing",
     "decisions": "{count} decisions",
-    "disagreed": "{count} disagreed"
+    "disagreed": "{count} disagreed",
+    "history": "Full history"
   }
 }

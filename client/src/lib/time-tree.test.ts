@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildTimeTree, defaultOpenIds, isoWeek, parseSqliteUtc, startOfIsoWeek } from './time-tree'
+import { buildTimeTree, defaultOpenIds, isoWeek, mostRecent, parseSqliteUtc, startOfIsoWeek } from './time-tree'
 
 const at = (x: { when: Date }) => x.when
 /** Built in LOCAL time on purpose: buckets are the reader's days, so a fixture
@@ -77,25 +77,62 @@ describe('buildTimeTree', () => {
 describe('defaultOpenIds', () => {
   const now = new Date(2026, 8, 10, 12)
 
-  it('opens the path to the current week and leaves its days shut', () => {
-    // The whole point: the reader lands on this week's summary, not on a wall
-    // of individual rows, and not on nothing.
-    const tree = buildTimeTree([item(2026, 9, 10), item(2026, 2, 2)], at, now)
+  it('opens the path to TODAY, today included', () => {
+    // The reader's own day is what they came to look at; making them click
+    // down to it is a toll. Older buckets stay shut, carrying their summary.
+    const tree = buildTimeTree([item(2026, 9, 10), item(2026, 9, 8), item(2026, 2, 2)], at, now)
     const open = defaultOpenIds(tree)
     const year = tree[0]
     const currentMonth = year.children.find(m => m.current)!
-    const currentWeek = currentMonth.children[0]
+    const currentWeek = currentMonth.children.find(w => w.current)!
+    const today = currentWeek.children.find(d => d.current)!
     expect(open.has(year.id)).toBe(true)
     expect(open.has(currentMonth.id)).toBe(true)
     expect(open.has(currentWeek.id)).toBe(true)
-    // Days closed, and the older month closed.
-    expect(open.has(currentWeek.children[0].id)).toBe(false)
+    expect(open.has(today.id)).toBe(true)
+    // A sibling day in the same open week stays shut, as does an older month.
+    expect(open.has(currentWeek.children.find(d => !d.current)!.id)).toBe(false)
     expect(open.has(year.children.find(m => !m.current)!.id)).toBe(false)
   })
 
-  it('opens nothing when the log has no entry this week', () => {
-    // Opening an absent week would render an empty expanded row.
-    const tree = buildTimeTree([item(2026, 2, 2)], at, now)
-    expect(defaultOpenIds(tree).size).toBe(0)
+  it('opens everything when the whole log covers one day', () => {
+    // Folding one day's rows behind three nested folds is ceremony over
+    // nothing - even when that day is not today.
+    const tree = buildTimeTree([item(2026, 2, 2), item(2026, 2, 2, 15)], at, now)
+    const open = defaultOpenIds(tree)
+    const year = tree[0]
+    const month = year.children[0]
+    const week = month.children[0]
+    expect([year.id, month.id, week.id, week.children[0].id].every(id => open.has(id))).toBe(true)
+  })
+
+  it('does not open a lone past day once the log spans more than one', () => {
+    // The single-day rule is whole-log on purpose. Per bucket it fires
+    // constantly - a sparse log has one day in most of its weeks - and then
+    // every fold is open and the condensing means nothing.
+    const tree = buildTimeTree([item(2026, 2, 2), item(2026, 2, 20)], at, now)
+    const open = defaultOpenIds(tree)
+    // The current YEAR is still open - it is current, and showing month
+    // summaries under it is the point. Nothing below it opens: February is
+    // not this month and neither of its days is today.
+    expect([...open]).toEqual([tree[0].id])
+  })
+
+  it('opens nothing for an empty log', () => {
+    expect(defaultOpenIds(buildTimeTree([], at, now)).size).toBe(0)
+  })
+})
+
+describe('mostRecent', () => {
+  it('returns the newest first, capped', () => {
+    const items = [item(2026, 9, 1), item(2026, 9, 3), item(2026, 9, 2)]
+    expect(mostRecent(items, at, 2).map(i => i.when.getDate())).toEqual([3, 2])
+  })
+
+  it('does not mutate the caller\'s array', () => {
+    const items = [item(2026, 9, 1), item(2026, 9, 3)]
+    const before = items.map(i => i.when.getDate())
+    mostRecent(items, at, 2)
+    expect(items.map(i => i.when.getDate())).toEqual(before)
   })
 })

@@ -919,7 +919,8 @@
     "poolMembers": "{count} മോഡലുകൾ",
     "poolMembersOne": "1 മോഡൽ",
     "locallyCountedMark": "·പ്രാദേശികം",
-    "locallyCountedHint": "ദാതാവ് ഈ പൂളിനെക്കുറിച്ച് ഒരിക്കലും റിപ്പോർട്ട് ചെയ്തിട്ടില്ല; ഈ എണ്ണം ഞങ്ങളുടേതാണ്, ഞങ്ങൾ സൂക്ഷിക്കുന്ന പരിധിക്കെതിരെ."
+    "locallyCountedHint": "ദാതാവ് ഈ പൂളിനെക്കുറിച്ച് ഒരിക്കലും റിപ്പോർട്ട് ചെയ്തിട്ടില്ല; ഈ എണ്ണം ഞങ്ങളുടേതാണ്, ഞങ്ങൾ സൂക്ഷിക്കുന്ന പരിധിക്കെതിരെ.",
+    "divergenceRecent": "Latest disagreements"
   },
   "logs": {
     "title": "ലോഗുകൾ",
@@ -1277,7 +1278,8 @@
       "retired": "retired",
       "removed": "removed",
       "relisted": "relisted"
-    }
+    },
+    "logRecent": "Latest changes"
   },
   "log": {
     "current": "now",
@@ -1285,6 +1287,7 @@
     "departed": "{count} left",
     "quiet": "nothing",
     "decisions": "{count} decisions",
-    "disagreed": "{count} disagreed"
+    "disagreed": "{count} disagreed",
+    "history": "Full history"
   }
 }

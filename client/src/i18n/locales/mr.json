@@ -919,7 +919,8 @@
     "poolMembers": "{count} मॉडेल",
     "poolMembersOne": "1 मॉडेल",
     "locallyCountedMark": "·स्थानिक",
-    "locallyCountedHint": "प्रदात्याने या पूलची कधीही माहिती दिली नाही; ही मोजणी आमची आहे, आम्ही ठेवलेल्या मर्यादेच्या तुलनेत."
+    "locallyCountedHint": "प्रदात्याने या पूलची कधीही माहिती दिली नाही; ही मोजणी आमची आहे, आम्ही ठेवलेल्या मर्यादेच्या तुलनेत.",
+    "divergenceRecent": "Latest disagreements"
   },
   "logs": {
     "title": "लॉग",
@@ -1277,7 +1278,8 @@
       "retired": "retired",
       "removed": "removed",
       "relisted": "relisted"
-    }
+    },
+    "logRecent": "Latest changes"
   },
   "log": {
     "current": "now",
@@ -1285,6 +1287,7 @@
     "departed": "{count} left",
     "quiet": "nothing",
     "decisions": "{count} decisions",
-    "disagreed": "{count} disagreed"
+    "disagreed": "{count} disagreed",
+    "history": "Full history"
   }
 }

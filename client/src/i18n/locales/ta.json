@@ -919,7 +919,8 @@
     "poolMembers": "{count} மாதிரிகள்",
     "poolMembersOne": "1 மாதிரி",
     "locallyCountedMark": "·உள்ளூர்",
-    "locallyCountedHint": "வழங்குநர் இந்தத் தொகுப்பைப் பற்றி எப்போதும் தெரிவிக்கவில்லை; இந்த எண்ணிக்கை நமது, நாம் வைத்திருக்கும் வரம்பை ஒப்பிட்டு."
+    "locallyCountedHint": "வழங்குநர் இந்தத் தொகுப்பைப் பற்றி எப்போதும் தெரிவிக்கவில்லை; இந்த எண்ணிக்கை நமது, நாம் வைத்திருக்கும் வரம்பை ஒப்பிட்டு.",
+    "divergenceRecent": "Latest disagreements"
   },
   "logs": {
     "title": "பதிவுகள்",
@@ -1277,7 +1278,8 @@
       "retired": "retired",
       "removed": "removed",
       "relisted": "relisted"
-    }
+    },
+    "logRecent": "Latest changes"
   },
   "log": {
     "current": "now",
@@ -1285,6 +1287,7 @@
     "departed": "{count} left",
     "quiet": "nothing",
     "decisions": "{count} decisions",
-    "disagreed": "{count} disagreed"
+    "disagreed": "{count} disagreed",
+    "history": "Full history"
   }
 }

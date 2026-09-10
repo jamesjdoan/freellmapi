@@ -919,7 +919,8 @@
     "poolMembers": "{count} طرازًا",
     "poolMembersOne": "طراز واحد",
     "locallyCountedMark": "·محلي",
-    "locallyCountedHint": "لم يبلّغ المزوّد عن هذا المجمع مطلقًا؛ العدّ من عندنا، مقابل حدٍّ نحتفظ به بأنفسنا."
+    "locallyCountedHint": "لم يبلّغ المزوّد عن هذا المجمع مطلقًا؛ العدّ من عندنا، مقابل حدٍّ نحتفظ به بأنفسنا.",
+    "divergenceRecent": "Latest disagreements"
   },
   "logs": {
     "title": "السجلات",
@@ -1277,7 +1278,8 @@
       "retired": "retired",
       "removed": "removed",
       "relisted": "relisted"
-    }
+    },
+    "logRecent": "Latest changes"
   },
   "log": {
     "current": "now",
@@ -1285,6 +1287,7 @@
     "departed": "{count} left",
     "quiet": "nothing",
     "decisions": "{count} decisions",
-    "disagreed": "{count} disagreed"
+    "disagreed": "{count} disagreed",
+    "history": "Full history"
   }
 }

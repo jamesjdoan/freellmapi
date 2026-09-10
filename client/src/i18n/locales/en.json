@@ -358,6 +358,7 @@
     }
   },
   "log": {
+"history": "Full history",
     "current": "now",
     "arrived": "{count} arrived",
     "departed": "{count} left",
@@ -799,14 +800,15 @@
     "departed": "Retired ({count})",
     "autoRouted": "already routing — {chains}",
     "notRouted": "not routed",
-"logTitle": "Catalogue log",
-"logAllProviders": "All",
-"kind": {
-  "arrived": "arrived",
-  "retired": "retired",
-  "removed": "removed",
-  "relisted": "relisted"
-},
+    "logTitle": "Catalogue log",
+    "logRecent": "Latest changes",
+    "logAllProviders": "All",
+    "kind": {
+      "arrived": "arrived",
+      "retired": "retired",
+      "removed": "removed",
+      "relisted": "relisted"
+    },
     "lostFrom": "lost from {chains}",
     "acknowledge": "Acknowledge"
   },
@@ -876,6 +878,7 @@
     "shadowTitle": "Shadow routing",
     "shadowCaveat": "Shadow records which provider quota-aware scoring would have preferred. It cannot say that choice would have been better — the preferred provider never ran.",
     "divergenceTitle": "Where the routers disagreed",
+    "divergenceRecent": "Latest disagreements",
     "agreementSummary": "{agreed} of {total} decisions agreed with the live router.",
     "allModels": "All models",
     "emptyResets": "No upcoming resets observed yet.",

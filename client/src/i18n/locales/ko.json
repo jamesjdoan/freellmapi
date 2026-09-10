@@ -919,7 +919,8 @@
     "poolMembers": "{count}개 모델",
     "poolMembersOne": "1개 모델",
     "locallyCountedMark": "·로컬",
-    "locallyCountedHint": "공급자가 이 풀을 보고한 적이 없습니다. 이 집계는 자체 계산이며, 우리가 보유한 한도를 기준으로 합니다."
+    "locallyCountedHint": "공급자가 이 풀을 보고한 적이 없습니다. 이 집계는 자체 계산이며, 우리가 보유한 한도를 기준으로 합니다.",
+    "divergenceRecent": "Latest disagreements"
   },
   "logs": {
     "title": "로그",
@@ -1277,7 +1278,8 @@
       "retired": "retired",
       "removed": "removed",
       "relisted": "relisted"
-    }
+    },
+    "logRecent": "Latest changes"
   },
   "log": {
     "current": "now",
@@ -1285,6 +1287,7 @@
     "departed": "{count} left",
     "quiet": "nothing",
     "decisions": "{count} decisions",
-    "disagreed": "{count} disagreed"
+    "disagreed": "{count} disagreed",
+    "history": "Full history"
   }
 }

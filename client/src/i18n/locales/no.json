@@ -919,7 +919,8 @@
     "poolMembers": "{count} modeller",
     "poolMembersOne": "1 modell",
     "locallyCountedMark": "·lokal",
-    "locallyCountedHint": "Leverandøren har aldri rapportert denne puljen; opptellingen er vår, mot en grense vi selv holder."
+    "locallyCountedHint": "Leverandøren har aldri rapportert denne puljen; opptellingen er vår, mot en grense vi selv holder.",
+    "divergenceRecent": "Latest disagreements"
   },
   "logs": {
     "title": "Logg",
@@ -1277,7 +1278,8 @@
       "retired": "retired",
       "removed": "removed",
       "relisted": "relisted"
-    }
+    },
+    "logRecent": "Latest changes"
   },
   "log": {
     "current": "now",
@@ -1285,6 +1287,7 @@
     "departed": "{count} left",
     "quiet": "nothing",
     "decisions": "{count} decisions",
-    "disagreed": "{count} disagreed"
+    "disagreed": "{count} disagreed",
+    "history": "Full history"
   }
 }

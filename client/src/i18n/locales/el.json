@@ -919,7 +919,8 @@
     "poolMembers": "{count} μοντέλα",
     "poolMembersOne": "1 μοντέλο",
     "locallyCountedMark": "·τοπικό",
-    "locallyCountedHint": "Ο πάροχος δεν ανέφερε ποτέ αυτή τη δεξαμενή· η καταμέτρηση είναι δική μας, έναντι ορίου που κρατάμε εμείς."
+    "locallyCountedHint": "Ο πάροχος δεν ανέφερε ποτέ αυτή τη δεξαμενή· η καταμέτρηση είναι δική μας, έναντι ορίου που κρατάμε εμείς.",
+    "divergenceRecent": "Latest disagreements"
   },
   "logs": {
     "title": "Καταγραφές",
@@ -1277,7 +1278,8 @@
       "retired": "retired",
       "removed": "removed",
       "relisted": "relisted"
-    }
+    },
+    "logRecent": "Latest changes"
   },
   "log": {
     "current": "now",
@@ -1285,6 +1287,7 @@
     "departed": "{count} left",
     "quiet": "nothing",
     "decisions": "{count} decisions",
-    "disagreed": "{count} disagreed"
+    "disagreed": "{count} disagreed",
+    "history": "Full history"
   }
 }

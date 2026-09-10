@@ -919,7 +919,8 @@
     "poolMembers": "{count} 個模型",
     "poolMembersOne": "1 個模型",
     "locallyCountedMark": "·本機",
-    "locallyCountedHint": "供應商從未回報此集區；此計數由本機統計，對應我們自己保存的上限。"
+    "locallyCountedHint": "供應商從未回報此集區；此計數由本機統計，對應我們自己保存的上限。",
+    "divergenceRecent": "Latest disagreements"
   },
   "logs": {
     "title": "日誌",
@@ -1277,7 +1278,8 @@
       "retired": "retired",
       "removed": "removed",
       "relisted": "relisted"
-    }
+    },
+    "logRecent": "Latest changes"
   },
   "log": {
     "current": "now",
@@ -1285,6 +1287,7 @@
     "departed": "{count} left",
     "quiet": "nothing",
     "decisions": "{count} decisions",
-    "disagreed": "{count} disagreed"
+    "disagreed": "{count} disagreed",
+    "history": "Full history"
   }
 }
