@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ExternalLink, RefreshCw, Scale } from 'lucide-react'
+import { ExternalLink, Merge, RefreshCw, Scale } from 'lucide-react'
 import { useI18n } from '@/i18n'
 import { apiFetch } from '@/lib/api'
 import { toast } from '@/lib/toast'
@@ -53,6 +53,17 @@ interface CompareRow {
   link: { slug: string | null; source: 'auto' | 'manual'; matchReason: string | null; unresolved: boolean } | null
 }
 
+interface CompareGroup {
+  groupId: number | null
+  name: string
+  members: CompareRow[]
+  analysis: CompareRow['analysis']
+  analysisSource: 'pinned' | 'inherited' | 'own' | null
+  conflicted: boolean
+  chains: string[]
+  enabledMembers: number
+}
+
 interface ComparePayload {
   rows: CompareRow[]
   catalogue: { slug: string; name: string; creator: string | null; intelligenceIndex: number | null }[]
@@ -89,6 +100,12 @@ export default function CompareModelsPage() {
     queryKey: ['analysis', 'compare'],
     queryFn: () => apiFetch('/api/analysis/compare'),
   })
+  // The condensed view: one entry per group, one per ungrouped model. Grouping
+  // is manual, so this is a second read rather than something derivable here.
+  const { data: grouped } = useQuery<{ groups: CompareGroup[] }>({
+    queryKey: ['analysis', 'grouped'],
+    queryFn: () => apiFetch('/api/analysis/grouped'),
+  })
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['analysis'] })
 
   const saveKey = useMutation({
@@ -108,6 +125,16 @@ export default function CompareModelsPage() {
     },
     meta: { silenceToast: false },
   })
+  const mergeGroup = useMutation({
+    mutationFn: (body: { name: string; members: { platform: string; modelId: string }[] }) =>
+      apiFetch('/api/analysis/groups', { method: 'POST', body: JSON.stringify(body) }),
+    onSuccess: () => { setSelected(new Set()); invalidate() },
+  })
+  const unmerge = useMutation({
+    mutationFn: (id: number) => apiFetch(`/api/analysis/groups/${id}`, { method: 'DELETE' }),
+    onSuccess: invalidate,
+  })
+
   const link = useMutation({
     mutationFn: (body: { platform: string; modelId: string; aaSlug: string | null }) =>
       apiFetch('/api/analysis/link', { method: 'PUT', body: JSON.stringify(body) }),
@@ -115,40 +142,50 @@ export default function CompareModelsPage() {
   })
 
   const status = data?.status
-  const rows = data?.rows ?? []
 
-  // Only models that can actually serve: the catalogue is 589 rows and most are
-  // switched off, so comparing all of them buries the ones in use.
-  const visible = useMemo(
-    () => rows.filter(r => (onlyRouted ? r.chains.length > 0 : r.enabled)),
-    [rows, onlyRouted],
-  )
   const rowKey = (r: CompareRow) => `${r.platform}:${r.modelId}`
-  const chosen = useMemo(
-    () => visible.filter(r => selected.has(rowKey(r))),
-    [visible, selected],
+  const groupKey = (g: CompareGroup) => (g.groupId != null ? `g${g.groupId}` : rowKey(g.members[0]))
+
+  // Condensed entries: one per group, one per ungrouped model. The catalogue is
+  // 589 rows and most are switched off, so comparing all of them buries the
+  // ones in use.
+  const entries = useMemo(
+    () => (grouped?.groups ?? []).filter(g =>
+      onlyRouted ? g.chains.length > 0 : g.enabledMembers > 0),
+    [grouped, onlyRouted],
   )
-  // Nothing picked reads as "compare everything visible", which is the more
-  // useful default than an empty chart.
-  const comparing = chosen.length > 0 ? chosen : visible
+  const chosen = useMemo(
+    () => entries.filter(g => selected.has(groupKey(g))),
+    [entries, selected],
+  )
+  // Nothing picked reads as "compare everything visible", which is more useful
+  // than an empty chart.
+  const comparing = chosen.length > 0 ? chosen : entries
 
   const scored = useMemo(
     () => comparing
-      .filter(r => r.analysis?.[metric] != null)
+      .filter(g => g.analysis?.[metric] != null)
       .sort((a, b) => (b.analysis![metric] as number) - (a.analysis![metric] as number)),
     [comparing, metric],
   )
   const peak = scored.length > 0 ? (scored[0].analysis![metric] as number) : 0
-  const unscored = comparing.filter(r => r.analysis?.[metric] == null)
+  const unscored = comparing.filter(g => g.analysis?.[metric] == null)
 
-  const toggle = (r: CompareRow) => {
+  const toggle = (key: string) => {
     setSelected(prev => {
       const next = new Set(prev)
-      const k = rowKey(r)
-      if (next.has(k)) next.delete(k)
-      else next.add(k)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
       return next
     })
+  }
+
+  // Merging takes the ROUTES behind the chosen entries, so selecting two
+  // existing groups merges every route in both rather than nesting groups.
+  const mergeSelected = () => {
+    const members = chosen.flatMap(g => g.members.map(m => ({ platform: m.platform, modelId: m.modelId })))
+    if (members.length < 2) return
+    mergeGroup.mutate({ name: chosen[0].name, members })
   }
 
   return (
@@ -244,12 +281,21 @@ export default function CompareModelsPage() {
             </div>
 
             <ul className="mt-3 space-y-1">
-              {scored.map(r => {
-                const value = r.analysis![metric] as number
+              {scored.map(g => {
+                const value = g.analysis![metric] as number
                 return (
-                  <li key={rowKey(r)} className="flex items-center gap-2 text-xs">
-                    <PlatformDot platform={r.platform} />
-                    <span className="w-[220px] flex-shrink-0 truncate" title={r.modelId}>{r.displayName}</span>
+                  <li key={groupKey(g)} className="flex items-center gap-2 text-xs">
+                    {/* One dot per provider behind this entry: a merged model
+                        is exactly as available as the routes it condenses. */}
+                    <span className="flex flex-shrink-0 items-center gap-0.5">
+                      {[...new Set(g.members.map(m => m.platform))].map(p => <PlatformDot key={p} platform={p} />)}
+                    </span>
+                    <span className="w-[220px] flex-shrink-0 truncate" title={g.members.map(m => m.modelId).join('\n')}>
+                      {g.name}
+                      {g.members.length > 1 && (
+                        <span className="ml-1 text-muted-foreground tabular-nums">{`×${g.members.length}`}</span>
+                      )}
+                    </span>
                     <div className="h-3 min-w-0 flex-1 rounded bg-muted">
                       {/* Scaled to the best model on screen, not to 100: the
                           indices are not percentages and the gap between the
@@ -272,7 +318,17 @@ export default function CompareModelsPage() {
           </section>
 
           <section className="rounded-xl border p-4">
-            <h2 className="text-sm font-medium">{t('compare.tableTitle')}</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-sm font-medium">{t('compare.tableTitle')}</h2>
+              {/* Merging needs two entries; below that the button would be a
+                  control that cannot do anything. */}
+              {chosen.length > 1 && (
+                <Button size="sm" variant="outline" onClick={mergeSelected} disabled={mergeGroup.isPending}>
+                  <Merge className="size-3.5" />
+                  {t('compare.merge', { count: chosen.length })}
+                </Button>
+              )}
+            </div>
             <p className="mt-1 text-xs text-muted-foreground">{t('compare.tableHint')}</p>
             <Table className="mt-3">
               <TableHeader>
@@ -288,40 +344,80 @@ export default function CompareModelsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {visible.map(r => (
-                  <TableRow key={rowKey(r)}>
-                    <TableCell>
-                      <input
-                        type="checkbox"
-                        checked={selected.has(rowKey(r))}
-                        onChange={() => toggle(r)}
-                        aria-label={r.modelId}
-                        className="size-3.5 accent-foreground"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <span className="flex items-center gap-1.5">
-                        <PlatformDot platform={r.platform} />
-                        <span className="font-medium">{r.displayName}</span>
-                        <code className="text-[11px] text-muted-foreground">{r.modelId}</code>
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-[11px] text-muted-foreground">
-                      {r.chains.join(', ') || '–'}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{score(r.analysis?.intelligenceIndex)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{score(r.analysis?.codingIndex)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{score(r.analysis?.agenticIndex)}</TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">{r.intelligenceRank}</TableCell>
-                    <TableCell>
-                      <MappingCell
-                        row={r}
-                        catalogue={data?.catalogue ?? []}
-                        onLink={slug => link.mutate({ platform: r.platform, modelId: r.modelId, aaSlug: slug })}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {entries.map(g => {
+                  const solo = g.members.length === 1 ? g.members[0] : null
+                  return (
+                    <TableRow key={groupKey(g)}>
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          checked={selected.has(groupKey(g))}
+                          onChange={() => toggle(groupKey(g))}
+                          aria-label={g.name}
+                          className="size-3.5 accent-foreground"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          {[...new Set(g.members.map(m => m.platform))].map(p => <PlatformDot key={p} platform={p} />)}
+                          <span className="font-medium">{g.name}</span>
+                          {solo
+                            ? <code className="text-[11px] text-muted-foreground">{solo.modelId}</code>
+                            : (
+                              <>
+                                <Badge variant="secondary" className="text-[10px] tabular-nums">
+                                  {t('compare.routeCount', { count: g.members.length })}
+                                </Badge>
+                                <button
+                                  type="button"
+                                  onClick={() => g.groupId != null && unmerge.mutate(g.groupId)}
+                                  className="text-[11px] text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
+                                >
+                                  {t('compare.unmerge')}
+                                </button>
+                              </>
+                            )}
+                          {g.conflicted && (
+                            <Tooltip text={t('compare.conflictHint')}>
+                              <span className="text-[11px] text-destructive">{t('compare.conflict')}</span>
+                            </Tooltip>
+                          )}
+                        </span>
+                        {/* The routes behind a merged entry, so the condensing
+                            never hides which providers actually serve it. */}
+                        {!solo && (
+                          <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                            {g.members.map(m => `${m.platform}/${m.modelId}`).join(' · ')}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-[11px] text-muted-foreground">
+                        {g.chains.join(', ') || '–'}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{score(g.analysis?.intelligenceIndex)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{score(g.analysis?.codingIndex)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{score(g.analysis?.agenticIndex)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">
+                        {solo ? solo.intelligenceRank : '–'}
+                      </TableCell>
+                      <TableCell>
+                        {solo
+                          ? (
+                            <MappingCell
+                              row={solo}
+                              catalogue={data?.catalogue ?? []}
+                              onLink={slug => link.mutate({ platform: solo.platform, modelId: solo.modelId, aaSlug: slug })}
+                            />
+                          )
+                          : (
+                            <span className="text-[11px] text-muted-foreground">
+                              {g.analysisSource === 'inherited' ? t('compare.matchInherited') : t('compare.matchNone')}
+                            </span>
+                          )}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           </section>

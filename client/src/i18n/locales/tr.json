@@ -1324,6 +1324,12 @@
     "matchNone": "no match",
     "matchNoneOption": "— no counterpart —",
     "matchUnresolved": "{slug} is no longer published",
-    "attribution": "Benchmark data from"
+    "attribution": "Benchmark data from",
+    "merge": "Merge {count} into one",
+    "unmerge": "unmerge",
+    "routeCount": "{count} routes",
+    "conflict": "members disagree",
+    "conflictHint": "Members of this group are mapped to different Artificial Analysis models. Pick one for the group, or unmerge.",
+    "matchInherited": "inherited by group"
   }
 }

@@ -2,6 +2,7 @@ import { getDb, getSetting, setSetting } from '../db/index.js';
 import type { Db } from '../db/types.js';
 import { encrypt, decrypt } from '../lib/crypto.js';
 import { matchAaModel, type AaCandidate } from './analysis-match.js';
+import { listGroups } from './model-groups-manual.js';
 
 // Artificial Analysis benchmark data, cached locally and mapped to our models.
 //
@@ -442,4 +443,104 @@ function numberOrNull(value: unknown): number | null {
   // NULL is "not measured" in their data and must never become 0 here: a model
   // with no agentic score would plot as the worst instead of as absent.
   return value == null ? null : Number(value);
+}
+
+export interface CompareGroup {
+  /** Null for a model standing on its own — the common case. */
+  groupId: number | null;
+  name: string;
+  /** Every route this group condenses, newest-capable first is NOT implied:
+   *  order is the members' own, so the reader can see all of them. */
+  members: CompareRow[];
+  /** The AA data the whole group is compared on. */
+  analysis: CompareRow['analysis'];
+  /** Where that came from: the group's pinned slug, a member's own link, or
+   *  nothing. A reader deciding whether to trust a score on an unmatched
+   *  member needs to know it was inherited. */
+  analysisSource: 'pinned' | 'inherited' | 'own' | null;
+  /** True when members carry links to DIFFERENT slugs. The group still shows
+   *  one score, but silently picking one of two would be a fabrication. */
+  conflicted: boolean;
+  /** Union across members, since a group serves wherever any member does. */
+  chains: string[];
+  enabledMembers: number;
+}
+
+/**
+ * The comparison, condensed: one entry per group, and one per ungrouped model.
+ *
+ * Grouping is manual on purpose. Auto-grouping by normalised name would make
+ * exactly the guesses `matchAaModel` refuses to make, and it would do so
+ * across our own catalogue where a wrong merge hides a model rather than just
+ * mislabelling it.
+ */
+export function getGroupedCompare(db: Db = getDb()): CompareGroup[] {
+  const { rows } = getComparePayload(db);
+  const groups = listGroups(db);
+  const byKey = new Map(rows.map(r => [`${r.platform}:${r.modelId}`, r]));
+  const claimed = new Set<string>();
+
+  const out: CompareGroup[] = [];
+  for (const g of groups) {
+    const members = g.members
+      .map(m => byKey.get(`${m.platform}:${m.modelId}`))
+      .filter((r): r is CompareRow => r !== undefined);
+    for (const m of g.members) claimed.add(`${m.platform}:${m.modelId}`);
+    // Every member gone means the catalogue dropped them all. The group is
+    // kept rather than silently deleted - it is the operator's, and a sync
+    // that removes a model should not also remove their decision about it.
+    const linkedSlugs = [...new Set(members.map(m => m.analysis?.slug).filter(Boolean))] as string[];
+    const pinned = g.aaSlug
+      ? members.find(m => m.analysis?.slug === g.aaSlug)?.analysis
+        ?? lookupAa(db, g.aaSlug)
+      : null;
+    const inherited = members.find(m => m.analysis)?.analysis ?? null;
+    out.push({
+      groupId: g.id,
+      name: g.name,
+      members,
+      analysis: pinned ?? inherited,
+      analysisSource: pinned ? 'pinned' : inherited ? 'inherited' : null,
+      conflicted: !g.aaSlug && linkedSlugs.length > 1,
+      chains: [...new Set(members.flatMap(m => m.chains))],
+      enabledMembers: members.filter(m => m.enabled).length,
+    });
+  }
+
+  for (const row of rows) {
+    if (claimed.has(`${row.platform}:${row.modelId}`)) continue;
+    out.push({
+      groupId: null,
+      name: row.displayName,
+      members: [row],
+      analysis: row.analysis,
+      analysisSource: row.analysis ? 'own' : null,
+      conflicted: false,
+      chains: row.chains,
+      enabledMembers: row.enabled ? 1 : 0,
+    });
+  }
+  return out;
+}
+
+function lookupAa(db: Db, slug: string): CompareRow['analysis'] {
+  const r = db.prepare(`
+    SELECT slug, name, creator, intelligence_index, coding_index, agentic_index,
+           price_1m_input, price_1m_output, median_output_tokens_per_second,
+           median_time_to_first_token_seconds
+      FROM aa_model WHERE slug = ?
+  `).get(slug) as Record<string, unknown> | undefined;
+  if (!r) return null;
+  return {
+    slug: String(r.slug),
+    name: String(r.name),
+    creator: r.creator == null ? null : String(r.creator),
+    intelligenceIndex: numberOrNull(r.intelligence_index),
+    codingIndex: numberOrNull(r.coding_index),
+    agenticIndex: numberOrNull(r.agentic_index),
+    price1mInput: numberOrNull(r.price_1m_input),
+    price1mOutput: numberOrNull(r.price_1m_output),
+    medianOutputTokensPerSecond: numberOrNull(r.median_output_tokens_per_second),
+    medianTimeToFirstTokenSeconds: numberOrNull(r.median_time_to_first_token_seconds),
+  };
 }
