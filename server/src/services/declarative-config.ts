@@ -250,8 +250,8 @@ function registerCustomProvider(db: Db, input: z.infer<typeof customProviderSche
       INSERT INTO models
         (platform, model_id, display_name, intelligence_rank, speed_rank, size_label,
          rpm_limit, rpd_limit, tpm_limit, tpd_limit, monthly_token_budget, context_window,
-         enabled, supports_vision, supports_tools, key_id, source, endpoint_scope)
-      VALUES ('custom', ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, 1, ?, ?, ?, 'user', ?)
+         enabled, supports_vision, supports_tools, key_id, source, endpoint_scope, first_seen_at)
+      VALUES ('custom', ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, 1, ?, ?, ?, 'user', ?, datetime('now'))
       ON CONFLICT(platform, model_id, endpoint_scope)
       DO UPDATE SET
         display_name = excluded.display_name,
@@ -364,8 +364,8 @@ function upsertModel(db: Db, input: z.infer<typeof modelSchema>): void {
       INSERT INTO models
         (platform, model_id, display_name, intelligence_rank, speed_rank, size_label,
          rpm_limit, rpd_limit, tpm_limit, tpd_limit, monthly_token_budget, context_window,
-         enabled, supports_vision, supports_tools, source)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'user')
+         enabled, supports_vision, supports_tools, source, first_seen_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'user', datetime('now'))
     `).run(
       platform,
       modelId,

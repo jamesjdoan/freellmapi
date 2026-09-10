@@ -113,10 +113,10 @@ export function registerCustomChatModels(
       INSERT INTO models
         (platform, model_id, display_name, intelligence_rank, speed_rank, size_label,
          rpm_limit, rpd_limit, tpm_limit, tpd_limit, monthly_token_budget, context_window, enabled, key_id,
-         supports_tools, supports_vision, source, endpoint_scope)
+         supports_tools, supports_vision, source, endpoint_scope, first_seen_at)
       VALUES ('custom', @modelId, COALESCE(@displayName, @modelId), @intelligenceRank, @speedRank, @sizeLabel,
          NULL, NULL, NULL, NULL, '', NULL, 1, @keyId,
-         COALESCE(@tools, 1), COALESCE(@vision, 0), 'user', @endpointScope)
+         COALESCE(@tools, 1), COALESCE(@vision, 0), 'user', @endpointScope, datetime('now'))
       ON CONFLICT(platform, model_id, endpoint_scope)
       DO UPDATE SET
         display_name = COALESCE(@displayName, display_name),
