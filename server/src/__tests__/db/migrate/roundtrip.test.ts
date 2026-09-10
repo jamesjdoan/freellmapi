@@ -47,6 +47,7 @@ const QUOTA_UNIT_FILENAME = '20260906_000002_quota_unit.ts';
 const ATTEMPT_ROUTING_TRACE_FILENAME = '20260909_000001_request_attempt_routing_trace.ts';
 const CATALOGUE_CHANGE_TRACKING_FILENAME = '20260910_000001_catalogue_change_tracking.ts';
 const CATALOGUE_EVENT_LOG_FILENAME = '20260910_000002_catalogue_event_log.ts';
+const ANALYSIS_BENCHMARKS_FILENAME = '20260911_000001_analysis_benchmarks.ts';
 
 interface SchemaRow {
   type: string;
@@ -140,6 +141,7 @@ describe('migration round trip', () => {
         ATTEMPT_ROUTING_TRACE_FILENAME,
         CATALOGUE_CHANGE_TRACKING_FILENAME,
         CATALOGUE_EVENT_LOG_FILENAME,
+        ANALYSIS_BENCHMARKS_FILENAME,
       ]);
     } finally {
       db.close();

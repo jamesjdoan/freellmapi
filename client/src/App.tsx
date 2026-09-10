@@ -39,6 +39,7 @@ import AudioPage from '@/pages/AudioPage'
 import MediaDetailPage from '@/pages/MediaDetailPage'
 import EmbeddingDetailPage from '@/pages/EmbeddingDetailPage'
 import AnalyticsPage from '@/pages/AnalyticsPage'
+import CompareModelsPage from '@/pages/CompareModelsPage'
 import QuotaPage from '@/pages/QuotaPage'
 import LogsPage from '@/pages/LogsPage'
 import PremiumPage from '@/pages/PremiumPage'
@@ -95,6 +96,7 @@ const modelItems = [
 // deliberately kept out of navItems so the top bar does not grow a seventh entry.
 const analyticsItems = [
   { to: '/analytics', labelKey: 'nav.analytics' },
+  { to: '/analytics/compare', labelKey: 'nav.compareModels' },
   { to: '/logs', labelKey: 'nav.logs' },
 ]
 
@@ -505,6 +507,7 @@ function App() {
                       <Route path="/agents" element={<AgentsPage />} />
                       <Route path="/fallback" element={<Navigate to="/models/chat" replace />} />
                       <Route path="/analytics" element={<AnalyticsPage />} />
+                      <Route path="/analytics/compare" element={<CompareModelsPage />} />
                       <Route path="/quota" element={<QuotaPage />} />
                       <Route path="/logs" element={<LogsPage />} />
                       <Route path="/premium" element={<PremiumPage />} />

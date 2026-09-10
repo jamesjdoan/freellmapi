@@ -17,7 +17,8 @@
     "modelsMenu": "Mag-browse ng mga uri ng modelo",
     "logs": "Mga Log",
     "analyticsMenu": "Mga pahina ng analitika",
-    "quota": "Quota"
+    "quota": "Quota",
+    "compareModels": "Compare models"
   },
   "auth": {
     "createYourAccount": "Gumawa ng iyong account",
@@ -1292,5 +1293,37 @@
     "restOfDay": "Show {count} more from today",
     "restOfMonth": "Show {count} more from this month",
     "restHide": "Show fewer"
+  },
+  "compare": {
+    "pageTitle": "Compare models",
+    "pageDescription": "Measured intelligence, coding and agentic scores from Artificial Analysis, mapped onto the models you route.",
+    "keyTitle": "Artificial Analysis key",
+    "keyHint": "Benchmark data is fetched with your own key and cached here. The free tier carries the three headline indices and allows 100 requests per day, so syncing is manual.",
+    "keyPlaceholder": "Paste your API key",
+    "keyReplace": "Paste a new key to replace the stored one",
+    "keyUnreadable": "A key is stored but cannot be decrypted — ENCRYPTION_KEY has changed since it was saved. Paste it again.",
+    "cacheState": "{cached} models cached · {linked} mapped",
+    "quota": "{remaining}/{limit} requests left today",
+    "sync": "Refresh data",
+    "syncDone": "Fetched {fetched} models, mapped {linked}.",
+    "empty": "No benchmark data yet. Add a key and press Refresh data.",
+    "chartTitle": "Ranked",
+    "tableTitle": "All models",
+    "tableHint": "Tick models to narrow the chart above. Our own rank sits beside the measured scores so you can see where the two disagree.",
+    "intelligence": "Intelligence",
+    "coding": "Coding",
+    "agentic": "Agentic",
+    "onlyRouted": "Routed only",
+    "notMeasured": "{count} of these have no score for this index.",
+    "colModel": "Model",
+    "colChains": "Chains",
+    "colOurRank": "Our rank",
+    "colMatch": "Mapped to",
+    "matchAuto": "matched by {reason}",
+    "matchManual": "mapped by hand",
+    "matchNone": "no match",
+    "matchNoneOption": "— no counterpart —",
+    "matchUnresolved": "{slug} is no longer published",
+    "attribution": "Benchmark data from"
   }
 }
