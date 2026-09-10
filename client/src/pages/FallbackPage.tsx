@@ -187,6 +187,10 @@ export default function FallbackPage() {
   // reordering the chain, and a checkbox on every row at rest is chrome nobody
   // asked for. Merge mode turns them on.
   const [mergeMode, setMergeMode] = useState(false)
+  // Which of the picked models survives the merge and gives the group its name.
+  // Held by group key rather than by position: the default used to be
+  // "whichever sorts first", which is arbitrary and unaskable-for.
+  const [mergeTarget, setMergeTarget] = useState<string | null>(null)
   const { data: unify } = useQuery<{ overrides: { merges: AliasMerge[]; splits: unknown[] } }>({
     queryKey: ['unify'],
     queryFn: () => apiFetch('/api/settings/unify'),
@@ -296,7 +300,16 @@ export default function FallbackPage() {
   const exitMergeMode = () => {
     setMergeMode(false)
     setSelectedGroups(new Set())
+    setMergeTarget(null)
   }
+
+  // Falls back to the first pick only until the operator says otherwise, and
+  // resets if the chosen target is unticked - a target that is no longer
+  // selected would merge into a model the operator removed from the set.
+  const effectiveTarget = useMemo(() => {
+    if (mergeTarget && chosenGroups.some(g => g.key === mergeTarget)) return mergeTarget
+    return chosenGroups[0]?.key ?? null
+  }, [mergeTarget, chosenGroups])
 
   /**
    * Fold the other selected models into the first one. `keys` are the routing
@@ -306,9 +319,13 @@ export default function FallbackPage() {
    */
   const mergeSelected = () => {
     if (chosenGroups.length < 2) return
-    const [target, ...rest] = chosenGroups
+    const target = chosenGroups.find(g => g.key === effectiveTarget)
+    if (!target) return
     let merges = unify?.overrides.merges ?? []
-    for (const g of rest) merges = addAlias(merges, target.label, g.key)
+    for (const g of chosenGroups) {
+      if (g.key === target.key) continue
+      merges = addAlias(merges, target.label, g.key)
+    }
     unifyMutation.mutate(merges)
   }
 
@@ -782,12 +799,29 @@ export default function FallbackPage() {
               <Button variant="outline" size="sm" onClick={exitMergeMode}>
                 {t('common.cancel')}
               </Button>
+              {/* The survivor is chosen, not inferred. It keeps its name, its
+                  place in the chain and its benchmark link; the others fold
+                  into it. */}
+              {chosenGroups.length > 1 && (
+                <label className="flex items-center gap-1 text-xs text-muted-foreground">
+                  {t('models.mergeKeep')}
+                  <select
+                    value={effectiveTarget ?? ''}
+                    onChange={e => setMergeTarget(e.target.value)}
+                    className="h-7 max-w-[220px] rounded border bg-background px-1 text-xs"
+                  >
+                    {chosenGroups.map(g => (
+                      <option key={g.key} value={g.key}>{g.label}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <Button
                 size="sm"
                 onClick={mergeSelected}
                 disabled={chosenGroups.length < 2 || unifyMutation.isPending}
               >
-                {t('models.mergeInto', { name: chosenGroups[0]?.label ?? '' })}
+                {t('models.mergeConfirm', { count: chosenGroups.length - 1 })}
               </Button>
               {/* Offered only when exactly one group is picked AND an override
                   built it: unmerging a group the catalogue's own names produced

@@ -298,7 +298,9 @@
     "mergeModeDone": "Done",
     "mergeModeHint": "Pick two or more models that are the same model, and fold them into one. Searching keeps your picks.",
     "mergePrompt": "Pick the models to fold together",
-    "mergeHidden": "({count} hidden by filters)"
+    "mergeHidden": "({count} hidden by filters)",
+    "mergeKeep": "Keep",
+    "mergeConfirm": "Fold in {count}"
   },
   "strategies": {
     "explore": "නොමැනූ ආකෘති ගවේෂණය කරන්න",

@@ -265,6 +265,8 @@
     "mergePrompt": "Pick the models to fold together",
     "mergeSelected": "{count} selected",
     "mergeHidden": "({count} hidden by filters)",
+"mergeKeep": "Keep",
+"mergeConfirm": "Fold in {count}",
     "mergeInto": "Merge into {name}",
     "unmergeGroup": "Unmerge",
     "showingCount": "{shown} of {total} models",
