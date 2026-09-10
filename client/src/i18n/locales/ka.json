@@ -611,7 +611,7 @@
     "bulkResult": "განახლდა {done}; ვერ მოხერხდა {failed}.",
     "bulkDeleteResult": "წაიშალა {done}; ვერ მოხერხდა {failed}.",
     "churnWindow": "{days}d",
-    "churnAria": "{added} damot'ebuli, {lost} otsneneluli na ugbua {days} ọzọ"
+    "churnAria": "{added} added, {lost} retired in the last {days} days"
   },
   "backups": {
     "title": "Backups",
@@ -1257,13 +1257,13 @@
   },
   "catalogue": {
     "changesTitle": "კატალოგის ცვლილებები",
-    "untracked": "{count} modeli maka arrival tracking",
-    "arrived": "daachira ({count})",
-    "departed": "otsneneluli ({count})",
-    "autoRouted": "ibarati marshrutze — {chains}",
-    "notRouted": "ar marshrutze",
-    "lostFrom": "tsavduli na {chains}",
-    "acknowledge": "acsnel",
+    "untracked": "{count} models predate arrival tracking.",
+    "arrived": "Arrived ({count})",
+    "departed": "Retired ({count})",
+    "autoRouted": "already routing — {chains}",
+    "notRouted": "not routed",
+    "lostFrom": "lost from {chains}",
+    "acknowledge": "Acknowledge",
     "changesHint": "Models added since {since}, and retirements not yet acknowledged."
   }
 }

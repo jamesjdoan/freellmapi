@@ -1257,11 +1257,11 @@
   },
   "catalogue": {
     "changesTitle": "การเปลี่ยนแปลงคอลลี่ย์",
-    "changesHint": "Models added since {since}, retirements not yet acknowledged.",
-    "untracked": "{count} models tracking之前 original.",
+    "changesHint": "โมเดลที่เพิ่มตั้งแต่ {since} และการถอนที่ยังไม่ได้รับรอง",
+    "untracked": "{count} โมเดลมีอยู่ก่อนการบันทึกวันที่เพิ่ม",
     "arrived": "เพิ่มเข้ามา ({count})",
     "departed": "ถูกถอน ({count})",
-    "autoRouted": "auto-routed already — {chains}",
+    "autoRouted": "กำหนดเส้นทางอยู่แล้ว — {chains}",
     "notRouted": "ไม่ได้กำหนดเส้นทาง",
     "lostFrom": "หายไปจาก {chains}",
     "acknowledge": "ยืนยัน"

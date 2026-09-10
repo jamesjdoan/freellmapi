@@ -869,7 +869,7 @@
     "colMetric": "Metrika",
     "colScope": "Opseg",
     "colSource": "Izvor",
-    "locallyCounted": "(lokalno brojano)",
+    "locallyCounted": "(локално пребројано)",
     "colWindow": "Prozor",
     "inferredWindow": "~{period} (proc. iz {samples})",
     "period_minute": "po minutu",

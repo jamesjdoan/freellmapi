@@ -1260,7 +1260,7 @@
     "changesHint": "{since} ਤੋਂ ਮੋਡਲ ਜੋੜੇ ਗਏ ਹਨ, ਅਤੇ ਉਪਰੇਰਤissions not acknowledged.",
     "untracked": "{count} ਮਾਡਲ ਆਗਮਨ ਟਰੈਕਿੰਗ ਤੋਂ ਪਹਿਲਾਂ ਦੇ ਹਨ।",
     "arrived": "ਪਹੁੰਚਿਆ ({count})",
-    "departed": "ਭਾਗਦਾਰ ({count})",
+    "departed": "ਹਟਾਏ ਗਏ ({count})",
     "autoRouted": "ਪਹਿਲਾਂ ਲੱਭ ਰਹਾ — {chains}",
     "notRouted": "ਨਹੀਂ ਲੱਭ ਰਿਹਾ",
     "lostFrom": "{chains} ਵਿੱਚੋਂ ਗਿਆ",

@@ -1257,11 +1257,11 @@
   },
   "catalogue": {
     "changesTitle": "క్యాటలోగ మార్పులు",
-    "changesHint": "Models added since {since}, retirements not yet acknowledged.",
+    "changesHint": "{since} నుండి చేర్చిన మోడల్‌లు, ఇంకా గుర్తించని తొలగింపులు.",
     "untracked": "{count} మోడల్స్ tracking terutు original.",
     "arrived": "చేరినవి ({count})",
     "departed": "తొలగించినవి ({count})",
-    "autoRouted": "auto-routed already — {chains}",
+    "autoRouted": "ఇప్పటికే రూట్ అవుతోంది — {chains}",
     "notRouted": "రూట్ చేయలేదు",
     "lostFrom": "{chains} నుండి కోల్పోయింది",
     "acknowledge": "గుర్తించు"

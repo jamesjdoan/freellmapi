@@ -61,6 +61,50 @@ const NATIVE_SCRIPTS = {
   ja: ['Han', 'Kana'], ko: ['Hangul', 'Han'], 'zh-CN': ['Han'], 'zh-TW': ['Han'],
 }
 
+// The locale's own script, for locales that do not write in Latin. A value
+// that differs from the English yet contains not one character of this script
+// is text in the wrong language: the first translation pass produced Kannada
+// rows reading "ritirato ({count})" (Italian), Georgian reading "daachira"
+// (romanised Igbo), and Malayalam holding a Polish fragment. Every one passed
+// the mixed-script check above, because Latin is exempt there - it has to be,
+// since model ids and product names are Latin everywhere.
+//
+// Only listed locales are checked, and only for values that are NOT the
+// English fallback, so an untranslated key stays a non-event.
+const NATIVE_SCRIPT = {
+  am: 'Ethiopic', ar: 'Arabic', bn: 'Bengali', bg: 'Cyrillic', el: 'Greek',
+  fa: 'Arabic', gu: 'Gujarati', he: 'Hebrew', hi: 'Devanagari', ka: 'Georgian',
+  km: 'Khmer', kn: 'Kannada', ko: 'Hangul', ml: 'Malayalam', mr: 'Devanagari',
+  my: 'Myanmar', ne: 'Devanagari', or: 'Oriya', pa: 'Gurmukhi', ru: 'Cyrillic',
+  si: 'Sinhala', ta: 'Tamil', te: 'Telugu', th: 'Thai',
+  uk: 'Cyrillic', ur: 'Arabic',
+}
+// Japanese and Chinese are deliberately absent: kana/Han mixing is already
+// handled above and a Han-only string is normal in both. Serbian is absent
+// because it genuinely writes in both Cyrillic and Latin, and this file uses
+// both - 117 of its existing strings are Latin and correct.
+
+// Latin words that read as prose rather than as a label: four or more letters
+// with at least one lowercase. `RPD`, `CTX`, `API` and `TOK` are units and
+// stay units in every language, so they are not evidence of anything.
+const prosaicLatinWords = value =>
+  (value.match(/[A-Za-z]{4,}/g) ?? []).filter(w => /[a-z]/.test(w))
+
+function wrongLanguage(value, englishValue, locale) {
+  const script = NATIVE_SCRIPT[locale]
+  if (!script || typeof value !== 'string') return null
+  const stripped = value.replace(/\{\w+\}/g, '')
+  if (new RegExp(`\\p{Script=${script}}`, 'u').test(stripped)) return null
+  // A word the English value also holds is a product name carried over
+  // deliberately ("Anthropic (Claude)" is that everywhere), or simply the
+  // English text left in place. Compared case-insensitively: a locale holding
+  // "Custom" against an English "custom" is untranslated, which is a
+  // non-event, not text in some third language.
+  const english = englishValue.toLowerCase()
+  const foreign = prosaicLatinWords(stripped).filter(w => !english.includes(w.toLowerCase()))
+  return foreign.length > 0 ? foreign : null
+}
+
 function foreignScripts(value, locale) {
   if (typeof value !== 'string') return []
   const native = new Set(NATIVE_SCRIPTS[locale] ?? [])
@@ -121,6 +165,12 @@ for (const locale of actualLocales) {
     }
     if (localizedValue.includes('\uFFFD')) {
       errors.push(`${locale}:${key}: contains a Unicode replacement character - ${JSON.stringify(localizedValue)}`)
+    }
+    const foreignWords = localizedValue === englishValue
+      ? null
+      : wrongLanguage(localizedValue, englishValue, locale)
+    if (foreignWords) {
+      errors.push(`${locale}:${key}: no ${NATIVE_SCRIPT[locale]} characters and ${foreignWords.join(', ')} is not in the English - text in the wrong language - ${JSON.stringify(localizedValue)}`)
     }
   }
 }

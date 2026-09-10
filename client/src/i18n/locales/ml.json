@@ -611,7 +611,7 @@
     "bulkResult": "{done} അപ്‌ഡേറ്റ് ചെയ്തു; {failed} പരാജയപ്പെട്ടു.",
     "bulkDeleteResult": "{done} ഇല്ലാതാക്കി; {failed} പരാജയപ്പെട്ടു.",
     "churnWindow": "{days}d",
-    "churnAria": "{added} Added, {lost} Lost ก่อน {days} วัน"
+    "churnAria": "കഴിഞ്ഞ {days} ദിവസത്തിൽ {added} ചേർന്നു, {lost} നീക്കി"
   },
   "backups": {
     "title": "Backups",
@@ -1259,7 +1259,7 @@
     "changesTitle": "കാറ്റാളോഗ് മാറ്റങ്ങൾ",
     "changesHint": "{since} - മോഡൽ zvýšení,retirata nepotvrzená",
     "arrived": "ചേർന്നവ ({count})",
-    "departed": " wycofved ({count})",
+    "departed": "നീക്കിയവ ({count})",
     "notRouted": "റൂട്ട് ചെയ്തിട്ടില്ല",
     "acknowledge": "സ്വീകരിക്കുക",
     "untracked": "{count} മോഡലുകൾ വരവ് ട്രാക്കിംഗിന് മുൻപുള്ളവയാണ്.",

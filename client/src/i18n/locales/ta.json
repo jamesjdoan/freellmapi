@@ -1257,11 +1257,11 @@
   },
   "catalogue": {
     "changesTitle": " catalog மாற்றங்கள்",
-    "changesHint": "Models added since {since}, retirements not yet acknowledged.",
+    "changesHint": "{since} முதல் சேர்க்கப்பட்ட மாதிரிகள், மற்றும் இன்னும் ஏற்கப்படாத நீக்கங்கள்.",
     "untracked": "{count} மாதிரிகள் tracking elleni oriignal.",
     "arrived": "சேர்ந்தவை ({count})",
     "departed": "நீக்கப்பட்டவை ({count})",
-    "autoRouted": "auto-routed already — {chains}",
+    "autoRouted": "ஏற்கனவே வழிப்படுத்தப்படுகிறது — {chains}",
     "notRouted": "வழிப்படுத்தப்படவில்லை",
     "lostFrom": "{chains} இல் இருந்து இழந்தது",
     "acknowledge": "ஓரட்டை"

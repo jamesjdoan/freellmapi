@@ -611,7 +611,7 @@
     "bulkResult": "{done} ನವೀಕರಿಸಲಾಗಿದೆ; {failed} ವಿಫಲವಾಗಿದೆ.",
     "bulkDeleteResult": "{done} ಅಳಿಸಲಾಗಿದೆ; {failed} ವಿಫಲವಾಗಿದೆ.",
     "churnWindow": "{days}d",
-    "churnAria": "{added} aggiunto, {lost} ritirato nei ultimi {days} giorni"
+    "churnAria": "ಕಳೆದ {days} ದಿನಗಳಲ್ಲಿ {added} ಸೇರಿದವು, {lost} ತೆಗೆದುಹಾಕಲಾಗಿದೆ"
   },
   "backups": {
     "title": "Backups",
@@ -1257,13 +1257,13 @@
   },
   "catalogue": {
     "changesTitle": "ಕ್ಯಾಟಾಲಾಗಿನ muutose",
-    "untracked": "{count} modello maka arrival tracking",
-    "arrived": "arrivato ({count})",
-    "departed": "ritirato ({count})",
-    "autoRouted": "già instradato — {chains}",
-    "notRouted": "non instradato",
+    "untracked": "{count} ಮಾದರಿಗಳು ಆಗಮನ ಟ್ರ್ಯಾಕಿಂಗ್‌ಗಿಂತ ಹಿಂದಿನವು.",
+    "arrived": "ಸೇರಿದವು ({count})",
+    "departed": "ತೆಗೆದುಹಾಕಲಾಗಿದೆ ({count})",
+    "autoRouted": "ಈಗಾಗಲೇ ರೂಟ್ ಆಗುತ್ತಿದೆ — {chains}",
+    "notRouted": "ರೂಟ್ ಆಗಿಲ್ಲ",
     "lostFrom": "{chains} ನಿಂದ ಕಳೆದುಹೋಯಿತು",
-    "acknowledge": "conferma",
+    "acknowledge": "ಸ್ವೀಕರಿಸಿ",
     "changesHint": "{since} ರಿಂದ ಸೇರಿಸಲಾದ ಮಾದರಿಗಳು, ಮತ್ತು ಇನ್ನೂ ಸ್ವೀಕರಿಸದ ತೆಗೆದುಹಾಕುವಿಕೆಗಳು."
   }
 }
