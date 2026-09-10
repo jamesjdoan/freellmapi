@@ -34,6 +34,7 @@ import {
   type TokenUsageData,
 } from '@/lib/routing'
 import { Button } from '@/components/ui/button'
+import { ConfirmButton } from '@/components/confirm-button'
 import { CustomWeightsPopover } from '@/components/custom-weights-popover'
 import { EmptyState } from '@/components/empty-state'
 import { GettingStarted } from '@/components/getting-started'
@@ -47,7 +48,7 @@ import { Tooltip } from '@/components/tooltip'
 import { PenaltyInspector } from '@/components/penalty-inspector'
 import { PeakHoursControls } from '@/components/peak-hours-controls'
 import { ChainManager } from '@/components/chain-manager'
-import { addAlias, aliasesFor, removeAlias, type AliasMerge } from '@/lib/alias-merge'
+import { addAlias, foldedKeys, unmergeGroupKeys, type AliasMerge, type GroupIdentity } from '@/lib/alias-merge'
 import { CatalogueChangesPanel } from '@/components/catalogue-changes'
 import { CatalogueLogPanel } from '@/components/catalogue-log'
 
@@ -342,18 +343,11 @@ export default function FallbackPage() {
    * last week and one today are four separate decisions, and undoing today's
    * should not undo the others.
    */
-  /** True when an operator merge built this group, so a one-click undo means
-   *  something. A group the catalogue's own names produced has no merge to undo. */
-  const isMerged = (label: string) => aliasesFor(unify?.overrides.merges ?? [], label).length > 0
-
-  const unmergeGroup = (group: { label: string }, key: string) => {
-    const merges = unify?.overrides.merges ?? []
-    const keys = key ? [key] : aliasesFor(merges, group.label)
-    let next = merges
-    for (const k of keys) next = removeAlias(next, group.label, k)
+  const unmergeGroup = (group: GroupIdentity, key: string) => {
     setUnmergePick('')
-    unifyMutation.mutate(next)
+    unifyMutation.mutate(unmergeGroupKeys(unify?.overrides.merges ?? [], group, key))
   }
+
 
   // Catalog search + filters (#343). Filtering operates on whole logical-model
   // groups; rank stays the model's position in the full chain so the numbers
@@ -752,7 +746,7 @@ export default function FallbackPage() {
                             rateUsage={rateUsageByModel}
                             selected={selectedGroups.has(g.key)}
                             onSelect={mergeMode ? toggleGroupSelected : undefined}
-                            onUnmerge={isMerged(g.label) ? () => unmergeGroup(g, '') : undefined}
+                            onUnmerge={foldedKeys(unify?.overrides.merges ?? [], g).length > 0 ? () => unmergeGroup(g, '') : undefined}
                           />
                         ))}
                       </tbody>
@@ -793,7 +787,7 @@ export default function FallbackPage() {
                           onToggleGroup={handleGroupToggle}
                           allRows={rows}
                           rateUsage={rateUsageByModel}
-                          onUnmerge={isMerged(g.label) ? () => unmergeGroup(g, '') : undefined}
+                          onUnmerge={foldedKeys(unify?.overrides.merges ?? [], g).length > 0 ? () => unmergeGroup(g, '') : undefined}
                         />
                       </tr>
                     ))}
@@ -852,7 +846,7 @@ export default function FallbackPage() {
               {/* Offered only when exactly one group is picked AND an override
                   built it: unmerging a group the catalogue's own names produced
                   would silently do nothing. */}
-              {chosenGroups.length === 1 && aliasesFor(unify?.overrides.merges ?? [], chosenGroups[0].label).length > 0 && (
+              {chosenGroups.length === 1 && foldedKeys(unify?.overrides.merges ?? [], chosenGroups[0]).length > 0 && (
                 <>
                   <select
                     value={unmergePick}
@@ -861,18 +855,20 @@ export default function FallbackPage() {
                     className="h-7 max-w-[240px] rounded border bg-background px-1 text-xs"
                   >
                     <option value="">{t('models.unmergeAll')}</option>
-                    {aliasesFor(unify?.overrides.merges ?? [], chosenGroups[0].label).map(k => (
+                    {foldedKeys(unify?.overrides.merges ?? [], chosenGroups[0]).map(k => (
                       <option key={k} value={k}>{k}</option>
                     ))}
                   </select>
-                  <Button
-                    variant="ghost"
+                  {/* Two-step, like every other destructive action here. It
+                      rewrites routing for a whole group, and "the whole group"
+                      is the default option in the select beside it. */}
+                  <ConfirmButton
                     size="sm"
-                    onClick={() => unmergeGroup(chosenGroups[0], unmergePick)}
+                    onConfirm={() => unmergeGroup(chosenGroups[0], unmergePick)}
                     disabled={unifyMutation.isPending}
                   >
                     {t('models.unmergeGroup')}
-                  </Button>
+                  </ConfirmButton>
                 </>
               )}
             </FloatingBar>

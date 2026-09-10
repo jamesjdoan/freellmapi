@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useI18n } from '@/i18n'
+import { ConfirmButton } from '@/components/confirm-button'
 import { CopyButton } from '@/components/copy-button'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip } from '@/components/tooltip'
@@ -332,23 +333,28 @@ export function GroupHeaderCells({ group, rank, dragHandle, onToggleGroup, allRo
               : <Tooltip text={t('models.servedBy', { providers: group.members.map(m => memberProviderLabel(m, siblings)).join('\n') })}>
                   <span className="text-[10px] rounded-full px-1.5 py-0.5 bg-muted text-muted-foreground">{t('models.providerCount', { count: group.members.length })}</span>
                 </Tooltip>}
-            {/* Undo the whole merge in one press, from the row itself. The
-                selective version lives in merge mode; this is the "put it back
-                how it was" that should not cost four interactions. Fades in on
-                hover so it is not chrome on every merged row at rest. */}
+            {/* Undo the whole merge from the row itself: the selective version
+                lives in merge mode, this is "put it back how it was" without
+                four interactions. Two-step like every other destructive action
+                here — a merge can span several providers and a stray click on a
+                hover-revealed control should not silently re-scatter them.
+                Fades in on hover so it is not chrome on every merged row.
+
+                The span wrapper stops the row's own navigate-to-detail click,
+                which would otherwise swallow the arming press. */}
             {onUnmerge && (
               <span
-                role="button"
-                tabIndex={0}
-                title={t('models.unmergeRowHint')}
-                onClick={e => { e.preventDefault(); e.stopPropagation(); onUnmerge() }}
-                onKeyDown={e => {
-                  if (e.key !== 'Enter' && e.key !== ' ') return
-                  e.preventDefault(); e.stopPropagation(); onUnmerge()
-                }}
-                className="text-[10px] rounded-full border px-1.5 py-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover/row:opacity-100"
+                onClick={e => { e.preventDefault(); e.stopPropagation() }}
+                className="opacity-0 transition-opacity focus-within:opacity-100 group-hover/row:opacity-100"
               >
-                {t('models.unmergeRow')}
+                <ConfirmButton
+                  onConfirm={onUnmerge}
+                  title={t('models.unmergeRowHint')}
+                  aria-label={t('models.unmergeRowHint')}
+                  className="h-5 rounded-full border px-1.5 text-[10px] text-muted-foreground"
+                >
+                  {t('models.unmergeRow')}
+                </ConfirmButton>
               </span>
             )}
             {quota && (
