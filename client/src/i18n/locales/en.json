@@ -268,6 +268,8 @@
 "mergeKeep": "Keep",
 "mergeConfirm": "Fold in {count}",
     "mergeInto": "Merge into {name}",
+"unmergeWhat": "What to take back out",
+"unmergeAll": "\u2014 the whole group \u2014",
     "unmergeGroup": "Unmerge",
     "showingCount": "{shown} of {total} models",
     "clearFilters": "Clear filters",

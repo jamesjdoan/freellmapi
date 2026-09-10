@@ -191,6 +191,10 @@ export default function FallbackPage() {
   // Held by group key rather than by position: the default used to be
   // "whichever sorts first", which is arbitrary and unaskable-for.
   const [mergeTarget, setMergeTarget] = useState<string | null>(null)
+  // Which folded-in key to take back out, or '' for the whole group. A group is
+  // often built from several separate decisions, so dissolving all of them is
+  // the wrong default for undoing one.
+  const [unmergePick, setUnmergePick] = useState('')
   const { data: unify } = useQuery<{ overrides: { merges: AliasMerge[]; splits: unknown[] } }>({
     queryKey: ['unify'],
     queryFn: () => apiFetch('/api/settings/unify'),
@@ -331,10 +335,20 @@ export default function FallbackPage() {
 
   /** Undo a merge: every key folded into this group goes back to standing on
    *  its own. Only offered where an override actually built the group. */
-  const unmergeGroup = (group: { key: string; label: string }) => {
-    let merges = unify?.overrides.merges ?? []
-    for (const key of aliasesFor(merges, group.label)) merges = removeAlias(merges, group.label, key)
-    unifyMutation.mutate(merges)
+  /**
+   * Take one folded-in model back out, or dissolve the group entirely.
+   *
+   * Granular by default because a merged group accretes: three routes folded in
+   * last week and one today are four separate decisions, and undoing today's
+   * should not undo the others.
+   */
+  const unmergeGroup = (group: { label: string }, key: string) => {
+    const merges = unify?.overrides.merges ?? []
+    const keys = key ? [key] : aliasesFor(merges, group.label)
+    let next = merges
+    for (const k of keys) next = removeAlias(next, group.label, k)
+    setUnmergePick('')
+    unifyMutation.mutate(next)
   }
 
   // Catalog search + filters (#343). Filtering operates on whole logical-model
@@ -827,9 +841,27 @@ export default function FallbackPage() {
                   built it: unmerging a group the catalogue's own names produced
                   would silently do nothing. */}
               {chosenGroups.length === 1 && aliasesFor(unify?.overrides.merges ?? [], chosenGroups[0].label).length > 0 && (
-                <Button variant="ghost" size="sm" onClick={() => unmergeGroup(chosenGroups[0])} disabled={unifyMutation.isPending}>
-                  {t('models.unmergeGroup')}
-                </Button>
+                <>
+                  <select
+                    value={unmergePick}
+                    onChange={e => setUnmergePick(e.target.value)}
+                    aria-label={t('models.unmergeWhat')}
+                    className="h-7 max-w-[240px] rounded border bg-background px-1 text-xs"
+                  >
+                    <option value="">{t('models.unmergeAll')}</option>
+                    {aliasesFor(unify?.overrides.merges ?? [], chosenGroups[0].label).map(k => (
+                      <option key={k} value={k}>{k}</option>
+                    ))}
+                  </select>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => unmergeGroup(chosenGroups[0], unmergePick)}
+                    disabled={unifyMutation.isPending}
+                  >
+                    {t('models.unmergeGroup')}
+                  </Button>
+                </>
               )}
             </FloatingBar>
 

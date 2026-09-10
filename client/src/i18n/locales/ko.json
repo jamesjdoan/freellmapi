@@ -300,7 +300,9 @@
     "mergePrompt": "Pick the models to fold together",
     "mergeHidden": "({count} hidden by filters)",
     "mergeKeep": "Keep",
-    "mergeConfirm": "Fold in {count}"
+    "mergeConfirm": "Fold in {count}",
+    "unmergeWhat": "What to take back out",
+    "unmergeAll": "— the whole group —"
   },
   "strategies": {
     "explore": "미측정 모델 탐색",
