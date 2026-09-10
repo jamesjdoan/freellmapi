@@ -155,3 +155,48 @@ describe('model groups', () => {
     expect(listGroups().find(g => g.id === id)!.members).toHaveLength(3);
   });
 });
+
+describe('removing one route from a group', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    const db = getDb();
+    db.prepare('DELETE FROM profile_models').run();
+    db.prepare('DELETE FROM fallback_config').run();
+    db.prepare('DELETE FROM models').run();
+    db.prepare('DELETE FROM aa_model').run();
+    db.prepare('DELETE FROM aa_model_link').run();
+    db.prepare('DELETE FROM model_group').run();
+    seedCatalogue();
+  });
+
+  it('returns that route to standing alone and leaves the rest merged', () => {
+    // Correcting one wrong member must not cost the grouping of the others.
+    const id = createGroup('Nemotron 3 Ultra', [ULTRA_NV, ULTRA_OR, ULTRA_OLLAMA]);
+    removeMember(ULTRA_OLLAMA);
+    const groups = getGroupedCompare();
+    expect(groups.find(g => g.groupId === id)!.members).toHaveLength(2);
+    const solo = groups.find(g => g.groupId === null && g.members[0].platform === 'ollama');
+    expect(solo).toBeDefined();
+    // And it loses the inherited score, because it no longer has a group to
+    // inherit from - showing it would be the fabrication this guards against.
+    expect(solo!.analysis).toBeNull();
+  });
+
+  it('dissolves the group when the second-to-last route leaves', () => {
+    // One route is not a merge; leaving a one-member group would show a
+    // "1 routes" entry with an unmerge control and nothing to unmerge.
+    const id = createGroup('Pair', [ULTRA_NV, ULTRA_OR]);
+    removeMember(ULTRA_OR);
+    expect(listGroups().find(g => g.id === id)!.members).toHaveLength(1);
+    removeMember(ULTRA_NV);
+    expect(listGroups()).toHaveLength(0);
+    expect(getGroupedCompare().every(g => g.groupId === null)).toBe(true);
+  });
+
+  it('ignores a route that is not in any group', () => {
+    createGroup('Pair', [ULTRA_NV, ULTRA_OR]);
+    expect(() => removeMember(ULTRA_OLLAMA)).not.toThrow();
+    expect(listGroups()[0].members).toHaveLength(2);
+  });
+});

@@ -1330,6 +1330,7 @@
     "routeCount": "{count} routes",
     "conflict": "members disagree",
     "conflictHint": "Members of this group are mapped to different Artificial Analysis models. Pick one for the group, or unmerge.",
-    "matchInherited": "inherited by group"
+    "matchInherited": "inherited by group",
+    "removeRoute": "Remove {model} from this group"
   }
 }

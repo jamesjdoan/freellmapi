@@ -134,6 +134,17 @@ export default function CompareModelsPage() {
     mutationFn: (id: number) => apiFetch(`/api/analysis/groups/${id}`, { method: 'DELETE' }),
     onSuccess: invalidate,
   })
+  // Pull ONE route back out, leaving the rest merged. Whole-group unmerge is
+  // the blunt version; correcting a single wrong member should not cost the
+  // grouping of the others.
+  const removeMember = useMutation({
+    mutationFn: ({ id, platform, modelId }: { id: number; platform: string; modelId: string }) =>
+      apiFetch(`/api/analysis/groups/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ removeMembers: [{ platform, modelId }] }),
+      }),
+    onSuccess: invalidate,
+  })
 
   const link = useMutation({
     mutationFn: (body: { platform: string; modelId: string; aaSlug: string | null }) =>
@@ -385,9 +396,32 @@ export default function CompareModelsPage() {
                         </span>
                         {/* The routes behind a merged entry, so the condensing
                             never hides which providers actually serve it. */}
+                        {/* The routes behind a merged entry, each removable on
+                            its own: a wrong member should cost that member, not
+                            the whole grouping. The last one out dissolves the
+                            group, which the server does rather than leaving an
+                            entry with nothing in it. */}
                         {!solo && (
-                          <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                            {g.members.map(m => `${m.platform}/${m.modelId}`).join(' · ')}
+                          <span className="mt-0.5 flex flex-wrap items-center gap-1">
+                            {g.members.map(m => (
+                              <span
+                                key={`${m.platform}:${m.modelId}`}
+                                className="inline-flex items-center gap-1 rounded border px-1 py-0.5 text-[11px] text-muted-foreground"
+                              >
+                                {`${m.platform}/${m.modelId}`}
+                                <button
+                                  type="button"
+                                  onClick={() => g.groupId != null && removeMember.mutate({
+                                    id: g.groupId, platform: m.platform, modelId: m.modelId,
+                                  })}
+                                  aria-label={t('compare.removeRoute', { model: m.modelId })}
+                                  title={t('compare.removeRoute', { model: m.modelId })}
+                                  className="text-muted-foreground hover:text-destructive"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
                           </span>
                         )}
                       </TableCell>
