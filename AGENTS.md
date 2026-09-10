@@ -20,6 +20,7 @@ This checkout is the Imperium-maintained FreeLLMAPI extension, not upstream `mai
 - Preserve public unified model IDs and automatic-routing defaults.
 - Preferred provider order remains soft: health, capability, key scope, cooldown and known quota exhaustion still win.
 - The Extensions registry is navigation/documentation metadata, never a second settings store.
+- New UI strings go into `client/src/i18n/locales/en.json`, then straight into every other locale as the English text via `node scripts/apply-translations.mjs --fill-english` from `client/`. Do not hand-translate them. The 60 locales are upstream's (`#607`), this is a single-user tool, and `check:i18n` gates only on the key being PRESENT — over 3,300 keys already hold the English text, so filling is the existing convention rather than an exception. Translate only what the operator asks for by name.
 - Never commit secrets, `.env` files, database contents or local backups.
 - Do not commit, push or deploy without explicit approval for that individual action.
 

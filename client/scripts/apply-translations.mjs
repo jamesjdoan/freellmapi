@@ -23,6 +23,11 @@
 // 3300 keys across these files are already in exactly this state. It makes the
 // gap explicit and greppable instead of leaving the suite red.
 //
+// THIS IS THE DEFAULT for new strings on this branch (see AGENTS.md). The 60
+// locales came from upstream (#607) and this is a single-user tool, so
+// hand-translating every new string costs hours per feature and buys the
+// operator nothing. Fill, and translate only what is asked for by name.
+//
 //   node scripts/apply-translations.mjs /tmp/batch-*.json
 //   node scripts/apply-translations.mjs --dry-run /tmp/batch-*.json
 //   node scripts/apply-translations.mjs --fill-english
