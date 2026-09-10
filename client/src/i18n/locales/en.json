@@ -528,6 +528,8 @@
     "filterDisabled": "Disabled",
     "noFilterMatch": "No providers match your filters.",
     "providerCountSummary": "{providers} providers · {keys} keys",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} added, {lost} retired in the last {days} days",
     "summaryHealthy": "{count} healthy",
     "summaryIssueOne": "{count} issue",
     "summaryIssueOther": "{count} issues",

@@ -5,11 +5,18 @@ import { createPortal } from 'react-dom'
 // clipped by an ancestor's overflow (e.g. a table's overflow-x-auto). Position
 // is computed from the trigger's rect and clamped to the viewport. `side`
 // picks which edge it opens from (use 'bottom' under sticky headers).
-export function Tooltip({ text, children, side = 'top', className }: {
+// `focusable` makes the wrapper itself a tab stop. `onFocus` has always sat on
+// that wrapper, but a bare span is not focusable and native `focus` does not
+// bubble, so the focus path only ever fired for a wrapper that could take
+// focus itself - i.e. never. A tooltip carrying detail available nowhere else
+// needs it; one that merely labels a focusable button does not, so this is
+// opt-in rather than always on.
+export function Tooltip({ text, children, side = 'top', className, focusable }: {
   text: string
   children: ReactNode
   side?: 'top' | 'bottom'
   className?: string
+  focusable?: boolean
 }) {
   const ref = useRef<HTMLSpanElement>(null)
   const [coords, setCoords] = useState<{ x: number; y: number } | null>(null)
@@ -63,6 +70,7 @@ export function Tooltip({ text, children, side = 'top', className }: {
   return (
     <span
       ref={ref}
+      tabIndex={focusable ? 0 : undefined}
       className={className ?? 'inline-flex'}
       onMouseEnter={show}
       onMouseLeave={hide}

@@ -34,6 +34,8 @@ import {
   statusLabelKey,
 } from './shared'
 import type { HealthData } from './shared'
+import { ProviderChurnChip } from './provider-churn'
+import { churnByPlatform, useCatalogueChanges } from '@/lib/catalogue-changes'
 import { DiscoverModelsDialog } from './discover-models-dialog'
 import { AddEndpointKeyDialog } from './add-endpoint-key-dialog'
 import { CopyKeyDialog } from './copy-key-dialog'
@@ -295,6 +297,13 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
     keys: keys.filter(k => k.platform === p.value),
   })).filter(p => p.keys.length > 0)
 
+  // What each provider's catalogue gained and lost lately (#F2 follow-up).
+  // Shares one query with the chain page's panel; this narrows it to a
+  // fortnight, because a retirement from months back is not news about the
+  // provider even when nobody has acknowledged it yet.
+  const { data: catalogueChanges } = useCatalogueChanges()
+  const churn = churnByPlatform(catalogueChanges)
+
   const totalProviders = grouped.length
   const totalKeys = grouped.reduce((n, g) => n + g.keys.length, 0)
 
@@ -441,6 +450,7 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
                         {`${models.enabled}/${models.total} models enabled`}
                       </Badge>
                     )}
+                    <ProviderChurnChip churn={churn.get(group.value)} />
                   </button>
                   {(group.url || proxyEnabled) && (
                     <DropdownMenu>
@@ -584,6 +594,7 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
                                     {`${models.enabled}/${models.total} models enabled`}
                                   </Badge>
                                 )}
+                                <ProviderChurnChip churn={churn.get(group.value)} />
                               </>
                             )}
                             {hasCustomModels && (

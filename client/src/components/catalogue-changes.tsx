@@ -1,9 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { PackagePlus, PackageMinus } from 'lucide-react'
 import { useI18n } from '@/i18n'
 import { apiFetch } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { shortDate, useCatalogueChanges } from '@/lib/catalogue-changes'
 
 // What the catalogue gained and lost since the last time anyone looked.
 //
@@ -16,47 +17,11 @@ import { Button } from '@/components/ui/button'
 // recreate `auto_include_new_models` behind a different control, which is the
 // drift this panel exists to expose.
 
-interface ArrivedModel {
-  platform: string
-  modelId: string
-  displayName: string
-  firstSeenAt: string
-  routed: boolean
-  chains: string[]
-  supportsTools: boolean
-  supportsVision: boolean
-  contextWindow: number | null
-}
-
-interface DepartedModel {
-  platform: string
-  modelId: string
-  retiredAt: string
-  reason: string | null
-  lostFrom: { chain: string; priority: number }[]
-  acknowledgedAt: string | null
-}
-
-interface CatalogueChanges {
-  since: string
-  arrived: ArrivedModel[]
-  departed: DepartedModel[]
-  untrackedArrivals: number
-}
-
-function shortDate(value: string): string {
-  // Stored as `YYYY-MM-DD HH:MM:SS` UTC; the date alone is what a reader needs.
-  return value.slice(0, 10)
-}
-
 export function CatalogueChangesPanel() {
   const { t } = useI18n()
   const queryClient = useQueryClient()
 
-  const { data } = useQuery<CatalogueChanges>({
-    queryKey: ['catalogue-changes'],
-    queryFn: () => apiFetch('/api/models/changes?sinceDays=30'),
-  })
+  const { data } = useCatalogueChanges()
 
   const acknowledge = useMutation({
     mutationFn: (model: { platform: string; modelId: string }) =>
