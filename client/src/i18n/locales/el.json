@@ -290,7 +290,10 @@
     "providerRouting": "Provider routing",
     "providerRoutingDescription": "Automatic uses live routing scores. Preferred order tries your list first while retaining health, quota, cooldown and failover protections.",
     "providerRoutingAutomatic": "Automatic",
-    "providerRoutingPreferred": "Preferred order"
+    "providerRoutingPreferred": "Preferred order",
+    "mergeSelected": "{count} selected",
+    "mergeInto": "Merge into {name}",
+    "unmergeGroup": "Unmerge"
   },
   "strategies": {
     "explore": "Εξερεύνηση μη μετρημένων μοντέλων",

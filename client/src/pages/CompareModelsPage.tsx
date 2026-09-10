@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ExternalLink, Merge, RefreshCw, Scale } from 'lucide-react'
+import { ExternalLink, RefreshCw, Scale } from 'lucide-react'
 import { useI18n } from '@/i18n'
 import { apiFetch } from '@/lib/api'
 import { toast } from '@/lib/toast'
@@ -54,11 +54,13 @@ interface CompareRow {
 }
 
 interface CompareGroup {
-  groupId: number | null
+  groupKey: string
+  canonicalId: string
   name: string
+  userDefined: boolean
   members: CompareRow[]
   analysis: CompareRow['analysis']
-  analysisSource: 'pinned' | 'inherited' | 'own' | null
+  analysisSource: 'inherited' | 'own' | null
   conflicted: boolean
   chains: string[]
   enabledMembers: number
@@ -125,26 +127,9 @@ export default function CompareModelsPage() {
     },
     meta: { silenceToast: false },
   })
-  const mergeGroup = useMutation({
-    mutationFn: (body: { name: string; members: { platform: string; modelId: string }[] }) =>
-      apiFetch('/api/analysis/groups', { method: 'POST', body: JSON.stringify(body) }),
-    onSuccess: () => { setSelected(new Set()); invalidate() },
-  })
-  const unmerge = useMutation({
-    mutationFn: (id: number) => apiFetch(`/api/analysis/groups/${id}`, { method: 'DELETE' }),
-    onSuccess: invalidate,
-  })
   // Pull ONE route back out, leaving the rest merged. Whole-group unmerge is
   // the blunt version; correcting a single wrong member should not cost the
   // grouping of the others.
-  const removeMember = useMutation({
-    mutationFn: ({ id, platform, modelId }: { id: number; platform: string; modelId: string }) =>
-      apiFetch(`/api/analysis/groups/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ removeMembers: [{ platform, modelId }] }),
-      }),
-    onSuccess: invalidate,
-  })
 
   const link = useMutation({
     mutationFn: (body: { platform: string; modelId: string; aaSlug: string | null }) =>
@@ -154,8 +139,7 @@ export default function CompareModelsPage() {
 
   const status = data?.status
 
-  const rowKey = (r: CompareRow) => `${r.platform}:${r.modelId}`
-  const groupKey = (g: CompareGroup) => (g.groupId != null ? `g${g.groupId}` : rowKey(g.members[0]))
+  const entryKey = (g: CompareGroup) => g.groupKey
 
   // Condensed entries: one per group, one per ungrouped model. The catalogue is
   // 589 rows and most are switched off, so comparing all of them buries the
@@ -166,7 +150,7 @@ export default function CompareModelsPage() {
     [grouped, onlyRouted],
   )
   const chosen = useMemo(
-    () => entries.filter(g => selected.has(groupKey(g))),
+    () => entries.filter(g => selected.has(entryKey(g))),
     [entries, selected],
   )
   // Nothing picked reads as "compare everything visible", which is more useful
@@ -191,13 +175,6 @@ export default function CompareModelsPage() {
     })
   }
 
-  // Merging takes the ROUTES behind the chosen entries, so selecting two
-  // existing groups merges every route in both rather than nesting groups.
-  const mergeSelected = () => {
-    const members = chosen.flatMap(g => g.members.map(m => ({ platform: m.platform, modelId: m.modelId })))
-    if (members.length < 2) return
-    mergeGroup.mutate({ name: chosen[0].name, members })
-  }
 
   return (
     <div className="space-y-6">
@@ -295,7 +272,7 @@ export default function CompareModelsPage() {
               {scored.map(g => {
                 const value = g.analysis![metric] as number
                 return (
-                  <li key={groupKey(g)} className="flex items-center gap-2 text-xs">
+                  <li key={entryKey(g)} className="flex items-center gap-2 text-xs">
                     {/* One dot per provider behind this entry: a merged model
                         is exactly as available as the routes it condenses. */}
                     <span className="flex flex-shrink-0 items-center gap-0.5">
@@ -331,14 +308,6 @@ export default function CompareModelsPage() {
           <section className="rounded-xl border p-4">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-sm font-medium">{t('compare.tableTitle')}</h2>
-              {/* Merging needs two entries; below that the button would be a
-                  control that cannot do anything. */}
-              {chosen.length > 1 && (
-                <Button size="sm" variant="outline" onClick={mergeSelected} disabled={mergeGroup.isPending}>
-                  <Merge className="size-3.5" />
-                  {t('compare.merge', { count: chosen.length })}
-                </Button>
-              )}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">{t('compare.tableHint')}</p>
             <Table className="mt-3">
@@ -358,12 +327,12 @@ export default function CompareModelsPage() {
                 {entries.map(g => {
                   const solo = g.members.length === 1 ? g.members[0] : null
                   return (
-                    <TableRow key={groupKey(g)}>
+                    <TableRow key={entryKey(g)}>
                       <TableCell>
                         <input
                           type="checkbox"
-                          checked={selected.has(groupKey(g))}
-                          onChange={() => toggle(groupKey(g))}
+                          checked={selected.has(entryKey(g))}
+                          onChange={() => toggle(entryKey(g))}
                           aria-label={g.name}
                           className="size-3.5 accent-foreground"
                         />
@@ -375,18 +344,9 @@ export default function CompareModelsPage() {
                           {solo
                             ? <code className="text-[11px] text-muted-foreground">{solo.modelId}</code>
                             : (
-                              <>
-                                <Badge variant="secondary" className="text-[10px] tabular-nums">
-                                  {t('compare.routeCount', { count: g.members.length })}
-                                </Badge>
-                                <button
-                                  type="button"
-                                  onClick={() => g.groupId != null && unmerge.mutate(g.groupId)}
-                                  className="text-[11px] text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
-                                >
-                                  {t('compare.unmerge')}
-                                </button>
-                              </>
+                              <Badge variant="secondary" className="text-[10px] tabular-nums">
+                                {t('compare.routeCount', { count: g.members.length })}
+                              </Badge>
                             )}
                           {g.conflicted && (
                             <Tooltip text={t('compare.conflictHint')}>
@@ -396,32 +356,13 @@ export default function CompareModelsPage() {
                         </span>
                         {/* The routes behind a merged entry, so the condensing
                             never hides which providers actually serve it. */}
-                        {/* The routes behind a merged entry, each removable on
-                            its own: a wrong member should cost that member, not
-                            the whole grouping. The last one out dissolves the
-                            group, which the server does rather than leaving an
-                            entry with nothing in it. */}
+                        {/* The routes behind this logical model. Grouping is the
+                            router's own unification, edited on the Models page —
+                            Compare reports it rather than keeping a second
+                            grouping that could disagree with what routes. */}
                         {!solo && (
-                          <span className="mt-0.5 flex flex-wrap items-center gap-1">
-                            {g.members.map(m => (
-                              <span
-                                key={`${m.platform}:${m.modelId}`}
-                                className="inline-flex items-center gap-1 rounded border px-1 py-0.5 text-[11px] text-muted-foreground"
-                              >
-                                {`${m.platform}/${m.modelId}`}
-                                <button
-                                  type="button"
-                                  onClick={() => g.groupId != null && removeMember.mutate({
-                                    id: g.groupId, platform: m.platform, modelId: m.modelId,
-                                  })}
-                                  aria-label={t('compare.removeRoute', { model: m.modelId })}
-                                  title={t('compare.removeRoute', { model: m.modelId })}
-                                  className="text-muted-foreground hover:text-destructive"
-                                >
-                                  ×
-                                </button>
-                              </span>
-                            ))}
+                          <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                            {g.members.map(m => `${m.platform}/${m.modelId}`).join(' · ')}
                           </span>
                         )}
                       </TableCell>

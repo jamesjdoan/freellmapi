@@ -380,12 +380,16 @@ export function GroupHeaderCells({ group, rank, dragHandle, onToggleGroup, allRo
   )
 }
 
-export function SortableGroupRow({ group, rank, onToggleGroup, allRows, rateUsage }: {
+export function SortableGroupRow({ group, rank, onToggleGroup, allRows, rateUsage, selected, onSelect }: {
   group: ModelGroupRow
   rank: number
   onToggleGroup: (memberIds: number[], enabled: boolean) => void
   allRows?: readonly Row[]
   rateUsage?: ReadonlyMap<number, RateLimitUsageRow>
+  /** Merge selection. Omitted where merging is not offered, and then no
+   *  checkbox renders and the row keeps its full width. */
+  selected?: boolean
+  onSelect?: (key: string) => void
 }) {
   const { t } = useI18n()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `grp:${group.key}` })
@@ -410,6 +414,17 @@ export function SortableGroupRow({ group, rank, onToggleGroup, allRows, rateUsag
       onClick={() => navigate(`/models/chat/${detailId}`)}
       className={`group/row border-b last:border-0 bg-card cursor-pointer transition-colors hover:[&>td]:bg-muted/50 [&>td:first-child]:rounded-l-lg [&>td:last-child]:rounded-r-lg ${isDragging ? 'opacity-50' : ''} ${anyEnabled ? '' : 'opacity-50'}`}
     >
+      {onSelect && (
+        <td className="w-6 pl-2" onClick={e => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={selected ?? false}
+            onChange={() => onSelect(group.key)}
+            aria-label={group.label}
+            className="size-3.5 accent-foreground cursor-pointer"
+          />
+        </td>
+      )}
       <GroupHeaderCells group={group} rank={rank} dragHandle={handle} onToggleGroup={onToggleGroup} allRows={allRows} rateUsage={rateUsage} />
     </tr>
   )

@@ -47,6 +47,7 @@ import { Tooltip } from '@/components/tooltip'
 import { PenaltyInspector } from '@/components/penalty-inspector'
 import { PeakHoursControls } from '@/components/peak-hours-controls'
 import { ChainManager } from '@/components/chain-manager'
+import { addAlias, aliasesFor, removeAlias, type AliasMerge } from '@/lib/alias-merge'
 import { CatalogueChangesPanel } from '@/components/catalogue-changes'
 import { CatalogueLogPanel } from '@/components/catalogue-log'
 
@@ -178,6 +179,30 @@ export default function FallbackPage() {
     [rateLimitUsage],
   )
 
+  // Merging models on THIS page, not a grouping of its own: `unifyOverrides` is
+  // what the router reads to decide which providers one logical model fails
+  // over across, so a merge here changes routing and shows up on Compare.
+  const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set())
+  const { data: unify } = useQuery<{ overrides: { merges: AliasMerge[]; splits: unknown[] } }>({
+    queryKey: ['unify'],
+    queryFn: () => apiFetch('/api/settings/unify'),
+  })
+  const unifyMutation = useMutation({
+    mutationFn: (merges: AliasMerge[]) =>
+      apiFetch('/api/settings/unify', {
+        method: 'PUT',
+        // The PUT replaces the whole object, so splits ride along untouched.
+        body: JSON.stringify({ overrides: { merges, splits: unify?.overrides.splits ?? [] } }),
+      }),
+    onSuccess: () => {
+      setSelectedGroups(new Set())
+      queryClient.invalidateQueries({ queryKey: ['unify'] })
+      queryClient.invalidateQueries({ queryKey: ['fallback'] })
+      queryClient.invalidateQueries({ queryKey: ['models'] })
+      queryClient.invalidateQueries({ queryKey: ['analysis'] })
+    },
+  })
+
   const saveMutation = useMutation({
     mutationFn: (data: { modelDbId: number; priority: number; enabled: boolean }[]) =>
       apiFetch('/api/fallback', { method: 'PUT', body: JSON.stringify(data) }),
@@ -245,6 +270,42 @@ export default function FallbackPage() {
   // ── Model unification: a model served by several providers is always shown as
   // one logical row that links to its own page (the on/off toggle was removed). ─
   const orderedGroups = useMemo(() => buildGroups(rows, isManual), [rows, isManual])
+
+  const toggleGroupSelected = (key: string) => {
+    setSelectedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  const chosenGroups = useMemo(
+    () => orderedGroups.filter(g => selectedGroups.has(g.key)),
+    [orderedGroups, selectedGroups],
+  )
+
+  /**
+   * Fold the other selected models into the first one. `keys` are the routing
+   * group keys (normalised display names), which is exactly what the server
+   * matches a merge entry against — so this is the same edit the model detail
+   * page's alias box makes, expressed over several groups at once.
+   */
+  const mergeSelected = () => {
+    if (chosenGroups.length < 2) return
+    const [target, ...rest] = chosenGroups
+    let merges = unify?.overrides.merges ?? []
+    for (const g of rest) merges = addAlias(merges, target.label, g.key)
+    unifyMutation.mutate(merges)
+  }
+
+  /** Undo a merge: every key folded into this group goes back to standing on
+   *  its own. Only offered where an override actually built the group. */
+  const unmergeGroup = (group: { key: string; label: string }) => {
+    let merges = unify?.overrides.merges ?? []
+    for (const key of aliasesFor(merges, group.label)) merges = removeAlias(merges, group.label, key)
+    unifyMutation.mutate(merges)
+  }
 
   // Catalog search + filters (#343). Filtering operates on whole logical-model
   // groups; rank stays the model's position in the full chain so the numbers
@@ -619,7 +680,16 @@ export default function FallbackPage() {
                     <SortableContext items={renderedGroups.map(g => `grp:${g.key}`)} strategy={verticalListSortingStrategy}>
                       <tbody>
                         {renderedGroups.map(g => (
-                          <SortableGroupRow key={g.key} group={g} rank={rankByKey.get(g.key) ?? 0} onToggleGroup={handleGroupToggle} allRows={rows} rateUsage={rateUsageByModel} />
+                          <SortableGroupRow
+                            key={g.key}
+                            group={g}
+                            rank={rankByKey.get(g.key) ?? 0}
+                            onToggleGroup={handleGroupToggle}
+                            allRows={rows}
+                            rateUsage={rateUsageByModel}
+                            selected={selectedGroups.has(g.key)}
+                            onSelect={toggleGroupSelected}
+                          />
                         ))}
                       </tbody>
                     </SortableContext>
@@ -651,6 +721,33 @@ export default function FallbackPage() {
 
             {/* Floating action bar — fixed to the viewport so it's always visible,
                 sliding up when there are unsaved changes and back down on save/discard. */}
+            {/* Merging is a separate bar from the unsaved-chain one: it writes
+                immediately (the router's overrides are not part of the chain
+                draft) and saying "Save changes" for it would be a lie. */}
+            <FloatingBar show={chosenGroups.length > 0}>
+              <span className="text-xs text-muted-foreground">
+                {t('models.mergeSelected', { count: chosenGroups.length })}
+              </span>
+              <Button variant="outline" size="sm" onClick={() => setSelectedGroups(new Set())}>
+                {t('common.cancel')}
+              </Button>
+              <Button
+                size="sm"
+                onClick={mergeSelected}
+                disabled={chosenGroups.length < 2 || unifyMutation.isPending}
+              >
+                {t('models.mergeInto', { name: chosenGroups[0]?.label ?? '' })}
+              </Button>
+              {/* Offered only when exactly one group is picked AND an override
+                  built it: unmerging a group the catalogue's own names produced
+                  would silently do nothing. */}
+              {chosenGroups.length === 1 && aliasesFor(unify?.overrides.merges ?? [], chosenGroups[0].label).length > 0 && (
+                <Button variant="ghost" size="sm" onClick={() => unmergeGroup(chosenGroups[0])} disabled={unifyMutation.isPending}>
+                  {t('models.unmergeGroup')}
+                </Button>
+              )}
+            </FloatingBar>
+
             <FloatingBar show={hasChanges}>
               <span className="text-xs text-muted-foreground">{t('common.unsavedChanges')}</span>
               <Button variant="outline" size="sm" onClick={() => setLocalEntries(null)}>{t('common.discard')}</Button>

@@ -2,7 +2,7 @@ import { getDb, getSetting, setSetting } from '../db/index.js';
 import type { Db } from '../db/types.js';
 import { encrypt, decrypt } from '../lib/crypto.js';
 import { matchAaModel, type AaCandidate } from './analysis-match.js';
-import { listGroups } from './model-groups-manual.js';
+import { getModelGroups } from './model-groups.js';
 
 // Artificial Analysis benchmark data, cached locally and mapped to our models.
 //
@@ -446,18 +446,24 @@ function numberOrNull(value: unknown): number | null {
 }
 
 export interface CompareGroup {
-  /** Null for a model standing on its own — the common case. */
-  groupId: number | null;
+  /** The router's grouping identity: the normalised display name. This is what
+   *  `unifyOverrides.merges` keys on, so the UI can merge with it directly. */
+  groupKey: string;
+  /** The id advertised on /v1/models for this logical model. */
+  canonicalId: string;
   name: string;
+  /** True when an operator merge built this group rather than the catalogue's
+   *  names matching by themselves. */
+  userDefined: boolean;
   /** Every route this group condenses, newest-capable first is NOT implied:
    *  order is the members' own, so the reader can see all of them. */
   members: CompareRow[];
   /** The AA data the whole group is compared on. */
   analysis: CompareRow['analysis'];
-  /** Where that came from: the group's pinned slug, a member's own link, or
-   *  nothing. A reader deciding whether to trust a score on an unmatched
-   *  member needs to know it was inherited. */
-  analysisSource: 'pinned' | 'inherited' | 'own' | null;
+  /** Where the score came from: this model's own link, or inherited from a
+   *  merged sibling. A reader deciding on an unmatched provider route needs to
+   *  know the number is not that route's own measurement. */
+  analysisSource: 'inherited' | 'own' | null;
   /** True when members carry links to DIFFERENT slugs. The group still shows
    *  one score, but silently picking one of two would be a fabrication. */
   conflicted: boolean;
@@ -467,60 +473,46 @@ export interface CompareGroup {
 }
 
 /**
- * The comparison, condensed: one entry per group, and one per ungrouped model.
+ * The comparison, condensed: one entry per LOGICAL model.
  *
- * Grouping is manual on purpose. Auto-grouping by normalised name would make
- * exactly the guesses `matchAaModel` refuses to make, and it would do so
- * across our own catalogue where a wrong merge hides a model rather than just
- * mislabelling it.
+ * The grouping is the router's own — `getModelGroups()`, the unification that
+ * decides what a request for a unified id resolves to and which providers it
+ * fails over across. Compare deliberately mirrors it rather than keeping a
+ * grouping of its own: two grouping systems would drift, and the whole point of
+ * comparing is to compare the things that actually route.
+ *
+ * So a merge made on the Models page shows up here, and the benchmark scores
+ * attach to the logical model rather than to each provider's copy of it.
  */
 export function getGroupedCompare(db: Db = getDb()): CompareGroup[] {
   const { rows } = getComparePayload(db);
-  const groups = listGroups(db);
   const byKey = new Map(rows.map(r => [`${r.platform}:${r.modelId}`, r]));
-  const claimed = new Set<string>();
 
-  const out: CompareGroup[] = [];
-  for (const g of groups) {
+  return getModelGroups().map(g => {
     const members = g.members
-      .map(m => byKey.get(`${m.platform}:${m.modelId}`))
+      .map(m => byKey.get(`${m.platform}:${m.model_id}`))
       .filter((r): r is CompareRow => r !== undefined);
-    for (const m of g.members) claimed.add(`${m.platform}:${m.modelId}`);
-    // Every member gone means the catalogue dropped them all. The group is
-    // kept rather than silently deleted - it is the operator's, and a sync
-    // that removes a model should not also remove their decision about it.
+    // Slugs the members' own links name. More than one means the merge put
+    // together models Artificial Analysis considers different — worth saying
+    // rather than silently showing one of them.
     const linkedSlugs = [...new Set(members.map(m => m.analysis?.slug).filter(Boolean))] as string[];
-    const pinned = g.aaSlug
-      ? members.find(m => m.analysis?.slug === g.aaSlug)?.analysis
-        ?? lookupAa(db, g.aaSlug)
-      : null;
     const inherited = members.find(m => m.analysis)?.analysis ?? null;
-    out.push({
-      groupId: g.id,
-      name: g.name,
+    const solo = members.length === 1;
+    return {
+      groupKey: g.groupKey,
+      canonicalId: g.canonicalId,
+      name: g.groupLabel,
+      // Whether an operator override put this group together, as opposed to
+      // the catalogue's display names doing it by accident.
+      userDefined: g.userDefined,
       members,
-      analysis: pinned ?? inherited,
-      analysisSource: pinned ? 'pinned' : inherited ? 'inherited' : null,
-      conflicted: !g.aaSlug && linkedSlugs.length > 1,
+      analysis: inherited,
+      analysisSource: inherited ? (solo ? 'own' as const : 'inherited' as const) : null,
+      conflicted: linkedSlugs.length > 1,
       chains: [...new Set(members.flatMap(m => m.chains))],
       enabledMembers: members.filter(m => m.enabled).length,
-    });
-  }
-
-  for (const row of rows) {
-    if (claimed.has(`${row.platform}:${row.modelId}`)) continue;
-    out.push({
-      groupId: null,
-      name: row.displayName,
-      members: [row],
-      analysis: row.analysis,
-      analysisSource: row.analysis ? 'own' : null,
-      conflicted: false,
-      chains: row.chains,
-      enabledMembers: row.enabled ? 1 : 0,
-    });
-  }
-  return out;
+    };
+  }).filter(g => g.members.length > 0);
 }
 
 function lookupAa(db: Db, slug: string): CompareRow['analysis'] {
