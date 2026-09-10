@@ -270,7 +270,7 @@ export const dragDots = (
 // The collapsed header row for a logical-model group: name, provider count,
 // union vision/tools badges, the best member's axis bars + score, and a single
 // switch that enables/disables every provider in the group.
-export function GroupHeaderCells({ group, rank, dragHandle, onToggleGroup, allRows, rateUsage }: {
+export function GroupHeaderCells({ group, rank, dragHandle, onToggleGroup, allRows, rateUsage, onUnmerge }: {
   group: ModelGroupRow
   rank: number
   dragHandle?: ReactNode
@@ -283,6 +283,10 @@ export function GroupHeaderCells({ group, rank, dragHandle, onToggleGroup, allRo
   // level and passed down: a query hook here would open one observer and one
   // 15s poll timer per row, i.e. hundreds of them on a real catalog.
   rateUsage?: ReadonlyMap<number, RateLimitUsageRow>
+  // Given only for groups an operator merge built, and then the row carries a
+  // one-click undo. Merged-by-name groups get nothing: there is no merge to
+  // undo, and a button that did nothing would be worse than no button.
+  onUnmerge?: () => void
 }) {
   const { t } = useI18n()
   const anyEnabled = group.members.some(m => m.enabled)
@@ -328,6 +332,25 @@ export function GroupHeaderCells({ group, rank, dragHandle, onToggleGroup, allRo
               : <Tooltip text={t('models.servedBy', { providers: group.members.map(m => memberProviderLabel(m, siblings)).join('\n') })}>
                   <span className="text-[10px] rounded-full px-1.5 py-0.5 bg-muted text-muted-foreground">{t('models.providerCount', { count: group.members.length })}</span>
                 </Tooltip>}
+            {/* Undo the whole merge in one press, from the row itself. The
+                selective version lives in merge mode; this is the "put it back
+                how it was" that should not cost four interactions. Fades in on
+                hover so it is not chrome on every merged row at rest. */}
+            {onUnmerge && (
+              <span
+                role="button"
+                tabIndex={0}
+                title={t('models.unmergeRowHint')}
+                onClick={e => { e.preventDefault(); e.stopPropagation(); onUnmerge() }}
+                onKeyDown={e => {
+                  if (e.key !== 'Enter' && e.key !== ' ') return
+                  e.preventDefault(); e.stopPropagation(); onUnmerge()
+                }}
+                className="text-[10px] rounded-full border px-1.5 py-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover/row:opacity-100"
+              >
+                {t('models.unmergeRow')}
+              </span>
+            )}
             {quota && (
               <span title={quota.title} className="text-[10px] rounded-full px-1.5 py-0.5 bg-muted text-muted-foreground tabular-nums">
                 {quota.text}
@@ -380,7 +403,7 @@ export function GroupHeaderCells({ group, rank, dragHandle, onToggleGroup, allRo
   )
 }
 
-export function SortableGroupRow({ group, rank, onToggleGroup, allRows, rateUsage, selected, onSelect }: {
+export function SortableGroupRow({ group, rank, onToggleGroup, allRows, rateUsage, selected, onSelect, onUnmerge }: {
   group: ModelGroupRow
   rank: number
   onToggleGroup: (memberIds: number[], enabled: boolean) => void
@@ -390,6 +413,7 @@ export function SortableGroupRow({ group, rank, onToggleGroup, allRows, rateUsag
    *  checkbox renders and the row keeps its full width. */
   selected?: boolean
   onSelect?: (key: string) => void
+  onUnmerge?: () => void
 }) {
   const { t } = useI18n()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `grp:${group.key}` })
@@ -425,7 +449,7 @@ export function SortableGroupRow({ group, rank, onToggleGroup, allRows, rateUsag
           />
         </td>
       )}
-      <GroupHeaderCells group={group} rank={rank} dragHandle={handle} onToggleGroup={onToggleGroup} allRows={allRows} rateUsage={rateUsage} />
+      <GroupHeaderCells group={group} rank={rank} dragHandle={handle} onToggleGroup={onToggleGroup} allRows={allRows} rateUsage={rateUsage} onUnmerge={onUnmerge} />
     </tr>
   )
 }

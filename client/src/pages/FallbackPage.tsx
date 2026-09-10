@@ -342,6 +342,10 @@ export default function FallbackPage() {
    * last week and one today are four separate decisions, and undoing today's
    * should not undo the others.
    */
+  /** True when an operator merge built this group, so a one-click undo means
+   *  something. A group the catalogue's own names produced has no merge to undo. */
+  const isMerged = (label: string) => aliasesFor(unify?.overrides.merges ?? [], label).length > 0
+
   const unmergeGroup = (group: { label: string }, key: string) => {
     const merges = unify?.overrides.merges ?? []
     const keys = key ? [key] : aliasesFor(merges, group.label)
@@ -748,6 +752,7 @@ export default function FallbackPage() {
                             rateUsage={rateUsageByModel}
                             selected={selectedGroups.has(g.key)}
                             onSelect={mergeMode ? toggleGroupSelected : undefined}
+                            onUnmerge={isMerged(g.label) ? () => unmergeGroup(g, '') : undefined}
                           />
                         ))}
                       </tbody>
@@ -782,7 +787,14 @@ export default function FallbackPage() {
                             />
                           </td>
                         )}
-                        <GroupHeaderCells group={g} rank={rankByKey.get(g.key) ?? 0} onToggleGroup={handleGroupToggle} allRows={rows} rateUsage={rateUsageByModel} />
+                        <GroupHeaderCells
+                          group={g}
+                          rank={rankByKey.get(g.key) ?? 0}
+                          onToggleGroup={handleGroupToggle}
+                          allRows={rows}
+                          rateUsage={rateUsageByModel}
+                          onUnmerge={isMerged(g.label) ? () => unmergeGroup(g, '') : undefined}
+                        />
                       </tr>
                     ))}
                   </tbody>

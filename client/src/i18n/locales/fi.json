@@ -302,7 +302,9 @@
     "mergeKeep": "Keep",
     "mergeConfirm": "Fold in {count}",
     "unmergeWhat": "What to take back out",
-    "unmergeAll": "— the whole group —"
+    "unmergeAll": "— the whole group —",
+    "unmergeRow": "unmerge",
+    "unmergeRowHint": "Undo this merge and put these models back as separate rows"
   },
   "strategies": {
     "explore": "Tutki mittaamattomia malleja",

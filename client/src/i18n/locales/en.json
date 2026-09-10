@@ -270,6 +270,8 @@
     "mergeInto": "Merge into {name}",
 "unmergeWhat": "What to take back out",
 "unmergeAll": "\u2014 the whole group \u2014",
+"unmergeRow": "unmerge",
+"unmergeRowHint": "Undo this merge and put these models back as separate rows",
     "unmergeGroup": "Unmerge",
     "showingCount": "{shown} of {total} models",
     "clearFilters": "Clear filters",
