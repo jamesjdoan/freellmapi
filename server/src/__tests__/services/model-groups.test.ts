@@ -246,3 +246,36 @@ describe('slug / model_id collisions resolve as an ordered union', () => {
     expect(reversed).toEqual(forward);
   });
 });
+
+describe('groupRows reports the keys that built a group', () => {
+  it('reports the folded group key a "Merge into" writes', () => {
+    // Exactly what the dashboard writes when two differently-named models are
+    // merged: the folded group's key, aimed at the survivor's label. Nothing in
+    // the finished group carries it, which is why the group has to report it —
+    // without this the merged row offered no way to undo the merge (#790).
+    const rows = [
+      row(1, 'google', 'gemma-4-26b-it', 'Gemma 4 26B IT', 6),
+      row(2, 'openrouter', 'google/gemma-4-26b:free', 'Gemma 4 26B (free)', 6),
+    ];
+    const groups = groupRows(rows, { merges: [{ into: 'Gemma 4 26B', keys: ['gemma 4 26b it'] }], splits: [] });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].members).toHaveLength(2);
+    expect(groups[0].userDefined).toBe(true);
+    expect(groups[0].mergedKeys).toEqual(['gemma 4 26b it']);
+  });
+
+  it('reports a member-id key, and nothing for a group the catalog built', () => {
+    const groups = groupRows(catalog(), {
+      merges: [{ into: 'Llama 3.3 70B', keys: ['cloudflare:@cf/meta/llama-3.3-70b-fp8-fast'] }],
+      splits: [],
+    });
+    const llama = groups.find(g => g.groupKey === 'llama 3.3 70b');
+    const oss = groups.find(g => g.groupKey === 'gpt oss 120b');
+
+    expect(llama?.mergedKeys).toEqual(['cloudflare:@cf/meta/llama-3.3-70b-fp8-fast']);
+    // Grouped purely by display name, so there is no merge to undo.
+    expect(oss?.members.length).toBeGreaterThan(1);
+    expect(oss?.mergedKeys).toEqual([]);
+  });
+});

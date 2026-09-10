@@ -54,6 +54,9 @@ export interface FallbackEntry {
   groupKey?: string
   canonicalId?: string
   groupLabel?: string
+  // Override keys that folded rows into this row's group. Server-computed: the
+  // finished group does not carry enough to work them out (see #790).
+  mergedKeys?: string[]
 }
 
 export type RoutingStrategy = 'priority' | 'balanced' | 'smartest' | 'fastest' | 'reliable' | 'custom'
@@ -417,6 +420,9 @@ export interface ModelGroupRow {
   key: string
   label: string
   members: Row[]
+  /** Override keys an undo would remove; empty for a group the catalog's own
+   *  display names produced, which has no merge to undo. */
+  mergedKeys: string[]
 }
 
 // Group merged rows by their server-assigned groupKey (or a per-row "solo" key
@@ -434,6 +440,7 @@ export function buildGroups(rows: Row[], isManual: boolean): ModelGroupRow[] {
   const groups = [...map.entries()].map(([key, members]) => ({
     key,
     label: members[0].groupLabel ?? members[0].displayName,
+    mergedKeys: [...new Set(members.flatMap(m => m.mergedKeys ?? []))],
     members: [...members].sort((a, b) => (isManual ? a.priority - b.priority : (b.score ?? 0) - (a.score ?? 0))),
   }))
   groups.sort((a, b) =>

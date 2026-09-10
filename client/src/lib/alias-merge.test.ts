@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addAlias, aliasesFor, foldedKeys, normalizeInto, removeAlias, unmergeGroupKeys, type AliasMerge } from './alias-merge'
+import { addAlias, aliasesFor, normalizeInto, removeAlias, unmergeGroupKeys, type AliasMerge } from './alias-merge'
 
 const merges: AliasMerge[] = [
   { into: 'GPT-4.1', keys: ['custom:gpt41-relay'] },
@@ -80,17 +80,9 @@ describe('removeAlias (#790)', () => {
   })
 })
 
-describe('group-identity merge matching', () => {
-  // Both entries are real, from a live install. The Super group's label
-  // ("Nemotron-3 Super") differs from its merge target ("Nemotron 3 Super
-  // 120B"), which is what a label match got wrong.
-  const superGroup = {
-    key: 'nemotron 3 super 120b',
-    members: [
-      { platform: 'nvidia', modelId: 'nvidia/nemotron-3-super-120b-a12b' },
-      { platform: 'ollama', modelId: 'nemotron-3-super' },
-    ],
-  }
+describe('undoing a merge', () => {
+  // Both entries are real, from a live install. The second is another group's
+  // business and must survive every edit to the first.
   const merges = [
     { into: 'Nemotron 3 Super 120B', keys: ['nemotron 3 super'] },
     {
@@ -103,18 +95,13 @@ describe('group-identity merge matching', () => {
     },
   ]
 
-  it('finds the entry whose target does not match the rendered label', () => {
-    expect(foldedKeys(merges, superGroup)).toEqual(['nemotron 3 super'])
-  })
-
   it('leaves every other group untouched when undoing the whole merge', () => {
-    // The bug this pins: undoing one group wiped an unrelated group's keys.
-    expect(unmergeGroupKeys(merges, superGroup, '')).toEqual([merges[1]])
+    // The live bug this pins: undoing one group wiped an unrelated group's keys.
+    expect(unmergeGroupKeys(merges, ['nemotron 3 super'], '')).toEqual([merges[1]])
   })
 
   it('takes out one key and keeps the rest of the same group', () => {
-    const g = { key: 'nemotron 3 ultra 550b', members: [] }
-    const next = unmergeGroupKeys(merges, g, 'kilo:nvidia/nemotron-3-ultra-550b-a55b:free')
+    const next = unmergeGroupKeys(merges, merges[1].keys, 'kilo:nvidia/nemotron-3-ultra-550b-a55b:free')
     expect(next).toHaveLength(2)
     expect(next[1].keys).toEqual([
       'nvidia:nvidia/nemotron-3-ultra-550b-a55b',
@@ -122,12 +109,13 @@ describe('group-identity merge matching', () => {
     ])
   })
 
-  it('matches an entry by a member it names, not only by target', () => {
-    const g = { key: 'some other label', members: [{ platform: 'nvidia', modelId: 'nvidia/nemotron-3-ultra-550b-a55b' }] }
-    expect(foldedKeys(merges, g)).toHaveLength(3)
+  it('removes a folded group key, which names neither the group nor a member', () => {
+    // What "Merge into" actually writes: the key of the group being folded in.
+    const folded = [{ into: 'Gemma 4 26B', keys: ['gemma 4 26b it'] }]
+    expect(unmergeGroupKeys(folded, ['gemma 4 26b it'], '')).toEqual([])
   })
 
-  it('reports nothing for a group the catalogue own names produced', () => {
-    expect(foldedKeys(merges, { key: 'gpt oss 120b', members: [{ platform: 'groq', modelId: 'openai/gpt-oss-120b' }] })).toEqual([])
+  it('is a no-op for a group the catalog built by name', () => {
+    expect(unmergeGroupKeys(merges, [], '')).toEqual(merges)
   })
 })

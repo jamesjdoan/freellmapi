@@ -51,49 +51,23 @@ export function removeAlias(merges: AliasMerge[], label: string, alias: string):
     .filter(m => m.keys.length > 0)
 }
 
-/** The shape of a rendered group this module needs: its grouping key and the
- *  `platform:modelId` identity of each row folded under it. */
-export interface GroupIdentity {
-  key: string
-  members: readonly { platform: string; modelId: string }[]
-}
-
 /**
- * The merge entries that built this group.
+ * Take keys back out of a group: one named key, or every key that built it.
  *
- * NOT matched on the group's label. The label is the representative member's
- * stripped display name, while `into` is whatever the operator merged toward,
- * and the two routinely differ: a real entry here stored
- * `into: "Nemotron 3 Super 120B"` while the group came out labelled
- * "Nemotron-3 Super", so a label match found nothing and the row offered no
- * undo for a merge that plainly existed.
+ * `groupKeys` comes from the server, which is the only place that knows them.
+ * A merge writes the *folded* group's key ("gemma 4 26b it"), and once the fold
+ * happens that key is neither the surviving group's key nor any member id, so
+ * working backwards from the rendered group finds nothing to remove. Matching
+ * on the group's label is no better: the label is the representative member's
+ * stripped display name and routinely differs from the merge target.
  *
- * Matched on grouping identity instead: an entry owns this group when its
- * target normalises to the group's key, or when one of its keys is that key or
- * names one of its members. Everything else is another group's business and
- * MUST come back untouched — this list is the whole catalog's overrides.
+ * Entries emptied by the edit are dropped (the schema needs at least one key);
+ * every other entry comes back untouched, since this list is the whole
+ * catalog's overrides and an undo here must not disturb another group.
  */
-export function mergesForGroup(merges: readonly AliasMerge[], group: GroupIdentity): AliasMerge[] {
-  const memberIds = new Set(group.members.map(m => `${m.platform}:${m.modelId}`))
-  return merges.filter(m =>
-    normalizeInto(m.into) === group.key
-    || m.keys.some(k => k === group.key || normalizeInto(k) === group.key || memberIds.has(k)))
-}
-
-/** Every key folded into this group, across whichever entries built it. */
-export function foldedKeys(merges: readonly AliasMerge[], group: GroupIdentity): string[] {
-  return [...new Set(mergesForGroup(merges, group).flatMap(m => m.keys))]
-}
-
-/**
- * Take keys back out of this group: one named key, or every key it holds when
- * `alias` is blank. Entries emptied by the edit are dropped (the schema needs
- * at least one key); entries belonging to other groups are returned as-is.
- */
-export function unmergeGroupKeys(merges: readonly AliasMerge[], group: GroupIdentity, alias: string): AliasMerge[] {
-  const owning = new Set(mergesForGroup(merges, group))
-  const drop = new Set(alias ? [alias] : [...owning].flatMap(m => m.keys))
+export function unmergeGroupKeys(merges: readonly AliasMerge[], groupKeys: readonly string[], alias: string): AliasMerge[] {
+  const drop = new Set(alias ? [alias] : groupKeys)
   return merges
-    .map(m => (owning.has(m) ? { ...m, keys: m.keys.filter(k => !drop.has(k)) } : m))
+    .map(m => ({ ...m, keys: m.keys.filter(k => !drop.has(k)) }))
     .filter(m => m.keys.length > 0)
 }

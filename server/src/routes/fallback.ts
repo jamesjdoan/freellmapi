@@ -232,10 +232,10 @@ fallbackRouter.get('/', (req: Request, res: Response) => {
   // Logical-model grouping per row, so the dashboard can collapse the same
   // model served by several providers into one expandable group. Always sent
   // (cheap); the client renders grouped only when its unify toggle is on.
-  const groupByDbId = new Map<number, { groupKey: string; canonicalId: string; groupLabel: string }>();
+  const groupByDbId = new Map<number, { groupKey: string; canonicalId: string; groupLabel: string; mergedKeys: string[] }>();
   for (const g of getModelGroups()) {
     for (const m of g.members) {
-      groupByDbId.set(m.model_db_id, { groupKey: g.groupKey, canonicalId: g.canonicalId, groupLabel: g.groupLabel });
+      groupByDbId.set(m.model_db_id, { groupKey: g.groupKey, canonicalId: g.canonicalId, groupLabel: g.groupLabel, mergedKeys: g.mergedKeys });
     }
   }
 
@@ -245,6 +245,9 @@ fallbackRouter.get('/', (req: Request, res: Response) => {
     return {
       modelDbId: r.model_db_id,
       groupKey: group?.groupKey,
+      // What an undo would remove. Sent per row because the client rebuilds the
+      // groups itself and cannot derive this (see tokenSourceForRow).
+      mergedKeys: group?.mergedKeys ?? [],
       canonicalId: group?.canonicalId,
       groupLabel: group?.groupLabel,
       priority: r.priority,

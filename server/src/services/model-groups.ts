@@ -91,6 +91,9 @@ export interface ModelGroup {
   // accident. A slug match on a name the user asserted themselves is a
   // first-class answer; one on an auto-derived slug is only a fallback.
   userDefined: boolean;
+  /** Override keys that folded rows into this group; empty when the catalog's
+   *  own display names produced it. These are what an undo removes. */
+  mergedKeys: string[];
 }
 
 // ── Settings accessors ───────────────────────────────────────────────────────
@@ -199,8 +202,17 @@ export function qualifiedMemberId(row: GroupableRow): string | null {
   return qualifiedModelMemberId(row.platform, row.model_id, row.endpoint_scope);
 }
 
-/** The grouping token plus whether an operator override chose it. */
-function tokenSourceForRow(row: GroupableRow, ov: UnifyOverrides): { token: string; userDefined: boolean } {
+/**
+ * The grouping token, whether an operator override chose it, and — when one
+ * did — the override key that matched.
+ *
+ * The key is reported because it is the only thing that can undo the merge, and
+ * it is NOT derivable from the finished group. A merge writes the folded
+ * group's key ("gemma 4 26b it"), which afterwards is neither the surviving
+ * group's key nor any member id, so a client trying to work backwards from the
+ * rendered group finds nothing to remove (#790).
+ */
+function tokenSourceForRow(row: GroupableRow, ov: UnifyOverrides): { token: string; userDefined: boolean; mergedKey?: string } {
   const mid = memberId(row);
   // A qualified id names ONE relay's copy, so an override written against it
   // must only move that copy. Plain member ids keep matching as before, which is
@@ -216,9 +228,14 @@ function tokenSourceForRow(row: GroupableRow, ov: UnifyOverrides): { token: stri
   }
 
   const base = normalizeGroupKey(row.display_name);
-  const merge = ov.merges.find(mg => mg.keys.some(k => names(k) || normalizeGroupKey(k) === base));
+  let mergedKey: string | undefined;
+  const merge = ov.merges.find(mg => {
+    const hit = mg.keys.find(k => names(k) || normalizeGroupKey(k) === base);
+    if (hit !== undefined) mergedKey = hit;
+    return hit !== undefined;
+  });
   return merge
-    ? { token: normalizeGroupKey(merge.into), userDefined: true }
+    ? { token: normalizeGroupKey(merge.into), userDefined: true, mergedKey }
     : { token: base, userDefined: false };
 }
 
@@ -243,17 +260,18 @@ function assignCanonicalIds(groups: ModelGroup[]): void {
 export function groupRows(rows: GroupableRow[], ov: UnifyOverrides): ModelGroup[] {
   const map = new Map<string, ModelGroup>();
   for (const row of rows) {
-    const { token: key, userDefined } = tokenSourceForRow(row, ov);
+    const { token: key, userDefined, mergedKey } = tokenSourceForRow(row, ov);
     let g = map.get(key);
     if (!g) {
       g = {
         groupKey: key, canonicalId: '', groupLabel: stripProviderSuffix(row.display_name),
-        members: [], userDefined: false,
+        members: [], userDefined: false, mergedKeys: [],
       };
       map.set(key, g);
     }
     g.members.push(row);
     g.userDefined ||= userDefined;
+    if (mergedKey !== undefined && !g.mergedKeys.includes(mergedKey)) g.mergedKeys.push(mergedKey);
   }
 
   // Representative label = the best (lowest intelligence_rank) member, tiebroken
