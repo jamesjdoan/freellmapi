@@ -297,10 +297,10 @@ function applyCatalogInner(db: Db, catalog: Catalog): NonNullable<SyncResult['co
   const insertModel = db.prepare(`
     INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, size_label,
                         rpm_limit, rpd_limit, tpm_limit, tpd_limit, monthly_token_budget, context_window,
-                        enabled, supports_vision, supports_tools, source)
+                        enabled, supports_vision, supports_tools, source, first_seen_at)
     VALUES (@platform, @modelId, @displayName, @intelligenceRank, @speedRank, @sizeLabel,
             @rpm, @rpd, @tpm, @tpd, @monthlyTokenBudget, @contextWindow,
-            @enabled, @supportsVision, @supportsTools, 'catalog')
+            @enabled, @supportsVision, @supportsTools, 'catalog', datetime('now'))
   `);
 
   // Generative-media models go to their own table (never the chat router's pool).

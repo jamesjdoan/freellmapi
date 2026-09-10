@@ -47,6 +47,7 @@ import { Tooltip } from '@/components/tooltip'
 import { PenaltyInspector } from '@/components/penalty-inspector'
 import { PeakHoursControls } from '@/components/peak-hours-controls'
 import { ChainManager } from '@/components/chain-manager'
+import { CatalogueChangesPanel } from '@/components/catalogue-changes'
 
 // `tKey` is the i18n suffix under `strategies.*` (label) and `strategies.*Blurb`.
 // It differs from the routing `key` for Manual, whose strategy id is 'priority'.
@@ -473,6 +474,12 @@ export default function FallbackPage() {
           )}
 
         </section>
+
+        {/* What the catalogue gained and lost. Sits above the chain manager
+            because it is the input to editing a chain: a model that arrived and
+            auto-routed, or a retirement that took a chain head with it, is the
+            reason you are here. Renders nothing when neither happened. */}
+        <CatalogueChangesPanel />
 
         {/* Named fallback chains (#960/#895): list/create/activate/delete.
             Activating a chain makes the table below edit that chain. */}

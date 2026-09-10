@@ -15,7 +15,6 @@
     "switchToChinese": "Switch to Chinese",
     "switchToEnglish": "Switch to English",
     "modelsMenu": "Browse model types",
-    "playgroundMenu": "Open Playground or Agents",
     "logs": "Logs",
     "analyticsMenu": "Analytics pages",
     "quota": "Quota"
@@ -776,6 +775,17 @@
     "cacheHitRate": "Cache hit rate",
     "cacheSavedTokens": "{tokens} tokens saved",
     "cacheHitRateHint": "{hits} hits vs {misses} misses since the server started · {requests} provider calls avoided"
+  },
+  "catalogue": {
+    "changesTitle": "Catalogue changes",
+    "changesHint": "Models added since {since}, and retirements not yet acknowledged.",
+    "untracked": "{count} models predate arrival tracking.",
+    "arrived": "Arrived ({count})",
+    "departed": "Retired ({count})",
+    "autoRouted": "already routing — {chains}",
+    "notRouted": "not routed",
+    "lostFrom": "lost from {chains}",
+    "acknowledge": "Acknowledge"
   },
   "quota": {
     "title": "Quota",

@@ -133,15 +133,16 @@ export function recordCatalogModelTombstone(
   kind: CatalogModelKind,
   platform: string,
   modelId: string,
-  options: { source?: CatalogTombstoneSource; reason?: string | null } = {},
+  options: { source?: CatalogTombstoneSource; reason?: string | null; chains?: string | null } = {},
 ): void {
   const source: CatalogTombstoneSource = options.source ?? 'user';
   db.prepare(`
-    INSERT INTO catalog_model_tombstones (kind, platform, model_id, source, reason)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO catalog_model_tombstones (kind, platform, model_id, source, reason, chains_json)
+    VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(kind, platform, model_id)
-    DO UPDATE SET created_at = datetime('now'), source = excluded.source, reason = excluded.reason
-  `).run(kind, platform, modelId, source, options.reason ?? null);
+    DO UPDATE SET created_at = datetime('now'), source = excluded.source, reason = excluded.reason,
+                  chains_json = excluded.chains_json
+  `).run(kind, platform, modelId, source, options.reason ?? null, options.chains ?? null);
   // A user deletion drops their local metadata edits with the row. An upstream
   // retirement keeps the row, so it keeps the overrides too — they must survive
   // if the model is reinstated.
@@ -170,10 +171,43 @@ export function retireCatalogModelUpstream(
 ): boolean {
   const existing = getCatalogModelTombstone(db, 'chat', platform, modelId);
   if (existing) return false;
-  recordCatalogModelTombstone(db, 'chat', platform, modelId, { source: 'upstream_eol', reason });
+  // What this retirement costs, captured BEFORE the rows below are switched
+  // off. A model leaving matters because of what went with it: "gemini-2.5-pro
+  // retired" and "gemini-2.5-pro retired, it was Vision #1 and Frontier #3" are
+  // the same event and completely different problems.
+  //
+  // It cannot be read back afterwards. The disable below leaves the chain rows
+  // in place with enabled = 0, indistinguishable from a route the operator
+  // switched off themselves — so the moment of retirement is the only chance to
+  // record it.
+  recordCatalogModelTombstone(db, 'chat', platform, modelId, {
+    source: 'upstream_eol',
+    reason,
+    chains: serializeChainMembership(db, modelDbId),
+  });
   db.prepare('UPDATE fallback_config SET enabled = 0 WHERE model_db_id = ?').run(modelDbId);
   db.prepare('UPDATE profile_models SET enabled = 0 WHERE model_db_id = ?').run(modelDbId);
   return true;
+}
+
+export interface RetiredChainMembership { chain: string; priority: number }
+
+/** The chains this model was actively serving, with its position in each.
+ *  Null when it was in none — an unrouted model leaving costs nothing. */
+function serializeChainMembership(db: Db, modelDbId: number): string | null {
+  try {
+    const rows = db.prepare(`
+      SELECT p.name AS chain, pm.priority AS priority
+        FROM profile_models pm
+        JOIN profiles p ON p.id = pm.profile_id
+       WHERE pm.model_db_id = ? AND pm.enabled = 1
+       ORDER BY p.sort_order, pm.priority
+    `).all(modelDbId) as RetiredChainMembership[];
+    return rows.length === 0 ? null : JSON.stringify(rows);
+  } catch {
+    // A retirement must still be recorded when its annotation cannot be.
+    return null;
+  }
 }
 
 /**

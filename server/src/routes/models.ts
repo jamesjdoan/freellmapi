@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { getCatalogueChanges, acknowledgeDeparture } from '../services/catalogue-changes.js';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { getDb } from '../db/index.js';
@@ -280,4 +281,44 @@ modelsRouter.get('/', (_req: Request, res: Response) => {
   }));
 
   res.json(result);
+});
+
+/**
+ * What the catalogue gained and lost.
+ *
+ * Read-only, and deliberately so: it reports that two models arrived and are
+ * already serving, or that a retirement took a chain head with it, and leaves
+ * the decision to the operator. Chain membership lives in a reviewed source
+ * file (`data/routing-curation.ts`); a panel that edited it from here would
+ * recreate `auto_include_new_models` — the very drift this surface exists to
+ * make visible — behind a different button.
+ */
+modelsRouter.get('/changes', (req: Request, res: Response) => {
+  const raw = typeof req.query.sinceDays === 'string' ? Number(req.query.sinceDays) : NaN;
+  // Clamped rather than rejected: this is a dashboard control, and a nonsense
+  // value should show the default window, not a 400.
+  const sinceDays = Number.isFinite(raw) && raw > 0 ? Math.min(365, Math.floor(raw)) : 30;
+  res.json(getCatalogueChanges(sinceDays));
+});
+
+const acknowledgeSchema = z.object({
+  platform: z.string().min(1, 'platform is required'),
+  modelId: z.string().min(1, 'modelId is required'),
+});
+
+/** Mark a retirement as dealt with, so the panel stops reporting it as news.
+ *  Without this every departure stays listed forever and the surface meant to
+ *  say "something broke" becomes a list nobody reads. */
+modelsRouter.post('/changes/acknowledge', (req: Request, res: Response) => {
+  const parsed = acknowledgeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
+    return;
+  }
+  const ok = acknowledgeDeparture(parsed.data.platform, parsed.data.modelId);
+  if (!ok) {
+    res.status(404).json({ error: { message: 'No upstream retirement recorded for that model' } });
+    return;
+  }
+  res.json({ success: true });
 });

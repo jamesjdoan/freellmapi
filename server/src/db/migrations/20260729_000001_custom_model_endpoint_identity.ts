@@ -74,8 +74,34 @@ function childTablesOfModels(db: Db): string[] {
     .map(t => t.name);
 }
 
+/**
+ * Columns the live `models` table has that MODELS_COLUMNS does not name.
+ *
+ * The base schema above is deliberately written out in full so the rebuilt
+ * table is auditable here. That is fine for the columns this migration knows
+ * about and silently destructive for every one added after it: a later
+ * `ALTER TABLE models ADD COLUMN` survives until this rebuild runs, then
+ * vanishes. `models.first_seen_at` was the first casualty, caught by the
+ * round-trip test asserting this rebuild is lossless.
+ *
+ * So later columns are carried through: re-declared on the new table with the
+ * type SQLite reports for them, and included in the copy. Their DEFAULT and
+ * NOT NULL are not recoverable from `table_info` in general, so they come
+ * across nullable with no default — which is what an additive column added by
+ * a later migration is, and those migrations are all guarded by `hasColumn`,
+ * so a re-run restores the intended definition.
+ */
+function laterColumnsOf(db: Db, known: string): { name: string; type: string }[] {
+  const declared = new Set(known.split(',').map(c => c.trim()));
+  return (db.prepare('PRAGMA table_info(models)').all() as { name: string; type: string }[])
+    .filter(c => !declared.has(c.name))
+    .map(c => ({ name: c.name, type: c.type || 'TEXT' }));
+}
+
 function rebuildModels(db: Db, extraColumns: string, copiedColumns: string, unique: string): void {
   const children = childTablesOfModels(db);
+  // Computed BEFORE the rebuild: afterwards the old table is gone.
+  const later = laterColumnsOf(db, `${copiedColumns}, endpoint_scope`);
   // AUTOINCREMENT's high-water mark. DROP TABLE takes the sqlite_sequence row
   // with it, and copying rows back only pushes the counter to the highest id
   // PRESENT — so a table whose top rows were deleted (catalog sync prunes
@@ -89,12 +115,18 @@ function rebuildModels(db: Db, extraColumns: string, copiedColumns: string, uniq
     db.exec(`DELETE FROM "${child}"`);
   }
 
+  const carried = [copiedColumns, ...later.map(c => c.name)].join(', ');
   db.exec(`
-    CREATE TABLE models_endpoint_identity (${MODELS_COLUMNS}${extraColumns},
+    CREATE TABLE models_endpoint_identity (${MODELS_COLUMNS}${extraColumns}${
+      // Same-line, exactly as \`ALTER TABLE ADD COLUMN\` writes it, so a
+      // down/up round trip reproduces the schema TEXT byte for byte and the
+      // round-trip test can keep comparing SQL rather than a looser shape.
+      later.map(c => `, ${c.name} ${c.type}`).join('')
+    },
       ${unique}
     );
-    INSERT INTO models_endpoint_identity (${copiedColumns})
-      SELECT ${copiedColumns} FROM models;
+    INSERT INTO models_endpoint_identity (${carried})
+      SELECT ${carried} FROM models;
     DROP TABLE models;
     ALTER TABLE models_endpoint_identity RENAME TO models;
   `);
