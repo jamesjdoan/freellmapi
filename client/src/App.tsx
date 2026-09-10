@@ -66,9 +66,13 @@ const queryClient = new QueryClient({
   }),
 })
 
+// Six top-bar entries. Playground and Agents are deliberately absent: they are
+// the two least-used pages and they already live in the overflow (…) menu, so
+// a top-bar entry for them was the same destination reachable two ways. The
+// first attempt at trimming the bar folded Agents INTO a Playground entry,
+// which left the pair in both places at once rather than one.
 const navItems = [
   { to: '/models', labelKey: 'nav.models' },
-  { to: '/playground', labelKey: 'nav.playground' },
   { to: '/keys', labelKey: 'nav.keys' },
   { to: '/analytics', labelKey: 'nav.analytics' },
   { to: "/quota", labelKey: "nav.quota" },
@@ -107,14 +111,8 @@ const navMenus: Record<
     items: modelItems,
     isActive: (pathname) => pathname.startsWith('/models'),
   },
-  '/playground': {
-    ariaKey: 'nav.playgroundMenu',
-    items: [
-      { to: '/playground', labelKey: 'nav.playground' },
-      { to: '/agents', labelKey: 'nav.agents' },
-    ],
-    isActive: (pathname) => pathname === '/playground' || pathname === '/agents',
-  },
+  // No '/playground' entry: it is not in navItems, so a menu keyed to it would
+  // never render. Both pages are reached from the overflow menu.
   '/analytics': {
     ariaKey: 'nav.analyticsMenu',
     items: analyticsItems,
@@ -372,6 +370,22 @@ function Navbar() {
                     )
                   })}
                 </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                {/* Mirrors the desktop overflow (…) menu. Mobile has no such
+                    menu — this dropdown IS the whole nav — so dropping these
+                    from navItems would leave both pages unreachable here. */}
+                <DropdownMenuItem
+                  onClick={() => navigate('/playground')}
+                  className={location.pathname === '/playground' ? 'bg-accent text-accent-foreground font-medium' : undefined}
+                >
+                  {t('nav.playground')}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => navigate('/agents')}
+                  className={location.pathname === '/agents' ? 'bg-accent text-accent-foreground font-medium' : undefined}
+                >
+                  {t('nav.agents')}
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => setExtensionsOpen(true)}>
                   <Blocks />

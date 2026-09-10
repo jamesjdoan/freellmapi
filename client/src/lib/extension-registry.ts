@@ -102,8 +102,8 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
   {
     id: 'nav-playground-agents-menu',
     title: 'Condensed top navigation',
-    summary: 'Playground and Agents share one top-bar entry so the bar keeps six items instead of seven. The label still navigates to the Playground; the chevron on desktop and the submenu on mobile reach Agents.',
-    settingsLocation: 'Navigation: Playground entry (chevron on desktop, submenu on mobile)',
+    summary: 'Playground and Agents are reached from the overflow (…) menu rather than the top bar, which keeps five entries. Folding them into a shared top-bar entry was the first attempt and left both pages in two places at once.',
+    settingsLocation: 'Navigation: overflow (…) menu on desktop, main menu on mobile',
     destinations: [
       { kind: 'internal', label: 'Open playground', href: '/playground' },
       { kind: 'internal', label: 'Open agents', href: '/agents' },
