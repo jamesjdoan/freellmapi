@@ -767,16 +767,16 @@
     "cacheHitRate": "Taxa de acerto do cache",
     "cacheSavedTokens": "{tokens} tokens economizados",
     "cacheHitRateHint": "{hits} acertos contra {misses} erros desde o início do servidor · {requests} chamadas ao provedor evitadas",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "os termos de cota o moveram #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "sondagem de exploração",
+      "sticky": "sessão fixa",
+      "pinned": "fixado pela solicitação"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "margem de cota {pct} %",
+    "routingHarvest": "cota vencendo sem uso",
+    "routingDiversity": "distribuição ({pct} % de amortecimento)",
+    "routingInFlight": "{pct} % do trabalho em andamento neste grupo"
   },
   "quota": {
     "title": "Cota",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Excluir",
     "resetInferredMark": "(est.)",
     "resetInferredHint": "Previsto a partir dos limites de reinício observados — este provedor não envia horário de reinício. Preciso dentro do intervalo de sondagem.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
+    "poolMembers": "{count} modelos",
+    "poolMembersOne": "1 modelo",
     "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "locallyCountedHint": "O provedor nunca informou este grupo; a contagem é nossa, contra um limite que mantemos."
   },
   "logs": {
     "title": "Logs",

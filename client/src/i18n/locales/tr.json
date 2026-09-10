@@ -767,16 +767,16 @@
     "cacheHitRate": "Önbellek isabet oranı",
     "cacheSavedTokens": "{tokens} jeton tasarruf edildi",
     "cacheHitRateHint": "Sunucu başlatıldığından beri {hits} isabet, {misses} ıskalama · {requests} sağlayıcı çağrısından kaçınıldı",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "kota koşulları onu #{from} → #{to} taşıdı",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "keşif sondası",
+      "sticky": "sabit oturum",
+      "pinned": "istekle sabitlendi"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "kota payı {pct} %",
+    "routingHarvest": "tahsis kullanılmadan doluyor",
+    "routingDiversity": "dağıtım ({pct} % sönüm)",
+    "routingInFlight": "süren işin {pct} %'i bu havuzda"
   },
   "quota": {
     "title": "Kota",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Sil",
     "resetInferredMark": "(tahmini)",
     "resetInferredHint": "Gözlenen sıfırlama sınırlarından tahmin edildi — bu sağlayıcı sıfırlama zamanı göndermiyor. Yoklama aralığı kadar hassastır.",
-    "poolMembers": "{count} models",
+    "poolMembers": "{count} model",
     "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "locallyCountedMark": "·yerel",
+    "locallyCountedHint": "Sağlayıcı bu havuzu hiç bildirmedi; sayım bizim, kendi tuttuğumuz bir sınıra karşı."
   },
   "logs": {
     "title": "Günlükler",

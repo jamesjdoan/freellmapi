@@ -767,16 +767,16 @@
     "cacheHitRate": "ಕ್ಯಾಶ್ ಹಿಟ್ ದರ",
     "cacheSavedTokens": "{tokens} ಟೋಕನ್‌ಗಳ ಉಳಿತಾಯ",
     "cacheHitRateHint": "ಸರ್ವರ್ ಪ್ರಾರಂಭವಾದಾಗಿನಿಂದ {hits} ಹಿಟ್‌ಗಳು ಮತ್ತು {misses} ಮಿಸ್‌ಗಳು · {requests} ಪೂರೈಕೆದಾರ ಕರೆಗಳನ್ನು ತಪ್ಪಿಸಲಾಗಿದೆ",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "ಕೋಟಾ ಷರತ್ತುಗಳು ಇದನ್ನು #{from} → #{to} ಸರಿಸಿದವು",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "ಅನ್ವೇಷಣಾ ಪರೀಕ್ಷೆ",
+      "sticky": "ಸ್ಥಿರ ಸೆಷನ್",
+      "pinned": "ವಿನಂತಿಯಿಂದ ಪಿನ್ ಮಾಡಲಾಗಿದೆ"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "ಉಳಿದ ಕೋಟಾ {pct}%",
+    "routingHarvest": "ಕೋಟಾ ಬಳಸದೆ ಮುಗಿಯುತ್ತಿದೆ",
+    "routingDiversity": "ಹರಡುವಿಕೆ ({pct}% ಇಳಿಕೆ)",
+    "routingInFlight": "ನಡೆಯುತ್ತಿರುವ ಕೆಲಸದ {pct}% ಈ ಪೂಲ್‌ನಲ್ಲಿ"
   },
   "quota": {
     "title": "ಕೋಟಾ",
@@ -869,7 +869,7 @@
     "colMetric": "ಮೆಟ್ರಿಕ್",
     "colScope": "ವ್ಯಾಪ್ತಿ",
     "colSource": "ಮೂಲ",
-    "locallyCounted": "(ಸ್ಥಳೀಯವಾಗಿ ಎಣಿಸಲಾಗಿದೆ)",
+    "locallyCounted": "(ಸ್ಥಳೀಯ ಎಣಿಕೆ)",
     "colWindow": "ವಿಂಡೋ",
     "inferredWindow": "~{period} ({samples} ರಿಂದ ಅಂದಾಜು)",
     "period_minute": "ಪ್ರತಿ ನಿಮಿಷಕ್ಕೆ",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "ಅಳಿಸಿ",
     "resetInferredMark": "(ಅಂದಾಜು)",
     "resetInferredHint": "ಗಮನಿಸಿದ ಮರುಹೊಂದಿಕೆ ಗಡಿಗಳಿಂದ ಊಹಿಸಲಾಗಿದೆ — ಈ ಪೂರೈಕೆದಾರ ಮರುಹೊಂದಿಕೆ ಸಮಯವನ್ನು ಕಳುಹಿಸುವುದಿಲ್ಲ. ಪೋಲಿಂಗ್ ಅಂತರದೊಳಗೆ ನಿಖರ.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} ಮಾದರಿಗಳು",
+    "poolMembersOne": "1 ಮಾದರಿ",
+    "locallyCountedMark": "·ಸ್ಥಳೀಯ",
+    "locallyCountedHint": "ಪೂರೈಕೆದಾರರು ಈ ಪೂಲ್ ಬಗ್ಗೆ ಎಂದೂ ವರದಿ ಮಾಡಿಲ್ಲ; ಈ ಎಣಿಕೆ ನಮ್ಮದೇ, ನಾವು ಇಟ್ಟುಕೊಂಡ ಮಿತಿಗೆ ಎದುರಾಗಿ."
   },
   "logs": {
     "title": "ಲಾಗ್‌ಗಳು",
@@ -1262,8 +1262,8 @@
     "departed": "ritirato ({count})",
     "autoRouted": "già instradato — {chains}",
     "notRouted": "non instradato",
-    "lostFrom": "perso da {chains}",
+    "lostFrom": "{chains} ನಿಂದ ಕಳೆದುಹೋಯಿತು",
     "acknowledge": "conferma",
-    "changesHint": "Models added since {since}, and retirements not yet acknowledged."
+    "changesHint": "{since} ರಿಂದ ಸೇರಿಸಲಾದ ಮಾದರಿಗಳು, ಮತ್ತು ಇನ್ನೂ ಸ್ವೀಕರಿಸದ ತೆಗೆದುಹಾಕುವಿಕೆಗಳು."
   }
 }

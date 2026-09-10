@@ -610,8 +610,8 @@
     "bulkDeleteConfirm": "حذف {count}؟",
     "bulkResult": "{done} به‌روزرسانی شد؛ {failed} ناموفق.",
     "bulkDeleteResult": "{done} حذف شد؛ {failed} ناموفق.",
-    "churnWindow": "{days}d",
-    "churnAria": "{added} added, {lost} retired in the last {days} days"
+    "churnWindow": "{days} روز",
+    "churnAria": "{added} افزوده، {lost} حذف در {days} روز گذشته"
   },
   "backups": {
     "title": "Backups",
@@ -767,16 +767,16 @@
     "cacheHitRate": "نرخ اصابت حافظه نهان",
     "cacheSavedTokens": "{tokens} توکن صرفه‌جویی شد",
     "cacheHitRateHint": "{hits} اصابت در برابر {misses} خطا از زمان راه‌اندازی سرور · {requests} فراخوانی ارائه‌دهنده صرفه‌جویی شد",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "شرایط سهمیه آن را #{from} → #{to} جابه‌جا کرد",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "کاوش آزمایشی",
+      "sticky": "نشست ثابت",
+      "pinned": "سنجاق‌شده با درخواست"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "سهمیه باقی‌مانده {pct}%",
+    "routingHarvest": "سهمیه بدون استفاده در حال انقضا",
+    "routingDiversity": "پراکندگی ({pct}% کاهش)",
+    "routingInFlight": "{pct}% کار در جریان روی این استخر"
   },
   "quota": {
     "title": "سهمیه",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "حذف",
     "resetInferredMark": "(تخمینی)",
     "resetInferredHint": "پیش‌بینی‌شده از مرزهای بازنشانی مشاهده‌شده — این ارائه‌دهنده زمان بازنشانی ارسال نمی‌کند. دقت در حد فاصلهٔ نمونه‌برداری.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} مدل",
+    "poolMembersOne": "۱ مدل",
+    "locallyCountedMark": "·محلی",
+    "locallyCountedHint": "ارائه‌دهنده هرگز این استخر را گزارش نکرده است؛ این شمارش از خودمان است، در برابر حدی که خودمان نگه می‌داریم."
   },
   "logs": {
     "title": "لاگ‌ها",
@@ -1256,14 +1256,14 @@
     "curatedHint": "New catalog models are not added to this chain automatically."
   },
   "catalogue": {
-    "changesTitle": "Catalogue changes",
-    "changesHint": "Models added since {since}, and retirements not yet acknowledged.",
-    "untracked": "{count} models predate arrival tracking.",
-    "arrived": "Arrived ({count})",
-    "departed": "Retired ({count})",
-    "autoRouted": "already routing — {chains}",
-    "notRouted": "not routed",
-    "lostFrom": "lost from {chains}",
-    "acknowledge": "Acknowledge"
+    "changesTitle": "تغییرات فهرست",
+    "changesHint": "مدل‌های افزوده‌شده از {since}، و حذف‌هایی که هنوز تأیید نشده‌اند.",
+    "untracked": "{count} مدل پیش از آغاز ثبت ورود وجود داشته‌اند.",
+    "arrived": "افزوده‌شده ({count})",
+    "departed": "حذف‌شده ({count})",
+    "autoRouted": "از قبل مسیریابی‌شده — {chains}",
+    "notRouted": "مسیریابی‌نشده",
+    "lostFrom": "از {chains} از دست رفت",
+    "acknowledge": "تأیید"
   }
 }

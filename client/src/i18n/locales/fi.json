@@ -610,8 +610,8 @@
     "bulkDeleteConfirm": "Poistetaanko {count}?",
     "bulkResult": "Päivitetty {done}; epäonnistui {failed}.",
     "bulkDeleteResult": "Poistettu {done}; epäonnistui {failed}.",
-    "churnWindow": "{days}d",
-    "churnAria": "{added} added, {lost} retired in the last {days} days"
+    "churnWindow": "{days} pv",
+    "churnAria": "{added} lisätty, {lost} poistettu viimeisten {days} päivän aikana"
   },
   "backups": {
     "title": "Backups",
@@ -767,16 +767,16 @@
     "cacheHitRate": "Välimuistin osumaprosentti",
     "cacheSavedTokens": "{tokens} tokenia säästetty",
     "cacheHitRateHint": "{hits} osumaa vs. {misses} ohitusta palvelimen käynnistyksestä · {requests} palveluntarjoajan kutsua vältetty",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "kvoottiehdot siirsivät sen #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "tutkiva koe",
+      "sticky": "kiinteä istunto",
+      "pinned": "kiinnitetty pyynnössä"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "kvoottitilaa {pct} %",
+    "routingHarvest": "käyttämätön kvootti umpeutuu",
+    "routingDiversity": "hajautus ({pct} % vaimennus)",
+    "routingInFlight": "{pct} % käynnissä olevasta työstä tässä altaassa"
   },
   "quota": {
     "title": "Kvootti",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Poista",
     "resetInferredMark": "(arvio)",
     "resetInferredHint": "Ennustettu havaituista nollausrajoista — tämä tarjoaja ei lähetä nollausaikaa. Tarkkuus kyselyvälin rajoissa.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} mallia",
+    "poolMembersOne": "1 malli",
+    "locallyCountedMark": "·paikall.",
+    "locallyCountedHint": "Palveluntarjoaja ei ole koskaan ilmoittanut tätä allasta; laskenta on omamme, omaa rajaa vasten."
   },
   "logs": {
     "title": "Lokit",
@@ -1256,14 +1256,14 @@
     "curatedHint": "New catalog models are not added to this chain automatically."
   },
   "catalogue": {
-    "changesTitle": "Catalogue changes",
-    "changesHint": "Models added since {since}, and retirements not yet acknowledged.",
-    "untracked": "{count} models predate arrival tracking.",
-    "arrived": "Arrived ({count})",
-    "departed": "Retired ({count})",
-    "autoRouted": "already routing — {chains}",
-    "notRouted": "not routed",
-    "lostFrom": "lost from {chains}",
-    "acknowledge": "Acknowledge"
+    "changesTitle": "Luettelon muutokset",
+    "changesHint": "Mallit, jotka on lisätty {since} jälkeen, ja vielä vahvistamattomat poistot.",
+    "untracked": "{count} mallia on saapumisen seurantaa vanhempia.",
+    "arrived": "Saapuneet ({count})",
+    "departed": "Poistetut ({count})",
+    "autoRouted": "jo reitityksessä — {chains}",
+    "notRouted": "ei reitityksessä",
+    "lostFrom": "menetetty kohteesta {chains}",
+    "acknowledge": "Vahvista"
   }
 }

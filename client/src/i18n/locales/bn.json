@@ -767,16 +767,16 @@
     "cacheHitRate": "ক্যাশ হিট রেট",
     "cacheSavedTokens": "{tokens} টোকেন সাশ্রয়",
     "cacheHitRateHint": "সার্ভার চালুর পর থেকে {hits} হিট বনাম {misses} মিস · {requests} প্রোভাইডার কল এড়ানো হয়েছে",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "কোটার শর্ত এটিকে #{from} → #{to} সরিয়েছে",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "অনুসন্ধানী পরীক্ষা",
+      "sticky": "স্থির সেশন",
+      "pinned": "অনুরোধে পিন করা"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "অবশিষ্ট কোটা {pct}%",
+    "routingHarvest": "কোটা অব্যবহৃত অবস্থায় শেষ হচ্ছে",
+    "routingDiversity": "বিস্তার ({pct}% হ্রাস)",
+    "routingInFlight": "চলমান কাজের {pct}% এই পুলে"
   },
   "quota": {
     "title": "কোটা",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "মুছুন",
     "resetInferredMark": "(আনু.)",
     "resetInferredHint": "পর্যবেক্ষিত রিসেট সীমানা থেকে অনুমান করা — এই প্রোভাইডার কোনো রিসেট সময় পাঠায় না। পোলিং ইন্টারভালের মধ্যে নির্ভুল।",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count}টি মডেল",
+    "poolMembersOne": "১টি মডেল",
+    "locallyCountedMark": "·স্থানীয়",
+    "locallyCountedHint": "প্রদানকারী এই পুলের কথা কখনও জানায়নি; এই গণনা আমাদের নিজের, আমরা যে সীমা রাখি তার বিপরীতে।"
   },
   "logs": {
     "title": "লগ",

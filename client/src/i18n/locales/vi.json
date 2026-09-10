@@ -767,16 +767,16 @@
     "cacheHitRate": "Tỷ lệ trúng bộ nhớ đệm",
     "cacheSavedTokens": "Tiết kiệm {tokens} token",
     "cacheHitRateHint": "{hits} lần trúng so với {misses} lần trượt kể từ khi máy chủ khởi động · tránh được {requests} lượt gọi nhà cung cấp",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "điều kiện hạn mức đã chuyển nó #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "thăm dò khám phá",
+      "sticky": "phiên cố định",
+      "pinned": "ghim theo yêu cầu"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "hạn mức còn {pct}%",
+    "routingHarvest": "hạn mức sắp hết hạn mà chưa dùng",
+    "routingDiversity": "phân tán ({pct}% giảm)",
+    "routingInFlight": "{pct}% công việc đang chạy trên nhóm này"
   },
   "quota": {
     "title": "Hạn mức",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Xóa",
     "resetInferredMark": "(ước tính)",
     "resetInferredHint": "Dự đoán từ các mốc đặt lại quan sát được — nhà cung cấp này không gửi thời điểm đặt lại. Độ chính xác trong phạm vi chu kỳ thăm dò.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} mô hình",
+    "poolMembersOne": "1 mô hình",
+    "locallyCountedMark": "·cục bộ",
+    "locallyCountedHint": "Nhà cung cấp chưa bao giờ báo cáo nhóm này; số đếm là của chúng ta, so với giới hạn mà chúng ta tự giữ."
   },
   "logs": {
     "title": "Nhật ký",

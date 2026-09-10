@@ -767,16 +767,16 @@
     "cacheHitRate": "快取命中率",
     "cacheSavedTokens": "已節省 {tokens} Token",
     "cacheHitRateHint": "自伺服器啟動以來命中 {hits} 次、未命中 {misses} 次 · 省下 {requests} 次供應商呼叫",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "配額因素將其自 #{from} 移至 #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "探索性試探",
+      "sticky": "黏著工作階段",
+      "pinned": "由請求指定"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "配額餘量 {pct}%",
+    "routingHarvest": "額度即將到期且未使用",
+    "routingDiversity": "分散（{pct}% 衰減）",
+    "routingInFlight": "進行中請求的 {pct}% 在此集區"
   },
   "quota": {
     "title": "配額",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "刪除",
     "resetInferredMark": "（推估）",
     "resetInferredHint": "依觀察到的重設邊界預測 — 此供應商未提供重設時間。誤差在輪詢間隔之內。",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} 個模型",
+    "poolMembersOne": "1 個模型",
+    "locallyCountedMark": "·本機",
+    "locallyCountedHint": "供應商從未回報此集區；此計數由本機統計，對應我們自己保存的上限。"
   },
   "logs": {
     "title": "日誌",

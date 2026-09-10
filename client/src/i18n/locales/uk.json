@@ -767,16 +767,16 @@
     "cacheHitRate": "Частка влучань у кеш",
     "cacheSavedTokens": "Заощаджено {tokens} токенів",
     "cacheHitRateHint": "{hits} влучань проти {misses} промахів від запуску сервера · уникнено {requests} викликів до постачальника",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "умови квоти перемістили її #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "дослідна проба",
+      "sticky": "закріплена сесія",
+      "pinned": "закріплено запитом"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "запас квоти {pct} %",
+    "routingHarvest": "ліміт спливає невикористаним",
+    "routingDiversity": "розподіл ({pct} % ослаблення)",
+    "routingInFlight": "{pct} % поточної роботи в цьому пулі"
   },
   "quota": {
     "title": "Квота",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Видалити",
     "resetInferredMark": "(оцінка)",
     "resetInferredHint": "Прогноз на основі спостережених меж скидання — цей провайдер не надсилає час скидання. Точність у межах інтервалу опитування.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} моделей",
+    "poolMembersOne": "1 модель",
+    "locallyCountedMark": "·локально",
+    "locallyCountedHint": "Провайдер ніколи не повідомляв про цей пул; підрахунок наш, проти ліміту, який тримаємо ми."
   },
   "logs": {
     "title": "Журнал",

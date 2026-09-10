@@ -610,8 +610,8 @@
     "bulkDeleteConfirm": "למחוק {count}?",
     "bulkResult": "עודכנו {done}; נכשלו {failed}.",
     "bulkDeleteResult": "נמחקו {done}; נכשלו {failed}.",
-    "churnWindow": "{days}d",
-    "churnAria": "{added} added, {lost} retired in the last {days} days"
+    "churnWindow": "{days} י׳",
+    "churnAria": "{added} נוספו, {lost} הוסרו ב־{days} הימים האחרונים"
   },
   "backups": {
     "title": "Backups",
@@ -767,16 +767,16 @@
     "cacheHitRate": "שיעור פגיעות במטמון",
     "cacheSavedTokens": "נחסכו {tokens} טוקנים",
     "cacheHitRateHint": "{hits} פגיעות מול {misses} החטאות מאז הפעלת השרת · נחסכו {requests} קריאות לספק",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "תנאי המכסה הזיזו אותו #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "בדיקת חקר",
+      "sticky": "הפעלה מקובעת",
+      "pinned": "מוצמד לפי הבקשה"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "מכסה פנויה {pct}%",
+    "routingHarvest": "הקצבה פגה ללא שימוש",
+    "routingDiversity": "פיזור ({pct}% עמעום)",
+    "routingInFlight": "{pct}% מהעבודה הפעילה במאגר הזה"
   },
   "quota": {
     "title": "מכסה",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "מחק",
     "resetInferredMark": "(הערכה)",
     "resetInferredHint": "נחזה מגבולות איפוס שנצפו — ספק זה אינו שולח מועד איפוס. מדויק עד כדי מרווח הדגימה.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} דגמים",
+    "poolMembersOne": "דגם אחד",
+    "locallyCountedMark": "·מקומי",
+    "locallyCountedHint": "הספק מעולם לא דיווח על המאגר הזה; הספירה היא שלנו, מול מגבלה שאנחנו מחזיקים."
   },
   "logs": {
     "title": "יומן",
@@ -1256,14 +1256,14 @@
     "curatedHint": "New catalog models are not added to this chain automatically."
   },
   "catalogue": {
-    "changesTitle": "Catalogue changes",
-    "changesHint": "Models added since {since}, and retirements not yet acknowledged.",
-    "untracked": "{count} models predate arrival tracking.",
-    "arrived": "Arrived ({count})",
-    "departed": "Retired ({count})",
-    "autoRouted": "already routing — {chains}",
-    "notRouted": "not routed",
-    "lostFrom": "lost from {chains}",
-    "acknowledge": "Acknowlide"
+    "changesTitle": "שינויים בקטלוג",
+    "changesHint": "דגמים שנוספו מאז {since}, ומשיכות שעוד לא אושרו.",
+    "untracked": "{count} דגמים קדמו למעקב ההוספות.",
+    "arrived": "נוספו ({count})",
+    "departed": "הוסרו ({count})",
+    "autoRouted": "כבר מנותב — {chains}",
+    "notRouted": "לא מנותב",
+    "lostFrom": "אבד מ־{chains}",
+    "acknowledge": "אישור"
   }
 }

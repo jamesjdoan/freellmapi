@@ -610,8 +610,8 @@
     "bulkDeleteConfirm": "{count} törlése?",
     "bulkResult": "Frissítve {done}; {failed} sikertelen.",
     "bulkDeleteResult": "Törölve {done}; {failed} sikertelen.",
-    "churnWindow": "{days}d",
-    "churnAria": "{added} added, {lost} retired in the last {days} days"
+    "churnWindow": "{days} n.",
+    "churnAria": "{added} hozzáadva, {lost} visszavonva az elmúlt {days} napban"
   },
   "backups": {
     "title": "Backups",
@@ -767,16 +767,16 @@
     "cacheHitRate": "Gyorsítótár-találati arány",
     "cacheSavedTokens": "{tokens} token megtakarítva",
     "cacheHitRateHint": "{hits} találat és {misses} tévesztés a szerver indítása óta · {requests} szolgáltatóhívás megspórolva",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "a kvótafeltételek áthelyezték #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "feltáró próba",
+      "sticky": "kötött munkamenet",
+      "pinned": "a kérés rögzítette"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "szabad kvóta {pct} %",
+    "routingHarvest": "a keret felhasználatlanul lejár",
+    "routingDiversity": "szórás ({pct} % csillapítás)",
+    "routingInFlight": "a futó munka {pct} %-a ezen a készleten"
   },
   "quota": {
     "title": "Kvóta",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Törlés",
     "resetInferredMark": "(becsült)",
     "resetInferredHint": "Megfigyelt visszaállítási határokból előrejelezve – ez a szolgáltató nem küld visszaállítási időt. A pontosság a lekérdezési intervallumon belüli.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} modell",
+    "poolMembersOne": "1 modell",
+    "locallyCountedMark": "·helyi",
+    "locallyCountedHint": "A szolgáltató soha nem jelentette ezt a készletet; a számolás a miénk, egy általunk tartott korláttal szemben."
   },
   "logs": {
     "title": "Napló",
@@ -1256,14 +1256,14 @@
     "curatedHint": "New catalog models are not added to this chain automatically."
   },
   "catalogue": {
-    "changesTitle": "Catalogue changes",
-    "changesHint": "Models added since {since}, and retirements not yet acknowledged.",
-    "untracked": "{count} models predate arrival tracking.",
-    "arrived": "Arrived ({count})",
-    "departed": "Retired ({count})",
-    "autoRouted": "already routing — {chains}",
-    "notRouted": "not routed",
-    "lostFrom": "lost from {chains}",
-    "acknowledge": "Acknowledge"
+    "changesTitle": "Katalógus változásai",
+    "changesHint": "{since} óta hozzáadott modellek, és a még nem tudomásul vett visszavonások.",
+    "untracked": "{count} modell megelőzi az érkezés nyomon követését.",
+    "arrived": "Érkezett ({count})",
+    "departed": "Visszavonva ({count})",
+    "autoRouted": "már útvonalon — {chains}",
+    "notRouted": "nincs útvonalon",
+    "lostFrom": "elveszett innen: {chains}",
+    "acknowledge": "Tudomásul vétel"
   }
 }

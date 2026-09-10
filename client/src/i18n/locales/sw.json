@@ -767,16 +767,16 @@
     "cacheHitRate": "Kiwango cha mafanikio ya akiba",
     "cacheSavedTokens": "Tokeni {tokens} zimehifadhiwa",
     "cacheHitRateHint": "Mafanikio {hits} dhidi ya makosa {misses} tangu seva ianze · miito {requests} kwa mtoa huduma imeepukwa",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "vigezo vya kiasi vilihamisha #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "jaribio la uchunguzi",
+      "sticky": "kipindi kilichobanwa",
+      "pinned": "kimebanwa na ombi"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "kiasi kilichosalia {pct}%",
+    "routingHarvest": "kiasi kinakwisha bila kutumika",
+    "routingDiversity": "usambazaji ({pct}% kupunguzwa)",
+    "routingInFlight": "{pct}% ya kazi inayoendelea kwenye kundi hili"
   },
   "quota": {
     "title": "Kiwango",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Futa",
     "resetInferredMark": "(kadirio)",
     "resetInferredHint": "Imetabiriwa kutokana na mipaka ya kuwekwa upya iliyoonekana — mtoa huduma huyu hatumi muda wa kuwekwa upya. Usahihi ni ndani ya kipindi cha uchunguzi.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "mifano {count}",
+    "poolMembersOne": "mfano 1",
+    "locallyCountedMark": "·hapa",
+    "locallyCountedHint": "Mtoa huduma hakuripoti kundi hili kamwe; hesabu ni yetu, kulingana na kikomo tunachohifadhi wenyewe."
   },
   "logs": {
     "title": "Kumbukumbu",
@@ -1259,11 +1259,11 @@
     "changesTitle": "Ubadilishi kwenye catalogue",
     "changesHint": "Models added since {since}, retirements not yet acknowledged.",
     "untracked": "{count} models iliyopo kabla ya tracking.",
-    "arrived": "Arrived ({count})",
-    "departed": "Retired ({count})",
+    "arrived": "Zimeongezwa ({count})",
+    "departed": "Zimeondolewa ({count})",
     "autoRouted": "kisha kuleta— {chains}",
     "notRouted": "ha general i route",
-    "lostFrom": "lost from {chains}",
+    "lostFrom": "kimepotea kutoka {chains}",
     "acknowledge": "Angalau"
   }
 }

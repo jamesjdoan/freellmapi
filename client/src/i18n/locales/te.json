@@ -611,7 +611,7 @@
     "bulkResult": "{done} నవీకరించబడింది; {failed} విఫలమైంది.",
     "bulkDeleteResult": "{done} తొలగించబడింది; {failed} విఫలమైంది.",
     "churnWindow": "{days}d",
-    "churnAria": "{added} added, {lost} retired in the last {days} days"
+    "churnAria": "గత {days} రోజుల్లో {added} చేరాయి, {lost} తొలగించబడ్డాయి"
   },
   "backups": {
     "title": "Backups",
@@ -767,16 +767,16 @@
     "cacheHitRate": "కాష్ హిట్ రేటు",
     "cacheSavedTokens": "{tokens} టోకెన్‌ల ఆదా",
     "cacheHitRateHint": "సర్వర్ ప్రారంభమైనప్పటి నుండి {hits} హిట్‌లు, {misses} మిస్‌లు · {requests} ప్రొవైడర్ కాల్‌లు ఆదా అయ్యాయి",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "కోటా షరతులు దీన్ని #{from} → #{to} జరిపాయి",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "అన్వేషణ పరీక్ష",
+      "sticky": "స్థిర సెషన్",
+      "pinned": "అభ్యర్థనతో పిన్ చేయబడింది"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "మిగిలిన కోటా {pct}%",
+    "routingHarvest": "కోటా వాడకుండానే ముగుస్తోంది",
+    "routingDiversity": "వ్యాప్తి ({pct}% తగ్గింపు)",
+    "routingInFlight": "నడుస్తున్న పనిలో {pct}% ఈ పూల్‌లో"
   },
   "quota": {
     "title": "కోటా",
@@ -869,7 +869,7 @@
     "colMetric": "మెట్రిక్",
     "colScope": "పరిధి",
     "colSource": "మూలం",
-    "locallyCounted": "(స్థానికంగా లెక్కించినది)",
+    "locallyCounted": "(స్థానిక లెక్క)",
     "colWindow": "విండో",
     "inferredWindow": "~{period} ({samples} నుండి అంచనా)",
     "period_minute": "నిమిషానికి",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "తొలగించు",
     "resetInferredMark": "(అంచనా)",
     "resetInferredHint": "గమనించిన రీసెట్ సరిహద్దుల నుండి అంచనా వేసినది — ఈ ప్రొవైడర్ రీసెట్ సమయాన్ని పంపదు. పోలింగ్ విరామం లోపు ఖచ్చితత్వం.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} మోడల్‌లు",
+    "poolMembersOne": "1 మోడల్",
+    "locallyCountedMark": "·స్థానిక",
+    "locallyCountedHint": "ప్రొవైడర్ ఈ పూల్ గురించి ఎప్పుడూ నివేదించలేదు; ఈ లెక్క మాదే, మేము ఉంచిన పరిమితికి ఎదురుగా."
   },
   "logs": {
     "title": "లాగ్‌లు",
@@ -1259,11 +1259,11 @@
     "changesTitle": "క్యాటలోగ మార్పులు",
     "changesHint": "Models added since {since}, retirements not yet acknowledged.",
     "untracked": "{count} మోడల్స్ tracking terutు original.",
-    "arrived": "Arrived ({count})",
-    "departed": "Retired ({count})",
+    "arrived": "చేరినవి ({count})",
+    "departed": "తొలగించినవి ({count})",
     "autoRouted": "auto-routed already — {chains}",
-    "notRouted": "not routed",
-    "lostFrom": "lost from {chains}",
-    "acknowledge": "Acknowledge"
+    "notRouted": "రూట్ చేయలేదు",
+    "lostFrom": "{chains} నుండి కోల్పోయింది",
+    "acknowledge": "గుర్తించు"
   }
 }

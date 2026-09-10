@@ -611,7 +611,7 @@
     "bulkResult": "{done} புதுப்பிக்கப்பட்டது; {failed} தோல்வி.",
     "bulkDeleteResult": "{done} நீக்கப்பட்டது; {failed} தோல்வி.",
     "churnWindow": "{days}d",
-    "churnAria": "{added} added, {lost} retired in the last {days} days"
+    "churnAria": "கடந்த {days} நாட்களில் {added} சேர்ந்தன, {lost} நீக்கப்பட்டன"
   },
   "backups": {
     "title": "Backups",
@@ -767,16 +767,16 @@
     "cacheHitRate": "தற்காலிக சேமிப்பு வெற்றி விகிதம்",
     "cacheSavedTokens": "{tokens} டோக்கன்கள் சேமிக்கப்பட்டன",
     "cacheHitRateHint": "சேவையகம் தொடங்கியதிலிருந்து {hits} வெற்றி, {misses} தோல்வி · {requests} வழங்குநர் அழைப்புகள் தவிர்க்கப்பட்டன",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "ஒதுக்கீட்டு நிபந்தனைகள் இதை #{from} → #{to} நகர்த்தின",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "ஆய்வுச் சோதனை",
+      "sticky": "நிலையான அமர்வு",
+      "pinned": "கோரிக்கையால் நிலைநிறுத்தப்பட்டது"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "மீதமுள்ள ஒதுக்கீடு {pct}%",
+    "routingHarvest": "ஒதுக்கீடு பயன்படுத்தப்படாமல் முடிகிறது",
+    "routingDiversity": "பரவல் ({pct}% குறைப்பு)",
+    "routingInFlight": "நடப்பு வேலையின் {pct}% இந்தத் தொகுப்பில்"
   },
   "quota": {
     "title": "ஒதுக்கீடு",
@@ -869,7 +869,7 @@
     "colMetric": "அளவீடு",
     "colScope": "வரம்பெல்லை",
     "colSource": "மூலம்",
-    "locallyCounted": "(உள்ளூரில் கணக்கிடப்பட்டது)",
+    "locallyCounted": "(உள்ளூர் எண்ணிக்கை)",
     "colWindow": "சாளரம்",
     "inferredWindow": "~{period} ({samples} இலிருந்து மதிப்பீடு)",
     "period_minute": "நிமிடத்திற்கு",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "நீக்கு",
     "resetInferredMark": "(மதிப்பீடு)",
     "resetInferredHint": "கவனிக்கப்பட்ட மீட்டமைவு எல்லைகளிலிருந்து கணிக்கப்பட்டது — இந்த வழங்குநர் மீட்டமைவு நேரத்தை அனுப்புவதில்லை. துல்லியம் பாலிங் இடைவெளிக்குள் இருக்கும்.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} மாதிரிகள்",
+    "poolMembersOne": "1 மாதிரி",
+    "locallyCountedMark": "·உள்ளூர்",
+    "locallyCountedHint": "வழங்குநர் இந்தத் தொகுப்பைப் பற்றி எப்போதும் தெரிவிக்கவில்லை; இந்த எண்ணிக்கை நமது, நாம் வைத்திருக்கும் வரம்பை ஒப்பிட்டு."
   },
   "logs": {
     "title": "பதிவுகள்",
@@ -1259,11 +1259,11 @@
     "changesTitle": " catalog மாற்றங்கள்",
     "changesHint": "Models added since {since}, retirements not yet acknowledged.",
     "untracked": "{count} மாதிரிகள் tracking elleni oriignal.",
-    "arrived": "Arrived ({count})",
-    "departed": "Retired ({count})",
+    "arrived": "சேர்ந்தவை ({count})",
+    "departed": "நீக்கப்பட்டவை ({count})",
     "autoRouted": "auto-routed already — {chains}",
-    "notRouted": "not routed",
-    "lostFrom": "lost from {chains}",
+    "notRouted": "வழிப்படுத்தப்படவில்லை",
+    "lostFrom": "{chains} இல் இருந்து இழந்தது",
     "acknowledge": "ஓரட்டை"
   }
 }

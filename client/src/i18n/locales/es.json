@@ -767,16 +767,16 @@
     "cacheHitRate": "Tasa de aciertos de caché",
     "cacheSavedTokens": "{tokens} tokens ahorrados",
     "cacheHitRateHint": "{hits} aciertos frente a {misses} fallos desde el arranque del servidor · {requests} llamadas al proveedor evitadas",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "los términos de cuota lo movieron #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "sondeo de exploración",
+      "sticky": "sesión fija",
+      "pinned": "fijado por la solicitud"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "margen de cuota {pct} %",
+    "routingHarvest": "asignación por vencer sin usar",
+    "routingDiversity": "reparto ({pct} % de atenuación)",
+    "routingInFlight": "{pct} % del trabajo en curso en este grupo"
   },
   "quota": {
     "title": "Cuota",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Eliminar",
     "resetInferredMark": "(est.)",
     "resetInferredHint": "Predicho a partir de los límites de reinicio observados: este proveedor no envía hora de reinicio. Preciso dentro del intervalo de sondeo.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
+    "poolMembers": "{count} modelos",
+    "poolMembersOne": "1 modelo",
     "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "locallyCountedHint": "El proveedor nunca informó de este grupo; el recuento es nuestro, frente a un límite que mantenemos."
   },
   "logs": {
     "title": "Registros",

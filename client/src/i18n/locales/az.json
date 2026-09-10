@@ -767,16 +767,16 @@
     "cacheHitRate": "Keş uğur nisbəti",
     "cacheSavedTokens": "{tokens} token qənaət edildi",
     "cacheHitRateHint": "Server başladığından bəri {hits} uğur, {misses} uğursuzluq · {requests} provayder sorğusundan qaçınıldı",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "kvota şərtləri onu #{from} → #{to} keçirdi",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "kəşfiyyat yoxlaması",
+      "sticky": "sabit sessiya",
+      "pinned": "sorğu ilə bərkidilib"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "qalan kvota {pct} %",
+    "routingHarvest": "kvota istifadə edilmədən bitir",
+    "routingDiversity": "yayılma ({pct} % azalma)",
+    "routingInFlight": "davam edən işin {pct} %-i bu hovuzda"
   },
   "quota": {
     "title": "Kvota",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Sil",
     "resetInferredMark": "(təxmini)",
     "resetInferredHint": "Müşahidə olunan sıfırlanma sərhədlərinə görə proqnozlaşdırılıb — bu provayder sıfırlanma vaxtı göndərmir. Dəqiqlik sorğulama intervalı həddindədir.",
-    "poolMembers": "{count} models",
+    "poolMembers": "{count} model",
     "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "locallyCountedMark": "·yerli",
+    "locallyCountedHint": "Təchizatçı bu hovuz barədə heç vaxt məlumat vermədi; sayım bizimdir, öz saxladığımız limitə qarşı."
   },
   "logs": {
     "title": "Loglar",

@@ -610,8 +610,8 @@
     "bulkDeleteConfirm": "Supprimer {count} ?",
     "bulkResult": "Mises à jour : {done}. Échecs : {failed}.",
     "bulkDeleteResult": "Supprimées : {done}. Échecs : {failed}.",
-    "churnWindow": "{days}d",
-    "churnAria": "{added} added, {lost} retired in the last {days} days"
+    "churnWindow": "{days} j",
+    "churnAria": "{added} ajoutés, {lost} retirés au cours des {days} derniers jours"
   },
   "backups": {
     "title": "Sauvegardes",
@@ -767,16 +767,16 @@
     "cacheHitRate": "Taux de succès du cache",
     "cacheSavedTokens": "{tokens} jetons économisés",
     "cacheHitRateHint": "{hits} succès contre {misses} échecs depuis le démarrage du serveur · {requests} appels au fournisseur évités",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "les critères de quota l'ont déplacé #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "sondage d'exploration",
+      "sticky": "session fixe",
+      "pinned": "épinglé par la requête"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "marge de quota {pct} %",
+    "routingHarvest": "allocation expirant sans usage",
+    "routingDiversity": "répartition ({pct} % d'atténuation)",
+    "routingInFlight": "{pct} % du travail en cours sur ce pool"
   },
   "quota": {
     "title": "Quota",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Supprimer",
     "resetInferredMark": "(est.)",
     "resetInferredHint": "Prédit à partir des bornes de réinitialisation observées — ce fournisseur ne transmet aucune heure de réinitialisation. Précision limitée à l’intervalle d’interrogation.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
+    "poolMembers": "{count} modèles",
+    "poolMembersOne": "1 modèle",
     "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "locallyCountedHint": "Le fournisseur n'a jamais communiqué ce pool ; le décompte est le nôtre, face à une limite que nous détenons."
   },
   "logs": {
     "title": "Journaux",
@@ -1256,14 +1256,14 @@
     "curatedHint": "Les nouveaux modèles du catalogue ne sont pas ajoutés automatiquement à cette chaîne."
   },
   "catalogue": {
-    "changesTitle": "Catalogue changes",
-    "changesHint": "Models added since {since}, and retirements not yet acknowledged.",
-    "untracked": "{count} models predate arrival tracking.",
-    "arrived": "Arrived ({count})",
-    "departed": "Retired ({count})",
-    "autoRouted": "already routing — {chains}",
-    "notRouted": "not routed",
-    "lostFrom": "lost from {chains}",
-    "acknowledge": "Acknowledge"
+    "changesTitle": "Modifications du catalogue",
+    "changesHint": "Modèles ajoutés depuis le {since}, et retraits non encore confirmés.",
+    "untracked": "{count} modèles antérieurs au suivi des arrivées.",
+    "arrived": "Arrivés ({count})",
+    "departed": "Retirés ({count})",
+    "autoRouted": "déjà routé — {chains}",
+    "notRouted": "non routé",
+    "lostFrom": "perdu de {chains}",
+    "acknowledge": "Confirmer"
   }
 }

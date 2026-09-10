@@ -767,16 +767,16 @@
     "cacheHitRate": "കാഷ് ഹിറ്റ് നിരക്ക്",
     "cacheSavedTokens": "{tokens} ടോക്കണുകൾ ലാഭിച്ചു",
     "cacheHitRateHint": "സെർവർ ആരംഭിച്ചതിനുശേഷം {hits} ഹിറ്റുകൾ, {misses} മിസ്സുകൾ · {requests} ദാതാവ് കോളുകൾ ഒഴിവാക്കി",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "ക്വാട്ട വ്യവസ്ഥകൾ ഇത് #{from} → #{to} മാറ്റി",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "അന്വേഷണ പരീക്ഷണം",
+      "sticky": "സ്ഥിര സെഷൻ",
+      "pinned": "അഭ്യർത്ഥനയാൽ പിൻ ചെയ്തു"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "ശേഷിക്കുന്ന ക്വാട്ട {pct}%",
+    "routingHarvest": "ക്വാട്ട ഉപയോഗിക്കാതെ അവസാനിക്കുന്നു",
+    "routingDiversity": "വിതരണം ({pct}% കുറവ്)",
+    "routingInFlight": "നടക്കുന്ന ജോലിയുടെ {pct}% ഈ പൂളിൽ"
   },
   "quota": {
     "title": "ക്വോട്ട",
@@ -869,7 +869,7 @@
     "colMetric": "മെട്രിക്",
     "colScope": "സ്കോപ്പ്",
     "colSource": "ഉറവിടം",
-    "locallyCounted": "(ലോക്കലായി എണ്ണിയത്)",
+    "locallyCounted": "(പ്രാദേശിക എണ്ണം)",
     "colWindow": "വിൻഡോ",
     "inferredWindow": "~{period} ({samples} അടിസ്ഥാനത്തിൽ കണക്കാക്കിയത്)",
     "period_minute": "മിനിറ്റിൽ",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "ഇല്ലാതാക്കുക",
     "resetInferredMark": "(ഏകദേശം)",
     "resetInferredHint": "നിരീക്ഷിച്ച റീസെറ്റ് അതിരുകളിൽ നിന്ന് പ്രവചിച്ചത് — ഈ പ്രൊവൈഡർ റീസെറ്റ് സമയം അയയ്ക്കുന്നില്ല. പോളിംഗ് ഇടവേളയ്ക്കുള്ളിൽ കൃത്യം.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} മോഡലുകൾ",
+    "poolMembersOne": "1 മോഡൽ",
+    "locallyCountedMark": "·പ്രാദേശികം",
+    "locallyCountedHint": "ദാതാവ് ഈ പൂളിനെക്കുറിച്ച് ഒരിക്കലും റിപ്പോർട്ട് ചെയ്തിട്ടില്ല; ഈ എണ്ണം ഞങ്ങളുടേതാണ്, ഞങ്ങൾ സൂക്ഷിക്കുന്ന പരിധിക്കെതിരെ."
   },
   "logs": {
     "title": "ലോഗുകൾ",
@@ -1258,12 +1258,12 @@
   "catalogue": {
     "changesTitle": "കാറ്റാളോഗ് മാറ്റങ്ങൾ",
     "changesHint": "{since} - മോഡൽ zvýšení,retirata nepotvrzená",
-    "arrived": "വരിയ ({count})",
+    "arrived": "ചേർന്നവ ({count})",
     "departed": " wycofved ({count})",
-    "notRouted": "ല dimostrado",
-    "acknowledge": "തിരസ്കരിക്കുക",
-    "untracked": "{count} models predate arrival tracking.",
-    "autoRouted": "already routing — {chains}",
-    "lostFrom": "lost from {chains}"
+    "notRouted": "റൂട്ട് ചെയ്തിട്ടില്ല",
+    "acknowledge": "സ്വീകരിക്കുക",
+    "untracked": "{count} മോഡലുകൾ വരവ് ട്രാക്കിംഗിന് മുൻപുള്ളവയാണ്.",
+    "autoRouted": "ഇപ്പോൾ തന്നെ റൂട്ടിംഗിൽ — {chains}",
+    "lostFrom": "{chains}-ൽ നിന്ന് നഷ്ടപ്പെട്ടു"
   }
 }

@@ -767,16 +767,16 @@
     "cacheHitRate": "Kesh muvaffaqiyat darajasi",
     "cacheSavedTokens": "{tokens} token tejaldi",
     "cacheHitRateHint": "Server ishga tushganidan beri {hits} muvaffaqiyat, {misses} o‘tkazib yuborish · {requests} ta provayder so‘rovi tejaldi",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "kvota shartlari uni #{from} → #{to} ko‘chirdi",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "izlanish sinovi",
+      "sticky": "qat’iy sessiya",
+      "pinned": "so‘rov bilan qadalgan"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "qolgan kvota {pct} %",
+    "routingHarvest": "kvota ishlatilmay tugayapti",
+    "routingDiversity": "tarqatish ({pct} % pasaytirish)",
+    "routingInFlight": "bajarilayotgan ishning {pct} % shu havzada"
   },
   "quota": {
     "title": "Kvota",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "O‘chirish",
     "resetInferredMark": "(taxminiy)",
     "resetInferredHint": "Kuzatilgan tiklanish chegaralaridan taxmin qilingan — bu provayder tiklanish vaqtini yubormaydi. Aniqlik so‘rov intervali darajasida.",
-    "poolMembers": "{count} models",
+    "poolMembers": "{count} model",
     "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "locallyCountedMark": "·mahalliy",
+    "locallyCountedHint": "Provayder bu havza haqida hech qachon xabar bermagan; hisob bizniki, o‘zimiz saqlaydigan cheklovga nisbatan."
   },
   "logs": {
     "title": "Jurnal",

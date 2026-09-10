@@ -767,16 +767,16 @@
     "cacheHitRate": "کیش ہٹ ریٹ",
     "cacheSavedTokens": "{tokens} ٹوکن بچائے گئے",
     "cacheHitRateHint": "سرور شروع ہونے کے بعد سے {hits} ہٹ بمقابلہ {misses} مِس · {requests} فراہم کنندہ کالز سے بچت",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "کوٹا شرائط نے اسے #{from} → #{to} منتقل کیا",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "جستجوی جانچ",
+      "sticky": "مقررہ سیشن",
+      "pinned": "درخواست سے پن شدہ"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "باقی کوٹا {pct}%",
+    "routingHarvest": "کوٹا بغیر استعمال ختم ہو رہا ہے",
+    "routingDiversity": "پھیلاؤ ({pct}% کمی)",
+    "routingInFlight": "جاری کام کا {pct}% اس پول پر"
   },
   "quota": {
     "title": "کوٹہ",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "حذف کریں",
     "resetInferredMark": "(تخمینی)",
     "resetInferredHint": "مشاہدہ شدہ ری سیٹ حدود سے پیش گوئی — یہ فراہم کنندہ ری سیٹ کا وقت نہیں بھیجتا۔ درستگی پولنگ وقفے کے اندر ہے۔",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} ماڈل",
+    "poolMembersOne": "1 ماڈل",
+    "locallyCountedMark": "·مقامی",
+    "locallyCountedHint": "فراہم کنندہ نے اس پول کی کبھی اطلاع نہیں دی؛ یہ گنتی ہماری ہے، اس حد کے مقابلے میں جو ہم خود رکھتے ہیں۔"
   },
   "logs": {
     "title": "لاگز",

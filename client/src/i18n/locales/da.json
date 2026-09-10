@@ -767,16 +767,16 @@
     "cacheHitRate": "Cache-hitrate",
     "cacheSavedTokens": "{tokens} tokens sparet",
     "cacheHitRateHint": "{hits} hits mod {misses} misses siden serveren startede · {requests} udbyderkald undgået",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "kvotefaktorer flyttede den #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "udforskende test",
+      "sticky": "fastholdt session",
+      "pinned": "fastgjort af anmodning"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "kvoteplads {pct} %",
+    "routingHarvest": "tilgodehavende udløber ubrugt",
+    "routingDiversity": "spredning ({pct} % dæmpning)",
+    "routingInFlight": "{pct} % af igangværende arbejde i denne pulje"
   },
   "quota": {
     "title": "Kvote",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Slet",
     "resetInferredMark": "(anslået)",
     "resetInferredHint": "Forudsagt ud fra observerede nulstillingsgrænser — denne udbyder sender ingen nulstillingstid. Nøjagtig inden for polling-intervallet.",
-    "poolMembers": "{count} models",
+    "poolMembers": "{count} modeller",
     "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "locallyCountedMark": "·lokal",
+    "locallyCountedHint": "Udbyderen har aldrig rapporteret denne pulje; optællingen er vores, mod en grænse vi selv holder."
   },
   "logs": {
     "title": "Log",

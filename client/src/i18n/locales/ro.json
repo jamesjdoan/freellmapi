@@ -767,16 +767,16 @@
     "cacheHitRate": "Rata de succes a cache-ului",
     "cacheSavedTokens": "{tokens} tokenuri economisite",
     "cacheHitRateHint": "{hits} accesări reușite față de {misses} ratări de la pornirea serverului · {requests} apeluri către furnizor evitate",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "criteriile de cotă l-au mutat #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "sondaj de explorare",
+      "sticky": "sesiune fixă",
+      "pinned": "fixat de cerere"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "marjă de cotă {pct} %",
+    "routingHarvest": "alocare care expiră nefolosită",
+    "routingDiversity": "distribuire ({pct} % atenuare)",
+    "routingInFlight": "{pct} % din lucrul în curs pe acest grup"
   },
   "quota": {
     "title": "Cotă",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Șterge",
     "resetInferredMark": "(est.)",
     "resetInferredHint": "Estimat pe baza limitelor de resetare observate — acest furnizor nu trimite ora resetării. Precizie în limita intervalului de interogare.",
-    "poolMembers": "{count} models",
+    "poolMembers": "{count} modele",
     "poolMembersOne": "1 model",
     "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "locallyCountedHint": "Furnizorul nu a raportat niciodată acest grup; numărătoarea este a noastră, față de o limită pe care o deținem."
   },
   "logs": {
     "title": "Jurnale",

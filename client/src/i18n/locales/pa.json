@@ -767,16 +767,16 @@
     "cacheHitRate": "ਕੈਸ਼ ਹਿੱਟ ਦਰ",
     "cacheSavedTokens": "{tokens} ਟੋਕਨ ਬਚਾਏ",
     "cacheHitRateHint": "ਸਰਵਰ ਚਾਲੂ ਹੋਣ ਤੋਂ ਬਾਅਦ {hits} ਹਿੱਟ ਬਨਾਮ {misses} ਮਿਸ · {requests} ਪ੍ਰਦਾਤਾ ਕਾਲਾਂ ਬਚਾਈਆਂ",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "ਕੋਟਾ ਸ਼ਰਤਾਂ ਨੇ ਇਸਨੂੰ #{from} → #{to} ਲਿਜਾਇਆ",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "ਖੋਜੀ ਜਾਂਚ",
+      "sticky": "ਸਥਿਰ ਸੈਸ਼ਨ",
+      "pinned": "ਬੇਨਤੀ ਨਾਲ ਪਿੰਨ ਕੀਤਾ"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "ਬਾਕੀ ਕੋਟਾ {pct}%",
+    "routingHarvest": "ਕੋਟਾ ਵਰਤੇ ਬਿਨਾਂ ਖਤਮ ਹੋ ਰਿਹਾ ਹੈ",
+    "routingDiversity": "ਫੈਲਾਅ ({pct}% ਘਾਟਾ)",
+    "routingInFlight": "ਚੱਲ ਰਹੇ ਕੰਮ ਦਾ {pct}% ਇਸ ਪੂਲ ਉੱਤੇ"
   },
   "quota": {
     "title": "ਕੋਟਾ",
@@ -869,7 +869,7 @@
     "colMetric": "ਮੈਟਰਿਕ",
     "colScope": "ਸਕੋਪ",
     "colSource": "ਸਰੋਤ",
-    "locallyCounted": "(ਲੋਕਲ ਗਿਣਤੀ)",
+    "locallyCounted": "(ਸਥਾਨਕ ਗਿਣਤੀ)",
     "colWindow": "ਵਿੰਡੋ",
     "inferredWindow": "~{period} ({samples} ਤੋਂ ਅੰਦਾਜ਼ਾ)",
     "period_minute": "ਪ੍ਰਤੀ ਮਿੰਟ",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "ਮਿਟਾਓ",
     "resetInferredMark": "(ਅੰਦਾਜ਼ਨ)",
     "resetInferredHint": "ਦੇਖੀਆਂ ਰੀਸੈੱਟ ਹੱਦਾਂ ਤੋਂ ਅਨੁਮਾਨਿਤ — ਇਹ ਪ੍ਰੋਵਾਈਡਰ ਰੀਸੈੱਟ ਸਮਾਂ ਨਹੀਂ ਭੇਜਦਾ। ਪੋਲਿੰਗ ਅੰਤਰਾਲ ਜਿੰਨੀ ਸ਼ੁੱਧਤਾ।",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} ਮਾਡਲ",
+    "poolMembersOne": "1 ਮਾਡਲ",
+    "locallyCountedMark": "·ਸਥਾਨਕ",
+    "locallyCountedHint": "ਪ੍ਰਦਾਤਾ ਨੇ ਇਸ ਪੂਲ ਦੀ ਕਦੇ ਰਿਪੋਰਟ ਨਹੀਂ ਕੀਤੀ; ਇਹ ਗਿਣਤੀ ਸਾਡੀ ਹੈ, ਉਸ ਹੱਦ ਦੇ ਮੁਕਾਬਲੇ ਜੋ ਅਸੀਂ ਰੱਖਦੇ ਹਾਂ।"
   },
   "logs": {
     "title": "ਲੌਗ",
@@ -1258,12 +1258,12 @@
   "catalogue": {
     "changesTitle": "ਕੈਟਲੋਗ ਗੱਲਬਦਲਰ",
     "changesHint": "{since} ਤੋਂ ਮੋਡਲ ਜੋੜੇ ਗਏ ਹਨ, ਅਤੇ ਉਪਰੇਰਤissions not acknowledged.",
-    "untracked": "{count} models predate arrival tracking.",
+    "untracked": "{count} ਮਾਡਲ ਆਗਮਨ ਟਰੈਕਿੰਗ ਤੋਂ ਪਹਿਲਾਂ ਦੇ ਹਨ।",
     "arrived": "ਪਹੁੰਚਿਆ ({count})",
     "departed": "ਭਾਗਦਾਰ ({count})",
     "autoRouted": "ਪਹਿਲਾਂ ਲੱਭ ਰਹਾ — {chains}",
     "notRouted": "ਨਹੀਂ ਲੱਭ ਰਿਹਾ",
-    "lostFrom": "{chains} ਤੋਂ ਗੁੰਨ ਗਿਆ",
+    "lostFrom": "{chains} ਵਿੱਚੋਂ ਗਿਆ",
     "acknowledge": "ਪੁਸ਼ਟੀ ਕਰੋ"
   }
 }

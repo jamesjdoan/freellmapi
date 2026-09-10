@@ -767,16 +767,16 @@
     "cacheHitRate": "Cache hit rate",
     "cacheSavedTokens": "{tokens} token ang natipid",
     "cacheHitRateHint": "{hits} hit laban sa {misses} miss mula nang magsimula ang server · {requests} tawag sa provider ang naiwasan",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "inilipat ito ng mga tuntunin ng quota #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "pansubok na pagsisiyasat",
+      "sticky": "nakapirming session",
+      "pinned": "naka-pin ng kahilingan"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "natitirang quota {pct}%",
+    "routingHarvest": "malapit nang mag-expire na hindi nagamit",
+    "routingDiversity": "pagkakalat ({pct}% na pagpigil)",
+    "routingInFlight": "{pct}% ng tumatakbong trabaho sa pool na ito"
   },
   "quota": {
     "title": "Quota",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Burahin",
     "resetInferredMark": "(tantiya)",
     "resetInferredHint": "Hinulaan mula sa naobserbahang hangganan ng reset — walang ipinapadalang oras ng reset ang provider na ito. Tumpak hanggang sa saklaw ng polling interval.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} modelo",
+    "poolMembersOne": "1 modelo",
+    "locallyCountedMark": "·lokal",
+    "locallyCountedHint": "Hindi kailanman iniulat ng provider ang pool na ito; sarili naming bilang ito, laban sa limiteng kami mismo ang may hawak."
   },
   "logs": {
     "title": "Mga Log",

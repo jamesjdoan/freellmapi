@@ -767,16 +767,16 @@
     "cacheHitRate": "Úspěšnost cache",
     "cacheSavedTokens": "Ušetřeno {tokens} tokenů",
     "cacheHitRateHint": "{hits} zásahů proti {misses} minutím od spuštění serveru · ušetřeno {requests} volání poskytovatele",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "podmínky kvóty jej posunuly #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "průzkumná sonda",
+      "sticky": "vázaná session",
+      "pinned": "připnuto požadavkem"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "rezerva kvóty {pct} %",
+    "routingHarvest": "příděl vyprší nevyužitý",
+    "routingDiversity": "rozprostření ({pct} % tlumení)",
+    "routingInFlight": "{pct} % probíhající práce v tomto poolu"
   },
   "quota": {
     "title": "Kvóta",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Smazat",
     "resetInferredMark": "(odhad)",
     "resetInferredHint": "Předpovězeno z pozorovaných hranic obnovení — tento poskytovatel čas obnovení neposílá. Přesnost odpovídá intervalu dotazování.",
-    "poolMembers": "{count} models",
+    "poolMembers": "{count} modelů",
     "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "locallyCountedMark": "·lokálně",
+    "locallyCountedHint": "Poskytovatel tento pool nikdy nenahlásil; počet je náš, proti limitu, který držíme sami."
   },
   "logs": {
     "title": "Logy",

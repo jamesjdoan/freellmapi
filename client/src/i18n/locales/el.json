@@ -767,16 +767,16 @@
     "cacheHitRate": "Ποσοστό ευστοχίας cache",
     "cacheSavedTokens": "Εξοικονομήθηκαν {tokens} tokens",
     "cacheHitRateHint": "{hits} ευστοχίες έναντι {misses} αστοχιών από την εκκίνηση του διακομιστή · αποφεύχθηκαν {requests} κλήσεις παρόχου",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "οι όροι ορίου το μετακίνησαν #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "διερευνητική δοκιμή",
+      "sticky": "σταθερή συνεδρία",
+      "pinned": "καρφιτσώθηκε από το αίτημα"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "υπόλοιπο ορίου {pct} %",
+    "routingHarvest": "το όριο λήγει ανεκμετάλλευτο",
+    "routingDiversity": "κατανομή ({pct} % απόσβεση)",
+    "routingInFlight": "{pct} % της εν εξελίξει εργασίας σε αυτή τη δεξαμενή"
   },
   "quota": {
     "title": "Όριο χρήσης",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Διαγραφή",
     "resetInferredMark": "(εκτ.)",
     "resetInferredHint": "Προβλέπεται από παρατηρούμενα όρια επαναφοράς — ο πάροχος δεν στέλνει ώρα επαναφοράς. Ακρίβεια εντός του διαστήματος δειγματοληψίας.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} μοντέλα",
+    "poolMembersOne": "1 μοντέλο",
+    "locallyCountedMark": "·τοπικό",
+    "locallyCountedHint": "Ο πάροχος δεν ανέφερε ποτέ αυτή τη δεξαμενή· η καταμέτρηση είναι δική μας, έναντι ορίου που κρατάμε εμείς."
   },
   "logs": {
     "title": "Καταγραφές",

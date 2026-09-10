@@ -610,8 +610,8 @@
     "bulkDeleteConfirm": "{count} मेट्ने?",
     "bulkResult": "{done} अद्यावधिक भयो; {failed} असफल ।",
     "bulkDeleteResult": "{done} मेटियो; {failed} असफल ।",
-    "churnWindow": "{days}d",
-    "churnAria": "{added} added, {lost} retired in the last {days} days"
+    "churnWindow": "{days} दि",
+    "churnAria": "पछिल्ला {days} दिनमा {added} थपिए, {lost} हटाइए"
   },
   "backups": {
     "title": "Backups",
@@ -767,16 +767,16 @@
     "cacheHitRate": "क्यास हिट दर",
     "cacheSavedTokens": "{tokens} टोकन बचत",
     "cacheHitRateHint": "सर्भर सुरु भएदेखि {hits} हिट बनाम {misses} मिस · {requests} प्रदायक कल बचाइयो",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "कोटा सर्तहरूले यसलाई #{from} → #{to} सार्‍यो",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "खोजी परीक्षण",
+      "sticky": "स्थिर सत्र",
+      "pinned": "अनुरोधले पिन गरेको"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "बाँकी कोटा {pct}%",
+    "routingHarvest": "कोटा प्रयोग नभएरै सकिँदै",
+    "routingDiversity": "फैलावट ({pct}% घटाउ)",
+    "routingInFlight": "चालु कामको {pct}% यो पूलमा"
   },
   "quota": {
     "title": "कोटा",
@@ -869,7 +869,7 @@
     "colMetric": "मेट्रिक",
     "colScope": "स्कोप",
     "colSource": "स्रोत",
-    "locallyCounted": "(स्थानीय रूपमा गणना)",
+    "locallyCounted": "(स्थानीय गणना)",
     "colWindow": "विन्डो",
     "inferredWindow": "~{period} ({samples} बाट अनुमानित)",
     "period_minute": "प्रति मिनेट",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "मेट्ने",
     "resetInferredMark": "(अनुमानित)",
     "resetInferredHint": "अवलोकन गरिएका रिसेट सीमाबाट अनुमानित — यो प्रदायकले रिसेट समय पठाउँदैन। पोलिङ अन्तरालभित्रको शुद्धता।",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} मोडेल",
+    "poolMembersOne": "1 मोडेल",
+    "locallyCountedMark": "·स्थानीय",
+    "locallyCountedHint": "प्रदायकले यो पूलबारे कहिल्यै रिपोर्ट गरेको छैन; यो गणना हाम्रो हो, हामीले राखेको सीमाविरुद्ध।"
   },
   "logs": {
     "title": "लग",
@@ -1257,13 +1257,13 @@
   },
   "catalogue": {
     "changesTitle": "कैटेलग परिवर्तनहरू",
-    "changesHint": "Models added since {since}, and retirements not yet acknowledged.",
-    "untracked": "{count} models predate arrival tracking.",
-    "arrived": "Arrived ({count})",
-    "departed": "Retired ({count})",
-    "autoRouted": "already routing — {chains}",
-    "notRouted": "not routed",
-    "lostFrom": "lost from {chains}",
-    "acknowledge": "Acknowledge"
+    "changesHint": "{since} पछि थपिएका मोडेल, र अझै स्वीकृत नभएका हटाइएकाहरू।",
+    "untracked": "{count} मोडेल आगमन ट्र्याकिङ अघिका हुन्।",
+    "arrived": "थपिए ({count})",
+    "departed": "हटाइए ({count})",
+    "autoRouted": "पहिले नै रुट भइरहेको — {chains}",
+    "notRouted": "रुट नभएको",
+    "lostFrom": "{chains} बाट गयो",
+    "acknowledge": "स्वीकार गर्नु"
   }
 }

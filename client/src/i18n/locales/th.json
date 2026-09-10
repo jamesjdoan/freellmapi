@@ -611,7 +611,7 @@
     "bulkResult": "อัปเดต {done}; ล้มเหลว {failed}",
     "bulkDeleteResult": "ลบ {done}; ล้มเหลว {failed}",
     "churnWindow": "{days}d",
-    "churnAria": "{added} added, {lost} retired in the last {days} days"
+    "churnAria": "เพิ่ม {added} ถอน {lost} ใน {days} วันที่ผ่านมา"
   },
   "backups": {
     "title": "Backups",
@@ -767,16 +767,16 @@
     "cacheHitRate": "อัตราการเข้าถึงแคช",
     "cacheSavedTokens": "ประหยัด {tokens} โทเค็น",
     "cacheHitRateHint": "{hits} ครั้งที่พบ เทียบกับ {misses} ครั้งที่ไม่พบ นับตั้งแต่เซิร์ฟเวอร์เริ่มทำงาน · เลี่ยงการเรียกผู้ให้บริการ {requests} ครั้ง",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "เงื่อนไขโควตาย้ายจาก #{from} ไป #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "การทดลองสำรวจ",
+      "sticky": "เซสชันคงที่",
+      "pinned": "ปักหมุดตามคำขอ"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "โควตาคงเหลือ {pct}%",
+    "routingHarvest": "โควตาใกล้หมดอายุโดยไม่ได้ใช้",
+    "routingDiversity": "กระจาย ({pct}% ลดทอน)",
+    "routingInFlight": "{pct}% ของงานที่กำลังทำงานอยู่ในพูลนี้"
   },
   "quota": {
     "title": "โควตา",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "ลบ",
     "resetInferredMark": "(ประมาณ)",
     "resetInferredHint": "คาดการณ์จากขอบเขตการรีเซ็ตที่สังเกตได้ — ผู้ให้บริการรายนี้ไม่ส่งเวลารีเซ็ต ความแม่นยำอยู่ในระดับช่วงการโพล",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} โมเดล",
+    "poolMembersOne": "1 โมเดล",
+    "locallyCountedMark": "·ในเครื่อง",
+    "locallyCountedHint": "ผู้ให้บริการไม่เคยรายงานพูลนี้ จำนวนนี้เรานับเอง เทียบกับขีดจำกัดที่เราเก็บไว้"
   },
   "logs": {
     "title": "บันทึก",
@@ -1259,11 +1259,11 @@
     "changesTitle": "การเปลี่ยนแปลงคอลลี่ย์",
     "changesHint": "Models added since {since}, retirements not yet acknowledged.",
     "untracked": "{count} models tracking之前 original.",
-    "arrived": "Arrived ({count})",
-    "departed": "Retired ({count})",
+    "arrived": "เพิ่มเข้ามา ({count})",
+    "departed": "ถูกถอน ({count})",
     "autoRouted": "auto-routed already — {chains}",
-    "notRouted": "not routed",
-    "lostFrom": "lost from {chains}",
+    "notRouted": "ไม่ได้กำหนดเส้นทาง",
+    "lostFrom": "หายไปจาก {chains}",
     "acknowledge": "ยืนยัน"
   }
 }

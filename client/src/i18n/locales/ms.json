@@ -767,16 +767,16 @@
     "cacheHitRate": "Kadar hit cache",
     "cacheSavedTokens": "{tokens} token dijimatkan",
     "cacheHitRateHint": "{hits} hit berbanding {misses} miss sejak pelayan dimulakan · {requests} panggilan pembekal dielakkan",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "syarat kuota memindahkannya #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "ujian penerokaan",
+      "sticky": "sesi tetap",
+      "pinned": "disemat oleh permintaan"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "baki kuota {pct}%",
+    "routingHarvest": "peruntukan hampir luput tanpa digunakan",
+    "routingDiversity": "sebaran ({pct}% redaman)",
+    "routingInFlight": "{pct}% kerja sedang berjalan dalam kumpulan ini"
   },
   "quota": {
     "title": "Kuota",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Hapus",
     "resetInferredMark": "(angg.)",
     "resetInferredHint": "Diramal daripada sempadan set semula yang diperhatikan — penyedia ini tidak menghantar masa set semula. Tepat dalam lingkungan selang pengundian.",
-    "poolMembers": "{count} models",
+    "poolMembers": "{count} model",
     "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "locallyCountedMark": "·setempat",
+    "locallyCountedHint": "Penyedia tidak pernah melaporkan kumpulan ini; kiraan ini milik kami, terhadap had yang kami simpan sendiri."
   },
   "logs": {
     "title": "Log",

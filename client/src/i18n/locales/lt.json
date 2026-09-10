@@ -767,16 +767,16 @@
     "cacheHitRate": "Podėlio pataikymų dalis",
     "cacheSavedTokens": "Sutaupyta {tokens} žetonų",
     "cacheHitRateHint": "{hits} pataikymai prieš {misses} praleidimus nuo serverio paleidimo · išvengta {requests} tiekėjo užklausų",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "kvotos sąlygos perkėlė jį #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "tiriamasis bandymas",
+      "sticky": "pririšta sesija",
+      "pinned": "prisegta užklausos"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "kvotos atsarga {pct} %",
+    "routingHarvest": "kvota baigiasi nepanaudota",
+    "routingDiversity": "paskirstymas ({pct} % slopinimo)",
+    "routingInFlight": "{pct} % vykdomo darbo šiame telkinyje"
   },
   "quota": {
     "title": "Kvota",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Ištrinti",
     "resetInferredMark": "(įvert.)",
     "resetInferredHint": "Prognozuota iš stebėtų atstatymo ribų — šis tiekėjas nepraneša atstatymo laiko. Tikslumas – iki apklausos intervalo.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} modelių",
+    "poolMembersOne": "1 modelis",
+    "locallyCountedMark": "·vietinis",
+    "locallyCountedHint": "Teikėjas niekada nepranešė apie šį telkinį; skaičius yra mūsų, pagal mūsų paties nustatytą ribą."
   },
   "logs": {
     "title": "Žurnalas",

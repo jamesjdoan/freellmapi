@@ -610,8 +610,8 @@
     "bulkDeleteConfirm": "Hapus {count}?",
     "bulkResult": "Diperbarui {done}; gagal {failed}.",
     "bulkDeleteResult": "Dihapus {done}; gagal {failed}.",
-    "churnWindow": "{days}d",
-    "churnAria": "{added} added, {lost} retired in the last {days} days"
+    "churnWindow": "{days} hr",
+    "churnAria": "{added} ditambahkan, {lost} ditarik dalam {days} hari terakhir"
   },
   "backups": {
     "title": "Backups",
@@ -767,16 +767,16 @@
     "cacheHitRate": "Rasio hit cache",
     "cacheSavedTokens": "{tokens} token dihemat",
     "cacheHitRateHint": "{hits} hit vs {misses} miss sejak server dijalankan · {requests} panggilan penyedia dihindari",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "ketentuan kuota memindahkannya #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "uji eksplorasi",
+      "sticky": "sesi tetap",
+      "pinned": "disematkan oleh permintaan"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "sisa kuota {pct}%",
+    "routingHarvest": "alokasi hampir kedaluwarsa tanpa dipakai",
+    "routingDiversity": "sebaran ({pct}% redaman)",
+    "routingInFlight": "{pct}% pekerjaan berjalan di kumpulan ini"
   },
   "quota": {
     "title": "Kuota",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Hapus",
     "resetInferredMark": "(perk.)",
     "resetInferredHint": "Diprediksi dari batas reset yang teramati — provider ini tidak mengirim waktu reset. Akurat dalam rentang interval polling.",
-    "poolMembers": "{count} models",
+    "poolMembers": "{count} model",
     "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "locallyCountedMark": "·lokal",
+    "locallyCountedHint": "Penyedia tidak pernah melaporkan kumpulan ini; hitungan ini milik kami, terhadap batas yang kami simpan sendiri."
   },
   "logs": {
     "title": "Log",
@@ -1256,14 +1256,14 @@
     "curatedHint": "Model katalog baru tidak ditambahkan ke rantai ini secara otomatis."
   },
   "catalogue": {
-    "changesTitle": "Catalogue changes",
-    "changesHint": "Models added since {since}, and retirements not yet acknowledged.",
-    "untracked": "{count} models predate arrival tracking.",
-    "arrived": "Arrived ({count})",
-    "departed": "Retired ({count})",
-    "autoRouted": "already routing — {chains}",
-    "notRouted": "not routed",
-    "lostFrom": "lost from {chains}",
-    "acknowledge": "Acknowledge"
+    "changesTitle": "Perubahan katalog",
+    "changesHint": "Model yang ditambahkan sejak {since}, dan penarikan yang belum dikonfirmasi.",
+    "untracked": "{count} model mendahului pelacakan kedatangan.",
+    "arrived": "Ditambahkan ({count})",
+    "departed": "Ditarik ({count})",
+    "autoRouted": "sudah dirutekan — {chains}",
+    "notRouted": "tidak dirutekan",
+    "lostFrom": "hilang dari {chains}",
+    "acknowledge": "Konfirmasi"
   }
 }

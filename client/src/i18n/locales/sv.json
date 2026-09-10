@@ -767,16 +767,16 @@
     "cacheHitRate": "Cacheträffkvot",
     "cacheSavedTokens": "{tokens} tokens sparade",
     "cacheHitRateHint": "{hits} träffar mot {misses} missar sedan servern startade · {requests} leverantörsanrop undvikna",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "kvotfaktorer flyttade den #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "utforskande test",
+      "sticky": "låst session",
+      "pinned": "fäst av begäran"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "kvotutrymme {pct} %",
+    "routingHarvest": "tilldelning löper ut oanvänd",
+    "routingDiversity": "spridning ({pct} % dämpning)",
+    "routingInFlight": "{pct} % av pågående arbete i denna pool"
   },
   "quota": {
     "title": "Kvot",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Ta bort",
     "resetInferredMark": "(uppsk.)",
     "resetInferredHint": "Förutsagt från observerade återställningsgränser – leverantören skickar ingen återställningstid. Noggrannhet inom pollningsintervallet.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} modeller",
+    "poolMembersOne": "1 modell",
+    "locallyCountedMark": "·lokal",
+    "locallyCountedHint": "Leverantören har aldrig rapporterat denna pool; räkningen är vår, mot en gräns vi själva håller."
   },
   "logs": {
     "title": "Loggar",

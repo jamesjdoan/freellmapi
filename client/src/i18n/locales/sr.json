@@ -767,16 +767,16 @@
     "cacheHitRate": "Стопа погодака кеша",
     "cacheSavedTokens": "Уштеђено {tokens} токена",
     "cacheHitRateHint": "{hits} погодака наспрам {misses} промашаја од покретања сервера · избегнуто {requests} позива провајдеру",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "услови квоте су га померили #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "истраживачка проба",
+      "sticky": "везана сесија",
+      "pinned": "закачено захтевом"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "резерва квоте {pct} %",
+    "routingHarvest": "квота истиче неискоришћена",
+    "routingDiversity": "распоређивање ({pct} % ублажавања)",
+    "routingInFlight": "{pct} % посла у току у овом пулу"
   },
   "quota": {
     "title": "Kvota",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Obriši",
     "resetInferredMark": "(proc.)",
     "resetInferredHint": "Predviđeno na osnovu uočenih granica resetovanja — ovaj provajder ne šalje vreme resetovanja. Tačnost u okviru intervala provere.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} модела",
+    "poolMembersOne": "1 модел",
+    "locallyCountedMark": "·локално",
+    "locallyCountedHint": "Провајдер никада није пријавио овај пул; број је наш, према ограничењу које сами држимо."
   },
   "logs": {
     "title": "Логови",
@@ -1259,8 +1259,8 @@
     "changesTitle": "Измењеvie у каталогу",
     "changesHint": "Модели додав {since}, retirements not yet acknowledged.",
     "untracked": "{count} модеља пред tracking.",
-    "arrived": "Arrived ({count})",
-    "departed": "Retired ({count})",
+    "arrived": "Појавили се ({count})",
+    "departed": "Повучени ({count})",
     "autoRouted": "ми automatski rutirano — {chains}",
     "notRouted": "не routed",
     "lostFrom": "губио из {chains}",

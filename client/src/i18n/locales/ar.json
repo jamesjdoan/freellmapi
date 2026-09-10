@@ -767,16 +767,16 @@
     "cacheHitRate": "معدل إصابات التخزين المؤقت",
     "cacheSavedTokens": "تم توفير {tokens} رمز",
     "cacheHitRateHint": "{hits} إصابة مقابل {misses} إخفاق منذ تشغيل الخادم · تم تفادي {requests} طلب للمزوّد",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "نقلته شروط الحصة #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "فحص استكشافي",
+      "sticky": "جلسة ثابتة",
+      "pinned": "مثبَّت بالطلب"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "متبقي الحصة {pct}%",
+    "routingHarvest": "الحصة تنتهي دون استخدام",
+    "routingDiversity": "توزيع ({pct}% تخفيف)",
+    "routingInFlight": "{pct}% من العمل الجاري على هذا المجمع"
   },
   "quota": {
     "title": "الحصة",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "حذف",
     "resetInferredMark": "(تقديري)",
     "resetInferredHint": "متوقّع من حدود إعادة التعيين المرصودة — هذا المزوّد لا يرسل وقت إعادة التعيين. الدقة في حدود فترة الاستطلاع.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} طرازًا",
+    "poolMembersOne": "طراز واحد",
+    "locallyCountedMark": "·محلي",
+    "locallyCountedHint": "لم يبلّغ المزوّد عن هذا المجمع مطلقًا؛ العدّ من عندنا، مقابل حدٍّ نحتفظ به بأنفسنا."
   },
   "logs": {
     "title": "السجلات",

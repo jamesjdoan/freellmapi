@@ -610,8 +610,8 @@
     "bulkDeleteConfirm": "Obrisati {count}?",
     "bulkResult": "Ažurirano {done}; neuspješno {failed}.",
     "bulkDeleteResult": "Obrisano {done}; neuspješno {failed}.",
-    "churnWindow": "{days}d",
-    "churnAria": "{added} added, {lost} retired in the last {days} days"
+    "churnWindow": "{days} d",
+    "churnAria": "{added} dodano, {lost} povučeno u posljednjih {days} dana"
   },
   "backups": {
     "title": "Backups",
@@ -767,16 +767,16 @@
     "cacheHitRate": "Stopa pogodaka predmemorije",
     "cacheSavedTokens": "Ušteđeno {tokens} tokena",
     "cacheHitRateHint": "{hits} pogodaka naspram {misses} promašaja od pokretanja poslužitelja · izbjegnuto {requests} poziva pružatelju",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "uvjeti kvote premjestili su ga #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "istraživačka proba",
+      "sticky": "vezana sesija",
+      "pinned": "prikvačeno zahtjevom"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "rezerva kvote {pct} %",
+    "routingHarvest": "kvota istječe neiskorištena",
+    "routingDiversity": "raspoređivanje ({pct} % ublažavanja)",
+    "routingInFlight": "{pct} % posla u tijeku u ovom poolu"
   },
   "quota": {
     "title": "Kvota",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Izbriši",
     "resetInferredMark": "(proc.)",
     "resetInferredHint": "Predviđeno iz opaženih granica resetiranja — ovaj pružatelj ne šalje vrijeme reseta. Točnost je u okviru intervala provjere.",
-    "poolMembers": "{count} models",
+    "poolMembers": "{count} modela",
     "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "locallyCountedMark": "·lokalno",
+    "locallyCountedHint": "Pružatelj nikada nije prijavio ovaj pool; brojanje je naše, prema ograničenju koje sami držimo."
   },
   "logs": {
     "title": "Logovi",
@@ -1256,14 +1256,14 @@
     "curatedHint": "New catalog models are not added to this chain automatically."
   },
   "catalogue": {
-    "changesTitle": "Catalogue changes",
-    "changesHint": "Models added since {since}, and retirements not yet acknowledged.",
-    "untracked": "{count} models predate arrival tracking.",
-    "arrived": "Arrived ({count})",
-    "departed": "Retired ({count})",
-    "autoRouted": "already routing — {chains}",
-    "notRouted": "not routed",
-    "lostFrom": "lost from {chains}",
-    "acknowledge": "Acknowledge"
+    "changesTitle": "Promjene kataloga",
+    "changesHint": "Modeli dodani od {since} i povlačenja koja još nisu potvrđena.",
+    "untracked": "{count} modela je starije od praćenja dolazaka.",
+    "arrived": "Dodano ({count})",
+    "departed": "Povučeno ({count})",
+    "autoRouted": "već usmjeren — {chains}",
+    "notRouted": "nije usmjeren",
+    "lostFrom": "izgubljeno iz {chains}",
+    "acknowledge": "Potvrdi"
   }
 }

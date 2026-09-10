@@ -767,16 +767,16 @@
     "cacheHitRate": "Доля попаданий в кэш",
     "cacheSavedTokens": "Сэкономлено {tokens} токенов",
     "cacheHitRateHint": "{hits} попаданий против {misses} промахов с момента запуска сервера · сэкономлено {requests} запросов к провайдеру",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "условия квоты переместили её #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "исследовательская проба",
+      "sticky": "закреплённая сессия",
+      "pinned": "закреплено запросом"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "запас квоты {pct} %",
+    "routingHarvest": "лимит истекает неиспользованным",
+    "routingDiversity": "распределение ({pct} % ослабления)",
+    "routingInFlight": "{pct} % текущей работы в этом пуле"
   },
   "quota": {
     "title": "Квота",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Удалить",
     "resetInferredMark": "(оценка)",
     "resetInferredHint": "Спрогнозировано по наблюдаемым границам сброса — провайдер не сообщает время сброса. Точность в пределах интервала опроса.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} моделей",
+    "poolMembersOne": "1 модель",
+    "locallyCountedMark": "·локально",
+    "locallyCountedHint": "Провайдер никогда не сообщал об этом пуле; подсчёт наш, относительно лимита, который мы храним сами."
   },
   "logs": {
     "title": "Журнал",
@@ -1259,8 +1259,8 @@
     "changesTitle": "Изменения каталога",
     "changesHint": "Модели добавлены {since}, retirement not yet acknowledged.",
     "untracked": "{count} моделей предвари_tracking.",
-    "arrived": "Arrived ({count})",
-    "departed": "Retired ({count})",
+    "arrived": "Появились ({count})",
+    "departed": "Отозваны ({count})",
     "autoRouted": "уже маршрутизировано — {chains}",
     "notRouted": "не маршрутизировано",
     "lostFrom": "утеряно из {chains}",

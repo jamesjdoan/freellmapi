@@ -611,7 +611,7 @@
     "bulkResult": "{done} යාවත්කාලීන කළා; {failed} අසාර්ථකයි.",
     "bulkDeleteResult": "{done} මකා දැමුවා; {failed} අසාර්ථකයි.",
     "churnWindow": "{days}d",
-    "churnAria": "{added} added, {lost} retired in the last {days} days"
+    "churnAria": "පසුගිය {days} දින තුළ {added} එකතු විය, {lost} ඉවත් විය"
   },
   "backups": {
     "title": "Backups",
@@ -767,16 +767,16 @@
     "cacheHitRate": "හැඹිලි පහර අනුපාතය",
     "cacheSavedTokens": "ටෝකන {tokens}ක් ඉතිරි විය",
     "cacheHitRateHint": "සේවාදායකය ආරම්භ වූ දා සිට පහරවල් {hits}ක්, මගහැරීම් {misses}ක් · සැපයුම්කරු ඇමතුම් {requests}ක් වළක්වා ගැනිණි",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "කෝටා කොන්දේසි එය #{from} → #{to} වෙත ගෙන ගියේය",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "ගවේෂණ පරීක්ෂණය",
+      "sticky": "ස්ථාවර සැසිය",
+      "pinned": "ඉල්ලීමෙන් අමුණා ඇත"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "ඉතිරි කෝටාව {pct}%",
+    "routingHarvest": "කෝටාව භාවිත නොකර ඉකුත් වෙමින්",
+    "routingDiversity": "විසිරීම ({pct}% අඩුවීම)",
+    "routingInFlight": "ක්‍රියාත්මක වැඩෙන් {pct}% මෙම එකතුවේ"
   },
   "quota": {
     "title": "කෝටාව",
@@ -869,7 +869,7 @@
     "colMetric": "මෙට්‍රිකය",
     "colScope": "විෂය පථය",
     "colSource": "මූලාශ්‍රය",
-    "locallyCounted": "(ස්ථානීයව ගණන් කළ)",
+    "locallyCounted": "(දේශීයව ගණන් කළ)",
     "colWindow": "කවුළුව",
     "inferredWindow": "~{period} ({samples}කින් ඇස්තමේන්තු)",
     "period_minute": "විනාඩියකට",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "මකන්න",
     "resetInferredMark": "(ඇස්.)",
     "resetInferredHint": "නිරීක්ෂිත යළි සැකසුම් සීමා මත පදනම්ව පුරෝකථනය කළා — මෙම සැපයුම්කරු යළි සැකසුම් වේලාවක් නොයවයි. පෝලිං පරාසය තුළ නිරවද්‍යයි.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} ආකෘති",
+    "poolMembersOne": "ආකෘති 1",
+    "locallyCountedMark": "·දේශීය",
+    "locallyCountedHint": "සපයන්නා මෙම එකතුව කිසිදා වාර්තා කර නැත; මෙම ගණන අපගේය, අප තබා ගන්නා සීමාවට එරෙහිව."
   },
   "logs": {
     "title": "ලොග",
@@ -1259,11 +1259,11 @@
     "changesTitle": "කලාපයන් සටහන",
     "changesHint": "මොදල් {since} දත්ත කර, සැංචිත්ව retirement not yet acknowledged.",
     "untracked": "{count} මොදල් අත්හිම ගත්ත.",
-    "arrived": "Arrived ({count})",
-    "departed": "Retired ({count})",
+    "arrived": "එකතු විය ({count})",
+    "departed": "ඉවත් කළා ({count})",
     "autoRouted": "අපි කරුණු {chains} ඞවල",
-    "notRouted": "not routed",
-    "lostFrom": "lost from {chains}",
-    "acknowledge": "Acknowledge"
+    "notRouted": "මාර්ගගත කර නැත",
+    "lostFrom": "{chains} වෙතින් නැති විය",
+    "acknowledge": "පිළිගන්න"
   }
 }

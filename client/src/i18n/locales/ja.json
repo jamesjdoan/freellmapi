@@ -767,16 +767,16 @@
     "cacheHitRate": "キャッシュヒット率",
     "cacheSavedTokens": "{tokens} トークンを節約",
     "cacheHitRateHint": "サーバー起動以降 {hits} ヒット / {misses} ミス · プロバイダー呼び出し {requests} 回を回避",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "クォータ要因で #{from} → #{to} に移動",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "探索プローブ",
+      "sticky": "固定セッション",
+      "pinned": "リクエストで指定"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "クォータ残り {pct}%",
+    "routingHarvest": "未使用のまま期限切れ間近",
+    "routingDiversity": "分散（{pct}% 減点）",
+    "routingInFlight": "実行中の処理の {pct}% がこのプール"
   },
   "quota": {
     "title": "クォータ",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "削除",
     "resetInferredMark": "(推定)",
     "resetInferredHint": "観測されたリセット境界からの予測 — このプロバイダーはリセット時刻を送信しません。精度はポーリング間隔の範囲内です。",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} モデル",
+    "poolMembersOne": "1 モデル",
+    "locallyCountedMark": "·ローカル",
+    "locallyCountedHint": "プロバイダーはこのプールを報告していません。この件数は自前の集計で、こちらで保持している上限に対する値です。"
   },
   "logs": {
     "title": "ログ",

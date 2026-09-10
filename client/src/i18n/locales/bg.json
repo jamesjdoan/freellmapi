@@ -767,16 +767,16 @@
     "cacheHitRate": "Процент попадения в кеша",
     "cacheSavedTokens": "Спестени {tokens} токена",
     "cacheHitRateHint": "{hits} попадения срещу {misses} пропуска от старта на сървъра · спестени {requests} заявки към доставчик",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "условията за квота го преместиха #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "изследователска проба",
+      "sticky": "закрепена сесия",
+      "pinned": "закрепено от заявката"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "запас от квота {pct} %",
+    "routingHarvest": "квотата изтича неизползвана",
+    "routingDiversity": "разпределение ({pct} % потискане)",
+    "routingInFlight": "{pct} % от текущата работа в този пул"
   },
   "quota": {
     "title": "Квота",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Изтрий",
     "resetInferredMark": "(оцен.)",
     "resetInferredHint": "Прогнозирано по наблюдавани граници на нулиране — този доставчик не изпраща час на нулиране. Точност в рамките на интервала на запитване.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} модела",
+    "poolMembersOne": "1 модел",
+    "locallyCountedMark": "·локално",
+    "locallyCountedHint": "Доставчикът никога не е отчитал този пул; броенето е наше, спрямо лимит, който поддържаме сами."
   },
   "logs": {
     "title": "Логове",

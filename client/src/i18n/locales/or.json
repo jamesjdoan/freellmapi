@@ -611,7 +611,7 @@
     "bulkResult": "{done} ଅଦ୍ୟତନ ହୋଇଛି; {failed} ବିଫଳ ହୋଇଛି।",
     "bulkDeleteResult": "{done} ବିଲୋପ ହୋଇଛି; {failed} ବିଫଳ ହୋଇଛି।",
     "churnWindow": "{days}d",
-    "churnAria": "{added} added, {lost} retired in the last {days} days"
+    "churnAria": "ଗତ {days} ଦିନରେ {added} ଯୋଡ଼ାଗଲା, {lost} ହଟାଗଲା"
   },
   "backups": {
     "title": "Backups",
@@ -767,16 +767,16 @@
     "cacheHitRate": "କ୍ୟାଶ୍ ହିଟ୍ ହାର",
     "cacheSavedTokens": "{tokens} ଟୋକେନ୍ ସଞ୍ଚୟ",
     "cacheHitRateHint": "ସର୍ଭର ଆରମ୍ଭ ହେବା ପରଠାରୁ {hits} ହିଟ୍ ବନାମ {misses} ମିସ୍ · {requests} ପ୍ରଦାତା କଲ୍ ଏଡ଼ାଯାଇଛି",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "କୋଟା ସର୍ତ୍ତ ଏହାକୁ #{from} → #{to} ସ୍ଥାନାନ୍ତର କଲା",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "ଅନ୍ୱେଷଣ ପରୀକ୍ଷା",
+      "sticky": "ସ୍ଥିର ସେସନ୍",
+      "pinned": "ଅନୁରୋଧ ଦ୍ୱାରା ପିନ୍ ହୋଇଛି"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "ଅବଶିଷ୍ଟ କୋଟା {pct}%",
+    "routingHarvest": "କୋଟା ବ୍ୟବହାର ନହୋଇ ଶେଷ ହେଉଛି",
+    "routingDiversity": "ବିସ୍ତାର ({pct}% ହ୍ରାସ)",
+    "routingInFlight": "ଚାଲୁ କାର୍ଯ୍ୟର {pct}% ଏହି ପୁଲରେ"
   },
   "quota": {
     "title": "କୋଟା",
@@ -869,7 +869,7 @@
     "colMetric": "ମେଟ୍ରିକ୍",
     "colScope": "ପରିସର",
     "colSource": "ଉତ୍ସ",
-    "locallyCounted": "(ସ୍ଥାନୀୟ ଭାବେ ଗଣିତ)",
+    "locallyCounted": "(ସ୍ଥାନୀୟ ଗଣନା)",
     "colWindow": "ୱିଣ୍ଡୋ",
     "inferredWindow": "~{period} ({samples}ରୁ ଆକଳିତ)",
     "period_minute": "ପ୍ରତି ମିନିଟ୍",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "ଡିଲିଟ୍",
     "resetInferredMark": "(ଆକଳିତ)",
     "resetInferredHint": "ଦେଖାଯାଇଥିବା ରିସେଟ୍ ସୀମାରୁ ଅନୁମାନିତ — ଏହି ପ୍ରଦାତା କୌଣସି ରିସେଟ୍ ସମୟ ପଠାଏ ନାହିଁ। ପୋଲିଂ ଅନ୍ତରାଳ ମଧ୍ୟରେ ସଠିକ୍।",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} ମଡେଲ",
+    "poolMembersOne": "1 ମଡେଲ",
+    "locallyCountedMark": "·ସ୍ଥାନୀୟ",
+    "locallyCountedHint": "ପ୍ରଦାନକାରୀ ଏହି ପୁଲ ବିଷୟରେ କେବେ ରିପୋର୍ଟ କରିନାହିଁ; ଏହି ଗଣନା ଆମର, ଆମେ ରଖିଥିବା ସୀମା ବିରୁଦ୍ଧରେ।"
   },
   "logs": {
     "title": "ଲଗ",
@@ -1258,12 +1258,12 @@
   "catalogue": {
     "changesTitle": "କାଟାଲୋଗ୍ ପରିବର୍ତ୍ତନ",
     "changesHint": "{since} ପରେ ମାଡେଲ ଯୋଡ଼ାଯାଇଛି, ଏବଂ ନିବୃତି ଅନୟାୟତ ନାହିଁ।",
-    "untracked": "{count} models predate arrival tracking.",
-    "arrived": "Arrived ({count})",
-    "departed": "Retired ({count})",
-    "autoRouted": "already routing — {chains}",
-    "notRouted": "not routed",
-    "lostFrom": "lost from {chains}",
-    "acknowledge": "Acknowledge"
+    "untracked": "{count} ମଡେଲ ଆଗମନ ଟ୍ରାକିଂ ପୂର୍ବରୁ ଅଛି।",
+    "arrived": "ଯୋଡ଼ାଗଲା ({count})",
+    "departed": "ହଟାଗଲା ({count})",
+    "autoRouted": "ପୂର୍ବରୁ ରୁଟ ହେଉଛି — {chains}",
+    "notRouted": "ରୁଟ ହୋଇନାହିଁ",
+    "lostFrom": "{chains} ରୁ ହଜିଗଲା",
+    "acknowledge": "ସ୍ୱୀକାର କରନ୍ତୁ"
   }
 }

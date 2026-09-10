@@ -767,16 +767,16 @@
     "cacheHitRate": "Cache-hitratio",
     "cacheSavedTokens": "{tokens} tokens bespaard",
     "cacheHitRateHint": "{hits} hits tegenover {misses} missers sinds de serverstart · {requests} provideraanroepen vermeden",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "quotafactoren verschoven het #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "verkenningstest",
+      "sticky": "vaste sessie",
+      "pinned": "vastgezet door verzoek"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "quotaruimte {pct}%",
+    "routingHarvest": "tegoed verloopt ongebruikt",
+    "routingDiversity": "spreiding ({pct}% demping)",
+    "routingInFlight": "{pct}% van het lopende werk in deze pool"
   },
   "quota": {
     "title": "Quota",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Verwijderen",
     "resetInferredMark": "(schatting)",
     "resetInferredHint": "Voorspeld op basis van waargenomen resetgrenzen — deze provider stuurt geen resettijd. Nauwkeurig tot op het polling-interval.",
-    "poolMembers": "{count} models",
+    "poolMembers": "{count} modellen",
     "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "locallyCountedMark": "·lokaal",
+    "locallyCountedHint": "De provider heeft deze pool nooit gerapporteerd; de telling is de onze, tegen een limiet die wij aanhouden."
   },
   "logs": {
     "title": "Logs",

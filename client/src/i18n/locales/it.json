@@ -767,16 +767,16 @@
     "cacheHitRate": "Tasso di hit della cache",
     "cacheSavedTokens": "{tokens} token risparmiati",
     "cacheHitRateHint": "{hits} hit contro {misses} miss dall'avvio del server · {requests} chiamate al provider evitate",
-    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingRankMove": "i criteri di quota l'hanno spostato #{from} → #{to}",
     "routingOverride": {
-      "explore": "exploration probe",
-      "sticky": "sticky session",
-      "pinned": "pinned by request"
+      "explore": "sondaggio esplorativo",
+      "sticky": "sessione fissa",
+      "pinned": "fissato dalla richiesta"
     },
-    "routingScarcity": "quota headroom {pct}%",
-    "routingHarvest": "allowance expiring unused",
-    "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingScarcity": "margine di quota {pct} %",
+    "routingHarvest": "quota in scadenza non usata",
+    "routingDiversity": "distribuzione ({pct} % di attenuazione)",
+    "routingInFlight": "{pct} % del lavoro in corso su questo pool"
   },
   "quota": {
     "title": "Quota",
@@ -911,10 +911,10 @@
     "policyDeleteConfirm": "Elimina",
     "resetInferredMark": "(stima)",
     "resetInferredHint": "Previsto dai limiti di reset osservati — questo provider non invia l'ora di reset. Precisione pari all'intervallo di polling.",
-    "poolMembers": "{count} models",
-    "poolMembersOne": "1 model",
-    "locallyCountedMark": "·local",
-    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
+    "poolMembers": "{count} modelli",
+    "poolMembersOne": "1 modello",
+    "locallyCountedMark": "·locale",
+    "locallyCountedHint": "Il provider non ha mai riportato questo pool; il conteggio è nostro, rispetto a un limite che manteniamo noi."
   },
   "logs": {
     "title": "Log",
