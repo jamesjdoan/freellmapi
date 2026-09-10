@@ -614,7 +614,9 @@
     "churnAria": "{added} ajoutés, {lost} retirés au cours des {days} derniers jours",
     "churnExpandHint": "Afficher les arrivées et les retraits, et choisir ce que cette clé sert",
     "churnPanelHint": "Inclure ou exclure un modèle du périmètre de cette clé. Un nouveau modèle doit en plus figurer dans une chaîne de routage avant de servir du trafic.",
-    "churnLastModel": "Une clé ne peut pas être limitée à rien — désactivez plutôt la clé elle-même."
+    "churnLastModel": "Une clé ne peut pas être limitée à rien — désactivez plutôt la clé elle-même.",
+    "churnNotScoped": "hors périmètre",
+    "churnNotScopedHint": "Le retrait a supprimé ce modèle du catalogue et cette clé ne l'a jamais listé : il n'y a rien à basculer."
   },
   "backups": {
     "title": "Sauvegardes",

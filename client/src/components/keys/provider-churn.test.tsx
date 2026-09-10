@@ -150,3 +150,51 @@ describe('ProviderChurnPanel', () => {
     expect(renderPanel({ churn: { arrived: [], departed: [] } }).innerHTML).toBe('')
   })
 })
+
+describe('ProviderChurnPanel, retired models', () => {
+  const gone = { arrived: [], departed: [departure('gemini-2.5-pro', '2026-09-04 09:00:00')] }
+
+  function renderWith(isServed: (id: string) => boolean, onSetServed = () => {}) {
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    act(() => root!.render(
+      <ProviderChurnPanel
+        churn={gone}
+        isServed={isServed}
+        onSetServed={onSetServed}
+        pending={false}
+        disabledReason={() => null}
+      />,
+    ))
+    return host
+  }
+
+  it('offers no switch when the key never listed the retired model', () => {
+    // Retirement DELETES the catalogue row - only a tombstone survives - so the
+    // id resolves to nothing, is absent from the picker and uncounted by the
+    // n/m badge. A switch there would be a control over nothing.
+    const el = renderWith(() => false)
+    expect(el.querySelector('[aria-label="gemini-2.5-pro"]')).toBeNull()
+    // No I18nProvider in this file, so `t` echoes the key - assert on that
+    // rather than on English that a translation would legitimately change.
+    expect(el.textContent).toContain('keys.churnNotScoped')
+  })
+
+  it('offers the switch while the stale id is still in scope', () => {
+    // Here it is real cleanup: the scope holds a string pointing at a model
+    // that no longer exists, and taking it out is the point.
+    const el = renderWith(() => true)
+    expect(el.querySelector('[aria-label="gemini-2.5-pro"]')).not.toBeNull()
+    expect(el.textContent).not.toContain('keys.churnNotScoped')
+  })
+
+  it('still names the model and its date either way', () => {
+    for (const served of [true, false]) {
+      const el = renderWith(() => served)
+      expect(el.textContent).toContain('gemini-2.5-pro')
+      expect(el.textContent).toContain('2026-09-04')
+      act(() => root!.unmount()); host!.remove(); root = null; host = null
+    }
+  })
+})

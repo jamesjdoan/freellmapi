@@ -614,7 +614,9 @@
     "churnAria": "{added} 新增，{lost} 退役，過去 {days} 天",
     "churnExpandHint": "顯示新增與撤下的模型，並選擇此金鑰服務哪些",
     "churnPanelHint": "將模型加入或移出此金鑰的範圍。新模型還需要加入路由鏈才會承接流量。",
-    "churnLastModel": "金鑰範圍不能為空 — 請直接停用該金鑰。"
+    "churnLastModel": "金鑰範圍不能為空 — 請直接停用該金鑰。",
+    "churnNotScoped": "不在範圍內",
+    "churnNotScopedHint": "撤下已將該模型從目錄中刪除，且此金鑰從未包含它，沒有可切換的內容。"
   },
   "backups": {
     "title": "Backups",

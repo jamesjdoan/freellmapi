@@ -614,7 +614,9 @@
     "churnAria": "{added} được thêm, {lost} đã huỷ trong {days} ngày qua",
     "churnExpandHint": "Hiện những gì được thêm và bị ngừng, và chọn những gì khóa này phục vụ",
     "churnPanelHint": "Thêm hoặc bỏ một mô hình khỏi phạm vi của khóa này. Mô hình mới vẫn cần một chuỗi định tuyến trước khi phục vụ lưu lượng.",
-    "churnLastModel": "Phạm vi của khóa không thể trống — hãy tắt chính khóa đó."
+    "churnLastModel": "Phạm vi của khóa không thể trống — hãy tắt chính khóa đó.",
+    "churnNotScoped": "ngoài phạm vi",
+    "churnNotScopedHint": "Việc ngừng cung cấp đã xóa mô hình này khỏi danh mục và khóa này chưa từng có nó, nên không có gì để bật tắt."
   },
   "backups": {
     "title": "Backups",

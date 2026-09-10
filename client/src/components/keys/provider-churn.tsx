@@ -84,9 +84,12 @@ export function ProviderChurnChip({ churn, expanded, onToggle }: {
  * routing chain before it serves traffic, and that stays on the chain page,
  * where the ordering it affects is visible.
  *
- * A retired model keeps its switch on purpose. It is gone upstream, but it can
- * still be sitting in the scope, and taking it out here is the cleanup the
- * departure implies.
+ * A retired model gets a switch ONLY while its id is still sitting in the
+ * scope. Retirement deletes the catalogue row outright - a tombstone is all
+ * that is left - so the id resolves to nothing, is not in the picker's list and
+ * is not counted by the `n/m` badge. Where the scope still holds it, taking it
+ * out is real cleanup of a stale entry. Where it does not, there is nothing to
+ * toggle, and a switch would be a control over nothing.
  */
 export function ProviderChurnPanel({ churn, isServed, onSetServed, pending, disabledReason }: {
   churn: ProviderChurn | undefined
@@ -102,6 +105,9 @@ export function ProviderChurnPanel({ churn, isServed, onSetServed, pending, disa
 
   const rows = [
     ...churn.arrived.map(m => ({
+      // An arrival is in the catalogue, so its switch always means something -
+      // off is a real exclusion, not a no-op.
+      actionable: true,
       key: `+${m.modelId}`,
       modelId: m.modelId,
       name: m.displayName || m.modelId,
@@ -111,6 +117,8 @@ export function ProviderChurnPanel({ churn, isServed, onSetServed, pending, disa
       noteIsWarning: m.routed,
     })),
     ...churn.departed.map(m => ({
+      // Only when the stale id is actually there to remove.
+      actionable: isServed(m.modelId),
       key: `-${m.modelId}`,
       modelId: m.modelId,
       name: m.modelId,
@@ -145,7 +153,11 @@ export function ProviderChurnPanel({ churn, isServed, onSetServed, pending, disa
                 </span>
               )}
               <span className="flex-shrink-0 text-[11px] text-muted-foreground tabular-nums">{row.date}</span>
-              {blocked ? (
+              {!row.actionable ? (
+                <span className="flex-shrink-0 text-[11px] text-muted-foreground" title={t('keys.churnNotScopedHint')}>
+                  {t('keys.churnNotScoped')}
+                </span>
+              ) : blocked ? (
                 <Tooltip text={blocked} focusable className="inline-flex flex-shrink-0 rounded focus-visible:outline focus-visible:outline-1">
                   <Switch size="sm" checked={served} disabled aria-label={row.modelId} />
                 </Tooltip>

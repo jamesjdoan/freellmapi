@@ -614,7 +614,9 @@
     "churnAria": "{added} adicionado, {lost} removido nos últimos {days} dias",
     "churnExpandHint": "Mostrar o que chegou e o que foi descontinuado, e escolher o que esta chave serve",
     "churnPanelHint": "Inclua ou remova um modelo do âmbito desta chave. Um modelo novo precisa ainda de uma cadeia de encaminhamento antes de servir tráfego.",
-    "churnLastModel": "Uma chave não pode ficar sem nenhum modelo — desative a própria chave."
+    "churnLastModel": "Uma chave não pode ficar sem nenhum modelo — desative a própria chave.",
+    "churnNotScoped": "fora do âmbito",
+    "churnNotScopedHint": "A descontinuação removeu este modelo do catálogo e esta chave nunca o listou, pelo que não há nada para alternar."
   },
   "backups": {
     "title": "Backups",

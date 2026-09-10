@@ -614,7 +614,9 @@
     "churnAria": "negli ultimi {days} giorni, {added} aggiunti, {lost} ritirati",
     "churnExpandHint": "Mostra ciò che è arrivato e ciò che è stato ritirato, e scegli cosa serve questa chiave",
     "churnPanelHint": "Includi o escludi un modello dall'ambito di questa chiave. Un modello nuovo deve inoltre entrare in una catena di routing prima di servire traffico.",
-    "churnLastModel": "Una chiave non può essere limitata a nulla: disattiva invece la chiave stessa."
+    "churnLastModel": "Una chiave non può essere limitata a nulla: disattiva invece la chiave stessa.",
+    "churnNotScoped": "fuori ambito",
+    "churnNotScopedHint": "Il ritiro ha eliminato questo modello dal catalogo e questa chiave non l'ha mai elencato: non c'è nulla da commutare."
   },
   "backups": {
     "title": "Backups",

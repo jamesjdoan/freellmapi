@@ -614,7 +614,9 @@
     "churnAria": "최근 {days}일 동안 {added}개 추가, {lost}개 종료",
     "churnExpandHint": "추가와 종료를 표시하고, 이 키가 제공할 모델을 선택",
     "churnPanelHint": "모델을 이 키의 범위에 넣거나 제외합니다. 새 모델이 실제로 트래픽을 처리하려면 라우팅 체인에도 등록되어야 합니다.",
-    "churnLastModel": "키의 범위를 비울 수는 없습니다. 대신 키 자체를 끄세요."
+    "churnLastModel": "키의 범위를 비울 수는 없습니다. 대신 키 자체를 끄세요.",
+    "churnNotScoped": "범위 밖",
+    "churnNotScopedHint": "종료로 이 모델은 카탈로그에서 삭제되었고 이 키가 포함한 적도 없습니다. 전환할 것이 없습니다."
   },
   "backups": {
     "title": "Backups",

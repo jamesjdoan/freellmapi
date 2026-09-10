@@ -614,7 +614,9 @@
     "churnAria": "{added} ditambahkan, {lost} ditarik dalam {days} hari terakhir",
     "churnExpandHint": "Tampilkan yang masuk dan yang ditarik, lalu pilih apa yang dilayani kunci ini",
     "churnPanelHint": "Masukkan atau keluarkan model dari cakupan kunci ini. Model baru masih perlu rantai perutean sebelum melayani lalu lintas.",
-    "churnLastModel": "Cakupan kunci tidak boleh kosong — matikan kuncinya saja."
+    "churnLastModel": "Cakupan kunci tidak boleh kosong — matikan kuncinya saja.",
+    "churnNotScoped": "di luar cakupan",
+    "churnNotScopedHint": "Penarikan menghapus model ini dari katalog dan kunci ini tidak pernah memuatnya, jadi tidak ada yang bisa diubah."
   },
   "backups": {
     "title": "Backups",

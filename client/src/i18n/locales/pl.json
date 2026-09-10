@@ -614,7 +614,9 @@
     "churnAria": "{added} dodano, {lost} wycofano w ciągu ostatnich {days} dni",
     "churnExpandHint": "Pokaż, co doszło i co wycofano, oraz wybierz, co obsługuje ten klucz",
     "churnPanelHint": "Włącz model do zakresu tego klucza lub go usuń. Nowy model potrzebuje jeszcze łańcucha routingu, zanim zacznie obsługiwać ruch.",
-    "churnLastModel": "Klucz nie może mieć pustego zakresu — wyłącz raczej sam klucz."
+    "churnLastModel": "Klucz nie może mieć pustego zakresu — wyłącz raczej sam klucz.",
+    "churnNotScoped": "poza zakresem",
+    "churnNotScopedHint": "Wycofanie usunęło ten model z katalogu, a ten klucz nigdy go nie zawierał — nie ma czego przełączać."
   },
   "backups": {
     "title": "Backups",

@@ -614,7 +614,9 @@
     "churnAria": "පසුගිය {days} දින තුළ {added} එකතු විය, {lost} ඉවත් විය",
     "churnExpandHint": "Show what arrived and left, and pick what this key serves",
     "churnPanelHint": "Switch a model into or out of this key's scope. A new model still needs a routing chain before it serves traffic.",
-    "churnLastModel": "A key cannot be scoped to nothing - turn the key itself off instead."
+    "churnLastModel": "A key cannot be scoped to nothing - turn the key itself off instead.",
+    "churnNotScoped": "not in scope",
+    "churnNotScopedHint": "Retirement deleted this model from the catalogue and this key never listed it, so there is nothing to switch."
   },
   "backups": {
     "title": "Backups",

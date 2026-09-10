@@ -614,7 +614,9 @@
     "churnAria": "{added} toegevoegd, {lost} teruggetrokken in de laatste {days} dagen",
     "churnExpandHint": "Toon wat erbij kwam en wegviel, en kies wat deze sleutel bedient",
     "churnPanelHint": "Neem een model op in of haal het uit het bereik van deze sleutel. Een nieuw model heeft daarnaast een routeringsketen nodig voordat het verkeer bedient.",
-    "churnLastModel": "Een sleutel kan niet tot niets beperkt worden — zet de sleutel zelf uit."
+    "churnLastModel": "Een sleutel kan niet tot niets beperkt worden — zet de sleutel zelf uit.",
+    "churnNotScoped": "buiten bereik",
+    "churnNotScopedHint": "De terugtrekking heeft dit model uit de catalogus verwijderd en deze sleutel had het nooit; er is niets om te schakelen."
   },
   "backups": {
     "title": "Backups",
