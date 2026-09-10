@@ -162,3 +162,50 @@ describe('password reset by log code', () => {
     expect((await post(app, '/api/auth/login', { email: EMAIL, password: PASSWORD })).status).toBe(200);
   });
 });
+
+describe('reset clears the brute-force lockout', () => {
+  let app: Express;
+  beforeEach(async () => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    jump(60 * 60 * 1000);
+    initDb(':memory:');
+    clearResetCode();
+    app = makeApp();
+    await post(app, '/api/auth/setup', { email: EMAIL, password: PASSWORD });
+  });
+
+  it('lets the new password straight in after five failed attempts', async () => {
+    // The reported failure, exactly: read the code out of the logs, set a new
+    // password, and still be refused for fifteen minutes with "Too many failed
+    // attempts" — against a password that no longer exists. The lockout is
+    // keyed by email and held in memory, so waiting it out or restarting the
+    // container were the only ways through, and nothing said so.
+    for (let i = 0; i < 5; i++) {
+      await post(app, '/api/auth/login', { email: EMAIL, password: 'wrong' });
+    }
+    const lockedOut = await post(app, '/api/auth/login', { email: EMAIL, password: PASSWORD });
+    expect(lockedOut.status).toBe(429);
+
+    await forgot(app);
+    const reset = await post(app, '/api/auth/reset-password', {
+      resetCode: getResetCode(), newPassword: 'a-brand-new-password',
+    });
+    expect(reset.status).toBe(200);
+
+    const signedIn = await post(app, '/api/auth/login', { email: EMAIL, password: 'a-brand-new-password' });
+    expect(signedIn.status).toBe(200);
+    expect(signedIn.body.token).toBeTruthy();
+  });
+
+  it('still refuses the old password after the reset', async () => {
+    // Clearing the counter must not become a way to keep using stale
+    // credentials: the reset invalidates the password, not just the lockout.
+    await forgot(app);
+    await post(app, '/api/auth/reset-password', {
+      resetCode: getResetCode(), newPassword: 'a-brand-new-password',
+    });
+    const old = await post(app, '/api/auth/login', { email: EMAIL, password: PASSWORD });
+    expect(old.status).toBe(401);
+  });
+});

@@ -66,6 +66,22 @@ function recordFailure(email: string): void {
 function clearFailures(email: string): void {
   attempts.delete(email.toLowerCase());
 }
+/**
+ * Drop every recorded failure.
+ *
+ * Used by the password reset, which is the one path that fixes the cause of the
+ * failures without knowing which email they were recorded against —
+ * `resetUserPassword` resets THE user, this being a single-user tool, and never
+ * sees an address.
+ *
+ * Without it the reset left you locked out: you would read the code out of the
+ * logs, set a new password, and still be refused for fifteen minutes with "Too
+ * many failed attempts", against a password that no longer exists. The only way
+ * through was to wait it out or restart the container, and nothing said so.
+ */
+function clearAllFailures(): void {
+  attempts.clear();
+}
 
 function bearer(req: Request): string | undefined {
   return req.headers.authorization?.replace(/^Bearer\s+/i, '')
@@ -286,5 +302,8 @@ authRouter.post('/reset-password', (req: Request, res: Response) => {
     return;
   }
   clearResetCode();
+  // The old password is gone, so failures recorded against it are meaningless
+  // and must not keep the account locked.
+  clearAllFailures();
   res.json({ success: true });
 });
