@@ -611,7 +611,10 @@
     "bulkResult": "עודכנו {done}; נכשלו {failed}.",
     "bulkDeleteResult": "נמחקו {done}; נכשלו {failed}.",
     "churnWindow": "{days} י׳",
-    "churnAria": "{added} נוספו, {lost} הוסרו ב־{days} הימים האחרונים"
+    "churnAria": "{added} נוספו, {lost} הוסרו ב־{days} הימים האחרונים",
+    "churnExpandHint": "הצג מה נוסף ומה הוסר, ובחר מה המפתח הזה משרת",
+    "churnPanelHint": "הכלל או הוצא דגם מתחום המפתח הזה. דגם חדש זקוק גם לשרשרת ניתוב לפני שישרת בקשות.",
+    "churnLastModel": "לא ניתן לצמצם מפתח לכלום — כבה את המפתח עצמו במקום."
   },
   "backups": {
     "title": "Backups",

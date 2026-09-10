@@ -611,7 +611,10 @@
     "bulkResult": "{done} 件を更新しました。{failed} 件が失敗しました。",
     "bulkDeleteResult": "{done} 件を削除しました。{failed} 件が失敗しました。",
     "churnWindow": "{days}日",
-    "churnAria": "過去 {days} 日間に {added} 件追加、{lost} 件提供終了"
+    "churnAria": "過去 {days} 日間に {added} 件追加、{lost} 件提供終了",
+    "churnExpandHint": "追加と提供終了を表示し、このキーが扱うモデルを選ぶ",
+    "churnPanelHint": "モデルをこのキーの対象に含める、または外します。新しいモデルが実際に処理を受けるには、別途ルーティングチェーンへの登録が必要です。",
+    "churnLastModel": "キーの対象を空にはできません。代わりにキー自体を無効にしてください。"
   },
   "backups": {
     "title": "Backups",

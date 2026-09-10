@@ -9,7 +9,7 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { ProviderChurnChip } from './provider-churn'
+import { ProviderChurnChip, ProviderChurnPanel } from './provider-churn'
 import type { ProviderChurn } from '@/lib/catalogue-changes'
 
 beforeAll(() => {
@@ -87,5 +87,66 @@ describe('ProviderChurnChip', () => {
     const el = render({ arrived: [arrival('x', 'X', '2026-09-08 09:00:00', ['Fast-Lane', 'Default'])], departed: [] })
     act(() => el.querySelector<HTMLElement>('[tabindex="0"]')!.focus())
     expect(document.querySelector('[role=tooltip]')!.textContent).toContain('Fast-Lane, Default')
+  })
+})
+
+describe('ProviderChurnPanel', () => {
+  const churn = {
+    arrived: [arrival('openai/new-model', 'New Model', '2026-09-08 09:00:00', ['Fast-Lane'])],
+    departed: [departure('gemini-2.5-pro', '2026-09-04 09:00:00')],
+  }
+
+  function renderPanel(over: Partial<Parameters<typeof ProviderChurnPanel>[0]> = {}) {
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    const props = {
+      churn,
+      isServed: () => true,
+      onSetServed: () => {},
+      pending: false,
+      disabledReason: () => null,
+      ...over,
+    }
+    act(() => root!.render(<ProviderChurnPanel {...props} />))
+    return host
+  }
+
+  it('lists both directions with the model names the chip only hinted at', () => {
+    const el = renderPanel()
+    expect(el.textContent).toContain('New Model')
+    expect(el.textContent).toContain('gemini-2.5-pro')
+    expect(el.textContent).toContain('2026-09-08')
+  })
+
+  it('reports the scope change a switch would make, by model id', () => {
+    const calls: [string, boolean][] = []
+    const el = renderPanel({ onSetServed: (id, served) => calls.push([id, served]) })
+    // The id is what the scope stores; the display name is not addressable.
+    const sw = el.querySelector<HTMLElement>('[aria-label="openai/new-model"]')!
+    act(() => sw.click())
+    expect(calls).toEqual([['openai/new-model', false]])
+  })
+
+  it('offers a retired model its switch, so it can be taken out of scope', () => {
+    // It is gone upstream but can still be sitting in the key's scope, and
+    // removing it is the cleanup the departure implies.
+    const el = renderPanel()
+    expect(el.querySelector('[aria-label="gemini-2.5-pro"]')).not.toBeNull()
+  })
+
+  it('disables the switch it cannot honour instead of failing the write', () => {
+    const calls: string[] = []
+    const el = renderPanel({
+      disabledReason: id => (id === 'openai/new-model' ? 'cannot scope to nothing' : null),
+      onSetServed: id => calls.push(id),
+    })
+    const sw = el.querySelector<HTMLElement>('[aria-label="openai/new-model"]')!
+    act(() => sw.click())
+    expect(calls).toEqual([])
+  })
+
+  it('renders nothing when this provider gained and lost nothing', () => {
+    expect(renderPanel({ churn: { arrived: [], departed: [] } }).innerHTML).toBe('')
   })
 })

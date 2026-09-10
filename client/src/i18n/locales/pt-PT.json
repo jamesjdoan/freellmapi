@@ -611,7 +611,10 @@
     "bulkResult": "Atualizadas {done}; falharam {failed}.",
     "bulkDeleteResult": "Eliminadas {done}; falharam {failed}.",
     "churnWindow": "{days}d",
-    "churnAria": "{added} adicionado, {lost} removido nos últimos {days} dias"
+    "churnAria": "{added} adicionado, {lost} removido nos últimos {days} dias",
+    "churnExpandHint": "Mostrar o que chegou e o que foi descontinuado, e escolher o que esta chave serve",
+    "churnPanelHint": "Inclua ou remova um modelo do âmbito desta chave. Um modelo novo precisa ainda de uma cadeia de encaminhamento antes de servir tráfego.",
+    "churnLastModel": "Uma chave não pode ficar sem nenhum modelo — desative a própria chave."
   },
   "backups": {
     "title": "Backups",

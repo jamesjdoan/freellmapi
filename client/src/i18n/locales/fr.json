@@ -611,7 +611,10 @@
     "bulkResult": "Mises à jour : {done}. Échecs : {failed}.",
     "bulkDeleteResult": "Supprimées : {done}. Échecs : {failed}.",
     "churnWindow": "{days} j",
-    "churnAria": "{added} ajoutés, {lost} retirés au cours des {days} derniers jours"
+    "churnAria": "{added} ajoutés, {lost} retirés au cours des {days} derniers jours",
+    "churnExpandHint": "Afficher les arrivées et les retraits, et choisir ce que cette clé sert",
+    "churnPanelHint": "Inclure ou exclure un modèle du périmètre de cette clé. Un nouveau modèle doit en plus figurer dans une chaîne de routage avant de servir du trafic.",
+    "churnLastModel": "Une clé ne peut pas être limitée à rien — désactivez plutôt la clé elle-même."
   },
   "backups": {
     "title": "Sauvegardes",

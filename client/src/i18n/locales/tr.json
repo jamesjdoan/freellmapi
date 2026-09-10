@@ -611,7 +611,10 @@
     "bulkResult": "Güncellenen {done}; başarısız {failed}.",
     "bulkDeleteResult": "Silinen {done}; başarısız {failed}.",
     "churnWindow": "{days}g",
-    "churnAria": "{added} eklendi, {lost} çıkarıldı son {days} g içinde"
+    "churnAria": "{added} eklendi, {lost} çıkarıldı son {days} g içinde",
+    "churnExpandHint": "Eklenenleri ve çıkarılanları göster, bu anahtarın neye hizmet ettiğini seç",
+    "churnPanelHint": "Bir modeli bu anahtarın kapsamına alın veya çıkarın. Yeni bir modelin trafiğe hizmet etmesi için ayrıca bir yönlendirme zinciri gerekir.",
+    "churnLastModel": "Bir anahtarın kapsamı boş olamaz — bunun yerine anahtarı kapatın."
   },
   "backups": {
     "title": "Backups",

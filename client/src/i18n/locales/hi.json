@@ -611,7 +611,10 @@
     "bulkResult": "{done} अपडेट हुए; {failed} विफल।",
     "bulkDeleteResult": "{done} हटाए गए; {failed} विफल।",
     "churnWindow": "{days} दि",
-    "churnAria": "पिछले {days} दिनों में {added} जुड़े, {lost} हटे"
+    "churnAria": "पिछले {days} दिनों में {added} जुड़े, {lost} हटे",
+    "churnExpandHint": "जुड़े और हटाए गए मॉडल दिखाएँ, और चुनें कि यह कुंजी क्या देती है",
+    "churnPanelHint": "मॉडल को इस कुंजी के दायरे में जोड़ें या हटाएँ। नए मॉडल को ट्रैफ़िक देने से पहले किसी रूटिंग चेन में भी होना चाहिए।",
+    "churnLastModel": "कुंजी का दायरा खाली नहीं हो सकता — इसके बजाय कुंजी को ही बंद करें।"
   },
   "backups": {
     "title": "Backups",

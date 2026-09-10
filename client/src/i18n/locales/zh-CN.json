@@ -611,7 +611,10 @@
     "bulkResult": "已更新 {done} 个；失败 {failed} 个。",
     "bulkDeleteResult": "已删除 {done} 个；失败 {failed} 个。",
     "churnWindow": "{days}天",
-    "churnAria": "{added} 新增，{lost} 退役，过去 {days} 天"
+    "churnAria": "{added} 新增，{lost} 退役，过去 {days} 天",
+    "churnExpandHint": "显示新增与撤下的模型，并选择此密钥服务哪些",
+    "churnPanelHint": "将模型加入或移出此密钥的范围。新模型还需要加入路由链才会承接流量。",
+    "churnLastModel": "密钥范围不能为空 — 请直接停用该密钥。"
   },
   "backups": {
     "title": "备份",

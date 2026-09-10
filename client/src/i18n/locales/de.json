@@ -611,7 +611,10 @@
     "bulkResult": "Aktualisiert {done}; fehlgeschlagen {failed}.",
     "bulkDeleteResult": "Gelöscht {done}; fehlgeschlagen {failed}.",
     "churnWindow": "{days} T.",
-    "churnAria": "{added} hinzugefügt, {lost} zurückgezogen in den letzten {days} Tagen"
+    "churnAria": "{added} hinzugefügt, {lost} zurückgezogen in den letzten {days} Tagen",
+    "churnExpandHint": "Zeigen, was hinzukam und wegfiel, und wählen, was dieser Schlüssel bedient",
+    "churnPanelHint": "Ein Modell in den Geltungsbereich dieses Schlüssels aufnehmen oder daraus entfernen. Ein neues Modell braucht zusätzlich eine Routing-Kette, bevor es Anfragen bedient.",
+    "churnLastModel": "Ein Schlüssel kann nicht auf nichts eingeschränkt werden — schalten Sie stattdessen den Schlüssel selbst ab."
   },
   "backups": {
     "title": "Backups",

@@ -611,7 +611,10 @@
     "bulkResult": "បានធ្វើបច្ចុប្បន្នភាព {done}; បរាជ័យ {failed}។",
     "bulkDeleteResult": "បានលុប {done}; បរាជ័យ {failed}។",
     "churnWindow": "{days}d",
-    "churnAria": "{added} ត្រូវបានបន់, {lost} ត្រូវបាត់ ក្នុង {days} ថ្ងៃ"
+    "churnAria": "{added} ត្រូវបានបន់, {lost} ត្រូវបាត់ ក្នុង {days} ថ្ងៃ",
+    "churnExpandHint": "Show what arrived and left, and pick what this key serves",
+    "churnPanelHint": "Switch a model into or out of this key's scope. A new model still needs a routing chain before it serves traffic.",
+    "churnLastModel": "A key cannot be scoped to nothing - turn the key itself off instead."
   },
   "backups": {
     "title": "Backups",

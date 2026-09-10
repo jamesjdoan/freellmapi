@@ -611,7 +611,10 @@
     "bulkResult": "Aggiornate {done}; fallite {failed}.",
     "bulkDeleteResult": "Eliminate {done}; fallite {failed}.",
     "churnWindow": "{days}d",
-    "churnAria": "negli ultimi {days} giorni, {added} aggiunti, {lost} ritirati"
+    "churnAria": "negli ultimi {days} giorni, {added} aggiunti, {lost} ritirati",
+    "churnExpandHint": "Mostra ciò che è arrivato e ciò che è stato ritirato, e scegli cosa serve questa chiave",
+    "churnPanelHint": "Includi o escludi un modello dall'ambito di questa chiave. Un modello nuovo deve inoltre entrare in una catena di routing prima di servire traffico.",
+    "churnLastModel": "Una chiave non può essere limitata a nulla: disattiva invece la chiave stessa."
   },
   "backups": {
     "title": "Backups",

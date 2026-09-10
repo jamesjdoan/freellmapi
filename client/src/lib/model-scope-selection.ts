@@ -330,6 +330,56 @@ export type ScopeUpdate =
   | { patch: false; reason: 'all' | 'empty' }
   | { patch: true; modelScope: string[] }
 
+/**
+ * The scope a key should hold after flipping ONE model on or off.
+ *
+ * Distinct from `resolveScopeUpdate` above, which answers "should the picker
+ * send anything at all" and deliberately declines to patch when everything is
+ * ticked. A single inline switch has to say what the scope becomes, and the
+ * two answers differ in exactly the case that matters: a key holding an
+ * explicit list, whose last excluded model is switched back on, must be
+ * written back to NULL. Leaving the list in place would pin the key to
+ * today's catalogue and quietly exclude every model added later - the same
+ * trap `resolveScopeUpdate` avoids by never narrowing a NULL scope.
+ *
+ * `refuse: 'last'` is the one state the column cannot express: NULL and the
+ * empty list both mean "serves everything", so a key cannot be scoped to
+ * nothing. Turning off the last model is the per-key `enabled` switch's job,
+ * and the caller says so rather than silently widening the scope to all.
+ *
+ * Ids the stored scope holds but `allIds` does not are PRESERVED, which is the
+ * opposite of what `resolveScopeUpdate` does and deliberately so. `allIds`
+ * comes from `/api/fallback`, which lists the ROUTABLE catalogue - a model
+ * disabled at catalogue level is simply absent. Pruning against that list
+ * meant flipping one switch silently revoked the key's access to every
+ * curated-off model: on a live key, turning off a retired model also dropped
+ * `gemini-2.5-flash`, which is real and merely switched off. The picker can
+ * prune because the operator is looking at the whole list as they confirm it.
+ * One switch must touch one model.
+ */
+export function scopeAfterToggle(
+  allIds: readonly string[],
+  currentScope: readonly string[] | null | undefined,
+  modelId: string,
+  enabled: boolean,
+): { modelScope: string[] | null } | { refuse: 'last' } {
+  // A NULL or empty scope serves everything, so the starting point for a
+  // narrowing edit is the whole routable catalogue, not an empty set.
+  const serveAll = currentScope == null || currentScope.length === 0
+  const chosen = serveAll ? [...allIds] : [...currentScope]
+  const at = chosen.indexOf(modelId)
+  if (enabled && at === -1) chosen.push(modelId)
+  if (!enabled && at !== -1) chosen.splice(at, 1)
+
+  if (chosen.length === 0) return { refuse: 'last' }
+  // Once every routable model is selected, NULL says the same thing and keeps
+  // saying it for models that arrive later. Any extra id the scope carries is
+  // covered by NULL too, so nothing is lost by collapsing.
+  const selected = new Set(chosen)
+  const servesEverything = allIds.length > 0 && allIds.every(id => selected.has(id))
+  return { modelScope: servesEverything ? null : chosen }
+}
+
 export function resolveScopeUpdate(
   allIds: readonly string[],
   selected: ReadonlySet<string>,

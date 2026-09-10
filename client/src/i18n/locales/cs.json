@@ -611,7 +611,10 @@
     "bulkResult": "Aktualizováno {done}; neúspěšné {failed}.",
     "bulkDeleteResult": "Smazáno {done}; neúspěšné {failed}.",
     "churnWindow": "{days}d.",
-    "churnAria": "{added} přidáno, {lost} vyřazeno za posledních {days} dní"
+    "churnAria": "{added} přidáno, {lost} vyřazeno za posledních {days} dní",
+    "churnExpandHint": "Zobrazit, co přišlo a co bylo odebráno, a vybrat, co tento klíč obsluhuje",
+    "churnPanelHint": "Zařaďte model do rozsahu tohoto klíče nebo jej odeberte. Nový model navíc potřebuje směrovací řetěz, než začne obsluhovat provoz.",
+    "churnLastModel": "Klíč nelze omezit na nic — vypněte místo toho samotný klíč."
   },
   "backups": {
     "title": "Backups",

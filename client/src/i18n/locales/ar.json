@@ -611,7 +611,10 @@
     "bulkResult": "تم تحديث {done}؛ فشل {failed}.",
     "bulkDeleteResult": "تم حذف {done}؛ فشل {failed}.",
     "churnWindow": "{days}يوم",
-    "churnAria": "{added} تمت إضافتها، {lost} تقاعدت في آخر {days} أيام"
+    "churnAria": "{added} تمت إضافتها، {lost} تقاعدت في آخر {days} أيام",
+    "churnExpandHint": "أظهر ما أُضيف وما سُحب، واختر ما يخدمه هذا المفتاح",
+    "churnPanelHint": "أدرج طرازًا في نطاق هذا المفتاح أو أخرجه منه. الطراز الجديد يحتاج أيضًا إلى سلسلة توجيه قبل أن يخدم الطلبات.",
+    "churnLastModel": "لا يمكن أن يكون نطاق المفتاح فارغًا — أوقف المفتاح نفسه بدلًا من ذلك."
   },
   "backups": {
     "title": "Backups",

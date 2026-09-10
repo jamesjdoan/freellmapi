@@ -611,7 +611,10 @@
     "bulkResult": "Diperbarui {done}; gagal {failed}.",
     "bulkDeleteResult": "Dihapus {done}; gagal {failed}.",
     "churnWindow": "{days} hr",
-    "churnAria": "{added} ditambahkan, {lost} ditarik dalam {days} hari terakhir"
+    "churnAria": "{added} ditambahkan, {lost} ditarik dalam {days} hari terakhir",
+    "churnExpandHint": "Tampilkan yang masuk dan yang ditarik, lalu pilih apa yang dilayani kunci ini",
+    "churnPanelHint": "Masukkan atau keluarkan model dari cakupan kunci ini. Model baru masih perlu rantai perutean sebelum melayani lalu lintas.",
+    "churnLastModel": "Cakupan kunci tidak boleh kosong — matikan kuncinya saja."
   },
   "backups": {
     "title": "Backups",

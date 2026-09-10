@@ -611,7 +611,10 @@
     "bulkResult": "Dikemas kini {done}; gagal {failed}.",
     "bulkDeleteResult": "Dipadam {done}; gagal {failed}.",
     "churnWindow": "{days}d",
-    "churnAria": "{added} ditambah, {lost} dicabut dalam {days} hari lepas"
+    "churnAria": "{added} ditambah, {lost} dicabut dalam {days} hari lepas",
+    "churnExpandHint": "Tunjukkan yang masuk dan yang ditarik, dan pilih apa yang dilayani kunci ini",
+    "churnPanelHint": "Masukkan atau keluarkan model daripada skop kunci ini. Model baharu masih memerlukan rantaian penghalaan sebelum melayani trafik.",
+    "churnLastModel": "Skop kunci tidak boleh kosong — matikan kunci itu sendiri."
   },
   "backups": {
     "title": "Backups",

@@ -21,7 +21,7 @@ import { ChevronDown, CircleAlert, Copy, ExternalLink, KeyRound, ListFilter, Lis
 import type { ApiKey, ApiKeyModel } from '../../../../shared/types'
 import { formatSqliteUtcToLocalTime } from '@/lib/utils'
 import type { FallbackEntry } from '@/lib/routing'
-import { enabledModelCount, providerKeyAccess } from '@/lib/model-scope-selection'
+import { enabledModelCount, providerKeyAccess, scopeAfterToggle, scopeCandidates } from '@/lib/model-scope-selection'
 import { useI18n } from '@/i18n'
 import { toast } from '@/lib/toast'
 import {
@@ -34,7 +34,7 @@ import {
   statusLabelKey,
 } from './shared'
 import type { HealthData } from './shared'
-import { ProviderChurnChip } from './provider-churn'
+import { ProviderChurnChip, ProviderChurnPanel } from './provider-churn'
 import { churnByPlatform, useCatalogueChanges } from '@/lib/catalogue-changes'
 import { DiscoverModelsDialog } from './discover-models-dialog'
 import { AddEndpointKeyDialog } from './add-endpoint-key-dialog'
@@ -56,6 +56,9 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
   const [editingKeyId, setEditingKeyId] = useState<number | null>(null)
   const [editingLabel, setEditingLabel] = useState('')
   const [expandedKeyIds, setExpandedKeyIds] = useState<Set<number>>(new Set())
+  // Separate from expandedKeyIds: the custom-model strip and the catalogue-churn
+  // strip are different disclosures on the same row and must open independently.
+  const [churnOpenKeyIds, setChurnOpenKeyIds] = useState<Set<number>>(new Set())
   // Explicit user open/closed overrides per provider group; absent = default.
   const [groupOverrides, setGroupOverrides] = useState<Map<string, boolean>>(new Map())
   const [search, setSearch] = useState('')
@@ -247,6 +250,21 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
     },
   })
 
+  // The inline churn switches write the key's model scope - the same field the
+  // model-scope dialog saves, and the same one the row's `n/m models enabled`
+  // badge counts, so the number moves as they are flipped.
+  const setKeyScope = useMutation({
+    mutationFn: ({ id, modelScope }: { id: number; modelScope: string[] | null }) =>
+      apiFetch(`/api/keys/${id}`, { method: 'PATCH', body: JSON.stringify({ modelScope }) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['keys'] })
+      queryClient.invalidateQueries({ queryKey: ['health'] })
+    },
+    onError: (error: unknown) => {
+      toast.error(error instanceof Error ? error.message : String(error))
+    },
+  })
+
   const toggleBypass = useMutation({
     mutationFn: (platform: string) => {
       const next = bypassPlatforms.includes(platform)
@@ -271,6 +289,15 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
     if (editingLabel !== undefined) {
       updateKey.mutate({ id, label: editingLabel })
     }
+  }
+
+  function toggleChurnOpen(id: number) {
+    setChurnOpenKeyIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   function toggleExpandedKey(id: number) {
@@ -303,6 +330,17 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
   // provider even when nobody has acknowledged it yet.
   const { data: catalogueChanges } = useCatalogueChanges()
   const churn = churnByPlatform(catalogueChanges)
+
+  // The full catalogue id list per platform, which is what decides whether a
+  // scope edit has re-selected everything (and so should go back to NULL).
+  // Same source the model-scope dialog uses, so the two cannot disagree.
+  const catalogIdsByPlatform = useMemo(() => {
+    const out = new Map<string, string[]>()
+    for (const p of PLATFORMS) {
+      out.set(p.value, scopeCandidates(fallback, p.value).map(c => c.modelId))
+    }
+    return out
+  }, [fallback])
 
   const totalProviders = grouped.length
   const totalKeys = grouped.reduce((n, g) => n + g.keys.length, 0)
@@ -450,6 +488,9 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
                         {`${models.enabled}/${models.total} models enabled`}
                       </Badge>
                     )}
+                    {/* No onToggle: with several keys in the group, "this
+                        key's scope" has no single answer. The switches live on
+                        each key row below. */}
                     <ProviderChurnChip churn={churn.get(group.value)} />
                   </button>
                   {(group.url || proxyEnabled) && (
@@ -594,7 +635,11 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
                                     {`${models.enabled}/${models.total} models enabled`}
                                   </Badge>
                                 )}
-                                <ProviderChurnChip churn={churn.get(group.value)} />
+                                <ProviderChurnChip
+                                  churn={churn.get(group.value)}
+                                  expanded={churnOpenKeyIds.has(k.id)}
+                                  onToggle={() => toggleChurnOpen(k.id)}
+                                />
                               </>
                             )}
                             {hasCustomModels && (
@@ -836,6 +881,31 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
                               })}
                             </div>
                           )}
+                          {churnOpenKeyIds.has(k.id) && (() => {
+                            const catalogIds = catalogIdsByPlatform.get(group.value) ?? []
+                            // A NULL or empty scope serves the whole catalogue.
+                            const serveAll = k.modelScope == null || k.modelScope.length === 0
+                            const servedNow = new Set(serveAll ? catalogIds : k.modelScope!)
+                            return (
+                              <ProviderChurnPanel
+                                churn={churn.get(group.value)}
+                                pending={setKeyScope.isPending && setKeyScope.variables?.id === k.id}
+                                isServed={modelId => servedNow.has(modelId)}
+                                disabledReason={modelId => {
+                                  // The one edit the column cannot express, said
+                                  // up front rather than as a failed write.
+                                  if (!servedNow.has(modelId)) return null
+                                  const result = scopeAfterToggle(catalogIds, k.modelScope, modelId, false)
+                                  return 'refuse' in result ? t('keys.churnLastModel') : null
+                                }}
+                                onSetServed={(modelId, served) => {
+                                  const result = scopeAfterToggle(catalogIds, k.modelScope, modelId, served)
+                                  if ('refuse' in result) return
+                                  setKeyScope.mutate({ id: k.id, modelScope: result.modelScope })
+                                }}
+                              />
+                            )
+                          })()}
                         </div>
                       )
                     })}

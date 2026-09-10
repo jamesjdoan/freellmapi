@@ -611,7 +611,10 @@
     "bulkResult": "Zaktualizowano {done}; nie powiodło się {failed}.",
     "bulkDeleteResult": "Usunięto {done}; nie powiodło się {failed}.",
     "churnWindow": "{days}d",
-    "churnAria": "{added} dodano, {lost} wycofano w ciągu ostatnich {days} dni"
+    "churnAria": "{added} dodano, {lost} wycofano w ciągu ostatnich {days} dni",
+    "churnExpandHint": "Pokaż, co doszło i co wycofano, oraz wybierz, co obsługuje ten klucz",
+    "churnPanelHint": "Włącz model do zakresu tego klucza lub go usuń. Nowy model potrzebuje jeszcze łańcucha routingu, zanim zacznie obsługiwać ruch.",
+    "churnLastModel": "Klucz nie może mieć pustego zakresu — wyłącz raczej sam klucz."
   },
   "backups": {
     "title": "Backups",

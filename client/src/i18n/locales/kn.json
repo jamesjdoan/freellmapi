@@ -611,7 +611,10 @@
     "bulkResult": "{done} ನವೀಕರಿಸಲಾಗಿದೆ; {failed} ವಿಫಲವಾಗಿದೆ.",
     "bulkDeleteResult": "{done} ಅಳಿಸಲಾಗಿದೆ; {failed} ವಿಫಲವಾಗಿದೆ.",
     "churnWindow": "{days}d",
-    "churnAria": "ಕಳೆದ {days} ದಿನಗಳಲ್ಲಿ {added} ಸೇರಿದವು, {lost} ತೆಗೆದುಹಾಕಲಾಗಿದೆ"
+    "churnAria": "ಕಳೆದ {days} ದಿನಗಳಲ್ಲಿ {added} ಸೇರಿದವು, {lost} ತೆಗೆದುಹಾಕಲಾಗಿದೆ",
+    "churnExpandHint": "Show what arrived and left, and pick what this key serves",
+    "churnPanelHint": "Switch a model into or out of this key's scope. A new model still needs a routing chain before it serves traffic.",
+    "churnLastModel": "A key cannot be scoped to nothing - turn the key itself off instead."
   },
   "backups": {
     "title": "Backups",

@@ -611,7 +611,10 @@
     "bulkResult": "Ažurirano {done}; neuspješno {failed}.",
     "bulkDeleteResult": "Obrisano {done}; neuspješno {failed}.",
     "churnWindow": "{days} d",
-    "churnAria": "{added} dodano, {lost} povučeno u posljednjih {days} dana"
+    "churnAria": "{added} dodano, {lost} povučeno u posljednjih {days} dana",
+    "churnExpandHint": "Show what arrived and left, and pick what this key serves",
+    "churnPanelHint": "Switch a model into or out of this key's scope. A new model still needs a routing chain before it serves traffic.",
+    "churnLastModel": "A key cannot be scoped to nothing - turn the key itself off instead."
   },
   "backups": {
     "title": "Backups",
