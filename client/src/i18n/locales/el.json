@@ -609,7 +609,9 @@
     "bulkDelete": "Διαγραφή όλων",
     "bulkDeleteConfirm": "Διαγραφή {count};",
     "bulkResult": "Ενημερώθηκαν {done}· απέτυχαν {failed}.",
-    "bulkDeleteResult": "Διαγράφηκαν {done}· απέτυχαν {failed}."
+    "bulkDeleteResult": "Διαγράφηκαν {done}· απέτυχαν {failed}.",
+    "churnWindow": "{days}ημ.",
+    "churnAria": "{added} προστέθηκαν, {lost} αποσύρθηκαν τις τελευταίες {days} ημέρες"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "Η ταξινόμηση ισχύει για τις {count} φορτωμένες γραμμές",
     "cacheHitRate": "Ποσοστό ευστοχίας cache",
     "cacheSavedTokens": "Εξοικονομήθηκαν {tokens} tokens",
-    "cacheHitRateHint": "{hits} ευστοχίες έναντι {misses} αστοχιών από την εκκίνηση του διακομιστή · αποφεύχθηκαν {requests} κλήσεις παρόχου"
+    "cacheHitRateHint": "{hits} ευστοχίες έναντι {misses} αστοχιών από την εκκίνηση του διακομιστή · αποφεύχθηκαν {requests} κλήσεις παρόχου",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "Όριο χρήσης",
@@ -898,7 +910,11 @@
     "policyDelete": "Διαγραφή πολιτικής",
     "policyDeleteConfirm": "Διαγραφή",
     "resetInferredMark": "(εκτ.)",
-    "resetInferredHint": "Προβλέπεται από παρατηρούμενα όρια επαναφοράς — ο πάροχος δεν στέλνει ώρα επαναφοράς. Ακρίβεια εντός του διαστήματος δειγματοληψίας."
+    "resetInferredHint": "Προβλέπεται από παρατηρούμενα όρια επαναφοράς — ο πάροχος δεν στέλνει ώρα επαναφοράς. Ακρίβεια εντός του διαστήματος δειγματοληψίας.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "Καταγραφές",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
     "curatedHint": "New catalog models are not added to this chain automatically."
+  },
+  "catalogue": {
+    "changesTitle": "Αλλαγές στον κατάλογο",
+    "changesHint": "Μοντέλα που προστέθηκαν από {since} και αποσυρθέντα που δεν έχουν αναγνωριστεί ακόμη.",
+    "untracked": "{count} μοντέλα προηγούνται της παρακολούθησης άφιξης.",
+    "arrived": "Αφίχθησαν ({count})",
+    "departed": "Αποσύρθηκαν ({count})",
+    "autoRouted": "δρομολογούνται ήδη — {chains}",
+    "notRouted": "δεν δρομολογούνται",
+    "lostFrom": "χάθηκαν από {chains}",
+    "acknowledge": "Αναγνώριση"
   }
 }

@@ -609,7 +609,9 @@
     "bulkDelete": "Paarẹ gbogbo rẹ",
     "bulkDeleteConfirm": "Paarẹ {count}?",
     "bulkResult": "Ṣe imudojuiwọn {done}; kuna {failed}.",
-    "bulkDeleteResult": "Paarẹ {done}; kuna {failed}."
+    "bulkDeleteResult": "Paarẹ {done}; kuna {failed}.",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} ti wọ si, {lost} ti si fun ojo {days} ni"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "Ìṣètò kan àwọn ìlà {count} tí a ti gbé sókè nìkan",
     "cacheHitRate": "Ìwọ̀n àṣeyọrí kaṣe",
     "cacheSavedTokens": "A ṣàfipamọ́ token {tokens}",
-    "cacheHitRateHint": "{hits} àṣeyọrí sí {misses} àìní láti ìgbà tí sáfà bẹ̀rẹ̀ · {requests} ìpè olùpèsè ni a yẹ̀ sílẹ̀"
+    "cacheHitRateHint": "{hits} àṣeyọrí sí {misses} àìní láti ìgbà tí sáfà bẹ̀rẹ̀ · {requests} ìpè olùpèsè ni a yẹ̀ sílẹ̀",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "Ìpín",
@@ -898,7 +910,11 @@
     "policyDelete": "Pa ìlànà rẹ́",
     "policyDeleteConfirm": "Pa rẹ́",
     "resetInferredMark": "(àfojúsùn)",
-    "resetInferredHint": "A sọtẹ́lẹ̀ rẹ̀ láti àwọn ààlà ìtúnbẹ̀rẹ̀ tí a rí — olùpèsè yìí kò rán àkókò ìtúnbẹ̀rẹ̀. Ó pé sí inú sáà ìbéèrè-ṣíṣe."
+    "resetInferredHint": "A sọtẹ́lẹ̀ rẹ̀ láti àwọn ààlà ìtúnbẹ̀rẹ̀ tí a rí — olùpèsè yìí kò rán àkókò ìtúnbẹ̀rẹ̀. Ó pé sí inú sáà ìbéèrè-ṣíṣe.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "Àkọọlẹ",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
     "curatedHint": "New catalog models are not added to this chain automatically."
+  },
+  "catalogue": {
+    "changesTitle": "Ayeke Catalogue",
+    "changesHint": "Awọn imọlẹ ti wọ ni {since}, ati awọn retire ti o pe lẹ ju akọsi lo.",
+    "untracked": "{count} awọn imọlẹ ti wọ lati de awọn arrival tracking.",
+    "arrived": "Wa ({count})",
+    "departed": "Si ({count})",
+    "autoRouted": "Ti o route si — {chains}",
+    "notRouted": "Ko si route",
+    "lostFrom": "Ti o si fun {chains}",
+    "acknowledge": "Mo gba"
   }
 }

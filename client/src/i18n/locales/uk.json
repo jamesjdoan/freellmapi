@@ -609,7 +609,9 @@
     "bulkDelete": "Видалити всі",
     "bulkDeleteConfirm": "Видалити {count}?",
     "bulkResult": "Оновлено {done}; не вдалося {failed}.",
-    "bulkDeleteResult": "Видалено {done}; не вдалося {failed}."
+    "bulkDeleteResult": "Видалено {done}; не вдалося {failed}.",
+    "churnWindow": "{days}д",
+    "churnAria": "{added} додано, {lost} вилучено протягом останніх {days} днів"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "Сортування застосовується до {count} завантажених рядків",
     "cacheHitRate": "Частка влучань у кеш",
     "cacheSavedTokens": "Заощаджено {tokens} токенів",
-    "cacheHitRateHint": "{hits} влучань проти {misses} промахів від запуску сервера · уникнено {requests} викликів до постачальника"
+    "cacheHitRateHint": "{hits} влучань проти {misses} промахів від запуску сервера · уникнено {requests} викликів до постачальника",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "Квота",
@@ -898,7 +910,11 @@
     "policyDelete": "Видалити політику",
     "policyDeleteConfirm": "Видалити",
     "resetInferredMark": "(оцінка)",
-    "resetInferredHint": "Прогноз на основі спостережених меж скидання — цей провайдер не надсилає час скидання. Точність у межах інтервалу опитування."
+    "resetInferredHint": "Прогноз на основі спостережених меж скидання — цей провайдер не надсилає час скидання. Точність у межах інтервалу опитування.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "Журнал",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Створює ланцюжок без моделей і не додає до нього нові моделі каталогу. Без позначки він починається як копія типового ланцюжка.",
     "curated": "Ручний",
     "curatedHint": "Нові моделі каталогу не додаються до цього ланцюжка автоматично."
+  },
+  "catalogue": {
+    "changesTitle": "Зміни в каталозі",
+    "changesHint": "Моделі, додані з {since}, та вилучення, які ще не підтверджені.",
+    "untracked": "{count} моделей передбачено системою відстеження прибуття.",
+    "arrived": "Прибуло ({count})",
+    "departed": "Вилучено ({count})",
+    "autoRouted": "Вже маршрутизується — {chains}",
+    "notRouted": "Не маршрутизується",
+    "lostFrom": "Втрачено з {chains}",
+    "acknowledge": "Підтвердити"
   }
 }

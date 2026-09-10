@@ -609,7 +609,9 @@
     "bulkDelete": "ਸਾਰੇ ਮਿਟਾਓ",
     "bulkDeleteConfirm": "{count} ਮਿਟਾਉਣੇ ਹਨ?",
     "bulkResult": "{done} ਅੱਪਡੇਟ ਹੋਏ; {failed} ਅਸਫਲ।",
-    "bulkDeleteResult": "{done} ਮਿਟਾਏ ਗਏ; {failed} ਅਸਫਲ।"
+    "bulkDeleteResult": "{done} ਮਿਟਾਏ ਗਏ; {failed} ਅਸਫਲ।",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} ਜੋੜੇ ਗਏ, {lost} ਹਟਾਏ ਗਏ ਹਨ ਪਿਛਲੇ {days} ਦਿਨਾਂ ਦੌਰਾਨ"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "ਕ੍ਰਮਬੱਧਤਾ ਸਿਰਫ਼ ਲੋਡ ਕੀਤੀਆਂ {count} ਕਤਾਰਾਂ 'ਤੇ ਲਾਗੂ ਹੁੰਦੀ ਹੈ",
     "cacheHitRate": "ਕੈਸ਼ ਹਿੱਟ ਦਰ",
     "cacheSavedTokens": "{tokens} ਟੋਕਨ ਬਚਾਏ",
-    "cacheHitRateHint": "ਸਰਵਰ ਚਾਲੂ ਹੋਣ ਤੋਂ ਬਾਅਦ {hits} ਹਿੱਟ ਬਨਾਮ {misses} ਮਿਸ · {requests} ਪ੍ਰਦਾਤਾ ਕਾਲਾਂ ਬਚਾਈਆਂ"
+    "cacheHitRateHint": "ਸਰਵਰ ਚਾਲੂ ਹੋਣ ਤੋਂ ਬਾਅਦ {hits} ਹਿੱਟ ਬਨਾਮ {misses} ਮਿਸ · {requests} ਪ੍ਰਦਾਤਾ ਕਾਲਾਂ ਬਚਾਈਆਂ",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "ਕੋਟਾ",
@@ -898,7 +910,11 @@
     "policyDelete": "ਨੀਤੀ ਮਿਟਾਓ",
     "policyDeleteConfirm": "ਮਿਟਾਓ",
     "resetInferredMark": "(ਅੰਦਾਜ਼ਨ)",
-    "resetInferredHint": "ਦੇਖੀਆਂ ਰੀਸੈੱਟ ਹੱਦਾਂ ਤੋਂ ਅਨੁਮਾਨਿਤ — ਇਹ ਪ੍ਰੋਵਾਈਡਰ ਰੀਸੈੱਟ ਸਮਾਂ ਨਹੀਂ ਭੇਜਦਾ। ਪੋਲਿੰਗ ਅੰਤਰਾਲ ਜਿੰਨੀ ਸ਼ੁੱਧਤਾ।"
+    "resetInferredHint": "ਦੇਖੀਆਂ ਰੀਸੈੱਟ ਹੱਦਾਂ ਤੋਂ ਅਨੁਮਾਨਿਤ — ਇਹ ਪ੍ਰੋਵਾਈਡਰ ਰੀਸੈੱਟ ਸਮਾਂ ਨਹੀਂ ਭੇਜਦਾ। ਪੋਲਿੰਗ ਅੰਤਰਾਲ ਜਿੰਨੀ ਸ਼ੁੱਧਤਾ।",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "ਲੌਗ",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
     "curatedHint": "New catalog models are not added to this chain automatically."
+  },
+  "catalogue": {
+    "changesTitle": "ਕੈਟਲੋਗ ਗੱਲਬਦਲਰ",
+    "changesHint": "{since} ਤੋਂ ਮੋਡਲ ਜੋੜੇ ਗਏ ਹਨ, ਅਤੇ ਉਪਰੇਰਤissions not acknowledged.",
+    "untracked": "{count} models predate arrival tracking.",
+    "arrived": "ਪਹੁੰਚਿਆ ({count})",
+    "departed": "ਭਾਗਦਾਰ ({count})",
+    "autoRouted": "ਪਹਿਲਾਂ ਲੱਭ ਰਹਾ — {chains}",
+    "notRouted": "ਨਹੀਂ ਲੱਭ ਰਿਹਾ",
+    "lostFrom": "{chains} ਤੋਂ ਗੁੰਨ ਗਿਆ",
+    "acknowledge": "ਪੁਸ਼ਟੀ ਕਰੋ"
   }
 }

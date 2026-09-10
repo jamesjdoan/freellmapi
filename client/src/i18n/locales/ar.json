@@ -609,7 +609,9 @@
     "bulkDelete": "حذف الكل",
     "bulkDeleteConfirm": "حذف {count}؟",
     "bulkResult": "تم تحديث {done}؛ فشل {failed}.",
-    "bulkDeleteResult": "تم حذف {done}؛ فشل {failed}."
+    "bulkDeleteResult": "تم حذف {done}؛ فشل {failed}.",
+    "churnWindow": "{days}يوم",
+    "churnAria": "{added} تمت إضافتها، {lost} تقاعدت في آخر {days} أيام"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "يُطبَّق الترتيب على الصفوف المحمَّلة البالغ عددها {count}",
     "cacheHitRate": "معدل إصابات التخزين المؤقت",
     "cacheSavedTokens": "تم توفير {tokens} رمز",
-    "cacheHitRateHint": "{hits} إصابة مقابل {misses} إخفاق منذ تشغيل الخادم · تم تفادي {requests} طلب للمزوّد"
+    "cacheHitRateHint": "{hits} إصابة مقابل {misses} إخفاق منذ تشغيل الخادم · تم تفادي {requests} طلب للمزوّد",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "الحصة",
@@ -898,7 +910,11 @@
     "policyDelete": "حذف السياسة",
     "policyDeleteConfirm": "حذف",
     "resetInferredMark": "(تقديري)",
-    "resetInferredHint": "متوقّع من حدود إعادة التعيين المرصودة — هذا المزوّد لا يرسل وقت إعادة التعيين. الدقة في حدود فترة الاستطلاع."
+    "resetInferredHint": "متوقّع من حدود إعادة التعيين المرصودة — هذا المزوّد لا يرسل وقت إعادة التعيين. الدقة في حدود فترة الاستطلاع.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "السجلات",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "ينشئ السلسلة بلا أي نماذج، ولا يضيف إليها نماذج الفهرس الجديدة. عند إلغاء التحديد تبدأ كنسخة من السلسلة الافتراضية.",
     "curated": "مُنسّقة يدويًا",
     "curatedHint": "لا تُضاف نماذج الفهرس الجديدة إلى هذه السلسلة تلقائيًا."
+  },
+  "catalogue": {
+    "changesTitle": "تغييرات الكتالوج",
+    "changesHint": "النماذج المضافة منذ {since}، والتقاعدات التي لم يتم الاعتراف بها بعد.",
+    "untracked": "{count} نموذج تسبق تتبع الوصول.",
+    "arrived": "وصلت ({count})",
+    "departed": "تقاعدت ({count})",
+    "autoRouted": "يتم توجيهها بالفعل — {chains}",
+    "notRouted": "غير موجهة",
+    "lostFrom": "مفقودة من {chains}",
+    "acknowledge": "إقرار"
   }
 }

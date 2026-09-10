@@ -609,7 +609,9 @@
     "bulkDelete": "លុបទាំងអស់",
     "bulkDeleteConfirm": "លុប {count}?",
     "bulkResult": "បានធ្វើបច្ចុប្បន្នភាព {done}; បរាជ័យ {failed}។",
-    "bulkDeleteResult": "បានលុប {done}; បរាជ័យ {failed}។"
+    "bulkDeleteResult": "បានលុប {done}; បរាជ័យ {failed}។",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} ត្រូវបានបន់, {lost} ត្រូវបាត់ ក្នុង {days} ថ្ងៃ"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "ការតម្រៀបអនុវត្តតែលើជួរ {count} ដែលបានផ្ទុកប៉ុណ្ណោះ",
     "cacheHitRate": "អត្រាជោគជ័យនៃឃ្លាំងសម្ងាត់",
     "cacheSavedTokens": "សន្សំបាន {tokens} តូខឹន",
-    "cacheHitRateHint": "{hits} ជោគជ័យ ធៀបនឹង {misses} បរាជ័យ តាំងពីម៉ាស៊ីនមេចាប់ផ្ដើម · ជៀសវាងការហៅអ្នកផ្ដល់សេវា {requests}"
+    "cacheHitRateHint": "{hits} ជោគជ័យ ធៀបនឹង {misses} បរាជ័យ តាំងពីម៉ាស៊ីនមេចាប់ផ្ដើម · ជៀសវាងការហៅអ្នកផ្ដល់សេវា {requests}",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "កូតា",
@@ -898,7 +910,11 @@
     "policyDelete": "លុបគោលការណ៍",
     "policyDeleteConfirm": "លុប",
     "resetInferredMark": "(ប៉ាន់)",
-    "resetInferredHint": "ព្យាករណ៍ពីព្រំដែនកំណត់ឡើងវិញដែលបានសង្កេត — អ្នកផ្តល់សេវានេះមិនផ្ញើពេលកំណត់ឡើងវិញទេ។ ភាពត្រឹមត្រូវក្នុងចន្លោះពេលស្ទង់។"
+    "resetInferredHint": "ព្យាករណ៍ពីព្រំដែនកំណត់ឡើងវិញដែលបានសង្កេត — អ្នកផ្តល់សេវានេះមិនផ្ញើពេលកំណត់ឡើងវិញទេ។ ភាពត្រឹមត្រូវក្នុងចន្លោះពេលស្ទង់។",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "កំណត់ហេតុ",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
     "curatedHint": "New catalog models are not added to this chain automatically."
+  },
+  "catalogue": {
+    "changesTitle": "ការលុបកាត់វិទ្យា",
+    "changesHint": "{since} - ម្តងត្រូវបានបន់ថ្មី, និងម្តងត្រូវបាត់មិនត្រូវបានយល់ដ៹រ",
+    "untracked": "{count} ម្តង ដែលមានស្រឡាញ់ មុន កំណត់រចនាសម្ព័ន្ធអ្នកផ្តល់សេវា",
+    "arrived": "ត្រូវបាន ({count})",
+    "departed": "ត្រូវបាត់ ({count})",
+    "autoRouted": "ត្រូវបានត្រូវ — {chains}",
+    "notRouted": "មិនត្រូវបានត្រូវ",
+    "lostFrom": "ខ្លីៈពី {chains}",
+    "acknowledge": "យល់ដ៹រ"
   }
 }

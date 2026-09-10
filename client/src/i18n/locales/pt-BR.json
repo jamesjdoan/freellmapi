@@ -609,7 +609,9 @@
     "bulkDelete": "Excluir todas",
     "bulkDeleteConfirm": "Excluir {count}?",
     "bulkResult": "Atualizadas {done}; falharam {failed}.",
-    "bulkDeleteResult": "Excluídas {done}; falharam {failed}."
+    "bulkDeleteResult": "Excluídas {done}; falharam {failed}.",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} adicionados, {lost} descontinuados nos últimos {days} dias"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "A ordenação se aplica às {count} linhas carregadas",
     "cacheHitRate": "Taxa de acerto do cache",
     "cacheSavedTokens": "{tokens} tokens economizados",
-    "cacheHitRateHint": "{hits} acertos contra {misses} erros desde o início do servidor · {requests} chamadas ao provedor evitadas"
+    "cacheHitRateHint": "{hits} acertos contra {misses} erros desde o início do servidor · {requests} chamadas ao provedor evitadas",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "Cota",
@@ -898,7 +910,11 @@
     "policyDelete": "Excluir política",
     "policyDeleteConfirm": "Excluir",
     "resetInferredMark": "(est.)",
-    "resetInferredHint": "Previsto a partir dos limites de reinício observados — este provedor não envia horário de reinício. Preciso dentro do intervalo de sondagem."
+    "resetInferredHint": "Previsto a partir dos limites de reinício observados — este provedor não envia horário de reinício. Preciso dentro do intervalo de sondagem.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "Logs",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Cria a cadeia sem modelos e mantém de fora os novos modelos do catálogo. Sem marcar, ela começa como cópia da cadeia padrão.",
     "curated": "Curada",
     "curatedHint": "Novos modelos do catálogo não são adicionados a esta cadeia automaticamente."
+  },
+  "catalogue": {
+    "changesTitle": "Alterações no catálogo",
+    "changesHint": "Modelos adicionados depuis {since}, e aposentadorias ainda não reconhecidas.",
+    "untracked": "{count} modelos são anteriores ao início do rastreamento.",
+    "arrived": "Chegou ({count})",
+    "departed": "Descontinuado ({count})",
+    "autoRouted": "já roteando — {chains}",
+    "notRouted": "não roteado",
+    "lostFrom": "perdido de {chains}",
+    "acknowledge": "Confirmar"
   }
 }

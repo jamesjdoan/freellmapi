@@ -609,7 +609,9 @@
     "bulkDelete": "అన్నింటినీ తొలగించు",
     "bulkDeleteConfirm": "{count} తొలగించాలా?",
     "bulkResult": "{done} నవీకరించబడింది; {failed} విఫలమైంది.",
-    "bulkDeleteResult": "{done} తొలగించబడింది; {failed} విఫలమైంది."
+    "bulkDeleteResult": "{done} తొలగించబడింది; {failed} విఫలమైంది.",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} added, {lost} retired in the last {days} days"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "క్రమబద్ధీకరణ లోడ్ అయిన {count} వరుసలకు మాత్రమే వర్తిస్తుంది",
     "cacheHitRate": "కాష్ హిట్ రేటు",
     "cacheSavedTokens": "{tokens} టోకెన్‌ల ఆదా",
-    "cacheHitRateHint": "సర్వర్ ప్రారంభమైనప్పటి నుండి {hits} హిట్‌లు, {misses} మిస్‌లు · {requests} ప్రొవైడర్ కాల్‌లు ఆదా అయ్యాయి"
+    "cacheHitRateHint": "సర్వర్ ప్రారంభమైనప్పటి నుండి {hits} హిట్‌లు, {misses} మిస్‌లు · {requests} ప్రొవైడర్ కాల్‌లు ఆదా అయ్యాయి",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "కోటా",
@@ -898,7 +910,11 @@
     "policyDelete": "విధానాన్ని తొలగించు",
     "policyDeleteConfirm": "తొలగించు",
     "resetInferredMark": "(అంచనా)",
-    "resetInferredHint": "గమనించిన రీసెట్ సరిహద్దుల నుండి అంచనా వేసినది — ఈ ప్రొవైడర్ రీసెట్ సమయాన్ని పంపదు. పోలింగ్ విరామం లోపు ఖచ్చితత్వం."
+    "resetInferredHint": "గమనించిన రీసెట్ సరిహద్దుల నుండి అంచనా వేసినది — ఈ ప్రొవైడర్ రీసెట్ సమయాన్ని పంపదు. పోలింగ్ విరామం లోపు ఖచ్చితత్వం.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "లాగ్‌లు",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
     "curatedHint": "New catalog models are not added to this chain automatically."
+  },
+  "catalogue": {
+    "changesTitle": "క్యాటలోగ మార్పులు",
+    "changesHint": "Models added since {since}, retirements not yet acknowledged.",
+    "untracked": "{count} మోడల్స్ tracking terutు original.",
+    "arrived": "Arrived ({count})",
+    "departed": "Retired ({count})",
+    "autoRouted": "auto-routed already — {chains}",
+    "notRouted": "not routed",
+    "lostFrom": "lost from {chains}",
+    "acknowledge": "Acknowledge"
   }
 }

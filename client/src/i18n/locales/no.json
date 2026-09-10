@@ -609,7 +609,9 @@
     "bulkDelete": "Slett alle",
     "bulkDeleteConfirm": "Slette {count}?",
     "bulkResult": "Oppdaterte {done}; mislyktes {failed}.",
-    "bulkDeleteResult": "Slettet {done}; mislyktes {failed}."
+    "bulkDeleteResult": "Slettet {done}; mislyktes {failed}.",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} lagt til, {lost} fjernet i de siste {days} dagene"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "Sorteringen gjelder de {count} innlastede radene",
     "cacheHitRate": "Cache-treffrate",
     "cacheSavedTokens": "{tokens} tokens spart",
-    "cacheHitRateHint": "{hits} treff mot {misses} bom siden serveren startet · {requests} leverandørkall unngått"
+    "cacheHitRateHint": "{hits} treff mot {misses} bom siden serveren startet · {requests} leverandørkall unngått",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "Kvote",
@@ -898,7 +910,11 @@
     "policyDelete": "Slett regel",
     "policyDeleteConfirm": "Slett",
     "resetInferredMark": "(est.)",
-    "resetInferredHint": "Forutsagt fra observerte nullstillingsgrenser – denne leverandøren sender ingen nullstillingstid. Nøyaktig innenfor pollingintervallet."
+    "resetInferredHint": "Forutsagt fra observerte nullstillingsgrenser – denne leverandøren sender ingen nullstillingstid. Nøyaktig innenfor pollingintervallet.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "Logg",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
     "curatedHint": "New catalog models are not added to this chain automatically."
+  },
+  "catalogue": {
+    "changesTitle": "Katalogendringer",
+    "changesHint": "Modeller lagt til siden {since}, og avvikelser som enda ikkje ererkjent.",
+    "untracked": "{count} modeller forankommer ankomstsporingen.",
+    "arrived": "Ankommet ({count})",
+    "departed": "Trukket tilbake ({count})",
+    "autoRouted": "rutes allerede — {chains}",
+    "notRouted": "ikke rutet",
+    "lostFrom": "tapt fra {chains}",
+    "acknowledge": "Bekreft"
   }
 }

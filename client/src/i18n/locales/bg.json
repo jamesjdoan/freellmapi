@@ -609,7 +609,9 @@
     "bulkDelete": "Изтрий всички",
     "bulkDeleteConfirm": "Да се изтрият ли {count}?",
     "bulkResult": "Обновени {done}; неуспешни {failed}.",
-    "bulkDeleteResult": "Изтрити {done}; неуспешни {failed}."
+    "bulkDeleteResult": "Изтрити {done}; неуспешни {failed}.",
+    "churnWindow": "{days}д.",
+    "churnAria": "{added} добавени, {lost} пенсионирани през последните {days} дни"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "Сортирането се прилага за {count} заредени реда",
     "cacheHitRate": "Процент попадения в кеша",
     "cacheSavedTokens": "Спестени {tokens} токена",
-    "cacheHitRateHint": "{hits} попадения срещу {misses} пропуска от старта на сървъра · спестени {requests} заявки към доставчик"
+    "cacheHitRateHint": "{hits} попадения срещу {misses} пропуска от старта на сървъра · спестени {requests} заявки към доставчик",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "Квота",
@@ -898,7 +910,11 @@
     "policyDelete": "Изтрий политиката",
     "policyDeleteConfirm": "Изтрий",
     "resetInferredMark": "(оцен.)",
-    "resetInferredHint": "Прогнозирано по наблюдавани граници на нулиране — този доставчик не изпраща час на нулиране. Точност в рамките на интервала на запитване."
+    "resetInferredHint": "Прогнозирано по наблюдавани граници на нулиране — този доставчик не изпраща час на нулиране. Точност в рамките на интервала на запитване.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "Логове",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
     "curatedHint": "New catalog models are not added to this chain automatically."
+  },
+  "catalogue": {
+    "changesTitle": "Промени в каталога",
+    "changesHint": "Модели, добавени от {since}, и пенсионирани, които още не са потвърдени.",
+    "untracked": "{count} модела предхождат проследяването на пристигането.",
+    "arrived": "Пристигнали ({count})",
+    "departed": "Пенсионирани ({count})",
+    "autoRouted": "вече се насочват — {chains}",
+    "notRouted": "не са насочени",
+    "lostFrom": "загубени от {chains}",
+    "acknowledge": "Потвърждавам"
   }
 }

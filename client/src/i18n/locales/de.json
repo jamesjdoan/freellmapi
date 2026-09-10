@@ -609,7 +609,9 @@
     "bulkDelete": "Alle löschen",
     "bulkDeleteConfirm": "{count} löschen?",
     "bulkResult": "Aktualisiert {done}; fehlgeschlagen {failed}.",
-    "bulkDeleteResult": "Gelöscht {done}; fehlgeschlagen {failed}."
+    "bulkDeleteResult": "Gelöscht {done}; fehlgeschlagen {failed}.",
+    "churnWindow": "{days} T.",
+    "churnAria": "{added} hinzugefügt, {lost} zurückgezogen in den letzten {days} Tagen"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "Die Sortierung gilt für die {count} geladenen Zeilen",
     "cacheHitRate": "Cache-Trefferquote",
     "cacheSavedTokens": "{tokens} Tokens gespart",
-    "cacheHitRateHint": "{hits} Treffer gegenüber {misses} Fehlschlägen seit dem Serverstart · {requests} Anbieteraufrufe vermieden"
+    "cacheHitRateHint": "{hits} Treffer gegenüber {misses} Fehlschlägen seit dem Serverstart · {requests} Anbieteraufrufe vermieden",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "Kontingent",
@@ -898,7 +910,11 @@
     "policyDelete": "Richtlinie löschen",
     "policyDeleteConfirm": "Löschen",
     "resetInferredMark": "(gesch.)",
-    "resetInferredHint": "Aus beobachteten Reset-Grenzen prognostiziert – dieser Provider liefert keinen Reset-Zeitpunkt. Genauigkeit im Rahmen des Abfrageintervalls."
+    "resetInferredHint": "Aus beobachteten Reset-Grenzen prognostiziert – dieser Provider liefert keinen Reset-Zeitpunkt. Genauigkeit im Rahmen des Abfrageintervalls.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "Protokoll",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Legt die Kette ohne Modelle an und hält neue Katalogmodelle heraus. Ohne Haken startet sie als Kopie der Standardkette.",
     "curated": "Kuratiert",
     "curatedHint": "Neue Katalogmodelle werden dieser Kette nicht automatisch hinzugefügt."
+  },
+  "catalogue": {
+    "changesTitle": "Katalogänderungen",
+    "changesHint": "Seit {since} hinzugefügte Modelle und Pensionierungen, die noch nicht bestätigt wurden.",
+    "untracked": "{count} Modelle vor Beginn der Ankunftserfassung.",
+    "arrived": "Eingetroffen ({count})",
+    "departed": "Zurückgezogen ({count})",
+    "autoRouted": "wird bereits geroutet — {chains}",
+    "notRouted": "nicht geroutet",
+    "lostFrom": "verloren von {chains}",
+    "acknowledge": "Bestätigen"
   }
 }

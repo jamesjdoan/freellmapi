@@ -609,7 +609,9 @@
     "bulkDelete": "Hammasini oʻchirish",
     "bulkDeleteConfirm": "{count} ta oʻchirilsinmi?",
     "bulkResult": "Yangilandi {done}; muvaffaqiyatsiz {failed}.",
-    "bulkDeleteResult": "Oʻchirildi {done}; muvaffaqiyatsiz {failed}."
+    "bulkDeleteResult": "Oʻchirildi {done}; muvaffaqiyatsiz {failed}.",
+    "churnWindow": "{days}k",
+    "churnAria": "{added} qo'shilgan, {lost} olib tashlangan oxirgi {days} kunlarda"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "Saralash faqat yuklangan {count} ta qatorga qo‘llanadi",
     "cacheHitRate": "Kesh muvaffaqiyat darajasi",
     "cacheSavedTokens": "{tokens} token tejaldi",
-    "cacheHitRateHint": "Server ishga tushganidan beri {hits} muvaffaqiyat, {misses} o‘tkazib yuborish · {requests} ta provayder so‘rovi tejaldi"
+    "cacheHitRateHint": "Server ishga tushganidan beri {hits} muvaffaqiyat, {misses} o‘tkazib yuborish · {requests} ta provayder so‘rovi tejaldi",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "Kvota",
@@ -898,7 +910,11 @@
     "policyDelete": "Siyosatni o‘chirish",
     "policyDeleteConfirm": "O‘chirish",
     "resetInferredMark": "(taxminiy)",
-    "resetInferredHint": "Kuzatilgan tiklanish chegaralaridan taxmin qilingan — bu provayder tiklanish vaqtini yubormaydi. Aniqlik so‘rov intervali darajasida."
+    "resetInferredHint": "Kuzatilgan tiklanish chegaralaridan taxmin qilingan — bu provayder tiklanish vaqtini yubormaydi. Aniqlik so‘rov intervali darajasida.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "Jurnal",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
     "curatedHint": "New catalog models are not added to this chain automatically."
+  },
+  "catalogue": {
+    "changesTitle": "Katalog o'zgarishlari",
+    "changesHint": "{since} dan qo'shilgan modellар va hali tasdiqlanmagan tashqi chiqishlar.",
+    "untracked": "{count} modellар arrival tracking dan oldin mavjud.",
+    "arrived": "Keldi ({count})",
+    "departed": "Sotib olingan ({count})",
+    "autoRouted": "Allaqachon yo'naltirilmoqda — {chains}",
+    "notRouted": "Yo'naltirilmaydi",
+    "lostFrom": "{chains} dan qo'zg'olgan",
+    "acknowledge": "Tasdiqlash"
   }
 }

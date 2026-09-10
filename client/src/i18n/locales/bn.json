@@ -609,7 +609,9 @@
     "bulkDelete": "সব মুছে দিন",
     "bulkDeleteConfirm": "{count}টি মুছবেন?",
     "bulkResult": "{done}টি হালনাগাদ হয়েছে; {failed}টি ব্যর্থ।",
-    "bulkDeleteResult": "{done}টি মুছে ফেলা হয়েছে; {failed}টি ব্যর্থ।"
+    "bulkDeleteResult": "{done}টি মুছে ফেলা হয়েছে; {failed}টি ব্যর্থ।",
+    "churnWindow": "{days}দিন",
+    "churnAria": "গত {days} দিনে {added} টি যোগ করা হয়েছে, {lost} টি অবসর নিয়েছে"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "সাজানো শুধুমাত্র লোড হওয়া {count}টি সারিতে প্রযোজ্য",
     "cacheHitRate": "ক্যাশ হিট রেট",
     "cacheSavedTokens": "{tokens} টোকেন সাশ্রয়",
-    "cacheHitRateHint": "সার্ভার চালুর পর থেকে {hits} হিট বনাম {misses} মিস · {requests} প্রোভাইডার কল এড়ানো হয়েছে"
+    "cacheHitRateHint": "সার্ভার চালুর পর থেকে {hits} হিট বনাম {misses} মিস · {requests} প্রোভাইডার কল এড়ানো হয়েছে",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "কোটা",
@@ -898,7 +910,11 @@
     "policyDelete": "পলিসি মুছুন",
     "policyDeleteConfirm": "মুছুন",
     "resetInferredMark": "(আনু.)",
-    "resetInferredHint": "পর্যবেক্ষিত রিসেট সীমানা থেকে অনুমান করা — এই প্রোভাইডার কোনো রিসেট সময় পাঠায় না। পোলিং ইন্টারভালের মধ্যে নির্ভুল।"
+    "resetInferredHint": "পর্যবেক্ষিত রিসেট সীমানা থেকে অনুমান করা — এই প্রোভাইডার কোনো রিসেট সময় পাঠায় না। পোলিং ইন্টারভালের মধ্যে নির্ভুল।",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "লগ",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
     "curatedHint": "New catalog models are not added to this chain automatically."
+  },
+  "catalogue": {
+    "changesTitle": "ক্যাটালগ পরিবর্তন",
+    "changesHint": "{since} থেকে যোগ করা মডেল এবং অবসরপ্রাপ্ত যা এখনও নিশ্চিত করা হয়নি।",
+    "untracked": "{count} টি মডেল আগমন ট্র্যাকিংয়ের আগের।",
+    "arrived": "এসেছে ({count})",
+    "departed": "অবসরপ্রাপ্ত ({count})",
+    "autoRouted": "ইতিমধ্যে রাউটিং হচ্ছে — {chains}",
+    "notRouted": "রাউট করা হয়নি",
+    "lostFrom": "{chains} থেকে হারিয়েছে",
+    "acknowledge": "স্বীকৃতি দিন"
   }
 }

@@ -609,7 +609,9 @@
     "bulkDelete": "Futa zote",
     "bulkDeleteConfirm": "Futa {count}?",
     "bulkResult": "Zimesasishwa {done}; zimeshindwa {failed}.",
-    "bulkDeleteResult": "Zimefutwa {done}; zimeshindwa {failed}."
+    "bulkDeleteResult": "Zimefutwa {done}; zimeshindwa {failed}.",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} ilitumwa, {lost} alitumwa mwisho {days} siku zilizopita"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "Upangaji unatumika kwa safu {count} zilizopakiwa",
     "cacheHitRate": "Kiwango cha mafanikio ya akiba",
     "cacheSavedTokens": "Tokeni {tokens} zimehifadhiwa",
-    "cacheHitRateHint": "Mafanikio {hits} dhidi ya makosa {misses} tangu seva ianze · miito {requests} kwa mtoa huduma imeepukwa"
+    "cacheHitRateHint": "Mafanikio {hits} dhidi ya makosa {misses} tangu seva ianze · miito {requests} kwa mtoa huduma imeepukwa",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "Kiwango",
@@ -898,7 +910,11 @@
     "policyDelete": "Futa sera",
     "policyDeleteConfirm": "Futa",
     "resetInferredMark": "(kadirio)",
-    "resetInferredHint": "Imetabiriwa kutokana na mipaka ya kuwekwa upya iliyoonekana — mtoa huduma huyu hatumi muda wa kuwekwa upya. Usahihi ni ndani ya kipindi cha uchunguzi."
+    "resetInferredHint": "Imetabiriwa kutokana na mipaka ya kuwekwa upya iliyoonekana — mtoa huduma huyu hatumi muda wa kuwekwa upya. Usahihi ni ndani ya kipindi cha uchunguzi.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "Kumbukumbu",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
     "curatedHint": "New catalog models are not added to this chain automatically."
+  },
+  "catalogue": {
+    "changesTitle": "Ubadilishi kwenye catalogue",
+    "changesHint": "Models added since {since}, retirements not yet acknowledged.",
+    "untracked": "{count} models iliyopo kabla ya tracking.",
+    "arrived": "Arrived ({count})",
+    "departed": "Retired ({count})",
+    "autoRouted": "kisha kuleta— {chains}",
+    "notRouted": "ha general i route",
+    "lostFrom": "lost from {chains}",
+    "acknowledge": "Angalau"
   }
 }

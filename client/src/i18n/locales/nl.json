@@ -609,7 +609,9 @@
     "bulkDelete": "Alles verwijderen",
     "bulkDeleteConfirm": "{count} verwijderen?",
     "bulkResult": "Bijgewerkt {done}; mislukt {failed}.",
-    "bulkDeleteResult": "Verwijderd {done}; mislukt {failed}."
+    "bulkDeleteResult": "Verwijderd {done}; mislukt {failed}.",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} toegevoegd, {lost} teruggetrokken in de laatste {days} dagen"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "De sortering geldt voor de {count} geladen rijen",
     "cacheHitRate": "Cache-hitratio",
     "cacheSavedTokens": "{tokens} tokens bespaard",
-    "cacheHitRateHint": "{hits} hits tegenover {misses} missers sinds de serverstart · {requests} provideraanroepen vermeden"
+    "cacheHitRateHint": "{hits} hits tegenover {misses} missers sinds de serverstart · {requests} provideraanroepen vermeden",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "Quota",
@@ -898,7 +910,11 @@
     "policyDelete": "Beleid verwijderen",
     "policyDeleteConfirm": "Verwijderen",
     "resetInferredMark": "(schatting)",
-    "resetInferredHint": "Voorspeld op basis van waargenomen resetgrenzen — deze provider stuurt geen resettijd. Nauwkeurig tot op het polling-interval."
+    "resetInferredHint": "Voorspeld op basis van waargenomen resetgrenzen — deze provider stuurt geen resettijd. Nauwkeurig tot op het polling-interval.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "Logs",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Maakt de keten zonder modellen aan en houdt nieuwe catalogusmodellen erbuiten. Niet aangevinkt begint hij als kopie van de standaardketen.",
     "curated": "Handmatig",
     "curatedHint": "Nieuwe catalogusmodellen worden niet automatisch aan deze keten toegevoegd."
+  },
+  "catalogue": {
+    "changesTitle": "Cataloguswijzigingen",
+    "changesHint": "Modellen toegevoegd siden {since}, en nog niet erkende buitengebruikstellingen.",
+    "untracked": "{count} modellen kommen vóór de komstregistratie.",
+    "arrived": "Gekomen ({count})",
+    "departed": "Teruggetrokken ({count})",
+    "autoRouted": "wordt al gerouteerd — {chains}",
+    "notRouted": "niet gerouteerd",
+    "lostFrom": "kwijtgeraakt van {chains}",
+    "acknowledge": "Bevestigen"
   }
 }

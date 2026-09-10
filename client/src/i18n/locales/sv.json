@@ -609,7 +609,9 @@
     "bulkDelete": "Radera alla",
     "bulkDeleteConfirm": "Radera {count}?",
     "bulkResult": "Uppdaterade {done}; misslyckades {failed}.",
-    "bulkDeleteResult": "Raderade {done}; misslyckades {failed}."
+    "bulkDeleteResult": "Raderade {done}; misslyckades {failed}.",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} tillagda, {lost} borttagna de senaste {days} dagarna"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "Sorteringen gäller de {count} inlästa raderna",
     "cacheHitRate": "Cacheträffkvot",
     "cacheSavedTokens": "{tokens} tokens sparade",
-    "cacheHitRateHint": "{hits} träffar mot {misses} missar sedan servern startade · {requests} leverantörsanrop undvikna"
+    "cacheHitRateHint": "{hits} träffar mot {misses} missar sedan servern startade · {requests} leverantörsanrop undvikna",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "Kvot",
@@ -898,7 +910,11 @@
     "policyDelete": "Ta bort policy",
     "policyDeleteConfirm": "Ta bort",
     "resetInferredMark": "(uppsk.)",
-    "resetInferredHint": "Förutsagt från observerade återställningsgränser – leverantören skickar ingen återställningstid. Noggrannhet inom pollningsintervallet."
+    "resetInferredHint": "Förutsagt från observerade återställningsgränser – leverantören skickar ingen återställningstid. Noggrannhet inom pollningsintervallet.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "Loggar",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
     "curatedHint": "New catalog models are not added to this chain automatically."
+  },
+  "catalogue": {
+    "changesTitle": "Katalogförändringar",
+    "changesHint": "Modeller tillagda sedan {since}, retirements not yet acknowledged.",
+    "untracked": "{count} modeller föregår spårning.",
+    "arrived": "Ankommen ({count})",
+    "departed": "Borttagen ({count})",
+    "autoRouted": "redan routat — {chains}",
+    "notRouted": "inte routad",
+    "lostFrom": "borttagen från {chains}",
+    "acknowledge": "Bekräfta"
   }
 }

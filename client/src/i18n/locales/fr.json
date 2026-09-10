@@ -609,7 +609,9 @@
     "bulkDelete": "Tout supprimer",
     "bulkDeleteConfirm": "Supprimer {count} ?",
     "bulkResult": "Mises à jour : {done}. Échecs : {failed}.",
-    "bulkDeleteResult": "Supprimées : {done}. Échecs : {failed}."
+    "bulkDeleteResult": "Supprimées : {done}. Échecs : {failed}.",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} added, {lost} retired in the last {days} days"
   },
   "backups": {
     "title": "Sauvegardes",
@@ -764,7 +766,17 @@
     "sortHint": "Le tri s'applique aux {count} lignes chargées",
     "cacheHitRate": "Taux de succès du cache",
     "cacheSavedTokens": "{tokens} jetons économisés",
-    "cacheHitRateHint": "{hits} succès contre {misses} échecs depuis le démarrage du serveur · {requests} appels au fournisseur évités"
+    "cacheHitRateHint": "{hits} succès contre {misses} échecs depuis le démarrage du serveur · {requests} appels au fournisseur évités",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "Quota",
@@ -898,7 +910,11 @@
     "policyDelete": "Supprimer la politique",
     "policyDeleteConfirm": "Supprimer",
     "resetInferredMark": "(est.)",
-    "resetInferredHint": "Prédit à partir des bornes de réinitialisation observées — ce fournisseur ne transmet aucune heure de réinitialisation. Précision limitée à l’intervalle d’interrogation."
+    "resetInferredHint": "Prédit à partir des bornes de réinitialisation observées — ce fournisseur ne transmet aucune heure de réinitialisation. Précision limitée à l’intervalle d’interrogation.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "Journaux",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Crée la chaîne sans aucun modèle et en tient les nouveaux modèles du catalogue à l'écart. Décoché, elle démarre comme une copie de la chaîne par défaut.",
     "curated": "Curatée",
     "curatedHint": "Les nouveaux modèles du catalogue ne sont pas ajoutés automatiquement à cette chaîne."
+  },
+  "catalogue": {
+    "changesTitle": "Catalogue changes",
+    "changesHint": "Models added since {since}, and retirements not yet acknowledged.",
+    "untracked": "{count} models predate arrival tracking.",
+    "arrived": "Arrived ({count})",
+    "departed": "Retired ({count})",
+    "autoRouted": "already routing — {chains}",
+    "notRouted": "not routed",
+    "lostFrom": "lost from {chains}",
+    "acknowledge": "Acknowledge"
   }
 }

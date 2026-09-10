@@ -609,7 +609,9 @@
     "bulkDelete": "සියල්ල මකන්න",
     "bulkDeleteConfirm": "{count} මකන්නද?",
     "bulkResult": "{done} යාවත්කාලීන කළා; {failed} අසාර්ථකයි.",
-    "bulkDeleteResult": "{done} මකා දැමුවා; {failed} අසාර්ථකයි."
+    "bulkDeleteResult": "{done} මකා දැමුවා; {failed} අසාර්ථකයි.",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} added, {lost} retired in the last {days} days"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "පෙළගැස්වීම පූරණය කළ පේළි {count} ට පමණක් අදාළ වේ",
     "cacheHitRate": "හැඹිලි පහර අනුපාතය",
     "cacheSavedTokens": "ටෝකන {tokens}ක් ඉතිරි විය",
-    "cacheHitRateHint": "සේවාදායකය ආරම්භ වූ දා සිට පහරවල් {hits}ක්, මගහැරීම් {misses}ක් · සැපයුම්කරු ඇමතුම් {requests}ක් වළක්වා ගැනිණි"
+    "cacheHitRateHint": "සේවාදායකය ආරම්භ වූ දා සිට පහරවල් {hits}ක්, මගහැරීම් {misses}ක් · සැපයුම්කරු ඇමතුම් {requests}ක් වළක්වා ගැනිණි",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "කෝටාව",
@@ -898,7 +910,11 @@
     "policyDelete": "ප්‍රතිපත්තිය මකන්න",
     "policyDeleteConfirm": "මකන්න",
     "resetInferredMark": "(ඇස්.)",
-    "resetInferredHint": "නිරීක්ෂිත යළි සැකසුම් සීමා මත පදනම්ව පුරෝකථනය කළා — මෙම සැපයුම්කරු යළි සැකසුම් වේලාවක් නොයවයි. පෝලිං පරාසය තුළ නිරවද්‍යයි."
+    "resetInferredHint": "නිරීක්ෂිත යළි සැකසුම් සීමා මත පදනම්ව පුරෝකථනය කළා — මෙම සැපයුම්කරු යළි සැකසුම් වේලාවක් නොයවයි. පෝලිං පරාසය තුළ නිරවද්‍යයි.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "ලොග",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
     "curatedHint": "New catalog models are not added to this chain automatically."
+  },
+  "catalogue": {
+    "changesTitle": "කලාපයන් සටහන",
+    "changesHint": "මොදල් {since} දත්ත කර, සැංචිත්ව retirement not yet acknowledged.",
+    "untracked": "{count} මොදල් අත්හිම ගත්ත.",
+    "arrived": "Arrived ({count})",
+    "departed": "Retired ({count})",
+    "autoRouted": "අපි කරුණු {chains} ඞවල",
+    "notRouted": "not routed",
+    "lostFrom": "lost from {chains}",
+    "acknowledge": "Acknowledge"
   }
 }

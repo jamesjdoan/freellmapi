@@ -31,6 +31,45 @@ function placeholders(value) {
   return [...value.matchAll(/\{(\w+)\}/g)].map(match => match[1]).sort()
 }
 
+// Script coherence. A missing key is caught above and an English value is a
+// legitimate state (many keys are still awaiting a translator), but a value
+// that mixes unrelated writing systems is neither: it is fabricated text.
+//
+// This exists because a translation pass produced Malayalam strings containing
+// Japanese, Cyrillic and Thai words, and a Khmer string carrying a
+// Canadian-syllabics character and Unicode replacement marks. All of it parsed
+// as JSON, type-checked, and passed every other check in this project - a
+// string is a string. Only a reader of that language would have noticed.
+//
+// Latin is exempt everywhere: product names, model ids and units are Latin in
+// every locale. Japanese legitimately mixes Han with both kana, and Korean
+// mixes Hangul with Han, so those combinations are declared native.
+const SCRIPT_PATTERNS = [
+  ['Cyrillic', /\p{Script=Cyrillic}/u], ['Greek', /\p{Script=Greek}/u],
+  ['Arabic', /\p{Script=Arabic}/u], ['Hebrew', /\p{Script=Hebrew}/u],
+  ['Devanagari', /\p{Script=Devanagari}/u], ['Bengali', /\p{Script=Bengali}/u],
+  ['Gujarati', /\p{Script=Gujarati}/u], ['Gurmukhi', /\p{Script=Gurmukhi}/u],
+  ['Tamil', /\p{Script=Tamil}/u], ['Telugu', /\p{Script=Telugu}/u],
+  ['Kannada', /\p{Script=Kannada}/u], ['Malayalam', /\p{Script=Malayalam}/u],
+  ['Sinhala', /\p{Script=Sinhala}/u], ['Thai', /\p{Script=Thai}/u],
+  ['Khmer', /\p{Script=Khmer}/u], ['Myanmar', /\p{Script=Myanmar}/u],
+  ['Georgian', /\p{Script=Georgian}/u], ['Ethiopic', /\p{Script=Ethiopic}/u],
+  ['Hangul', /\p{Script=Hangul}/u], ['Han', /\p{Script=Han}/u],
+  ['Kana', /[\p{Script=Hiragana}\p{Script=Katakana}]/u],
+]
+const NATIVE_SCRIPTS = {
+  ja: ['Han', 'Kana'], ko: ['Hangul', 'Han'], 'zh-CN': ['Han'], 'zh-TW': ['Han'],
+}
+
+function foreignScripts(value, locale) {
+  if (typeof value !== 'string') return []
+  const native = new Set(NATIVE_SCRIPTS[locale] ?? [])
+  const stripped = value.replace(/\{\w+\}/g, '')
+  return SCRIPT_PATTERNS
+    .filter(([name, pattern]) => pattern.test(stripped) && !native.has(name))
+    .map(([name]) => name)
+}
+
 const fileNames = (await readdir(localeDirectory))
   .filter(fileName => fileName.endsWith('.json'))
   .sort()
@@ -75,6 +114,13 @@ for (const locale of actualLocales) {
       errors.push(
         `${locale}:${key}: placeholders {${actualPlaceholders.join(', ')}} do not match {${expectedPlaceholders.join(', ')}}`,
       )
+    }
+    const mixed = foreignScripts(localizedValue, locale)
+    if (mixed.length > 1) {
+      errors.push(`${locale}:${key}: mixes ${mixed.join(' + ')} in one string - ${JSON.stringify(localizedValue)}`)
+    }
+    if (localizedValue.includes('\uFFFD')) {
+      errors.push(`${locale}:${key}: contains a Unicode replacement character - ${JSON.stringify(localizedValue)}`)
     }
   }
 }

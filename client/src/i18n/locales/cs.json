@@ -609,7 +609,9 @@
     "bulkDelete": "Smazat vše",
     "bulkDeleteConfirm": "Smazat {count}?",
     "bulkResult": "Aktualizováno {done}; neúspěšné {failed}.",
-    "bulkDeleteResult": "Smazáno {done}; neúspěšné {failed}."
+    "bulkDeleteResult": "Smazáno {done}; neúspěšné {failed}.",
+    "churnWindow": "{days}d.",
+    "churnAria": "{added} přidáno, {lost} vyřazeno za posledních {days} dní"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "Řazení se vztahuje na {count} načtených řádků",
     "cacheHitRate": "Úspěšnost cache",
     "cacheSavedTokens": "Ušetřeno {tokens} tokenů",
-    "cacheHitRateHint": "{hits} zásahů proti {misses} minutím od spuštění serveru · ušetřeno {requests} volání poskytovatele"
+    "cacheHitRateHint": "{hits} zásahů proti {misses} minutím od spuštění serveru · ušetřeno {requests} volání poskytovatele",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "Kvóta",
@@ -898,7 +910,11 @@
     "policyDelete": "Smazat zásadu",
     "policyDeleteConfirm": "Smazat",
     "resetInferredMark": "(odhad)",
-    "resetInferredHint": "Předpovězeno z pozorovaných hranic obnovení — tento poskytovatel čas obnovení neposílá. Přesnost odpovídá intervalu dotazování."
+    "resetInferredHint": "Předpovězeno z pozorovaných hranic obnovení — tento poskytovatel čas obnovení neposílá. Přesnost odpovídá intervalu dotazování.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "Logy",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
     "curatedHint": "New catalog models are not added to this chain automatically."
+  },
+  "catalogue": {
+    "changesTitle": "Změny v katalogu",
+    "changesHint": "Modely přidané od {since} a vyřazené, které zatím nebyly potvrzeny.",
+    "untracked": "{count} modelů předchází sledování příchodu.",
+    "arrived": "Přišlo ({count})",
+    "departed": "Vyřazeno ({count})",
+    "autoRouted": "již směruje — {chains}",
+    "notRouted": "nesměrováno",
+    "lostFrom": "ztraceno z {chains}",
+    "acknowledge": "Potvrdit"
   }
 }

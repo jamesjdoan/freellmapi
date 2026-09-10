@@ -609,7 +609,9 @@
     "bulkDelete": "Șterge toate",
     "bulkDeleteConfirm": "Ștergi {count}?",
     "bulkResult": "Actualizate {done}; eșuate {failed}.",
-    "bulkDeleteResult": "Șterse {done}; eșuate {failed}."
+    "bulkDeleteResult": "Șterse {done}; eșuate {failed}.",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} adăugate, {lost} retragate în ultimii {days} zile"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "Sortarea se aplică celor {count} rânduri încărcate",
     "cacheHitRate": "Rata de succes a cache-ului",
     "cacheSavedTokens": "{tokens} tokenuri economisite",
-    "cacheHitRateHint": "{hits} accesări reușite față de {misses} ratări de la pornirea serverului · {requests} apeluri către furnizor evitate"
+    "cacheHitRateHint": "{hits} accesări reușite față de {misses} ratări de la pornirea serverului · {requests} apeluri către furnizor evitate",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "Cotă",
@@ -898,7 +910,11 @@
     "policyDelete": "Șterge politica",
     "policyDeleteConfirm": "Șterge",
     "resetInferredMark": "(est.)",
-    "resetInferredHint": "Estimat pe baza limitelor de resetare observate — acest furnizor nu trimite ora resetării. Precizie în limita intervalului de interogare."
+    "resetInferredHint": "Estimat pe baza limitelor de resetare observate — acest furnizor nu trimite ora resetării. Precizie în limita intervalului de interogare.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "Jurnale",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
     "curatedHint": "New catalog models are not added to this chain automatically."
+  },
+  "catalogue": {
+    "changesTitle": "Schimbări din catalog",
+    "changesHint": "Modele adăugate pe {since}, și retiregeri neacceptate.",
+    "untracked": "{count} modele predate tracking-ul.",
+    "arrived": "Arrivat ({count})",
+    "departed": "Retras ({count})",
+    "autoRouted": "rutează deja — {chains}",
+    "notRouted": "nu rutează",
+    "lostFrom": "pierut din {chains}",
+    "acknowledge": "Confirmă"
   }
 }

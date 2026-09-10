@@ -609,7 +609,9 @@
     "bulkDelete": "Xóa tất cả",
     "bulkDeleteConfirm": "Xóa {count}?",
     "bulkResult": "Đã cập nhật {done}; {failed} không thành công.",
-    "bulkDeleteResult": "Đã xóa {done}; {failed} không thành công."
+    "bulkDeleteResult": "Đã xóa {done}; {failed} không thành công.",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} được thêm, {lost} đã huỷ trong {days} ngày qua"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "Sắp xếp chỉ áp dụng cho {count} hàng đã tải",
     "cacheHitRate": "Tỷ lệ trúng bộ nhớ đệm",
     "cacheSavedTokens": "Tiết kiệm {tokens} token",
-    "cacheHitRateHint": "{hits} lần trúng so với {misses} lần trượt kể từ khi máy chủ khởi động · tránh được {requests} lượt gọi nhà cung cấp"
+    "cacheHitRateHint": "{hits} lần trúng so với {misses} lần trượt kể từ khi máy chủ khởi động · tránh được {requests} lượt gọi nhà cung cấp",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "Hạn mức",
@@ -898,7 +910,11 @@
     "policyDelete": "Xóa chính sách",
     "policyDeleteConfirm": "Xóa",
     "resetInferredMark": "(ước tính)",
-    "resetInferredHint": "Dự đoán từ các mốc đặt lại quan sát được — nhà cung cấp này không gửi thời điểm đặt lại. Độ chính xác trong phạm vi chu kỳ thăm dò."
+    "resetInferredHint": "Dự đoán từ các mốc đặt lại quan sát được — nhà cung cấp này không gửi thời điểm đặt lại. Độ chính xác trong phạm vi chu kỳ thăm dò.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "Nhật ký",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Tạo chuỗi không có mô hình nào và không tự thêm mô hình mới từ danh mục. Bỏ chọn thì chuỗi bắt đầu như bản sao của chuỗi mặc định.",
     "curated": "Tự chọn",
     "curatedHint": "Mô hình mới trong danh mục không được thêm tự động vào chuỗi này."
+  },
+  "catalogue": {
+    "changesTitle": "Thay đổi trong Catalogue",
+    "changesHint": "Các mô hình được thêm từ {since}, và các mức cấp già chưa được xác nhận.",
+    "untracked": "{count} mô hình tồn tại trước khi bắt đầu theo dõi sự đến.",
+    "arrived": "Đã đến ({count})",
+    "departed": "Đã ngừng ({count})",
+    "autoRouted": "Đã được định tuyến — {chains}",
+    "notRouted": "Chưa được định tuyến",
+    "lostFrom": "Mất ở {chains}",
+    "acknowledge": "Xác nhận"
   }
 }

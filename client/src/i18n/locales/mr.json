@@ -609,7 +609,9 @@
     "bulkDelete": "सर्व हटवा",
     "bulkDeleteConfirm": "{count} हटवायचे?",
     "bulkResult": "{done} अद्ययावत केले; {failed} अयशस्वी.",
-    "bulkDeleteResult": "{done} हटवले; {failed} अयशस्वी."
+    "bulkDeleteResult": "{done} हटवले; {failed} अयशस्वी.",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} जोड़ा गया, {lost} निवृत्त पिछले {days} दिनों में"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "क्रमवारी फक्त लोड केलेल्या {count} ओळींना लागू होते",
     "cacheHitRate": "कॅशे हिट दर",
     "cacheSavedTokens": "{tokens} टोकन वाचले",
-    "cacheHitRateHint": "सर्व्हर सुरू झाल्यापासून {hits} हिट विरुद्ध {misses} मिस · {requests} पुरवठादार कॉल टाळले"
+    "cacheHitRateHint": "सर्व्हर सुरू झाल्यापासून {hits} हिट विरुद्ध {misses} मिस · {requests} पुरवठादार कॉल टाळले",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "कोटा",
@@ -898,7 +910,11 @@
     "policyDelete": "धोरण हटवा",
     "policyDeleteConfirm": "हटवा",
     "resetInferredMark": "(अंदाजे)",
-    "resetInferredHint": "निरीक्षण केलेल्या रीसेट सीमांवरून अंदाजित — हा प्रोव्हायडर रीसेट वेळ पाठवत नाही. पोलिंग अंतरालाइतकी अचूकता."
+    "resetInferredHint": "निरीक्षण केलेल्या रीसेट सीमांवरून अंदाजित — हा प्रोव्हायडर रीसेट वेळ पाठवत नाही. पोलिंग अंतरालाइतकी अचूकता.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "लॉग",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
     "curatedHint": "New catalog models are not added to this chain automatically."
+  },
+  "catalogue": {
+    "changesTitle": "कॅटालॉग बदल",
+    "changesHint": "{since} - जोड़े गए मॉडल और अभी तक मान्यता प्राप्त नहीं हुए सेवानिवृत्ति",
+    "untracked": "{count} मॉडल ट्रैकिंग शुरू होने से पहले से मौजूद हैं",
+    "arrived": "आयात ({count})",
+    "departed": "निवृत्त ({count})",
+    "autoRouted": "पहले से मार्गनिर्देशित — {chains}",
+    "notRouted": "मार्गनिर्देशित नहीं",
+    "lostFrom": "{chains} से हानि",
+    "acknowledge": "पुष्टि करें"
   }
 }

@@ -609,7 +609,9 @@
     "bulkDelete": "Padam semua",
     "bulkDeleteConfirm": "Padam {count}?",
     "bulkResult": "Dikemas kini {done}; gagal {failed}.",
-    "bulkDeleteResult": "Dipadam {done}; gagal {failed}."
+    "bulkDeleteResult": "Dipadam {done}; gagal {failed}.",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} ditambah, {lost} dicabut dalam {days} hari lepas"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "Pengisihan hanya digunakan pada {count} baris yang dimuatkan",
     "cacheHitRate": "Kadar hit cache",
     "cacheSavedTokens": "{tokens} token dijimatkan",
-    "cacheHitRateHint": "{hits} hit berbanding {misses} miss sejak pelayan dimulakan · {requests} panggilan pembekal dielakkan"
+    "cacheHitRateHint": "{hits} hit berbanding {misses} miss sejak pelayan dimulakan · {requests} panggilan pembekal dielakkan",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "Kuota",
@@ -898,7 +910,11 @@
     "policyDelete": "Hapus polisi",
     "policyDeleteConfirm": "Hapus",
     "resetInferredMark": "(angg.)",
-    "resetInferredHint": "Diramal daripada sempadan set semula yang diperhatikan — penyedia ini tidak menghantar masa set semula. Tepat dalam lingkungan selang pengundian."
+    "resetInferredHint": "Diramal daripada sempadan set semula yang diperhatikan — penyedia ini tidak menghantar masa set semula. Tepat dalam lingkungan selang pengundian.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "Log",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
     "curatedHint": "New catalog models are not added to this chain automatically."
+  },
+  "catalogue": {
+    "changesTitle": "Perubahan katalog",
+    "changesHint": "Model ditambahkan sejak {since}, dan pencabutan yang belum diakui.",
+    "untracked": "{count} model predating penjejakan kedatangan.",
+    "arrived": "Tiba ({count})",
+    "departed": "Dicabut ({count})",
+    "autoRouted": "sentiasa mengalihkan — {chains}",
+    "notRouted": "tidak di-alihkan",
+    "lostFrom": "hilang daripada {chains}",
+    "acknowledge": "Mengakui"
   }
 }

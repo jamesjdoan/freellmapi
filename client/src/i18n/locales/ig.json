@@ -609,7 +609,9 @@
     "bulkDelete": "Hichapụ ha niile",
     "bulkDeleteConfirm": "Hichapụ {count}?",
     "bulkResult": "Emelitere {done}; {failed} dara.",
-    "bulkDeleteResult": "Ehichapụrụ {done}; {failed} dara."
+    "bulkDeleteResult": "Ehichapụrụ {done}; {failed} dara.",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} taa kwụsị, {lost} ahụ na ugbua {days} ọzọ"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "Nhazi ahụ metụtara naanị ahịrị {count} ebugoro",
     "cacheHitRate": "Ọnụọgụ hit nke cache",
     "cacheSavedTokens": "Echekwara token {tokens}",
-    "cacheHitRateHint": "{hits} hit megide {misses} miss kemgbe sava malitere · ezere oku onye na-enye ozi {requests}"
+    "cacheHitRateHint": "{hits} hit megide {misses} miss kemgbe sava malitere · ezere oku onye na-enye ozi {requests}",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "Oke Ojiji",
@@ -898,7 +910,11 @@
     "policyDelete": "Hichapụ iwu",
     "policyDeleteConfirm": "Hichapụ",
     "resetInferredMark": "(atụmatụ)",
-    "resetInferredHint": "Atụrụ ya site n'oke ntọghata ahụrụ — onye na-eweta ọrụ a anaghị eziga oge ntọghata. Ọ ziri ezi ruo n'ime oge nnyocha."
+    "resetInferredHint": "Atụrụ ya site n'oke ntọghata ahụrụ — onye na-eweta ọrụ a anaghị eziga oge ntọghata. Ọ ziri ezi ruo n'ime oge nnyocha.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "Ndekọ",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
     "curatedHint": "New catalog models are not added to this chain automatically."
+  },
+  "catalogue": {
+    "changesTitle": "Ncheta kataloogu",
+    "changesHint": "{since} - ncheta model taa kwụsị, na-achọrọ na-enyi na mkparịta",
+    "untracked": "{count} model maka arrival tracking",
+    "arrived": "Ncheta ({count})",
+    "departed": "Ahụ ({count})",
+    "autoRouted": "Na-enwe otu — {chains}",
+    "notRouted": "Enweghị otu",
+    "lostFrom": "Ahụ na {chains}",
+    "acknowledge": "Kparịta"
   }
 }

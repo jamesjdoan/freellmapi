@@ -609,7 +609,9 @@
     "bulkDelete": "Hapus semua",
     "bulkDeleteConfirm": "Hapus {count}?",
     "bulkResult": "Diperbarui {done}; gagal {failed}.",
-    "bulkDeleteResult": "Dihapus {done}; gagal {failed}."
+    "bulkDeleteResult": "Dihapus {done}; gagal {failed}.",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} added, {lost} retired in the last {days} days"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "Pengurutan berlaku untuk {count} baris yang dimuat",
     "cacheHitRate": "Rasio hit cache",
     "cacheSavedTokens": "{tokens} token dihemat",
-    "cacheHitRateHint": "{hits} hit vs {misses} miss sejak server dijalankan · {requests} panggilan penyedia dihindari"
+    "cacheHitRateHint": "{hits} hit vs {misses} miss sejak server dijalankan · {requests} panggilan penyedia dihindari",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "Kuota",
@@ -898,7 +910,11 @@
     "policyDelete": "Hapus kebijakan",
     "policyDeleteConfirm": "Hapus",
     "resetInferredMark": "(perk.)",
-    "resetInferredHint": "Diprediksi dari batas reset yang teramati — provider ini tidak mengirim waktu reset. Akurat dalam rentang interval polling."
+    "resetInferredHint": "Diprediksi dari batas reset yang teramati — provider ini tidak mengirim waktu reset. Akurat dalam rentang interval polling.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "Log",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Membuat rantai tanpa model dan menjauhkan model katalog baru darinya. Jika tidak dicentang, rantai dimulai sebagai salinan rantai bawaan.",
     "curated": "Dikurasi",
     "curatedHint": "Model katalog baru tidak ditambahkan ke rantai ini secara otomatis."
+  },
+  "catalogue": {
+    "changesTitle": "Catalogue changes",
+    "changesHint": "Models added since {since}, and retirements not yet acknowledged.",
+    "untracked": "{count} models predate arrival tracking.",
+    "arrived": "Arrived ({count})",
+    "departed": "Retired ({count})",
+    "autoRouted": "already routing — {chains}",
+    "notRouted": "not routed",
+    "lostFrom": "lost from {chains}",
+    "acknowledge": "Acknowledge"
   }
 }

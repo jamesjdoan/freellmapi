@@ -609,7 +609,9 @@
     "bulkDelete": "حذف همه",
     "bulkDeleteConfirm": "حذف {count}؟",
     "bulkResult": "{done} به‌روزرسانی شد؛ {failed} ناموفق.",
-    "bulkDeleteResult": "{done} حذف شد؛ {failed} ناموفق."
+    "bulkDeleteResult": "{done} حذف شد؛ {failed} ناموفق.",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} added, {lost} retired in the last {days} days"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "مرتب‌سازی فقط روی {count} ردیف بارگذاری‌شده اعمال می‌شود",
     "cacheHitRate": "نرخ اصابت حافظه نهان",
     "cacheSavedTokens": "{tokens} توکن صرفه‌جویی شد",
-    "cacheHitRateHint": "{hits} اصابت در برابر {misses} خطا از زمان راه‌اندازی سرور · {requests} فراخوانی ارائه‌دهنده صرفه‌جویی شد"
+    "cacheHitRateHint": "{hits} اصابت در برابر {misses} خطا از زمان راه‌اندازی سرور · {requests} فراخوانی ارائه‌دهنده صرفه‌جویی شد",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "سهمیه",
@@ -898,7 +910,11 @@
     "policyDelete": "حذف سیاست",
     "policyDeleteConfirm": "حذف",
     "resetInferredMark": "(تخمینی)",
-    "resetInferredHint": "پیش‌بینی‌شده از مرزهای بازنشانی مشاهده‌شده — این ارائه‌دهنده زمان بازنشانی ارسال نمی‌کند. دقت در حد فاصلهٔ نمونه‌برداری."
+    "resetInferredHint": "پیش‌بینی‌شده از مرزهای بازنشانی مشاهده‌شده — این ارائه‌دهنده زمان بازنشانی ارسال نمی‌کند. دقت در حد فاصلهٔ نمونه‌برداری.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "لاگ‌ها",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
     "curatedHint": "New catalog models are not added to this chain automatically."
+  },
+  "catalogue": {
+    "changesTitle": "Catalogue changes",
+    "changesHint": "Models added since {since}, and retirements not yet acknowledged.",
+    "untracked": "{count} models predate arrival tracking.",
+    "arrived": "Arrived ({count})",
+    "departed": "Retired ({count})",
+    "autoRouted": "already routing — {chains}",
+    "notRouted": "not routed",
+    "lostFrom": "lost from {chains}",
+    "acknowledge": "Acknowledge"
   }
 }

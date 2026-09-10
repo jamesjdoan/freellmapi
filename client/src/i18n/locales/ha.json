@@ -609,7 +609,9 @@
     "bulkDelete": "Share duka",
     "bulkDeleteConfirm": "A share {count}?",
     "bulkResult": "An sabunta {done}; ya kasa {failed}.",
-    "bulkDeleteResult": "An share {done}; ya kasa {failed}."
+    "bulkDeleteResult": "An share {done}; ya kasa {failed}.",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} added, {lost} retired in the last {days} days"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "Tsarawar ta shafi layuka {count} da aka ɗora kawai",
     "cacheHitRate": "Yawan nasarar cache",
     "cacheSavedTokens": "An adana tokens {tokens}",
-    "cacheHitRateHint": "Nasara {hits} kan rashi {misses} tun farawar sabar · an guji kiran mai bayarwa {requests}"
+    "cacheHitRateHint": "Nasara {hits} kan rashi {misses} tun farawar sabar · an guji kiran mai bayarwa {requests}",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "Kason",
@@ -898,7 +910,11 @@
     "policyDelete": "Share manufa",
     "policyDeleteConfirm": "Share",
     "resetInferredMark": "(kimani)",
-    "resetInferredHint": "An hasashe daga iyakokin sake saitawa da aka lura — wannan mai bayarwa ba ya aika lokacin sake saitawa. Daidai ne cikin tazarar bincike."
+    "resetInferredHint": "An hasashe daga iyakokin sake saitawa da aka lura — wannan mai bayarwa ba ya aika lokacin sake saitawa. Daidai ne cikin tazarar bincike.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "Logs",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
     "curatedHint": "New catalog models are not added to this chain automatically."
+  },
+  "catalogue": {
+    "changesTitle": "Catalogue changes",
+    "changesHint": "Models added since {since}, and retirements not yet acknowledged.",
+    "untracked": "{count} models predate arrival tracking.",
+    "arrived": "Arrived ({count})",
+    "departed": "Retired ({count})",
+    "autoRouted": "already routing — {chains}",
+    "notRouted": "not routed",
+    "lostFrom": "lost from {chains}",
+    "acknowledge": "Acknowledge"
   }
 }

@@ -609,7 +609,9 @@
     "bulkDelete": "Elimina tutte",
     "bulkDeleteConfirm": "Eliminare {count}?",
     "bulkResult": "Aggiornate {done}; fallite {failed}.",
-    "bulkDeleteResult": "Eliminate {done}; fallite {failed}."
+    "bulkDeleteResult": "Eliminate {done}; fallite {failed}.",
+    "churnWindow": "{days}d",
+    "churnAria": "negli ultimi {days} giorni, {added} aggiunti, {lost} ritirati"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "L'ordinamento si applica alle {count} righe caricate",
     "cacheHitRate": "Tasso di hit della cache",
     "cacheSavedTokens": "{tokens} token risparmiati",
-    "cacheHitRateHint": "{hits} hit contro {misses} miss dall'avvio del server · {requests} chiamate al provider evitate"
+    "cacheHitRateHint": "{hits} hit contro {misses} miss dall'avvio del server · {requests} chiamate al provider evitate",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "Quota",
@@ -898,7 +910,11 @@
     "policyDelete": "Elimina policy",
     "policyDeleteConfirm": "Elimina",
     "resetInferredMark": "(stima)",
-    "resetInferredHint": "Previsto dai limiti di reset osservati — questo provider non invia l'ora di reset. Precisione pari all'intervallo di polling."
+    "resetInferredHint": "Previsto dai limiti di reset osservati — questo provider non invia l'ora di reset. Precisione pari all'intervallo di polling.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "Log",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Crea la catena senza modelli e tiene fuori i nuovi modelli del catalogo. Se non selezionato, parte come copia della catena predefinita.",
     "curated": "Curata",
     "curatedHint": "I nuovi modelli del catalogo non vengono aggiunti automaticamente a questa catena."
+  },
+  "catalogue": {
+    "changesTitle": "Modifiche al catalogo",
+    "changesHint": "Modelli aggiunti da {since} e ritiri non ancora riconosciuti",
+    "untracked": "{count} modelli precedenti l'inizio del tracciamento",
+    "arrived": "Arrivati ({count})",
+    "departed": "Ritirati ({count})",
+    "autoRouted": "già instradato — {chains}",
+    "notRouted": "non instradato",
+    "lostFrom": "perso da {chains}",
+    "acknowledge": "Conferma"
   }
 }

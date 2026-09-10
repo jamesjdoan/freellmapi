@@ -609,7 +609,9 @@
     "bulkDelete": "Удалить все",
     "bulkDeleteConfirm": "Удалить {count}?",
     "bulkResult": "Обновлено {done}; не удалось {failed}.",
-    "bulkDeleteResult": "Удалено {done}; не удалось {failed}."
+    "bulkDeleteResult": "Удалено {done}; не удалось {failed}.",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} добавлено, {lost} retired в последние {days} дней"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "Сортировка применяется к {count} загруженным строкам",
     "cacheHitRate": "Доля попаданий в кэш",
     "cacheSavedTokens": "Сэкономлено {tokens} токенов",
-    "cacheHitRateHint": "{hits} попаданий против {misses} промахов с момента запуска сервера · сэкономлено {requests} запросов к провайдеру"
+    "cacheHitRateHint": "{hits} попаданий против {misses} промахов с момента запуска сервера · сэкономлено {requests} запросов к провайдеру",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "Квота",
@@ -898,7 +910,11 @@
     "policyDelete": "Удалить политику",
     "policyDeleteConfirm": "Удалить",
     "resetInferredMark": "(оценка)",
-    "resetInferredHint": "Спрогнозировано по наблюдаемым границам сброса — провайдер не сообщает время сброса. Точность в пределах интервала опроса."
+    "resetInferredHint": "Спрогнозировано по наблюдаемым границам сброса — провайдер не сообщает время сброса. Точность в пределах интервала опроса.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "Журнал",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Создаёт цепочку без моделей и не добавляет в неё новые модели каталога. Без флажка она начинается как копия цепочки по умолчанию.",
     "curated": "Ручная",
     "curatedHint": "Новые модели каталога не добавляются в эту цепочку автоматически."
+  },
+  "catalogue": {
+    "changesTitle": "Изменения каталога",
+    "changesHint": "Модели добавлены {since}, retirement not yet acknowledged.",
+    "untracked": "{count} моделей предвари_tracking.",
+    "arrived": "Arrived ({count})",
+    "departed": "Retired ({count})",
+    "autoRouted": "уже маршрутизировано — {chains}",
+    "notRouted": "не маршрутизировано",
+    "lostFrom": "утеряно из {chains}",
+    "acknowledge": "Подтвердить"
   }
 }

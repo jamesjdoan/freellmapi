@@ -609,7 +609,9 @@
     "bulkDelete": "모두 삭제",
     "bulkDeleteConfirm": "{count}개를 삭제할까요?",
     "bulkResult": "{done}개 업데이트됨, {failed}개 실패.",
-    "bulkDeleteResult": "{done}개 삭제됨, {failed}개 실패."
+    "bulkDeleteResult": "{done}개 삭제됨, {failed}개 실패.",
+    "churnWindow": "{days}일",
+    "churnAria": "최근 {days}일 동안 {added}개 추가, {lost}개 종료"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "정렬은 불러온 {count}개 행에만 적용됩니다",
     "cacheHitRate": "캐시 적중률",
     "cacheSavedTokens": "{tokens} 토큰 절약",
-    "cacheHitRateHint": "서버 시작 이후 적중 {hits}회, 실패 {misses}회 · 제공자 호출 {requests}회 절약"
+    "cacheHitRateHint": "서버 시작 이후 적중 {hits}회, 실패 {misses}회 · 제공자 호출 {requests}회 절약",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "쿼터",
@@ -898,7 +910,11 @@
     "policyDelete": "정책 삭제",
     "policyDeleteConfirm": "삭제",
     "resetInferredMark": "(추정)",
-    "resetInferredHint": "관측된 초기화 경계로부터 예측 — 이 제공자는 초기화 시각을 제공하지 않습니다. 폴링 간격 범위 내에서 정확합니다."
+    "resetInferredHint": "관측된 초기화 경계로부터 예측 — 이 제공자는 초기화 시각을 제공하지 않습니다. 폴링 간격 범위 내에서 정확합니다.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "로그",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "모델 없이 체인을 만들고, 새로 추가되는 카탈로그 모델도 넣지 않습니다. 해제하면 기본 체인의 복사본으로 시작합니다.",
     "curated": "직접 관리",
     "curatedHint": "새 카탈로그 모델이 이 체인에 자동으로 추가되지 않습니다."
+  },
+  "catalogue": {
+    "changesTitle": "카탈로그 변경",
+    "changesHint": "{since} 이후 추가된 모델과 아직 확인하지 않은 종료 모델",
+    "untracked": "{count}개 모델은 도착 추적 이전에 존재함",
+    "arrived": "도착 ({count})",
+    "departed": "종료됨 ({count})",
+    "autoRouted": "이미 라우팅 중 — {chains}",
+    "notRouted": "라우팅되지 않음",
+    "lostFrom": "{chains}에서 손실됨",
+    "acknowledge": "확인"
   }
 }

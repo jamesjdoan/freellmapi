@@ -609,7 +609,9 @@
     "bulkDelete": "Usuń wszystkie",
     "bulkDeleteConfirm": "Usunąć {count}?",
     "bulkResult": "Zaktualizowano {done}; nie powiodło się {failed}.",
-    "bulkDeleteResult": "Usunięto {done}; nie powiodło się {failed}."
+    "bulkDeleteResult": "Usunięto {done}; nie powiodło się {failed}.",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} dodano, {lost} wycofano w ciągu ostatnich {days} dni"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "Sortowanie dotyczy {count} załadowanych wierszy",
     "cacheHitRate": "Współczynnik trafień pamięci podręcznej",
     "cacheSavedTokens": "Zaoszczędzono {tokens} tokenów",
-    "cacheHitRateHint": "{hits} trafień wobec {misses} chybień od startu serwera · uniknięto {requests} wywołań dostawcy"
+    "cacheHitRateHint": "{hits} trafień wobec {misses} chybień od startu serwera · uniknięto {requests} wywołań dostawcy",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "Limit",
@@ -898,7 +910,11 @@
     "policyDelete": "Usuń zasadę",
     "policyDeleteConfirm": "Usuń",
     "resetInferredMark": "(szac.)",
-    "resetInferredHint": "Przewidziane na podstawie zaobserwowanych granic resetu — ten dostawca nie podaje czasu resetu. Dokładność w granicach interwału odpytywania."
+    "resetInferredHint": "Przewidziane na podstawie zaobserwowanych granic resetu — ten dostawca nie podaje czasu resetu. Dokładność w granicach interwału odpytywania.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "Logi",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Tworzy łańcuch bez modeli i nie dodaje do niego nowych modeli z katalogu. Bez zaznaczenia zaczyna jako kopia łańcucha domyślnego.",
     "curated": "Ręczny",
     "curatedHint": "Nowe modele z katalogu nie są automatycznie dodawane do tego łańcucha."
+  },
+  "catalogue": {
+    "changesTitle": "Zmiany w katalogu",
+    "changesHint": "Modele dodane od {since}, sowie emerytury jeszcze nie uznane.",
+    "untracked": "{count} modeli jest starszych niż śledzenie przybyarrival.",
+    "arrived": "Przybyło ({count})",
+    "departed": "Wycofane ({count})",
+    "autoRouted": "już kieruje — {chains}",
+    "notRouted": "nie kierowane",
+    "lostFrom": "utracone z {chains}",
+    "acknowledge": "Potwierdź"
   }
 }

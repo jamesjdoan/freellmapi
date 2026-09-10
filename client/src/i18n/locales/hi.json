@@ -609,7 +609,9 @@
     "bulkDelete": "सभी हटाएँ",
     "bulkDeleteConfirm": "{count} हटाएँ?",
     "bulkResult": "{done} अपडेट हुए; {failed} विफल।",
-    "bulkDeleteResult": "{done} हटाए गए; {failed} विफल।"
+    "bulkDeleteResult": "{done} हटाए गए; {failed} विफल।",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} added, {lost} retired in the last {days} days"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "क्रमबद्धता केवल लोड की गई {count} पंक्तियों पर लागू होती है",
     "cacheHitRate": "कैश हिट दर",
     "cacheSavedTokens": "{tokens} टोकन बचे",
-    "cacheHitRateHint": "सर्वर शुरू होने के बाद से {hits} हिट बनाम {misses} मिस · {requests} प्रदाता कॉल बचाए गए"
+    "cacheHitRateHint": "सर्वर शुरू होने के बाद से {hits} हिट बनाम {misses} मिस · {requests} प्रदाता कॉल बचाए गए",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "कोटा",
@@ -898,7 +910,11 @@
     "policyDelete": "नीति हटाएँ",
     "policyDeleteConfirm": "हटाएँ",
     "resetInferredMark": "(अनु.)",
-    "resetInferredHint": "देखी गई रीसेट सीमाओं से अनुमानित — यह प्रोवाइडर रीसेट समय नहीं भेजता। पोलिंग अंतराल तक सटीक।"
+    "resetInferredHint": "देखी गई रीसेट सीमाओं से अनुमानित — यह प्रोवाइडर रीसेट समय नहीं भेजता। पोलिंग अंतराल तक सटीक।",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "लॉग",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "चेन को बिना किसी मॉडल के बनाएँ और नए कैटलॉग मॉडल भी इसमें न जोड़ें। अनचेक करने पर यह डिफ़ॉल्ट चेन की नकल से शुरू होती है।",
     "curated": "हस्तचयनित",
     "curatedHint": "नए कैटलॉग मॉडल इस चेन में अपने आप नहीं जुड़ते।"
+  },
+  "catalogue": {
+    "changesTitle": "Catalogue changes",
+    "changesHint": "Models added since {since}, and retirements not yet acknowledged.",
+    "untracked": "{count} models predate arrival tracking.",
+    "arrived": "Arrived ({count})",
+    "departed": "Retired ({count})",
+    "autoRouted": "already routing — {chains}",
+    "notRouted": "not routed",
+    "lostFrom": "lost from {chains}",
+    "acknowledge": "Acknowledge"
   }
 }

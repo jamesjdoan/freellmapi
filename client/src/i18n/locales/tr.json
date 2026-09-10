@@ -609,7 +609,9 @@
     "bulkDelete": "Tümünü sil",
     "bulkDeleteConfirm": "{count} silinsin mi?",
     "bulkResult": "Güncellenen {done}; başarısız {failed}.",
-    "bulkDeleteResult": "Silinen {done}; başarısız {failed}."
+    "bulkDeleteResult": "Silinen {done}; başarısız {failed}.",
+    "churnWindow": "{days}g",
+    "churnAria": "{added} eklendi, {lost} çıkarıldı son {days} g içinde"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "Sıralama yalnızca yüklenen {count} satıra uygulanır",
     "cacheHitRate": "Önbellek isabet oranı",
     "cacheSavedTokens": "{tokens} jeton tasarruf edildi",
-    "cacheHitRateHint": "Sunucu başlatıldığından beri {hits} isabet, {misses} ıskalama · {requests} sağlayıcı çağrısından kaçınıldı"
+    "cacheHitRateHint": "Sunucu başlatıldığından beri {hits} isabet, {misses} ıskalama · {requests} sağlayıcı çağrısından kaçınıldı",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "Kota",
@@ -898,7 +910,11 @@
     "policyDelete": "Politikayı sil",
     "policyDeleteConfirm": "Sil",
     "resetInferredMark": "(tahmini)",
-    "resetInferredHint": "Gözlenen sıfırlama sınırlarından tahmin edildi — bu sağlayıcı sıfırlama zamanı göndermiyor. Yoklama aralığı kadar hassastır."
+    "resetInferredHint": "Gözlenen sıfırlama sınırlarından tahmin edildi — bu sağlayıcı sıfırlama zamanı göndermiyor. Yoklama aralığı kadar hassastır.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "Günlükler",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Zinciri hiç model olmadan oluşturur ve yeni katalog modellerini dışarıda tutar. İşaretlenmezse varsayılan zincirin kopyası olarak başlar.",
     "curated": "Elle düzenli",
     "curatedHint": "Yeni katalog modelleri bu zincire otomatik eklenmez."
+  },
+  "catalogue": {
+    "changesTitle": "Katalog değişiklikleri",
+    "changesHint": "{since} tarihinden sonra eklenen modeller ve henüz onaylanmamış kaldırımlar.",
+    "untracked": "{count} model, arrivals tracking'ten önce var.",
+    "arrived": "Ulaşan ({count})",
+    "departed": "Çıkarılan ({count})",
+    "autoRouted": "Zaten yönlendiriliyor — {chains}",
+    "notRouted": "Yönlendirilmedi",
+    "lostFrom": "{chains}'den kayboldu",
+    "acknowledge": "Onayla"
   }
 }

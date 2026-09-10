@@ -609,7 +609,9 @@
     "bulkDelete": "എല്ലാം ഇല്ലാതാക്കുക",
     "bulkDeleteConfirm": "{count} ഇല്ലാതാക്കണോ?",
     "bulkResult": "{done} അപ്‌ഡേറ്റ് ചെയ്തു; {failed} പരാജയപ്പെട്ടു.",
-    "bulkDeleteResult": "{done} ഇല്ലാതാക്കി; {failed} പരാജയപ്പെട്ടു."
+    "bulkDeleteResult": "{done} ഇല്ലാതാക്കി; {failed} പരാജയപ്പെട്ടു.",
+    "churnWindow": "{days}d",
+    "churnAria": "{added} Added, {lost} Lost ก่อน {days} วัน"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "ക്രമീകരണം ലോഡ് ചെയ്ത {count} വരികൾക്ക് മാത്രമേ ബാധകമാകൂ",
     "cacheHitRate": "കാഷ് ഹിറ്റ് നിരക്ക്",
     "cacheSavedTokens": "{tokens} ടോക്കണുകൾ ലാഭിച്ചു",
-    "cacheHitRateHint": "സെർവർ ആരംഭിച്ചതിനുശേഷം {hits} ഹിറ്റുകൾ, {misses} മിസ്സുകൾ · {requests} ദാതാവ് കോളുകൾ ഒഴിവാക്കി"
+    "cacheHitRateHint": "സെർവർ ആരംഭിച്ചതിനുശേഷം {hits} ഹിറ്റുകൾ, {misses} മിസ്സുകൾ · {requests} ദാതാവ് കോളുകൾ ഒഴിവാക്കി",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "ക്വോട്ട",
@@ -898,7 +910,11 @@
     "policyDelete": "പോളിസി ഇല്ലാതാക്കുക",
     "policyDeleteConfirm": "ഇല്ലാതാക്കുക",
     "resetInferredMark": "(ഏകദേശം)",
-    "resetInferredHint": "നിരീക്ഷിച്ച റീസെറ്റ് അതിരുകളിൽ നിന്ന് പ്രവചിച്ചത് — ഈ പ്രൊവൈഡർ റീസെറ്റ് സമയം അയയ്ക്കുന്നില്ല. പോളിംഗ് ഇടവേളയ്ക്കുള്ളിൽ കൃത്യം."
+    "resetInferredHint": "നിരീക്ഷിച്ച റീസെറ്റ് അതിരുകളിൽ നിന്ന് പ്രവചിച്ചത് — ഈ പ്രൊവൈഡർ റീസെറ്റ് സമയം അയയ്ക്കുന്നില്ല. പോളിംഗ് ഇടവേളയ്ക്കുള്ളിൽ കൃത്യം.",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "ലോഗുകൾ",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
     "curatedHint": "New catalog models are not added to this chain automatically."
+  },
+  "catalogue": {
+    "changesTitle": "കാറ്റാളോഗ് മാറ്റങ്ങൾ",
+    "changesHint": "{since} - മോഡൽ zvýšení,retirata nepotvrzená",
+    "arrived": "വരിയ ({count})",
+    "departed": " wycofved ({count})",
+    "notRouted": "ല dimostrado",
+    "acknowledge": "തിരസ്കരിക്കുക",
+    "untracked": "{count} models predate arrival tracking.",
+    "autoRouted": "already routing — {chains}",
+    "lostFrom": "lost from {chains}"
   }
 }

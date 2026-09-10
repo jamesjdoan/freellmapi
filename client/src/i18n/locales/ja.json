@@ -609,7 +609,9 @@
     "bulkDelete": "すべて削除",
     "bulkDeleteConfirm": "{count} 件を削除しますか？",
     "bulkResult": "{done} 件を更新しました。{failed} 件が失敗しました。",
-    "bulkDeleteResult": "{done} 件を削除しました。{failed} 件が失敗しました。"
+    "bulkDeleteResult": "{done} 件を削除しました。{failed} 件が失敗しました。",
+    "churnWindow": "{days}日",
+    "churnAria": "過去 {days} 日間に {added} 件追加、{lost} 件提供終了"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "並べ替えは読み込み済みの {count} 行にのみ適用されます",
     "cacheHitRate": "キャッシュヒット率",
     "cacheSavedTokens": "{tokens} トークンを節約",
-    "cacheHitRateHint": "サーバー起動以降 {hits} ヒット / {misses} ミス · プロバイダー呼び出し {requests} 回を回避"
+    "cacheHitRateHint": "サーバー起動以降 {hits} ヒット / {misses} ミス · プロバイダー呼び出し {requests} 回を回避",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "クォータ",
@@ -898,7 +910,11 @@
     "policyDelete": "ポリシーを削除",
     "policyDeleteConfirm": "削除",
     "resetInferredMark": "(推定)",
-    "resetInferredHint": "観測されたリセット境界からの予測 — このプロバイダーはリセット時刻を送信しません。精度はポーリング間隔の範囲内です。"
+    "resetInferredHint": "観測されたリセット境界からの予測 — このプロバイダーはリセット時刻を送信しません。精度はポーリング間隔の範囲内です。",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "ログ",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "モデルを入れずにチェーンを作り、新しいカタログモデルも自動では追加しません。チェックを外すと既定のチェーンの複製になります。",
     "curated": "手動管理",
     "curatedHint": "新しいカタログモデルはこのチェーンに自動追加されません。"
+  },
+  "catalogue": {
+    "changesTitle": "カタログの変更",
+    "changesHint": "{since} 以降に追加されたモデルと、未確認の提供終了",
+    "untracked": "{count} 個のモデルは到着追跡以前から存在",
+    "arrived": "到着 ({count})",
+    "departed": "提供終了 ({count})",
+    "autoRouted": "既にルーティング中 — {chains}",
+    "notRouted": "ルーティングされていない",
+    "lostFrom": "{chains} から失われた",
+    "acknowledge": "承認"
   }
 }

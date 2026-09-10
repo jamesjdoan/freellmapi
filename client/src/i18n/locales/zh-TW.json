@@ -609,7 +609,9 @@
     "bulkDelete": "批次刪除",
     "bulkDeleteConfirm": "刪除 {count} 個？",
     "bulkResult": "已更新 {done} 個；失敗 {failed} 個。",
-    "bulkDeleteResult": "已刪除 {done} 個；失敗 {failed} 個。"
+    "bulkDeleteResult": "已刪除 {done} 個；失敗 {failed} 個。",
+    "churnWindow": "{days}天",
+    "churnAria": "{added} 新增，{lost} 退役，過去 {days} 天"
   },
   "backups": {
     "title": "Backups",
@@ -764,7 +766,17 @@
     "sortHint": "排序僅套用於已載入的 {count} 列",
     "cacheHitRate": "快取命中率",
     "cacheSavedTokens": "已節省 {tokens} Token",
-    "cacheHitRateHint": "自伺服器啟動以來命中 {hits} 次、未命中 {misses} 次 · 省下 {requests} 次供應商呼叫"
+    "cacheHitRateHint": "自伺服器啟動以來命中 {hits} 次、未命中 {misses} 次 · 省下 {requests} 次供應商呼叫",
+    "routingRankMove": "quota terms moved it #{from} → #{to}",
+    "routingOverride": {
+      "explore": "exploration probe",
+      "sticky": "sticky session",
+      "pinned": "pinned by request"
+    },
+    "routingScarcity": "quota headroom {pct}%",
+    "routingHarvest": "allowance expiring unused",
+    "routingDiversity": "spread ({pct}% damp)",
+    "routingInFlight": "{pct}% of in-flight work on this pool"
   },
   "quota": {
     "title": "配額",
@@ -898,7 +910,11 @@
     "policyDelete": "刪除政策",
     "policyDeleteConfirm": "刪除",
     "resetInferredMark": "（推估）",
-    "resetInferredHint": "依觀察到的重設邊界預測 — 此供應商未提供重設時間。誤差在輪詢間隔之內。"
+    "resetInferredHint": "依觀察到的重設邊界預測 — 此供應商未提供重設時間。誤差在輪詢間隔之內。",
+    "poolMembers": "{count} models",
+    "poolMembersOne": "1 model",
+    "locallyCountedMark": "·local",
+    "locallyCountedHint": "The provider never reported this pool; the count is ours, against a limit we hold."
   },
   "logs": {
     "title": "日誌",
@@ -1238,5 +1254,16 @@
     "startEmptyHint": "建立時不放入任何模型，之後新增的目錄模型也不會自動加入。不勾選則複製預設鏈。",
     "curated": "手動維護",
     "curatedHint": "新的目錄模型不會自動加入這條鏈。"
+  },
+  "catalogue": {
+    "changesTitle": "目錄變更",
+    "changesHint": "自 {since} 以來新增的模型及尚未確認的退役模型。",
+    "untracked": "{count} 個模型早於到達追蹤之前存在。",
+    "arrived": "到達 ({count})",
+    "departed": "退役 ({count})",
+    "autoRouted": "已路由 — {chains}",
+    "notRouted": "未路由",
+    "lostFrom": "從 {chains} 遺失",
+    "acknowledge": "確認"
   }
 }
