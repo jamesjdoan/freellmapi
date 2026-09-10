@@ -1269,6 +1269,22 @@
     "autoRouted": "ஏற்கனவே வழிப்படுத்தப்படுகிறது — {chains}",
     "notRouted": "வழிப்படுத்தப்படவில்லை",
     "lostFrom": "{chains} இல் இருந்து இழந்தது",
-    "acknowledge": "ஓரட்டை"
+    "acknowledge": "ஓரட்டை",
+    "logTitle": "Catalogue log",
+    "logAllProviders": "All",
+    "kind": {
+      "arrived": "arrived",
+      "retired": "retired",
+      "removed": "removed",
+      "relisted": "relisted"
+    }
+  },
+  "log": {
+    "current": "now",
+    "arrived": "{count} arrived",
+    "departed": "{count} left",
+    "quiet": "nothing",
+    "decisions": "{count} decisions",
+    "disagreed": "{count} disagreed"
   }
 }

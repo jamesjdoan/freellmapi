@@ -1269,6 +1269,22 @@
     "autoRouted": "wird bereits geroutet — {chains}",
     "notRouted": "nicht geroutet",
     "lostFrom": "verloren von {chains}",
-    "acknowledge": "Bestätigen"
+    "acknowledge": "Bestätigen",
+    "logTitle": "Catalogue log",
+    "logAllProviders": "All",
+    "kind": {
+      "arrived": "arrived",
+      "retired": "retired",
+      "removed": "removed",
+      "relisted": "relisted"
+    }
+  },
+  "log": {
+    "current": "now",
+    "arrived": "{count} arrived",
+    "departed": "{count} left",
+    "quiet": "nothing",
+    "decisions": "{count} decisions",
+    "disagreed": "{count} disagreed"
   }
 }

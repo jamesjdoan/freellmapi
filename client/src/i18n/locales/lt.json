@@ -1269,6 +1269,22 @@
     "autoRouted": "Ji tolimesnis maršrutizavimas — {chains}",
     "notRouted": "Nesiųstas maršrutu",
     "lostFrom": "{chains} iš gubtos",
-    "acknowledge": "Patvirtinti"
+    "acknowledge": "Patvirtinti",
+    "logTitle": "Catalogue log",
+    "logAllProviders": "All",
+    "kind": {
+      "arrived": "arrived",
+      "retired": "retired",
+      "removed": "removed",
+      "relisted": "relisted"
+    }
+  },
+  "log": {
+    "current": "now",
+    "arrived": "{count} arrived",
+    "departed": "{count} left",
+    "quiet": "nothing",
+    "decisions": "{count} decisions",
+    "disagreed": "{count} disagreed"
   }
 }

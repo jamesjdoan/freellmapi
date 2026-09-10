@@ -41,6 +41,7 @@ import * as quotaBurnRun from '../migrations/20260906_000001_quota_burn_run.js';
 import * as quotaUnit from '../migrations/20260906_000002_quota_unit.js';
 import * as attemptRoutingTrace from '../migrations/20260909_000001_request_attempt_routing_trace.js';
 import * as catalogueChangeTracking from '../migrations/20260910_000001_catalogue_change_tracking.js';
+import * as catalogueEventLog from '../migrations/20260910_000002_catalogue_event_log.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -94,6 +95,7 @@ export const QUOTA_BURN_RUN_FILENAME = '20260906_000001_quota_burn_run.ts';
 export const QUOTA_UNIT_FILENAME = '20260906_000002_quota_unit.ts';
 export const ATTEMPT_ROUTING_TRACE_FILENAME = '20260909_000001_request_attempt_routing_trace.ts';
 export const CATALOGUE_CHANGE_TRACKING_FILENAME = '20260910_000001_catalogue_change_tracking.ts';
+export const CATALOGUE_EVENT_LOG_FILENAME = '20260910_000002_catalogue_event_log.ts';
 
 export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: LEGACY_BASELINE_FILENAME, module: legacyBaseline },
@@ -138,4 +140,5 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: QUOTA_UNIT_FILENAME, module: quotaUnit },
   { filename: ATTEMPT_ROUTING_TRACE_FILENAME, module: attemptRoutingTrace },
   { filename: CATALOGUE_CHANGE_TRACKING_FILENAME, module: catalogueChangeTracking },
+  { filename: CATALOGUE_EVENT_LOG_FILENAME, module: catalogueEventLog },
 ];

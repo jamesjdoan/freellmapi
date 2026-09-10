@@ -1269,6 +1269,22 @@
     "autoRouted": "já a encaminhar — {chains}",
     "notRouted": "não encaminhado",
     "lostFrom": "perdido de {chains}",
-    "acknowledge": "Confirmar"
+    "acknowledge": "Confirmar",
+    "logTitle": "Catalogue log",
+    "logAllProviders": "All",
+    "kind": {
+      "arrived": "arrived",
+      "retired": "retired",
+      "removed": "removed",
+      "relisted": "relisted"
+    }
+  },
+  "log": {
+    "current": "now",
+    "arrived": "{count} arrived",
+    "departed": "{count} left",
+    "quiet": "nothing",
+    "decisions": "{count} decisions",
+    "disagreed": "{count} disagreed"
   }
 }

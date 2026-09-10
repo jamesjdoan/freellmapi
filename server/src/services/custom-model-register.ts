@@ -1,3 +1,4 @@
+import { recordCatalogueEvent } from './catalogue-log.js';
 import type { Db } from '../db/types.js';
 import { resolveCustomEndpointKey, customEndpointKeyIds } from './custom-endpoint.js';
 import { customModelSeed } from './custom-model-seed.js';
@@ -106,6 +107,12 @@ export function registerCustomChatModels(
     const bindKeyId = bound?.key_id != null && endpointKeyIds.has(bound.key_id) ? bound.key_id : keyId;
     const toolsParam = supportsTools === undefined ? null : (supportsTools ? 1 : 0);
     const visionParam = supportsVision === undefined ? null : (supportsVision ? 1 : 0);
+    // Whether this is a genuinely new model, read BEFORE the upsert: the
+    // statement below is an upsert, so afterwards an arrival and a
+    // re-registration are indistinguishable.
+    const existedBefore = db.prepare(
+      "SELECT 1 FROM models WHERE platform = 'custom' AND model_id = ? AND endpoint_scope = ?",
+    ).get(modelId, endpointScope) !== undefined;
     // The seed applies on INSERT only: DO UPDATE deliberately leaves the rank
     // columns alone so re-registering a model (or bulk-adding alongside it)
     // never rewrites ranks the operator has since tuned by hand.
@@ -129,6 +136,13 @@ export function registerCustomChatModels(
       intelligenceRank: seed.intelligenceRank, speedRank: seed.speedRank, sizeLabel: seed.sizeLabel,
       endpointScope,
     });
+
+    if (!existedBefore) {
+      recordCatalogueEvent(db, {
+        kind: 'arrived', platform: 'custom', modelId,
+        displayName: displayName ?? modelId, source: 'user',
+      });
+    }
 
     // Read back rather than echo the submitted values: an omitted display name
     // or capability flag resolves in SQL, so the row is the only place that

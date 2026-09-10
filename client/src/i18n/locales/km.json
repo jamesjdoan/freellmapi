@@ -1269,6 +1269,22 @@
     "autoRouted": "ត្រូវបានត្រូវ — {chains}",
     "notRouted": "មិនត្រូវបានត្រូវ",
     "lostFrom": "ខ្លីៈពី {chains}",
-    "acknowledge": "យល់ដ៹រ"
+    "acknowledge": "យល់ដ៹រ",
+    "logTitle": "Catalogue log",
+    "logAllProviders": "All",
+    "kind": {
+      "arrived": "arrived",
+      "retired": "retired",
+      "removed": "removed",
+      "relisted": "relisted"
+    }
+  },
+  "log": {
+    "current": "now",
+    "arrived": "{count} arrived",
+    "departed": "{count} left",
+    "quiet": "nothing",
+    "decisions": "{count} decisions",
+    "disagreed": "{count} disagreed"
   }
 }

@@ -1269,6 +1269,22 @@
     "acknowledge": "സ്വീകരിക്കുക",
     "untracked": "{count} മോഡലുകൾ വരവ് ട്രാക്കിംഗിന് മുൻപുള്ളവയാണ്.",
     "autoRouted": "ഇപ്പോൾ തന്നെ റൂട്ടിംഗിൽ — {chains}",
-    "lostFrom": "{chains}-ൽ നിന്ന് നഷ്ടപ്പെട്ടു"
+    "lostFrom": "{chains}-ൽ നിന്ന് നഷ്ടപ്പെട്ടു",
+    "logTitle": "Catalogue log",
+    "logAllProviders": "All",
+    "kind": {
+      "arrived": "arrived",
+      "retired": "retired",
+      "removed": "removed",
+      "relisted": "relisted"
+    }
+  },
+  "log": {
+    "current": "now",
+    "arrived": "{count} arrived",
+    "departed": "{count} left",
+    "quiet": "nothing",
+    "decisions": "{count} decisions",
+    "disagreed": "{count} disagreed"
   }
 }

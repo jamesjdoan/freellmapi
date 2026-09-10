@@ -1269,6 +1269,22 @@
     "autoRouted": "Ti o route si — {chains}",
     "notRouted": "Ko si route",
     "lostFrom": "Ti o si fun {chains}",
-    "acknowledge": "Mo gba"
+    "acknowledge": "Mo gba",
+    "logTitle": "Catalogue log",
+    "logAllProviders": "All",
+    "kind": {
+      "arrived": "arrived",
+      "retired": "retired",
+      "removed": "removed",
+      "relisted": "relisted"
+    }
+  },
+  "log": {
+    "current": "now",
+    "arrived": "{count} arrived",
+    "departed": "{count} left",
+    "quiet": "nothing",
+    "decisions": "{count} decisions",
+    "disagreed": "{count} disagreed"
   }
 }

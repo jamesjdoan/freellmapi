@@ -1269,6 +1269,22 @@
     "autoRouted": "이미 라우팅 중 — {chains}",
     "notRouted": "라우팅되지 않음",
     "lostFrom": "{chains}에서 손실됨",
-    "acknowledge": "확인"
+    "acknowledge": "확인",
+    "logTitle": "Catalogue log",
+    "logAllProviders": "All",
+    "kind": {
+      "arrived": "arrived",
+      "retired": "retired",
+      "removed": "removed",
+      "relisted": "relisted"
+    }
+  },
+  "log": {
+    "current": "now",
+    "arrived": "{count} arrived",
+    "departed": "{count} left",
+    "quiet": "nothing",
+    "decisions": "{count} decisions",
+    "disagreed": "{count} disagreed"
   }
 }

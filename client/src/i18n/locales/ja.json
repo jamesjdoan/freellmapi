@@ -1269,6 +1269,22 @@
     "autoRouted": "既にルーティング中 — {chains}",
     "notRouted": "ルーティングされていない",
     "lostFrom": "{chains} から失われた",
-    "acknowledge": "承認"
+    "acknowledge": "承認",
+    "logTitle": "Catalogue log",
+    "logAllProviders": "All",
+    "kind": {
+      "arrived": "arrived",
+      "retired": "retired",
+      "removed": "removed",
+      "relisted": "relisted"
+    }
+  },
+  "log": {
+    "current": "now",
+    "arrived": "{count} arrived",
+    "departed": "{count} left",
+    "quiet": "nothing",
+    "decisions": "{count} decisions",
+    "disagreed": "{count} disagreed"
   }
 }

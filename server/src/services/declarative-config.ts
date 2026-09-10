@@ -8,6 +8,7 @@ import { setCustomWeights, setRoutingStrategy, setKeySelectionStrategy } from '.
 import { ensureModelInProfiles } from './profile-models.js';
 import { customModelSeed } from './custom-model-seed.js';
 import { endpointRefMatches, endpointScopeForBaseUrl } from '../lib/endpoint-scope.js';
+import { recordCatalogueEvent } from './catalogue-log.js';
 import {
   clearCatalogModelTombstone,
   isCatalogManagedModel,
@@ -246,6 +247,11 @@ function registerCustomProvider(db: Db, input: z.infer<typeof customProviderSche
   let registered = 0;
   for (const entry of input.models) {
     const model = normalizeModelEntry(entry);
+    // Read before the upsert: afterwards a first registration and a re-apply of
+    // the same config are indistinguishable.
+    const existedBefore = db.prepare(
+      "SELECT 1 FROM models WHERE platform = 'custom' AND model_id = ? AND endpoint_scope = ?",
+    ).get(model.modelId, endpointScope) !== undefined;
     db.prepare(`
       INSERT INTO models
         (platform, model_id, display_name, intelligence_rank, speed_rank, size_label,
@@ -281,6 +287,12 @@ function registerCustomProvider(db: Db, input: z.infer<typeof customProviderSche
       "SELECT id FROM models WHERE platform = 'custom' AND model_id = ? AND endpoint_scope = ?",
     ).get(model.modelId, endpointScope) as { id: number };
     ensureFallbackRow(db, row.id, model.fallbackEnabled !== false);
+    if (!existedBefore) {
+      recordCatalogueEvent(db, {
+        kind: 'arrived', platform: 'custom', modelId: model.modelId,
+        displayName: model.displayName ?? model.modelId, source: 'user',
+      });
+    }
     registered++;
   }
   return registered;
@@ -383,6 +395,11 @@ function upsertModel(db: Db, input: z.infer<typeof modelSchema>): void {
       input.supportsVision ? 1 : 0,
       input.supportsTools ? 1 : 0,
     );
+    // Inside `if (!existing)`, so this really is an arrival.
+    recordCatalogueEvent(db, {
+      kind: 'arrived', platform, modelId,
+      displayName: input.displayName ?? modelId, source: 'user',
+    });
     const created = db.prepare('SELECT id FROM models WHERE platform = ? AND model_id = ?').get(platform, modelId) as { id: number };
     ensureFallbackRow(db, created.id, input.fallbackEnabled ?? input.enabled !== false);
     return;

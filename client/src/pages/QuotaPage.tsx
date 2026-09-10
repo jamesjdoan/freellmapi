@@ -7,6 +7,8 @@ import { useI18n } from '@/i18n';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip as HoverTooltip } from '@/components/tooltip';
+import { TimeTreeLog } from '@/components/time-tree-log';
+import { parseSqliteUtc } from '@/lib/time-tree';
 import { ConfirmButton } from '@/components/confirm-button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -556,29 +558,31 @@ export default function QuotaPage() {
 
       <Panel icon={Shield} title={t('quota.divergenceTitle')}>
         <PanelState loading={decisionsLoading} error={decisionsError} empty={decisionsData.decisions.length === 0} emptyKey="quota.emptyDivergence">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('quota.colWhen')}</TableHead>
-                <TableHead>{t('quota.colLogicalModel')}</TableHead>
-                <TableHead>{t('quota.colServed')}</TableHead>
-                <TableHead>{t('quota.colPreferred')}</TableHead>
-                <TableHead>{t('quota.colReason')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {decisionsData.decisions.map(d => (
-                <TableRow key={d.id}>
-                  <TableCell>{formatSqliteUtcToLocalTime(d.createdAt, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</TableCell>
-                  <TableCell className="font-medium">{d.logicalModel}</TableCell>
-                  {/* Endpoint disambiguates two relays that share a platform name. */}
-                  <TableCell>{d.actualEndpoint ? `${d.actualPlatform} (${d.actualEndpoint})` : d.actualPlatform}</TableCell>
-                  <TableCell>{d.shadowPlatform == null ? '—' : d.shadowEndpoint ? `${d.shadowPlatform} (${d.shadowEndpoint})` : d.shadowPlatform}</TableCell>
-                  <TableCell className="text-muted-foreground">{d.reason ?? '—'}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          {/* Folded by year/month/week, same control as the catalogue log.
+              This list only holds the rows where the two routers disagreed, so
+              it is sparse and bursty - a flat table of it reads as noise, while
+              the week summary reads as "the shadow router differed 4 times". */}
+          <TimeTreeLog
+            items={decisionsData.decisions}
+            at={d => parseSqliteUtc(d.createdAt)}
+            itemKey={d => String(d.id)}
+            summary={items => (
+              <span className="tabular-nums">{t('log.disagreed', { count: items.length })}</span>
+            )}
+            row={d => (
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
+                <span className="font-medium">{d.logicalModel}</span>
+                {/* Endpoint disambiguates two relays that share a platform name. */}
+                <span>{d.actualEndpoint ? `${d.actualPlatform} (${d.actualEndpoint})` : d.actualPlatform}</span>
+                <span className="text-muted-foreground">→</span>
+                <span>{d.shadowPlatform == null ? '—' : d.shadowEndpoint ? `${d.shadowPlatform} (${d.shadowEndpoint})` : d.shadowPlatform}</span>
+                {d.reason && <span className="text-[11px] text-muted-foreground">{d.reason}</span>}
+                <span className="ml-auto flex-shrink-0 text-[11px] text-muted-foreground tabular-nums">
+                  {parseSqliteUtc(d.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            )}
+          />
         </PanelState>
       </Panel>
 

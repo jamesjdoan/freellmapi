@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getCatalogueChanges, acknowledgeDeparture } from '../services/catalogue-changes.js';
+import { listCatalogueEvents } from '../services/catalogue-log.js';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { getDb } from '../db/index.js';
@@ -301,6 +302,14 @@ modelsRouter.get('/changes', (req: Request, res: Response) => {
   res.json(getCatalogueChanges(sinceDays));
 });
 
+const logQuerySchema = z.object({
+  platform: z.string().min(1).optional(),
+  kind: z.enum(['arrived', 'retired', 'removed', 'relisted']).optional(),
+  // Coerced because these arrive as query strings.
+  limit: z.coerce.number().int().positive().max(500).optional(),
+  offset: z.coerce.number().int().nonnegative().optional(),
+});
+
 const acknowledgeSchema = z.object({
   platform: z.string().min(1, 'platform is required'),
   modelId: z.string().min(1, 'modelId is required'),
@@ -309,6 +318,23 @@ const acknowledgeSchema = z.object({
 /** Mark a retirement as dealt with, so the panel stops reporting it as news.
  *  Without this every departure stays listed forever and the surface meant to
  *  say "something broke" becomes a list nobody reads. */
+/**
+ * The catalogue's history: what arrived, was retired, removed or relisted, and
+ * when. Read-only and append-only at the source, so this needs no writes.
+ *
+ * Separate from `/changes` above, which is a worklist of the recent and the
+ * unacknowledged. This is the whole record, for the question "what has this
+ * provider been doing".
+ */
+modelsRouter.get('/changes/log', (req: Request, res: Response) => {
+  const parsed = logQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
+    return;
+  }
+  res.json(listCatalogueEvents(parsed.data));
+});
+
 modelsRouter.post('/changes/acknowledge', (req: Request, res: Response) => {
   const parsed = acknowledgeSchema.safeParse(req.body);
   if (!parsed.success) {

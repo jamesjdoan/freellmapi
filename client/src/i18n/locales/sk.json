@@ -1269,6 +1269,22 @@
     "autoRouted": "už route — {chains}",
     "notRouted": "neni route",
     "lostFrom": "stratili z {chains}",
-    "acknowledge": "Prijať"
+    "acknowledge": "Prijať",
+    "logTitle": "Catalogue log",
+    "logAllProviders": "All",
+    "kind": {
+      "arrived": "arrived",
+      "retired": "retired",
+      "removed": "removed",
+      "relisted": "relisted"
+    }
+  },
+  "log": {
+    "current": "now",
+    "arrived": "{count} arrived",
+    "departed": "{count} left",
+    "quiet": "nothing",
+    "decisions": "{count} decisions",
+    "disagreed": "{count} disagreed"
   }
 }

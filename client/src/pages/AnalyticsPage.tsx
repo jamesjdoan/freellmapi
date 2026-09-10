@@ -36,11 +36,11 @@ import { Dialog, DialogClose, DialogPopup, DialogTitle } from '@/components/ui/d
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageHeader } from '@/components/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PlatformDot } from '@/components/platform-dot'
 import { Tooltip as HoverTooltip } from '@/components/tooltip'
 import { SortableHeader } from '@/components/sortable-header'
 import { formatSqliteUtcToLocalTime } from '@/lib/utils'
 import { sortRows, useTableSort, type SortValueFn } from '@/lib/table-sort'
-import { platformColors } from '@/lib/routing'
 import { categoryAxisProps, verticalCategoryAxisProps } from '@/lib/chart-axis'
 import { useI18n } from '@/i18n'
 
@@ -437,17 +437,6 @@ function Panel({ icon: Icon, title, actions, children }: { icon: LucideIcon; tit
       </div>
       <div className="p-4">{children}</div>
     </div>
-  )
-}
-
-// Platform swatch shared by the ladder and the per-provider table; same color
-// source as the token-usage legend (lib/routing.ts), same gray fallback.
-function PlatformDot({ platform }: { platform: string }) {
-  return (
-    <span
-      className="size-2 rounded-full flex-shrink-0"
-      style={{ backgroundColor: platformColors[platform] ?? '#94a3b8' }}
-    />
   )
 }
 

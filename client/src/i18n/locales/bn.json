@@ -1269,6 +1269,22 @@
     "autoRouted": "ইতিমধ্যে রাউটিং হচ্ছে — {chains}",
     "notRouted": "রাউট করা হয়নি",
     "lostFrom": "{chains} থেকে হারিয়েছে",
-    "acknowledge": "স্বীকৃতি দিন"
+    "acknowledge": "স্বীকৃতি দিন",
+    "logTitle": "Catalogue log",
+    "logAllProviders": "All",
+    "kind": {
+      "arrived": "arrived",
+      "retired": "retired",
+      "removed": "removed",
+      "relisted": "relisted"
+    }
+  },
+  "log": {
+    "current": "now",
+    "arrived": "{count} arrived",
+    "departed": "{count} left",
+    "quiet": "nothing",
+    "decisions": "{count} decisions",
+    "disagreed": "{count} disagreed"
   }
 }

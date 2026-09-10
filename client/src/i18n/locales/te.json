@@ -1269,6 +1269,22 @@
     "autoRouted": "ఇప్పటికే రూట్ అవుతోంది — {chains}",
     "notRouted": "రూట్ చేయలేదు",
     "lostFrom": "{chains} నుండి కోల్పోయింది",
-    "acknowledge": "గుర్తించు"
+    "acknowledge": "గుర్తించు",
+    "logTitle": "Catalogue log",
+    "logAllProviders": "All",
+    "kind": {
+      "arrived": "arrived",
+      "retired": "retired",
+      "removed": "removed",
+      "relisted": "relisted"
+    }
+  },
+  "log": {
+    "current": "now",
+    "arrived": "{count} arrived",
+    "departed": "{count} left",
+    "quiet": "nothing",
+    "decisions": "{count} decisions",
+    "disagreed": "{count} disagreed"
   }
 }

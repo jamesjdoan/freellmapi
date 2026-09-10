@@ -1269,6 +1269,22 @@
     "autoRouted": "rutes allerede — {chains}",
     "notRouted": "ikke rutet",
     "lostFrom": "tapt fra {chains}",
-    "acknowledge": "Bekreft"
+    "acknowledge": "Bekreft",
+    "logTitle": "Catalogue log",
+    "logAllProviders": "All",
+    "kind": {
+      "arrived": "arrived",
+      "retired": "retired",
+      "removed": "removed",
+      "relisted": "relisted"
+    }
+  },
+  "log": {
+    "current": "now",
+    "arrived": "{count} arrived",
+    "departed": "{count} left",
+    "quiet": "nothing",
+    "decisions": "{count} decisions",
+    "disagreed": "{count} disagreed"
   }
 }

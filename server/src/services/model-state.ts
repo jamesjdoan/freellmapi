@@ -1,3 +1,4 @@
+import { recordCatalogueEvent } from './catalogue-log.js';
 import type { Db } from '../db/types.js';
 
 export type CatalogModelKind = 'chat' | 'media';
@@ -143,6 +144,20 @@ export function recordCatalogModelTombstone(
     DO UPDATE SET created_at = datetime('now'), source = excluded.source, reason = excluded.reason,
                   chains_json = excluded.chains_json
   `).run(kind, platform, modelId, source, options.reason ?? null, options.chains ?? null);
+  // The permanent record of the event itself. The tombstone above is keyed by
+  // model and its created_at is overwritten on re-retirement, so it can only
+  // ever describe the LATEST departure; the log keeps each one.
+  if (kind === 'chat') {
+    recordCatalogueEvent(db, {
+      kind: 'retired',
+      platform,
+      modelId,
+      displayName: displayNameOf(db, platform, modelId),
+      source,
+      reason: options.reason ?? null,
+      chainsJson: options.chains ?? null,
+    });
+  }
   // A user deletion drops their local metadata edits with the row. An upstream
   // retirement keeps the row, so it keeps the overrides too — they must survive
   // if the model is reinstated.
@@ -193,8 +208,12 @@ export function retireCatalogModelUpstream(
 export interface RetiredChainMembership { chain: string; priority: number }
 
 /** The chains this model was actively serving, with its position in each.
- *  Null when it was in none — an unrouted model leaving costs nothing. */
-function serializeChainMembership(db: Db, modelDbId: number): string | null {
+ *  Null when it was in none — an unrouted model leaving costs nothing.
+ *
+ *  Exported for the catalogue log: the sync prune deletes a model row and needs
+ *  the same snapshot, for the same reason retirement does. It cannot be read
+ *  back once the row is gone. */
+export function serializeChainMembership(db: Db, modelDbId: number): string | null {
   try {
     const rows = db.prepare(`
       SELECT p.name AS chain, pm.priority AS priority
@@ -238,8 +257,32 @@ export function clearCatalogModelTombstone(
   platform: string,
   modelId: string,
 ): void {
-  db.prepare('DELETE FROM catalog_model_tombstones WHERE kind = ? AND platform = ? AND model_id = ?')
+  const removed = db.prepare('DELETE FROM catalog_model_tombstones WHERE kind = ? AND platform = ? AND model_id = ?')
     .run(kind, platform, modelId);
+  // Only when a retirement was actually lifted. This is called defensively on
+  // paths where no tombstone exists, and "relisted" on a model that was never
+  // retired would be a fabricated event.
+  if (kind === 'chat' && removed.changes > 0) {
+    recordCatalogueEvent(db, {
+      kind: 'relisted',
+      platform,
+      modelId,
+      displayName: displayNameOf(db, platform, modelId),
+    });
+  }
+}
+
+/** The model's display name while the row still exists. Copied into the log
+ *  because the row may be gone by the time anyone reads it, and a bare model
+ *  id is not a name a person recognises. */
+function displayNameOf(db: Db, platform: string, modelId: string): string | null {
+  try {
+    const row = db.prepare('SELECT display_name FROM models WHERE platform = ? AND model_id = ? LIMIT 1')
+      .get(platform, modelId) as { display_name: string } | undefined;
+    return row?.display_name ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export function upsertModelOverrides(

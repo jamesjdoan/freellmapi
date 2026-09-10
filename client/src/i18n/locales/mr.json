@@ -1269,6 +1269,22 @@
     "autoRouted": "पहले से मार्गनिर्देशित — {chains}",
     "notRouted": "मार्गनिर्देशित नहीं",
     "lostFrom": "{chains} से हानि",
-    "acknowledge": "पुष्टि करें"
+    "acknowledge": "पुष्टि करें",
+    "logTitle": "Catalogue log",
+    "logAllProviders": "All",
+    "kind": {
+      "arrived": "arrived",
+      "retired": "retired",
+      "removed": "removed",
+      "relisted": "relisted"
+    }
+  },
+  "log": {
+    "current": "now",
+    "arrived": "{count} arrived",
+    "departed": "{count} left",
+    "quiet": "nothing",
+    "decisions": "{count} decisions",
+    "disagreed": "{count} disagreed"
   }
 }

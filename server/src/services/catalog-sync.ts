@@ -6,12 +6,14 @@ import { MEDIA_PLATFORMS, TRANSCRIPTION_PLATFORMS, VIDEO_PLATFORMS } from './med
 import { EMBEDDING_PLATFORMS } from './embeddings.js';
 import type { Platform } from '@freellmapi/shared/types.js';
 import type { Scheduler } from '../lib/scheduler.js';
+import { recordCatalogueEvent } from './catalogue-log.js';
 import {
   applyAllModelOverrides,
   applyModelOverrides,
   deleteTombstonedCatalogModels,
   isCatalogModelTombstoned,
   reinstateUpstreamRetiredCatalogModel,
+  serializeChainMembership,
 } from './model-state.js';
 import { ensureAllModelsInProfiles } from './profile-models.js';
 
@@ -432,6 +434,10 @@ function applyCatalogInner(db: Db, catalog: Catalog): NonNullable<SyncResult['co
       } else {
         insertModel.run({ ...fields, platform: m.platform, modelId: m.modelId, enabled: m.enabled ? 1 : 0 });
         applyModelOverrides(db, m.platform, m.modelId);
+        recordCatalogueEvent(db, {
+          kind: 'arrived', platform: m.platform, modelId: m.modelId,
+          displayName: m.displayName, source: 'catalog',
+        });
         counts.inserted++;
       }
     }
@@ -563,18 +569,29 @@ function applyCatalogInner(db: Db, catalog: Catalog): NonNullable<SyncResult['co
     // predicates stay as belt and braces.
     const candidates = db
       .prepare(`
-        SELECT id, platform, model_id
+        SELECT id, platform, model_id, display_name
           FROM models
          WHERE platform != 'custom'
            AND key_id IS NULL
            AND source = 'catalog'
       `)
-      .all() as { id: number; platform: string; model_id: string }[];
+      .all() as { id: number; platform: string; model_id: string; display_name: string | null }[];
     const deleteFb = db.prepare('DELETE FROM fallback_config WHERE model_db_id = ?');
     const deleteModel = db.prepare('DELETE FROM models WHERE id = ?');
     for (const c of candidates) {
       if (!hasProvider(c.platform as Platform)) continue; // not catalog-managed by this binary
       if (!inCatalog.has(`${c.platform}:${c.model_id}`)) {
+        // The one departure that used to leave no trace at all. No tombstone is
+        // written here on purpose - a tombstone means "keep this deleted", and
+        // a model the catalogue merely stopped listing should come back if it
+        // is listed again. But the disappearance itself has to be recordable,
+        // or a provider quietly dropping a model is invisible.
+        recordCatalogueEvent(db, {
+          kind: 'removed', platform: c.platform, modelId: c.model_id,
+          displayName: c.display_name, source: 'catalog',
+          reason: 'No longer listed in the upstream catalogue',
+          chainsJson: serializeChainMembership(db, c.id),
+        });
         deleteFb.run(c.id);
         deleteModel.run(c.id);
         counts.removed++;

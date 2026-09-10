@@ -1269,6 +1269,22 @@
     "autoRouted": "Вже маршрутизується — {chains}",
     "notRouted": "Не маршрутизується",
     "lostFrom": "Втрачено з {chains}",
-    "acknowledge": "Підтвердити"
+    "acknowledge": "Підтвердити",
+    "logTitle": "Catalogue log",
+    "logAllProviders": "All",
+    "kind": {
+      "arrived": "arrived",
+      "retired": "retired",
+      "removed": "removed",
+      "relisted": "relisted"
+    }
+  },
+  "log": {
+    "current": "now",
+    "arrived": "{count} arrived",
+    "departed": "{count} left",
+    "quiet": "nothing",
+    "decisions": "{count} decisions",
+    "disagreed": "{count} disagreed"
   }
 }

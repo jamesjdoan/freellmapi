@@ -357,6 +357,14 @@
       "recent_errors": "failing"
     }
   },
+  "log": {
+    "current": "now",
+    "arrived": "{count} arrived",
+    "departed": "{count} left",
+    "quiet": "nothing",
+    "decisions": "{count} decisions",
+    "disagreed": "{count} disagreed"
+  },
   "keys": {
     "pageTitle": "Keys",
     "pageDescription": "Provider credentials and the unified API key your apps connect with.",
@@ -791,6 +799,14 @@
     "departed": "Retired ({count})",
     "autoRouted": "already routing — {chains}",
     "notRouted": "not routed",
+"logTitle": "Catalogue log",
+"logAllProviders": "All",
+"kind": {
+  "arrived": "arrived",
+  "retired": "retired",
+  "removed": "removed",
+  "relisted": "relisted"
+},
     "lostFrom": "lost from {chains}",
     "acknowledge": "Acknowledge"
   },
