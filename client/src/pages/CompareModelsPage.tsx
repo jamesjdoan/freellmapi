@@ -362,14 +362,14 @@ export default function CompareModelsPage() {
                             name differently, so the column could not be read
                             down. */}
                         <span className="flex flex-wrap items-center gap-1.5">
-                          <span className="max-w-[260px] truncate font-medium" title={g.name}>{g.name}</span>
+                          <span className="max-w-[190px] truncate font-medium" title={g.name}>{g.name}</span>
                           {/* The routes live in a tooltip, not inline. Printed
                               in the cell, seven `platform/modelId` pairs made
                               this column 1584px wide inside a 1070px container
                               and pushed every measured number off-screen. */}
                           {solo
                             ? (
-                              <code className="max-w-[220px] truncate text-[11px] text-muted-foreground" title={solo.modelId}>
+                              <code className="max-w-[150px] truncate text-[11px] text-muted-foreground" title={solo.modelId}>
                                 {solo.modelId}
                               </code>
                             )
@@ -545,18 +545,33 @@ function MappingCell({ members, catalogue, onLink }: {
     if (unresolved) {
       return <span className="text-destructive">{t('compare.matchUnresolved', { slug: unresolved.link?.slug ?? '' })}</span>
     }
-    if (allManual && common !== null) return <span>{t('compare.matchManual')}</span>
     // Mapped by hand to nothing: a decision, and one worth showing, or the row
     // reads identically to one nobody has looked at.
-    if (allManual) return <span>{t('compare.matchManualNone')}</span>
-    if (!scored) return <span className="text-muted-foreground">{t('compare.matchNone')}</span>
-    if (members.length > 1 && linked.length < members.length) {
-      return <span className="text-muted-foreground">{t('compare.matchInherited')}</span>
-    }
+    if (allManual && common === null) return <span>{t('compare.matchManualNone')}</span>
+    if (!scored?.analysis) return <span className="text-muted-foreground">{t('compare.matchNone')}</span>
+
+    // WHICH benchmark, not just how it was found. "matched by slug" alone is
+    // unverifiable — the whole point of an automatic match is that it can be
+    // wrong, and you cannot see that it is wrong without seeing what it picked.
+    const their = scored.analysis
+    const how = allManual
+      ? t('compare.matchManual')
+      : members.length > 1 && linked.length < members.length
+        ? t('compare.matchInherited')
+        : t('compare.matchAuto', { reason: scored.link?.matchReason ?? '' })
     return (
-      <span className="text-muted-foreground">
-        {t('compare.matchAuto', { reason: scored.link?.matchReason ?? '' })}
-      </span>
+      <Tooltip text={t('compare.matchedToHint', {
+        name: their.name,
+        slug: their.slug,
+        creator: their.creator ?? '?',
+        how,
+        model: `${scored.platform}/${scored.modelId}`,
+      })}>
+        <span className="flex max-w-[118px] flex-col items-start">
+          <span className={`w-full truncate ${allManual ? '' : 'text-muted-foreground'}`}>{their.name}</span>
+          <span className="w-full truncate text-[10px] text-muted-foreground">{how}</span>
+        </span>
+      </Tooltip>
     )
   }
 

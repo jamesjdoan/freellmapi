@@ -1357,6 +1357,7 @@
     "matchManualNone": "no counterpart (by hand)",
     "mapAriaLabel": "Map this model to a benchmark",
     "mapSearchPlaceholder": "Search benchmarks...",
-    "mapNoResults": "No benchmark matches that"
+    "mapNoResults": "No benchmark matches that",
+    "matchedToHint": "{name} ({creator})\nTheir slug: {slug}\nOur model: {model}\n{how}"
   }
 }

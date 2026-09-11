@@ -431,6 +431,7 @@
 "mapAriaLabel": "Map this model to a benchmark",
 "mapSearchPlaceholder": "Search benchmarks...",
 "mapNoResults": "No benchmark matches that",
+"matchedToHint": "{name} ({creator})\nTheir slug: {slug}\nOur model: {model}\n{how}",
     "matchNoneOption": "\u2014 no counterpart \u2014",
     "matchUnresolved": "{slug} is no longer published",
     "attribution": "Benchmark data from"
