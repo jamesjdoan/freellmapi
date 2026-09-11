@@ -92,7 +92,8 @@
     "success": "Mafanikio",
     "failures": "Kushindwa",
     "dismiss": "Ondoa",
-    "status": "Hali"
+    "status": "Hali",
+    "ok": "OK"
   },
   "settings": {
     "title": "Mipangilio",

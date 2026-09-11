@@ -92,7 +92,8 @@
     "success": "ភាពជោគជ័យ",
     "failures": "ការបរាជ័យ",
     "dismiss": "បណ្តេញចេញ",
-    "status": "ស្ថានភាព"
+    "status": "ស្ថានភាព",
+    "ok": "OK"
   },
   "settings": {
     "title": "ការកំណត់",

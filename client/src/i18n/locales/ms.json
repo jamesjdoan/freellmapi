@@ -92,7 +92,8 @@
     "success": "Kejayaan",
     "failures": "Kegagalan",
     "dismiss": "Bubarkan",
-    "status": "Status"
+    "status": "Status",
+    "ok": "OK"
   },
   "settings": {
     "title": "Tetapan",

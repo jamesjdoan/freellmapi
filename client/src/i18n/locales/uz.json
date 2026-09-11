@@ -92,7 +92,8 @@
     "success": "Muvaffaqiyat",
     "failures": "Muvaffaqiyatsizliklar",
     "dismiss": "Rad etish",
-    "status": "Status"
+    "status": "Status",
+    "ok": "OK"
   },
   "settings": {
     "title": "Sozlamalar",

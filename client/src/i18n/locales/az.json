@@ -92,7 +92,8 @@
     "success": "Uğur",
     "failures": "Uğursuzluqlar",
     "dismiss": "Rədd et",
-    "status": "Status"
+    "status": "Status",
+    "ok": "OK"
   },
   "settings": {
     "title": "Parametrlər",

@@ -92,7 +92,8 @@
     "success": "成功",
     "failures": "失敗",
     "dismiss": "關閉",
-    "status": "狀態"
+    "status": "狀態",
+    "ok": "OK"
   },
   "settings": {
     "title": "設定",

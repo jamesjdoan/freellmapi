@@ -92,7 +92,8 @@
     "success": "Sukces",
     "failures": "Awarie",
     "dismiss": "Odrzuć",
-    "status": "Stan"
+    "status": "Stan",
+    "ok": "OK"
   },
   "settings": {
     "title": "Ustawienia",

@@ -92,7 +92,8 @@
     "success": "Úspech",
     "failures": "Neúspechy",
     "dismiss": "Prepustiť",
-    "status": "Stav"
+    "status": "Stav",
+    "ok": "OK"
   },
   "settings": {
     "title": "Nastavenia",

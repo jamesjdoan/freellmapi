@@ -92,7 +92,8 @@
     "success": "Réussite",
     "failures": "Échecs",
     "dismiss": "Fermer",
-    "status": "Statut"
+    "status": "Statut",
+    "ok": "OK"
   },
   "settings": {
     "title": "Paramètres",

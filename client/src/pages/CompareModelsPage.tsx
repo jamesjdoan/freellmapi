@@ -775,6 +775,8 @@ function MappingCell({ members, catalogue, onLink }: {
 }) {
   const { t } = useI18n()
   const [editing, setEditing] = useState(false)
+  // Provisional until OK, so changing your mind does not cost a reselect.
+  const [pending, setPending] = useState<string | null>(null)
 
   // Read the state off the routes themselves. The group's own `analysisSource`
   // says "inherited" whenever the score reaches it through a member, which is
@@ -863,9 +865,9 @@ function MappingCell({ members, catalogue, onLink }: {
   return (
     <span className="flex items-center gap-1">
       <ModelCombobox
-        value={common ?? NO_COUNTERPART}
+        value={pending ?? common ?? NO_COUNTERPART}
         options={options}
-        onSelect={slug => { onLink(slug === NO_COUNTERPART ? null : slug); setEditing(false) }}
+        onSelect={setPending}
         ariaLabel={t('compare.mapAriaLabel')}
         placeholder={t('compare.mapSearchPlaceholder')}
         emptyText={t('compare.mapNoResults')}
@@ -876,8 +878,19 @@ function MappingCell({ members, catalogue, onLink }: {
       {members.length > 1 && (
         <span className="text-[10px] text-muted-foreground">{t('compare.appliesToRoutes', { count: members.length })}</span>
       )}
+      <Button
+        size="xs"
+        onClick={() => {
+          const slug = pending ?? common ?? NO_COUNTERPART
+          onLink(slug === NO_COUNTERPART ? null : slug)
+          setPending(null)
+          setEditing(false)
+        }}
+      >
+        {t('common.ok')}
+      </Button>
       <Tooltip text={t('common.cancel')}>
-        <Button variant="ghost" size="icon-xs" onClick={() => setEditing(false)} aria-label={t('common.cancel')}>×</Button>
+        <Button variant="ghost" size="icon-xs" onClick={() => { setPending(null); setEditing(false) }} aria-label={t('common.cancel')}>×</Button>
       </Tooltip>
     </span>
   )

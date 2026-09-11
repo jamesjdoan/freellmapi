@@ -92,7 +92,8 @@
     "success": "ความสำเร็จ",
     "failures": "ความล้มเหลว",
     "dismiss": "ยกเลิก",
-    "status": "สถานะ"
+    "status": "สถานะ",
+    "ok": "OK"
   },
   "settings": {
     "title": "การตั้งค่า",

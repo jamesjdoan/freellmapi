@@ -92,7 +92,8 @@
     "success": "સફળતા",
     "failures": "નિષ્ફળતાઓ",
     "dismiss": "કાઢી નાખો",
-    "status": "સ્થિતિ"
+    "status": "સ્થિતિ",
+    "ok": "OK"
   },
   "settings": {
     "title": "સેટિંગ્સ",

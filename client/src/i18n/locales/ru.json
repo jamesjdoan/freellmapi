@@ -92,7 +92,8 @@
     "success": "Успех",
     "failures": "Неудачи",
     "dismiss": "Уволить",
-    "status": "Статус"
+    "status": "Статус",
+    "ok": "OK"
   },
   "settings": {
     "title": "Настройки",

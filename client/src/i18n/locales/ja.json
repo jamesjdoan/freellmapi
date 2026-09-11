@@ -92,7 +92,8 @@
     "success": "成功",
     "failures": "失敗",
     "dismiss": "解雇する",
-    "status": "ステータス"
+    "status": "ステータス",
+    "ok": "OK"
   },
   "settings": {
     "title": "設定",

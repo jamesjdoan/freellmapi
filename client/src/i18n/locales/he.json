@@ -92,7 +92,8 @@
     "success": "הצלחה",
     "failures": "כישלונות",
     "dismiss": "דחה",
-    "status": "סטטוס"
+    "status": "סטטוס",
+    "ok": "OK"
   },
   "settings": {
     "title": "הגדרות",

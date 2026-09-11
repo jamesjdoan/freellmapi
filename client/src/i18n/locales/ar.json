@@ -92,7 +92,8 @@
     "success": "النجاح",
     "failures": "الفشل",
     "dismiss": "استبعاد",
-    "status": "الحالة"
+    "status": "الحالة",
+    "ok": "OK"
   },
   "settings": {
     "title": "الإعدادات",

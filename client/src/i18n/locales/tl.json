@@ -92,7 +92,8 @@
     "success": "Tagumpay",
     "failures": "Mga Kabiguan",
     "dismiss": "I-dismiss",
-    "status": "Kalagayan"
+    "status": "Kalagayan",
+    "ok": "OK"
   },
   "settings": {
     "title": "Mga Setting",

@@ -92,7 +92,8 @@
     "success": "വിജയം",
     "failures": "പരാജയങ്ങൾ",
     "dismiss": "പിരിച്ചുവിടുക",
-    "status": "നില"
+    "status": "നില",
+    "ok": "OK"
   },
   "settings": {
     "title": "ക്രമീകരണങ്ങൾ",

@@ -92,7 +92,8 @@
     "success": "සාර්ථකත්වය",
     "failures": "අසාර්ථකවීම්",
     "dismiss": "අස් කරන්න",
-    "status": "තත්ත්වය"
+    "status": "තත්ත්වය",
+    "ok": "OK"
   },
   "settings": {
     "title": "සැකසීම්",

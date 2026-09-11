@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { Switch } from '@/components/ui/switch'
+import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import { ModelCombobox } from '@/components/model-combobox'
 
@@ -319,6 +320,11 @@ function MappingCell({ row, catalogue, onLink, disabled }: {
   const { t } = useI18n()
   const [editing, setEditing] = useState(false)
   const [proxy, setProxy] = useState(false)
+  // Selection is provisional until OK. Writing on select meant the "closest
+  // match" tick had to be set BEFORE choosing — get the order wrong and the
+  // only way back was to pick the model again — and changing your mind about
+  // the flag alone cost a reselect.
+  const [pending, setPending] = useState<string | null>(null)
   const isProxy = row.link?.source === 'proxy'
 
   if (!editing) {
@@ -347,7 +353,7 @@ function MappingCell({ row, catalogue, onLink, disabled }: {
   return (
     <span className="flex items-center gap-1">
       <ModelCombobox
-        value={row.link?.slug ?? NO_COUNTERPART}
+        value={pending ?? row.link?.slug ?? NO_COUNTERPART}
         options={[
           { value: NO_COUNTERPART, label: t('compare.matchNoneOption') },
           ...catalogue.map(c => ({
@@ -357,7 +363,7 @@ function MappingCell({ row, catalogue, onLink, disabled }: {
             platforms: c.creator ? [c.creator] : undefined,
           })),
         ]}
-        onSelect={slug => { onLink(slug === NO_COUNTERPART ? null : slug, proxy); setEditing(false) }}
+        onSelect={setPending}
         ariaLabel={t('compare.mapAriaLabel')}
         placeholder={t('compare.mapSearchPlaceholder')}
         emptyText={t('compare.mapNoResults')}
@@ -366,13 +372,32 @@ function MappingCell({ row, catalogue, onLink, disabled }: {
         ariaInvalid={false}
         align="start"
       />
-      {/* Ticked BEFORE choosing: "closest thing to this" is a different claim
-          from "this is that model", and the picker cannot tell which was meant. */}
+      {/* "Closest thing to this" is a different claim from "this is that
+          model", and the picker cannot tell which was meant — so it is asked
+          here, in either order, and applied on OK. */}
       <label className="inline-flex items-center gap-1 text-[10px] text-muted-foreground" title={t('keys.proxyHint')}>
         <input type="checkbox" checked={proxy} onChange={e => setProxy(e.target.checked)} className="size-3 accent-foreground" />
         {t('keys.proxyLabel')}
       </label>
-      <button type="button" onClick={() => setEditing(false)} disabled={disabled} aria-label={t('common.cancel')} className="text-muted-foreground">×</button>
+      <Button
+        size="xs"
+        disabled={disabled}
+        onClick={() => {
+          const slug = pending ?? row.link?.slug ?? NO_COUNTERPART
+          onLink(slug === NO_COUNTERPART ? null : slug, proxy)
+          setPending(null)
+          setEditing(false)
+        }}
+      >
+        {t('common.ok')}
+      </Button>
+      <button
+        type="button"
+        onClick={() => { setPending(null); setEditing(false) }}
+        disabled={disabled}
+        aria-label={t('common.cancel')}
+        className="text-muted-foreground"
+      >×</button>
     </span>
   )
 }

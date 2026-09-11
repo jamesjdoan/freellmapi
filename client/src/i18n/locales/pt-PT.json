@@ -92,7 +92,8 @@
     "success": "Sucesso",
     "failures": "Falhas",
     "dismiss": "Arquivamento",
-    "status": "Estado"
+    "status": "Estado",
+    "ok": "OK"
   },
   "settings": {
     "title": "Definições",

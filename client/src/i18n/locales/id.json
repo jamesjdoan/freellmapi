@@ -92,7 +92,8 @@
     "success": "Sukses",
     "failures": "Kegagalan",
     "dismiss": "Singkirkan",
-    "status": "Status"
+    "status": "Status",
+    "ok": "OK"
   },
   "settings": {
     "title": "Pengaturan",

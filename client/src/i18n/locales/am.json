@@ -92,7 +92,8 @@
     "success": "ስኬት",
     "failures": "ውድቀቶች",
     "dismiss": "አሰናብት",
-    "status": "ሁኔታ"
+    "status": "ሁኔታ",
+    "ok": "OK"
   },
   "settings": {
     "title": "ማሰናጃዎች",

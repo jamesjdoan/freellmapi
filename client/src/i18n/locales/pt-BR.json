@@ -92,7 +92,8 @@
     "success": "Sucessos",
     "failures": "Falhas",
     "dismiss": "Dispensar",
-    "status": "Status"
+    "status": "Status",
+    "ok": "OK"
   },
   "settings": {
     "title": "Configurações",

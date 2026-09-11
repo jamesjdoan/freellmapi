@@ -92,7 +92,8 @@
     "success": "Siker",
     "failures": "Kudarák",
     "dismiss": "Feladás",
-    "status": "Státusz"
+    "status": "Státusz",
+    "ok": "OK"
   },
   "settings": {
     "title": "Beállítások",

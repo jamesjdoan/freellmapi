@@ -92,7 +92,8 @@
     "success": "成功",
     "failures": "失败",
     "dismiss": "关闭",
-    "status": "状态"
+    "status": "状态",
+    "ok": "OK"
   },
   "settings": {
     "title": "设置",

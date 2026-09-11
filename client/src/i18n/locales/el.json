@@ -92,7 +92,8 @@
     "success": "Επιτυχία",
     "failures": "Αποτυχίες",
     "dismiss": "Απόρριψη",
-    "status": "Κατάσταση"
+    "status": "Κατάσταση",
+    "ok": "OK"
   },
   "settings": {
     "title": "Ρυθμίσεις",

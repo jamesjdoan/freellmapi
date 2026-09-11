@@ -92,7 +92,8 @@
     "success": "Başarı",
     "failures": "Başarısızlıklar",
     "dismiss": "Reddet",
-    "status": "Durum"
+    "status": "Durum",
+    "ok": "OK"
   },
   "settings": {
     "title": "Ayarlar",

@@ -92,7 +92,8 @@
     "success": "Framgång",
     "failures": "Misslyckanden",
     "dismiss": "Avslut",
-    "status": "Status"
+    "status": "Status",
+    "ok": "OK"
   },
   "settings": {
     "title": "Inställningar",

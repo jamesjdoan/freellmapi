@@ -92,7 +92,8 @@
     "success": "Aciertos",
     "failures": "Fallos",
     "dismiss": "Descartar",
-    "status": "Estado"
+    "status": "Estado",
+    "ok": "OK"
   },
   "settings": {
     "title": "Configuración",

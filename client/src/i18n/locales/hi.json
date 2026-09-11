@@ -92,7 +92,8 @@
     "success": "सफलता",
     "failures": "असफलताएँ",
     "dismiss": "ख़ारिज करें",
-    "status": "स्थिति"
+    "status": "स्थिति",
+    "ok": "OK"
   },
   "settings": {
     "title": "सेटिंग्स",

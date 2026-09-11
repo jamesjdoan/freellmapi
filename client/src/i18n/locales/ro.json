@@ -92,7 +92,8 @@
     "success": "Succes",
     "failures": "Eșecuri",
     "dismiss": "Dizolvați",
-    "status": "Statut"
+    "status": "Statut",
+    "ok": "OK"
   },
   "settings": {
     "title": "Setări",

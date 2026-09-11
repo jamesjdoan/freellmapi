@@ -92,7 +92,8 @@
     "success": "Nasara",
     "failures": "Kasawa",
     "dismiss": "Korar",
-    "status": "Matsayi"
+    "status": "Matsayi",
+    "ok": "OK"
   },
   "settings": {
     "title": "Saituna",

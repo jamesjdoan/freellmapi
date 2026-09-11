@@ -65,6 +65,7 @@
   "common": {
     "save": "Save",
     "saving": "Saving…",
+    "ok": "OK",
     "cancel": "Cancel",
     "discard": "Discard",
     "delete": "Delete",

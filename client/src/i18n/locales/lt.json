@@ -92,7 +92,8 @@
     "success": "Sėkmė",
     "failures": "Nesėkmės",
     "dismiss": "Atleisti",
-    "status": "Statusas"
+    "status": "Statusas",
+    "ok": "OK"
   },
   "settings": {
     "title": "Nustatymai",
