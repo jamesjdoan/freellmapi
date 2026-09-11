@@ -8,6 +8,7 @@ import {
   setManualLink,
   setReferenceSlugs,
   setModelKeyScope,
+  getComparePayload,
 } from '../../services/analysis.js';
 import { setUnifyOverrides } from '../../services/model-groups.js';
 
@@ -314,5 +315,41 @@ describe('editing key scope', () => {
 
   it('is a no-op when the scope already says what was asked', () => {
     expect(setModelKeyScope('groq', 'probe/in-scope', true)).toEqual({ changed: 0, refused: 0 });
+  });
+})
+
+describe('a disabled key is not a missing key', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    addModel('huggingface', 'probe/hf-model', 'HF Probe');
+    addModel('sail', 'probe/sail-model', 'Sail Probe');
+    getDb().prepare(`
+      INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, enabled, status)
+      VALUES ('huggingface', 'k', 'x', 'x', 'x', 0, 'healthy')
+    `).run();
+  });
+
+  const scopeOf = (name: RegExp) =>
+    getComparePayload().rows.find(r => name.test(r.displayName))?.keyScope;
+
+  it('reports a switched-off key as disabled, not absent', () => {
+    // Switching a key off is a decision — a provider whose free allowance is
+    // not worth spending, say. Telling the operator to add a key they already
+    // have both loses that and sends them to the wrong screen.
+    expect(scopeOf(/HF Probe/)).toBe('disabled');
+    expect(scopeOf(/Sail Probe/)).toBe('none');
+  });
+
+  it('reports an unhealthy key as disabled too', () => {
+    getDb().prepare("UPDATE api_keys SET enabled = 1, status = 'invalid'").run();
+
+    expect(scopeOf(/HF Probe/)).toBe('disabled');
+  });
+
+  it('goes back to a real scope state once the key is usable', () => {
+    getDb().prepare("UPDATE api_keys SET enabled = 1, status = 'healthy'").run();
+
+    expect(scopeOf(/HF Probe/)).toBe('unscoped');
   });
 })

@@ -334,7 +334,7 @@ export interface CompareRow {
   hasKey: boolean;
   /** Whether the platform's key scope is what stands in the way, and so whether
    *  widening it is an available move. */
-  keyScope: 'none' | 'unscoped' | 'in' | 'out';
+  keyScope: 'none' | 'disabled' | 'unscoped' | 'in' | 'out';
   supportsTools: boolean;
   supportsVision: boolean;
   /** Our own ordering numbers, kept alongside deliberately: seeing a
@@ -412,18 +412,30 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
     list.push(parseModelScope(k.model_scope_json));
     keysByPlatform.set(k.platform, list);
   }
+  // Platforms where a key EXISTS but cannot serve — switched off, or in a
+  // failed state. Telling an operator to "add a key" for one of these is wrong
+  // twice over: they already have one, and switching it off was a decision
+  // (a provider whose free allowance is not worth spending, say). The useful
+  // move there is the Keys page, not the add dialog.
+  const platformsWithUnusableKey = new Set((db.prepare(
+    `SELECT DISTINCT platform FROM api_keys
+      WHERE enabled = 0 OR status NOT IN ('healthy', 'unknown')`,
+  ).all() as { platform: string }[]).map(r => r.platform));
   const hasUsableKey = (platform: string, modelId: string) =>
     (keysByPlatform.get(platform) ?? []).some(scope => scopeAllows(scope, modelId));
 
   // Why a route is or is not reachable, which is what decides whether an
   // operator can do anything about it:
-  //   none      no usable key for the platform at all — nothing to widen
+  //   none      no key for the platform at all — adding one is the move
+  //   disabled  a key exists but is switched off or unhealthy — enabling is
   //   unscoped  a key that already covers every model here
   //   in        named by a scoped key
   //   out       a scoped key exists and does not name it — one edit away
-  const keyScopeOf = (platform: string, modelId: string): 'none' | 'unscoped' | 'in' | 'out' => {
+  const keyScopeOf = (platform: string, modelId: string): 'none' | 'disabled' | 'unscoped' | 'in' | 'out' => {
     const scopes = keysByPlatform.get(platform);
-    if (!scopes || scopes.length === 0) return 'none';
+    if (!scopes || scopes.length === 0) {
+      return platformsWithUnusableKey.has(platform) ? 'disabled' : 'none';
+    }
     if (scopes.some(sc => sc === null)) return 'unscoped';
     return scopes.some(sc => scopeAllows(sc, modelId)) ? 'in' : 'out';
   };

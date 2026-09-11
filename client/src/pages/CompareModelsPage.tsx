@@ -39,7 +39,7 @@ interface CompareRow {
   supportsTools: boolean
   /** A usable key exists for this route, scope included. */
   hasKey: boolean
-  keyScope: 'none' | 'unscoped' | 'in' | 'out'
+  keyScope: 'none' | 'disabled' | 'unscoped' | 'in' | 'out'
   supportsVision: boolean
   intelligenceRank: number
   speedRank: number
@@ -208,11 +208,18 @@ export default function CompareModelsPage() {
     const map = new Map<string, PlatformScope>()
     for (const r of data?.rows ?? []) {
       const e = map.get(r.platform) ?? { inScope: [], outOfScope: [], noKey: [] }
-      if (r.keyScope === 'none') e.noKey.push(r.modelId)
+      if (r.keyScope === 'none' || r.keyScope === 'disabled') e.noKey.push(r.modelId)
       else if (r.keyScope === 'out') e.outOfScope.push(r.modelId)
       else e.inScope.push(r.modelId)
       map.set(r.platform, e)
     }
+    return map
+  }, [data?.rows])
+
+  // One state per platform; every route on a platform shares its key situation.
+  const platformKeyStates = useMemo(() => {
+    const map = new Map<string, CompareRow['keyScope']>()
+    for (const r of data?.rows ?? []) if (!map.has(r.platform)) map.set(r.platform, r.keyScope)
     return map
   }, [data?.rows])
 
@@ -467,6 +474,7 @@ export default function CompareModelsPage() {
                 platforms={[...new Set(entries.flatMap(g => g.members.map(m => m.platform)))].sort()}
                 keyed={new Set(entries.flatMap(g => g.members.filter(m => m.hasKey).map(m => m.platform)))}
                 scopes={platformScopes}
+                keyStates={platformKeyStates}
               />
             </div>
             <Table className="mt-3">
@@ -589,6 +597,7 @@ export default function CompareModelsPage() {
                               platform={m.platform}
                               hasKey={m.hasKey}
                               scope={platformScopes.get(m.platform)}
+                              keyState={platformKeyStates.get(m.platform)}
                               linkToKeys
                             />
                           ))}

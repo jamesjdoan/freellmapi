@@ -49,7 +49,13 @@ type BulkAction = 'enable' | 'disable' | 'delete'
 // The Providers tab body: a filter toolbar over a list of collapsible provider
 // groups. Owns the keys/health/proxy queries and every per-key mutation so
 // KeysPage stays a thin shell. `onAddKey` opens the shared Add key dialog.
-export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
+export function ProviderList({ onAddKey, initialSearch }: {
+  onAddKey: () => void
+  /** Arriving from elsewhere pointed at one provider (Compare links here when a
+   *  key exists but is switched off). Seeds the filter, which already
+   *  auto-expands the groups it matches. */
+  initialSearch?: string
+}) {
   const { t } = useI18n()
   const queryClient = useQueryClient()
 
@@ -61,7 +67,12 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
   const [churnOpenKeyIds, setChurnOpenKeyIds] = useState<Set<number>>(new Set())
   // Explicit user open/closed overrides per provider group; absent = default.
   const [groupOverrides, setGroupOverrides] = useState<Map<string, boolean>>(new Map())
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(initialSearch ?? '')
+  // The prop arrives AFTER mount — the URL parameter is read in an effect one
+  // level up — so seeding useState alone silently did nothing.
+  useEffect(() => {
+    if (initialSearch) setSearch(initialSearch)
+  }, [initialSearch])
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   // Custom endpoint whose model list is being fetched (#488) — relays change
   // what they serve constantly, so this is a repeat action, not a one-off.

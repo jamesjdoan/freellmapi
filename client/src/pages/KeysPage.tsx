@@ -57,12 +57,19 @@ export default function KeysPage() {
   // from a provider that serves a model we hold no key for, and arriving on a
   // generic Keys page would make the reader find the provider again.
   const [searchParams, setSearchParams] = useSearchParams()
+  // ?platform=<p> focuses an EXISTING key instead. Compare sends a provider
+  // whose key is switched off here rather than to the add dialog: they already
+  // have the key, and turning it off was a decision.
+  const [focusPlatform, setFocusPlatform] = useState('')
   useEffect(() => {
     const add = searchParams.get('add')
-    if (!add) return
-    openAddKey(add as Platform)
-    // Consumed, so a refresh or a back-navigation does not reopen it.
+    const focus = searchParams.get('platform')
+    if (!add && !focus) return
+    if (add) openAddKey(add as Platform)
+    if (focus) setFocusPlatform(focus)
+    // Consumed, so a refresh or a back-navigation does not repeat it.
     searchParams.delete('add')
+    searchParams.delete('platform')
     setSearchParams(searchParams, { replace: true })
   }, [searchParams, setSearchParams])
 
@@ -171,7 +178,7 @@ export default function KeysPage() {
         {tab === 'providers' && (
           <>
             <ProviderChecklistSection onAddKey={platform => openAddKey(platform as Platform)} />
-            <ProviderList onAddKey={() => openAddKey()} />
+            <ProviderList onAddKey={() => openAddKey()} initialSearch={focusPlatform || undefined} />
           </>
         )}
       </div>

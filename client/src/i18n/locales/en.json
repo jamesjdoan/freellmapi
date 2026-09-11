@@ -279,6 +279,7 @@
     "scopeNoKeyList": "Served here, no key ({count})",
     "andMore": "+{count} more",
     "platformHasKey": "{platform} - key configured",
+    "platformKeyDisabled": "{platform} - key is switched off. Click to open it.",
     "platformNoKey": "{platform} - no key. Click to add one.",
     "legendTitle": "Providers:",
     "legendHollow": "hollow = no key",
