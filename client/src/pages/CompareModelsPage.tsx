@@ -8,9 +8,10 @@ import { apiFetch } from '@/lib/api'
 import { toast } from '@/lib/toast'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ConfirmButton } from '@/components/confirm-button'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/page-header'
-import { PlatformDot } from '@/components/platform-dot'
+import { PlatformDot, PlatformLegend } from '@/components/platform-dot'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tooltip } from '@/components/tooltip'
 
@@ -36,6 +37,9 @@ interface CompareRow {
   enabled: boolean
   contextWindow: number | null
   supportsTools: boolean
+  /** A usable key exists for this route, scope included. */
+  hasKey: boolean
+  keyScope: 'none' | 'unscoped' | 'in' | 'out'
   supportsVision: boolean
   intelligenceRank: number
   speedRank: number
@@ -186,6 +190,15 @@ export default function CompareModelsPage() {
   const referenceSlugs = references?.slugs ?? []
   const addReference = (slug: string) => referenceMutation.mutate([...referenceSlugs, slug])
   const removeReference = (slug: string) => referenceMutation.mutate(referenceSlugs.filter(s => s !== slug))
+
+  // One model in or out of its provider key's scope. The Compare table can see
+  // that a route is unreachable only because the key does not name it; this is
+  // the edit that fixes it without leaving the row.
+  const keyScope = useMutation({
+    mutationFn: (body: { platform: string; modelId: string; allow: boolean }) =>
+      apiFetch('/api/analysis/key-scope', { method: 'PUT', body: JSON.stringify(body) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['analysis'] }),
+  })
 
   const status = data?.status
 
@@ -372,16 +385,19 @@ export default function CompareModelsPage() {
                 const value = g.analysis![metric] as number
                 return (
                   <li key={entryKey(g)} className={`flex items-center gap-2 text-xs ${g.reference ? 'text-sky-700 dark:text-sky-300' : ''}`}>
-                    {/* One dot per provider behind this entry: a merged model
-                        is exactly as available as the routes it condenses. */}
-                    <span className="flex flex-shrink-0 items-center gap-0.5">
-                      {[...new Set(g.members.map(m => m.platform))].map(p => <PlatformDot key={p} platform={p} />)}
-                    </span>
-                    <span className="w-[220px] flex-shrink-0 truncate" title={g.members.map(m => m.modelId).join('\n')}>
+                    {/* Name first, dots after it. Leading with a variable
+                        number of swatches started every name at a different
+                        offset, so the column could not be read down. */}
+                    <span className="w-[200px] flex-shrink-0 truncate" title={g.members.map(m => m.modelId).join('\n')}>
                       {g.name}
                       {g.members.length > 1 && (
                         <span className="ml-1 text-muted-foreground tabular-nums">{`×${g.members.length}`}</span>
                       )}
+                    </span>
+                    <span className="flex w-[70px] flex-shrink-0 items-center gap-0.5">
+                      {[...new Map(g.members.map(m => [m.platform, m])).values()].slice(0, 7).map(m => (
+                        <PlatformDot key={m.platform} platform={m.platform} hasKey={m.hasKey} />
+                      ))}
                     </span>
                     <div className="h-3 min-w-0 flex-1 rounded bg-muted">
                       {/* Scaled to the best model on screen, not to 100: the
@@ -430,6 +446,12 @@ export default function CompareModelsPage() {
                 {t('compare.showingCount', { shown: entries.length })}
               </span>
             </div>
+            <div className="mt-2">
+              <PlatformLegend
+                platforms={[...new Set(entries.flatMap(g => g.members.map(m => m.platform)))].sort()}
+                keyed={new Set(entries.flatMap(g => g.members.filter(m => m.hasKey).map(m => m.platform)))}
+              />
+            </div>
             <Table className="mt-3">
               <TableHeader>
                 <TableRow>
@@ -451,7 +473,7 @@ export default function CompareModelsPage() {
                 {entries.map(g => {
                   const solo = g.members.length === 1 ? g.members[0] : null
                   return (
-                    <TableRow key={entryKey(g)} className={g.reference ? 'bg-sky-500/5' : undefined}>
+                    <TableRow key={entryKey(g)} className={`group/row ${g.reference ? 'bg-sky-500/5' : ''}`}>
                       <TableCell>
                         {g.reference
                           ? (
@@ -481,6 +503,33 @@ export default function CompareModelsPage() {
                             down. */}
                         <span className="flex flex-wrap items-center gap-1.5">
                           <span className="max-w-[175px] truncate font-medium" title={g.name}>{g.name}</span>
+                          {/* Routes the platform holds a key for that the key
+                              does not name. One press each way, because this is
+                              the difference between a model being unreachable
+                              and being usable. */}
+                          {!g.reference && g.members.some(m => m.keyScope === 'out') && (
+                            <ConfirmButton
+                              onConfirm={() => g.members
+                                .filter(m => m.keyScope === 'out')
+                                .forEach(m => keyScope.mutate({ platform: m.platform, modelId: m.modelId, allow: true }))}
+                              confirmLabel={t('compare.scopeAddConfirm')}
+                              title={t('compare.scopeAddHint')}
+                              className="h-5 rounded-full border px-1.5 text-[10px] text-amber-600 dark:text-amber-400"
+                            >
+                              {t('compare.scopeAdd', { count: g.members.filter(m => m.keyScope === 'out').length })}
+                            </ConfirmButton>
+                          )}
+                          {!g.reference && g.members.some(m => m.keyScope === 'in') && (
+                            <ConfirmButton
+                              onConfirm={() => g.members
+                                .filter(m => m.keyScope === 'in')
+                                .forEach(m => keyScope.mutate({ platform: m.platform, modelId: m.modelId, allow: false }))}
+                              title={t('compare.scopeRemoveHint')}
+                              className="h-5 rounded-full border px-1.5 text-[10px] text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 group-hover/row:opacity-100"
+                            >
+                              {t('compare.scopeRemove')}
+                            </ConfirmButton>
+                          )}
                           {g.reference && (
                             <Badge variant="secondary" className="bg-sky-500/15 text-[10px] text-sky-700 dark:text-sky-300">
                               {t('compare.referenceBadge')}
@@ -513,8 +562,13 @@ export default function CompareModelsPage() {
                             </Tooltip>
                           )}
                         </span>
+                        {/* Hollow dot = this provider serves the model and we
+                            hold no key for it, so the dot links to the Keys page
+                            with the provider preselected. */}
                         <span className="mt-0.5 flex flex-wrap items-center gap-1">
-                          {[...new Set(g.members.map(m => m.platform))].map(p => <PlatformDot key={p} platform={p} />)}
+                          {[...new Map(g.members.map(m => [m.platform, m])).values()].map(m => (
+                            <PlatformDot key={m.platform} platform={m.platform} hasKey={m.hasKey} linkToKeys />
+                          ))}
                         </span>
                       </TableCell>
                       <TableCell className="max-w-[120px] truncate text-[11px] text-muted-foreground" title={g.chains.join(', ')}>

@@ -1,4 +1,5 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -51,6 +52,19 @@ export default function KeysPage() {
     setAddPlatform(platform)
     setAddOpen(true)
   }
+
+  // /keys?add=<platform> opens the add dialog preselected. Compare links here
+  // from a provider that serves a model we hold no key for, and arriving on a
+  // generic Keys page would make the reader find the provider again.
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    const add = searchParams.get('add')
+    if (!add) return
+    openAddKey(add as Platform)
+    // Consumed, so a refresh or a back-navigation does not reopen it.
+    searchParams.delete('add')
+    setSearchParams(searchParams, { replace: true })
+  }, [searchParams, setSearchParams])
 
   // Kept at page level for the header's "Check all" gate; ProviderList runs the
   // same query (deduped by react-query) for the list itself.

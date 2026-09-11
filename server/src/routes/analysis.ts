@@ -11,6 +11,7 @@ import {
   syncAnalysis,
   getGroupedCompare,
   getReferenceGroups,
+  setModelKeyScope,
   getReferenceSlugs,
   setReferenceSlugs,
 } from '../services/analysis.js';
@@ -92,6 +93,35 @@ analysisRouter.put('/references', (req: Request, res: Response) => {
   }
   const slugs = setReferenceSlugs(parsed.data.slugs);
   res.json({ slugs, groups: getReferenceGroups() });
+});
+
+const keyScopeSchema = z.object({
+  platform: z.string().min(1),
+  modelId: z.string().min(1),
+  allow: z.boolean(),
+});
+
+// Widen or narrow a provider key's model scope for ONE model. The Compare page
+// can see that a route is unreachable only because the key does not name it,
+// and this is the one edit that fixes that without leaving the row.
+analysisRouter.put('/key-scope', (req: Request, res: Response) => {
+  const parsed = keyScopeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
+    return;
+  }
+  const { platform, modelId, allow } = parsed.data;
+  const result = setModelKeyScope(platform, modelId, allow);
+  if (result.changed === 0 && result.refused > 0) {
+    res.status(409).json({ error: {
+      message: allow
+        ? 'Key already permits every model on this platform.'
+        : 'Cannot remove: the key is unscoped, or this is the only model it names. Edit the key on the Keys page.',
+      type: 'invalid_request_error',
+    } });
+    return;
+  }
+  res.json({ success: true, ...result });
 });
 
 analysisRouter.get('/compare', (_req: Request, res: Response) => {

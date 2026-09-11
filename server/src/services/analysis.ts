@@ -332,6 +332,9 @@ export interface CompareRow {
   /** A usable key exists for this route's platform, so it can actually serve.
    *  False means catalogue knowledge rather than supply. */
   hasKey: boolean;
+  /** Whether the platform's key scope is what stands in the way, and so whether
+   *  widening it is an available move. */
+  keyScope: 'none' | 'unscoped' | 'in' | 'out';
   supportsTools: boolean;
   supportsVision: boolean;
   /** Our own ordering numbers, kept alongside deliberately: seeing a
@@ -412,6 +415,19 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
   const hasUsableKey = (platform: string, modelId: string) =>
     (keysByPlatform.get(platform) ?? []).some(scope => scopeAllows(scope, modelId));
 
+  // Why a route is or is not reachable, which is what decides whether an
+  // operator can do anything about it:
+  //   none      no usable key for the platform at all — nothing to widen
+  //   unscoped  a key that already covers every model here
+  //   in        named by a scoped key
+  //   out       a scoped key exists and does not name it — one edit away
+  const keyScopeOf = (platform: string, modelId: string): 'none' | 'unscoped' | 'in' | 'out' => {
+    const scopes = keysByPlatform.get(platform);
+    if (!scopes || scopes.length === 0) return 'none';
+    if (scopes.some(sc => sc === null)) return 'unscoped';
+    return scopes.some(sc => scopeAllows(sc, modelId)) ? 'in' : 'out';
+  };
+
   const catalogue = db.prepare(`
     SELECT slug, name, creator, intelligence_index
       FROM aa_model
@@ -426,6 +442,7 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
       enabled: r.enabled === 1,
       contextWindow: r.context_window == null ? null : Number(r.context_window),
       hasKey: hasUsableKey(String(r.platform), String(r.model_id)),
+      keyScope: keyScopeOf(String(r.platform), String(r.model_id)),
       supportsTools: r.supports_tools === 1,
       supportsVision: r.supports_vision === 1,
       intelligenceRank: Number(r.intelligence_rank ?? 0),
@@ -630,4 +647,44 @@ function lookupAa(db: Db, slug: string): CompareRow['analysis'] {
     medianOutputTokensPerSecond: numberOrNull(r.median_output_tokens_per_second),
     medianTimeToFirstTokenSeconds: numberOrNull(r.median_time_to_first_token_seconds),
   };
+}
+
+/**
+ * Add or remove one model from the scope of every usable key on its platform.
+ *
+ * Refuses to narrow an UNSCOPED key. A null scope means "every model on this
+ * platform", and removing one id from that would have to materialise the whole
+ * catalogue into a list — turning a standing permission into a snapshot, and
+ * silently revoking access to every model discovered afterwards. That is a
+ * different decision from the one the button offers, so it is not taken here.
+ */
+export function setModelKeyScope(platform: string, modelId: string, allow: boolean, db: Db = getDb()): {
+  changed: number; refused: number;
+} {
+  const keys = db.prepare(
+    "SELECT id, model_scope_json FROM api_keys WHERE platform = ? AND enabled = 1 AND status IN ('healthy', 'unknown')",
+  ).all(platform) as { id: number; model_scope_json: string | null }[];
+
+  let changed = 0;
+  let refused = 0;
+  const write = db.prepare('UPDATE api_keys SET model_scope_json = ? WHERE id = ?');
+  for (const k of keys) {
+    const scope = parseModelScope(k.model_scope_json);
+    if (scope === null) {
+      // Already permits it; narrowing is out of scope for this operation.
+      if (!allow) refused++;
+      continue;
+    }
+    const has = scope.has(modelId);
+    if (allow === has) continue;
+    // Removing the last id would store NULL, and NULL means unscoped — the key
+    // would go from naming one model to permitting every model on the platform.
+    // Refuse rather than invert the operator's intent.
+    if (!allow && scope.size === 1) { refused++; continue; }
+    if (allow) scope.add(modelId);
+    else scope.delete(modelId);
+    write.run(JSON.stringify([...scope]), k.id);
+    changed++;
+  }
+  return { changed, refused };
 }

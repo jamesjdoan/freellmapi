@@ -7,6 +7,7 @@ import {
   relinkAll,
   setManualLink,
   setReferenceSlugs,
+  setModelKeyScope,
 } from '../../services/analysis.js';
 import { setUnifyOverrides } from '../../services/model-groups.js';
 
@@ -260,5 +261,58 @@ describe('key scope', () => {
     getDb().prepare('UPDATE api_keys SET model_scope_json = NULL').run();
 
     expect(getGroupedCompare().find(g => /Out Of Scope/.test(g.name))?.keyedMembers).toBe(1);
+  });
+})
+
+describe('editing key scope', () => {
+  const scopeOf = () => {
+    const raw = (getDb().prepare("SELECT model_scope_json s FROM api_keys WHERE platform='groq'").get() as { s: string | null }).s;
+    return raw === null ? null : JSON.parse(raw) as string[];
+  };
+
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    addModel('groq', 'probe/in-scope', 'In Scope');
+    addModel('groq', 'probe/out-of-scope', 'Out Of Scope');
+    getDb().prepare(`
+      INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, enabled, status, model_scope_json)
+      VALUES ('groq', 'k', 'x', 'x', 'x', 1, 'healthy', '["probe/in-scope","probe/other"]')
+    `).run();
+  });
+
+  it('widens the scope and makes the route reachable', () => {
+    expect(setModelKeyScope('groq', 'probe/out-of-scope', true).changed).toBe(1);
+
+    expect(scopeOf()).toContain('probe/out-of-scope');
+    expect(getGroupedCompare().find(g => /Out Of Scope/.test(g.name))?.keyedMembers).toBe(1);
+  });
+
+  it('narrows the scope again, leaving the other ids alone', () => {
+    setModelKeyScope('groq', 'probe/out-of-scope', true);
+
+    expect(setModelKeyScope('groq', 'probe/out-of-scope', false).changed).toBe(1);
+    expect(scopeOf()).toEqual(['probe/in-scope', 'probe/other']);
+  });
+
+  it('refuses to narrow an unscoped key, which would revoke every other model', () => {
+    // NULL scope means "every model on this platform". Removing one id would
+    // have to freeze the rest into a list, quietly revoking everything
+    // discovered later — a different decision from the one being asked for.
+    getDb().prepare('UPDATE api_keys SET model_scope_json = NULL').run();
+
+    expect(setModelKeyScope('groq', 'probe/in-scope', false)).toEqual({ changed: 0, refused: 1 });
+    expect(scopeOf()).toBeNull();
+  });
+
+  it('refuses to remove the last id, which would read as unscoped', () => {
+    getDb().prepare(`UPDATE api_keys SET model_scope_json = '["probe/in-scope"]'`).run();
+
+    expect(setModelKeyScope('groq', 'probe/in-scope', false)).toEqual({ changed: 0, refused: 1 });
+    expect(scopeOf()).toEqual(['probe/in-scope']);
+  });
+
+  it('is a no-op when the scope already says what was asked', () => {
+    expect(setModelKeyScope('groq', 'probe/in-scope', true)).toEqual({ changed: 0, refused: 0 });
   });
 })

@@ -304,7 +304,11 @@
     "unmergeWhat": "What to take back out",
     "unmergeAll": "— the whole group —",
     "unmergeRow": "unmerge",
-    "unmergeRowHint": "Undo this merge and put these models back as separate rows"
+    "unmergeRowHint": "Undo this merge and put these models back as separate rows",
+    "platformHasKey": "{platform} - key configured",
+    "platformNoKey": "{platform} - no key. Click to add one.",
+    "legendTitle": "Providers:",
+    "legendHollow": "hollow = no key"
   },
   "strategies": {
     "explore": "ମପାଯାଇନଥିବା ମଡେଲଗୁଡ଼ିକୁ ଅନୁସନ୍ଧାନ କରନ୍ତୁ",
@@ -1372,6 +1376,11 @@
     "scopeAll": "All discovered",
     "scopeAllHint": "Every model discovered from every provider, including ones we have no key for",
     "searchPlaceholder": "Search model, provider, chain or benchmark",
-    "showingCount": "{shown} shown"
+    "showingCount": "{shown} shown",
+    "scopeAdd": "+ key scope ({count})",
+    "scopeAddConfirm": "Allow",
+    "scopeAddHint": "This provider key does not name this model, so the router cannot use it. Add it to the key scope.",
+    "scopeRemove": "in key scope",
+    "scopeRemoveHint": "Remove this model from the provider key scope, so the router stops using it"
   }
 }
