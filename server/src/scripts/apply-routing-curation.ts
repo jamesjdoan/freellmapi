@@ -191,5 +191,8 @@ function main(): void {
   console.log(`\nApplied: ${totals}. Catalogue rows untouched.`);
 }
 
-// Importable for tests; only runs the CLI when invoked directly.
-if (process.argv[1] && process.argv[1].endsWith('apply-routing-curation.ts')) main();
+// Importable for tests; only runs the CLI when invoked directly. Both
+// extensions: the documented entry point is tsx against the source, but the
+// deployed container only has the compiled copy, and a guard that silently
+// exits there makes the script look like it ran and did nothing.
+if (process.argv[1] && /apply-routing-curation\.(ts|js)$/.test(process.argv[1])) main();

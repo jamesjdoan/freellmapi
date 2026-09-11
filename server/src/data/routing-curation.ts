@@ -72,7 +72,7 @@ export interface CuratedRoute {
  * This is the single most important fact about the table below and the reason
  * chain order is not simply "strongest first": three NVIDIA models are three
  * capabilities but ONE allowance. Ordering kimi-k3, deepseek-v4-pro and
- * nemotron-3-ultra 1-2-3 in `auto:apex` reads like depth and is actually a
+ * nemotron-3-ultra 1-2-3 in `auto:frontier` reads like depth and is actually a
  * single point of failure with three names.
  *
  * Independence is asserted only where it has been observed in
@@ -146,19 +146,21 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // in one of them.
   {
     platform: 'nvidia', modelId: 'nvidia/nemotron-3-ultra-550b-a55b', classification: 'CORE',
-    chains: { Coding: 1, Apex: 1 },
-    why: '82% over 313 attempts, Frontier tier, 1M context, tools. The strongest route here that is also reliable, which is exactly what apex and coding both need at position 1.',
+    chains: { Coding: 1, Frontier: 1 },
+    why: '82% over 313 attempts, Frontier tier, 1M context, tools. The strongest route here that is also reliable, which is exactly what frontier and coding both need at position 1.',
   },
   {
     platform: 'nvidia', modelId: 'nvidia/nemotron-3-super-120b-a12b', classification: 'CORE',
     chains: { Workhorse: 2, Coding: 4, Default: 2 },
     why: '97% over 5421 attempts — the most-proven route on this install. The middle tier is what it is for, and it is the safety net under coding.',
   },
-  {
-    platform: 'nvidia', modelId: 'minimaxai/minimax-m3', classification: 'CORE',
-    chains: { Frontier: 1 },
-    why: 'Heads frontier: 93% over 1302 attempts at Frontier tier. Escalation has to be both stronger AND dependable, or it is just a slower way to fail.',
-  },
+  // nvidia/minimaxai/minimax-m3 headed the escalation chain on 93% over 1302
+  // attempts and is gone: NVIDIA stopped listing it upstream and the catalogue
+  // sync recorded it removed. Nothing replaces it at that combination of tier
+  // and evidence, so apex is now the Google Flash stack — which is the honest
+  // shape of this install's peak once the two routes that HANG (kimi-k3,
+  // deepseek-v4-pro) are excluded. They out-score every Gemini and cannot be
+  // tried cheaply anywhere; see the NVIDIA note above.
   {
     platform: 'nvidia', modelId: 'nvidia/nemotron-3.5-lightning-30b-a3b', classification: 'CORE',
     chains: { 'Fast-Lane': 3, Workhorse: 5, Default: 5 },
@@ -167,16 +169,16 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   {
     platform: 'nvidia', modelId: 'openai/gpt-oss-20b', classification: 'OVERFLOW',
     chains: { 'Fast-Lane': 5 },
-    why: '88% over 24 attempts. Same model as the Groq fast-lane head on a different pool, but behind it: this one spends the shared NVIDIA balance apex and coding depend on.',
+    why: '88% over 24 attempts. Same model as the Groq fast-lane head on a different pool, but behind it: this one spends the shared NVIDIA balance frontier and coding depend on.',
   },
   {
     platform: 'nvidia', modelId: 'meta/llama-3.2-90b-vision-instruct', classification: 'OVERFLOW',
-    chains: { Vision: 5 },
+    chains: { Vision: 6 },
     why: 'The only non-Google vision route with tools, so it is kept — but at 20% over 10 attempts and currently benched, it is a tail, not the fallback it was first drafted as.',
   },
   {
     platform: 'nvidia', modelId: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', classification: 'SPECIALIST',
-    chains: { Vision: 6 },
+    chains: { Vision: 7 },
     why: 'tools=false, so barred from every agentic chain — but image analysis does not need tool calls, and rejecting vision models for lacking them would throw away most of the free multimodal capacity.',
   },
   // nvidia/moonshotai/kimi-k3 and nvidia/deepseek-ai/deepseek-v4-pro-0813 are
@@ -201,8 +203,8 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // genuinely do not contend.
   {
     platform: 'groq', modelId: 'openai/gpt-oss-120b', classification: 'CORE',
-    chains: { Workhorse: 1, Apex: 3, Coding: 2, Default: 1 },
-    why: '86% at 1000 RPD on its own pool. Heads workhorse and default as the most sustainable capacity here; second in coding so the two head routes cannot exhaust together.',
+    chains: { Workhorse: 1, Frontier: 3, Coding: 2, Default: 1 },
+    why: '86% at 1000 RPD on its own pool. Heads workhorse and default as the most sustainable capacity here; third in frontier and second in coding, so no two head routes can exhaust together.',
   },
   {
     platform: 'groq', modelId: 'openai/gpt-oss-20b', classification: 'CORE',
@@ -221,24 +223,30 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // changes; nothing else about it is wrong.
 
   // ── Google — small independent per-model pools, strongest vision ──────────
-  // 20 RPD per Flash model. Independent, so several of them is real depth, but
-  // no single one can carry a chain. Not every generation is enabled: three
-  // Flash routes and two Lite routes, chosen for capability, window and
-  // measured reliability rather than catalogue completeness.
+  // 20 RPD per Flash model for most; 1000/day for Gemma-4-26b. Independent
+  // pools mean several routes provide real depth. Per-minute truth (5/min for
+  // Flash, 15/min for Flash-Lite, 30/min for Gemma, >40/min for robotics-er)
+  // was measured 2026-09-11 via 429 bodies. Google exposes no quota headers,
+  // so the body is the ONLY channel.
   {
-    platform: 'google', modelId: 'gemini-3.7-flash', classification: 'CORE',
-    chains: { Vision: 1, Apex: 2, Coding: 3, Frontier: 4 },
-    why: 'Heads vision and holds apex position 2: 85% over 100 attempts at 4.4s, 1M context, tools and vision, on a pool NVIDIA cannot exhaust. The best-evidenced Google route.',
+    platform: 'google', modelId: 'gemma-4-26b-a4b-it', classification: 'SPECIALIST',
+    chains: { Vision: 8 },
+    why: 'Measured 30/min and 1000/day; 33K context is the reason it is the vision chain tail.',
   },
   {
-    platform: 'google', modelId: 'gemini-3.6-flash', classification: 'CORE',
-    chains: { Vision: 2, Frontier: 3 },
-    why: '89% over 91 attempts — the highest-scoring Google route measured. Second in vision on an independent per-model allowance.',
+    platform: 'google', modelId: 'gemini-3.7-flash', classification: 'CORE',
+    chains: { Vision: 1, Apex: 1, Frontier: 2, Coding: 3 },
+    why: 'Heads vision and apex, second in frontier: 85% over 100 attempts at 4.4s, 1M context, tools and vision, on a pool NVIDIA cannot exhaust. The best-evidenced strong route left after minimax-m3 was retired.',
+  },
+{
+   platform: 'google', modelId: 'gemini-3.6-flash', classification: 'CORE',
+   chains: { Vision: 3, Apex: 3 },
+    why: '89% over 91 attempts — the highest-scoring Google route measured. Second in vision, third in apex, on an independent per-model allowance.',
   },
   {
     platform: 'google', modelId: 'gemini-3.8-flash', classification: 'CORE',
-    chains: { Frontier: 2, Vision: 3 },
-    why: 'Newest Frontier-tier Google route with tools and vision. No traffic yet, so it sits second rather than first: unmeasured is not the same as good.',
+    chains: { Apex: 2, Vision: 4 },
+    why: 'Newest Frontier-tier Google route with tools and vision. No traffic yet, so it sits second in apex rather than first: unmeasured is not the same as good.',
   },
   {
     platform: 'google', modelId: 'gemini-3.1-flash-lite', classification: 'CORE',
@@ -247,13 +255,13 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'google', modelId: 'gemini-3.5-flash-lite', classification: 'CORE',
-    chains: { Vision: 4 },
+    chains: { Vision: 5 },
     why: 'Cheap 1M-context multimodal, 75% at 26s. Kept for vision depth and kept OUT of fast-lane: a 26-second average is not a fast lane.',
   },
   {
     platform: 'google', modelId: 'gemini-robotics-er-2-preview', classification: 'SPECIALIST',
-    chains: { Vision: 7 },
-    why: 'Vision, tools=false. Kept for image analysis where no tool call is needed; excluded from every agentic chain by that same flag.',
+    chains: { Vision: 2 },
+    why: '40/40 served with no refusal on probe. High-headroom specialized capacity for image analysis, placed ahead of the scarce Flash routes.',
   },
 
   // ── OpenRouter — free routes only, one shared pool ────────────────────────
@@ -263,13 +271,13 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // bill the balance. One shared pool, so these are tails, never heads.
   {
     platform: 'openrouter', modelId: 'nvidia/nemotron-3-ultra-550b-a55b:free', classification: 'OVERFLOW',
-    chains: { Apex: 4 },
-    why: '85% over 235 attempts — the apex head model on a completely independent pool. Exactly what apex should fall through to when NVIDIA credit is spent.',
+    chains: { Frontier: 4 },
+    why: '85% over 235 attempts — the frontier head model on a completely independent pool. Exactly what frontier should fall through to when NVIDIA credit is spent.',
   },
   {
     platform: 'openrouter', modelId: 'nvidia/nemotron-3-super-120b-a12b:free', classification: 'OVERFLOW',
-    chains: { Workhorse: 6, Frontier: 5 },
-    why: 'Free twin of the most-proven workhorse route, on an independent pool. Overflow rather than core: one shared free pool with a 200 RPD ceiling.',
+    chains: { Workhorse: 6, Apex: 4 },
+    why: 'Free twin of the most-proven workhorse route, on an independent pool. Overflow rather than core: one shared free pool with a 200 RPD ceiling. Last real route in apex not because it is strong but because escalation still has to answer when all four 20-a-day Gemini allowances are spent.',
   },
   {
     platform: 'openrouter', modelId: 'poolside/laguna-s-2.1:free', classification: 'OVERFLOW',
@@ -299,8 +307,8 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // a separate unmetered pool and is unaffected by any of this.
   {
     platform: 'ollama', modelId: 'nemotron-3-ultra', classification: 'OVERFLOW',
-    chains: { Apex: 5 },
-    why: '80% over 188 attempts — genuinely usable, and last in apex because its weekly balance is at 5.4% and must be reserved for the highest-value requests.',
+    chains: { Frontier: 5 },
+    why: '80% over 188 attempts — genuinely usable, and last in frontier because its weekly balance is at 5.4% and must be reserved for the highest-value requests.',
   },
   {
     platform: 'ollama', modelId: 'nemotron-3-super', classification: 'OVERFLOW',
@@ -316,8 +324,8 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // which is the second reason nothing here is near a critical path.
   {
     platform: 'opencode', modelId: 'muse-spark-1.3-contributor-free', classification: 'EXPERIMENTAL',
-    chains: { 'Extra-Tier': 1, Frontier: 6 },
-    why: 'Frontier tier, 1M context, tools and vision. Genuinely strong, entirely unmeasured — last in frontier, first in extra-tier.',
+    chains: { 'Extra-Tier': 1, Apex: 5 },
+    why: 'Frontier tier, 1M context, tools and vision. Genuinely strong, entirely unmeasured — last in apex, first in extra-tier.',
   },
   {
     platform: 'opencode', modelId: 'nemotron-3-ultra-free', classification: 'EXPERIMENTAL',
@@ -353,9 +361,9 @@ export interface ChainContract {
 export const CHAIN_CONTRACTS: ChainContract[] = [
   {
     name: 'Apex',
-    purpose: 'Strongest RELIABLE free general-purpose driver. Optimised for reasoning, coding, tool use, context and reliability together — not for maximising model count. The likely harness DEFAULT.',
+    purpose: 'The peak of the free catalogue, for ESCALATION — the strongest capability available whether or not it suits daily volume. Deliberately NOT the same as frontier: frontier is the best practical daily driver, apex is what a request escalates TO when frontier was not enough.',
     requiresTools: true, requiresVision: false,
-    admits: ['CORE', 'OVERFLOW'],
+    admits: ['CORE', 'OVERFLOW', 'EXPERIMENTAL'],
   },
   {
     name: 'Coding',
@@ -365,9 +373,9 @@ export const CHAIN_CONTRACTS: ChainContract[] = [
   },
   {
     name: 'Frontier',
-    purpose: 'Strongest free intelligence available, for escalation — deliberately NOT the same as apex. Apex is the best practical daily driver; frontier is the strongest capability pool whether or not it suits daily volume.',
+    purpose: 'Strongest RELIABLE free general-purpose driver: the working edge a harness can sit on all day. Optimised for reasoning, coding, tool use, context and reliability together — not for maximising model count. The likely harness DEFAULT.',
     requiresTools: true, requiresVision: false,
-    admits: ['CORE', 'OVERFLOW', 'EXPERIMENTAL'],
+    admits: ['CORE', 'OVERFLOW'],
   },
   {
     name: 'Workhorse',
@@ -377,7 +385,7 @@ export const CHAIN_CONTRACTS: ChainContract[] = [
   },
   {
     name: 'Fast-Lane',
-    purpose: 'Low-latency, high-volume work: scouting, search, summaries, classification, bounded subagents. Prefers routes with the lowest opportunity cost, so spending it never costs apex.',
+    purpose: 'Low-latency, high-volume work: scouting, search, summaries, classification, bounded subagents. Prefers routes with the lowest opportunity cost, so spending it never costs the drivers above it.',
     requiresTools: true, requiresVision: false,
     admits: ['CORE', 'OVERFLOW'],
   },

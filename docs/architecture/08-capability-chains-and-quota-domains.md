@@ -42,26 +42,26 @@ the tests run are the same statement.
 
 | Chain | Contract | Tools | Vision |
 |---|---|---|---|
-| `auto:apex` | Strongest **reliable** free general driver — reasoning, coding, tool use, context and reliability together. Not the longest chain, the best one. | required | — |
+| `auto:apex` | The **peak** of the free catalogue, for **escalation** — strongest capability available, whether or not it suits daily volume. Deliberately not the same as frontier. | required | — |
 | `auto:coding` | Implementation worker: coding ability, tool/edit reliability, adequate context, sustainable quota. | required | — |
-| `auto:frontier` | Strongest free intelligence, for **escalation**. Deliberately not the same as apex. | required | — |
+| `auto:frontier` | Strongest **reliable** free general driver — the working edge a harness sits on all day. Reasoning, coding, tool use, context and reliability together. Not the longest chain, the best one. | required | — |
 | `auto:workhorse` | Balanced middle tier: quota depth, reliability, sustained throughput. | required | — |
 | `auto:fast-lane` | Low-latency, high-volume: scouting, search, summaries, classification, bounded subagents. Lowest opportunity cost. | required | — |
 | `auto:vision` | Screenshots, UI inspection, image analysis, visual verification. | — | required |
 | `auto:extra-tier` | Overflow and experimental capacity. Never early on a critical path. | — | — |
 | `auto:default` | Generic safe compatibility endpoint. Behaves like a dependable general-purpose route — **not** a secret alias for the most powerful model available. | required | — |
 
-### apex is not frontier
+### frontier is not apex
 
-The distinction is load-bearing and the tests enforce that their heads differ.
-`apex` is the best model to drive all day. `frontier` is the strongest capability
-available for free, whether or not it suits daily volume. Collapsing them makes
-free escalation a no-op:
+The distinction decides where escalation goes, and the tests enforce that their
+heads differ. `frontier` is the best model to drive all day — the working edge.
+`apex` is the peak of what is available for free, whether or not it suits daily
+volume. Collapsing them makes free escalation a no-op:
 
 ```
 ordinary free model insufficient
         ↓
-auto:frontier          ← a genuinely stronger pool, not the same one again
+auto:apex              ← a genuinely stronger pool, not the same one again
         ↓
 external premium, only if still justified
 ```
@@ -452,7 +452,7 @@ auto:coding
   another coding-capable free route in the same chain
 ```
 
-It never promotes the request to `auto:frontier` or to a premium model. That is a
+It never promotes the request to `auto:apex` or to a premium model. That is a
 capability decision and it belongs to the harness. `skipModels` and
 `skipPlatforms` in the fallback loop keep the walk inside the requested chain.
 
@@ -512,16 +512,16 @@ not something the server enforces:
 
 | OMP role | Chain |
 |---|---|
-| `DEFAULT` | `auto:apex` |
+| `DEFAULT` | `auto:frontier` |
 | `TASK` | `auto:coding` |
 | `SMOL` | `auto:fast-lane` |
 | `TINY` | `auto:fast-lane` |
 | `VISION` | `auto:vision` |
 | `DESIGNER` | `auto:vision` |
-| free escalation | `auto:frontier` |
+| free escalation | `auto:apex` |
 
 `PLAN`, `SLOW` and `ADVISOR` stay on premium subscription models. FreeLLMAPI
-offers `auto:frontier` as a free escalation option for when higher-level triage
+offers `auto:apex` as a free escalation option for when higher-level triage
 elects to use it; it does not claim those roles.
 
 Other consumers — Codex, Claude Code, plain OpenAI clients — use the same eight

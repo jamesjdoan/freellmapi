@@ -61,12 +61,15 @@ describe('chain contracts hold for every curated member', () => {
     }
   });
 
-  it('keeps apex free of promo capacity and vision free of nothing but blindness', () => {
-    // apex is the likely harness DEFAULT: an unmeasured promo route at its head
-    // would put every unqualified request on capacity nobody can account for.
-    const apex = chainMembers('Apex').map(m => m.classification);
-    expect(apex).not.toContain('EXPERIMENTAL');
-    expect(apex).not.toContain('SPECIALIST');
+  it('keeps the daily driver free of promo capacity and vision free of nothing but blindness', () => {
+    // frontier is the likely harness DEFAULT: an unmeasured promo route in it
+    // would put unqualified requests on capacity nobody can account for. apex
+    // is the escalation tip and may carry an experimental tail, but never at
+    // its head — 'heads every chain with a CORE route' covers that.
+    const frontier = chainMembers('Frontier').map(m => m.classification);
+    expect(frontier).not.toContain('EXPERIMENTAL');
+    expect(frontier).not.toContain('SPECIALIST');
+    expect(chainMembers('Apex').map(m => m.classification)).not.toContain('SPECIALIST');
 
     // vision is the one chain that admits SPECIALIST, precisely so a strong
     // multimodal model is not rejected for lacking tool support.
@@ -88,8 +91,8 @@ describe('chain contracts hold for every curated member', () => {
   });
 
   it('gives apex and frontier different heads — they are different questions', () => {
-    // apex = best practical daily driver; frontier = strongest capability to
-    // escalate to. Collapsing them would make free escalation a no-op.
+    // frontier = best practical daily driver; apex = the peak it escalates to.
+    // Collapsing them would make free escalation a no-op.
     const apexHead = chainMembers('Apex')[0]!;
     const frontierHead = chainMembers('Frontier')[0]!;
     expect(`${apexHead.platform}/${apexHead.modelId}`).not.toBe(`${frontierHead.platform}/${frontierHead.modelId}`);
@@ -101,7 +104,7 @@ describe('shared quota domains are not mistaken for depth', () => {
     // Three NVIDIA models are three capabilities and ONE allowance. A chain
     // whose first two entries share a pool has no depth at all at the moment
     // that pool refuses — which is the moment depth is needed.
-    for (const name of ['Apex', 'Coding', 'Workhorse', 'Fast-Lane', 'Vision'] as ChainName[]) {
+    for (const name of ['Apex', 'Frontier', 'Coding', 'Workhorse', 'Fast-Lane', 'Vision'] as ChainName[]) {
       const members = chainMembers(name);
       const firstTwo = members.slice(0, 2).map(m => resolveQuotaPolicy(m.platform as never, m.modelId).poolKey);
       expect(new Set(firstTwo).size, `${name} head pools: ${firstTwo.join(', ')}`).toBe(2);
@@ -129,7 +132,7 @@ describe('scarce capacity stays off the high-volume paths', () => {
     const fastLane = chainMembers('Fast-Lane').map(m => m.platform);
     expect(fastLane).not.toContain('ollama');
     // Where it does appear, it appears last.
-    for (const name of ['Apex', 'Workhorse'] as ChainName[]) {
+    for (const name of ['Frontier', 'Workhorse'] as ChainName[]) {
       const members = chainMembers(name);
       const ollama = members.findIndex(m => m.platform === 'ollama');
       if (ollama === -1) continue;
@@ -137,8 +140,10 @@ describe('scarce capacity stays off the high-volume paths', () => {
     }
   });
 
-  it('keeps unmeasured promo capacity off apex, coding and fast-lane', () => {
-    for (const name of ['Apex', 'Coding', 'Fast-Lane', 'Workhorse', 'Default'] as ChainName[]) {
+  it('keeps unmeasured promo capacity off the driver, coding and fast-lane', () => {
+    // apex is exempt: escalation is where an unproven frontier-tier route is
+    // worth one attempt, and it sits last there.
+    for (const name of ['Frontier', 'Coding', 'Fast-Lane', 'Workhorse', 'Default'] as ChainName[]) {
       expect(chainMembers(name).map(m => m.platform), name).not.toContain('opencode');
     }
   });
@@ -228,6 +233,23 @@ describe('chain capability gates', () => {
   it('every agentic chain declares that it requires tools', () => {
     for (const name of ['Apex', 'Coding', 'Frontier', 'Workhorse', 'Fast-Lane', 'Default'] as ChainName[]) {
       expect(CHAIN_CONTRACTS.find(c => c.name === name)!.requiresTools, name).toBe(true);
+    }
+  });
+});
+
+describe('tail integrity', () => {
+  it('numbers every chain contiguously from 1, with no two routes claiming a position', () => {
+    // A duplicate priority does not fail, which is what makes it dangerous: two
+    // routes claim one position and their order becomes whatever the sort
+    // happens to do. This chain HAD two members at Vision 5, so the ordering
+    // an operator reads in the spec was not the ordering the applier wrote.
+    for (const contract of CHAIN_CONTRACTS) {
+      const priorities = chainMembers(contract.name).map(m => m.priority);
+      if (priorities.length === 0) continue;
+      expect(new Set(priorities).size, `${contract.name} has a duplicate priority: ${priorities.join(', ')}`)
+        .toBe(priorities.length);
+      expect(priorities, `${contract.name} priorities are not 1..${priorities.length}`)
+        .toEqual(Array.from({ length: priorities.length }, (_, i) => i + 1));
     }
   });
 });
