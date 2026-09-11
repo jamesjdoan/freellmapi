@@ -1420,6 +1420,12 @@
     "upgradeTitleOne": "An estimated model now has real benchmark data",
     "keySaved": "key saved",
     "keyChange": "Change key",
-    "lastSync": "synced {when}"
+    "lastSync": "synced {when}",
+    "chainNone": "not in a chain",
+    "chainEdit": "Choose which chains route to this model",
+    "chainPick": "Chains that may route to this model",
+    "chainServing": "serving",
+    "chainApply": "Apply {count}",
+    "chainConfirm": "Change routing"
   }
 }

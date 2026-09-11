@@ -9,6 +9,7 @@ import { toast } from '@/lib/toast'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ScopePicker } from '@/components/compare/scope-picker'
+import { ChainPicker } from '@/components/compare/chain-picker'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/page-header'
 import { PlatformDot, PlatformLegend, type PlatformScope } from '@/components/platform-dot'
@@ -31,6 +32,8 @@ import { Tooltip } from '@/components/tooltip'
 // The footer link is that attribution — do not remove it.
 
 interface CompareRow {
+  /** Catalogue row id, needed to edit chain membership. */
+  modelDbId: number
   platform: string
   modelId: string
   displayName: string
@@ -247,6 +250,21 @@ export default function CompareModelsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['analysis'] }),
   })
   const pendingUpgrades = upgrades?.upgrades ?? []
+
+  // Every chain that exists, so the picker can offer the ones a model is NOT in.
+  const { data: profiles } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ['profiles'],
+    queryFn: () => apiFetch('/api/profiles'),
+  })
+  const chainNames = (profiles ?? []).map(p => p.name)
+  const membership = useMutation({
+    mutationFn: (body: { chain: string; modelDbIds: number[]; member: boolean }) =>
+      apiFetch('/api/fallback/membership', { method: 'POST', body: JSON.stringify(body) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fallback'] })
+      queryClient.invalidateQueries({ queryKey: ['analysis'] })
+    },
+  })
 
   const status = data?.status
 
@@ -680,8 +698,25 @@ export default function CompareModelsPage() {
                           ))}
                         </span>
                       </TableCell>
-                      <TableCell className="max-w-[120px] truncate text-[11px] text-muted-foreground" title={g.chains.join(', ')}>
-                        {g.chains.join(', ') || '–'}
+                      {/* Membership, editable. Ranking the catalogue and then
+                          placing the winner is one motion; it used to mean
+                          leaving for the Models page and finding the model
+                          again with the scores no longer on screen. */}
+                      <TableCell className="text-[11px] text-muted-foreground">
+                        {g.reference
+                          ? <span className="text-[10px]">–</span>
+                          : (
+                            <ChainPicker
+                              chains={chainNames}
+                              member={g.chains}
+                              disabled={membership.isPending}
+                              onApply={changes => changes.forEach(c => membership.mutate({
+                                chain: c.chain,
+                                modelDbIds: g.members.map(m => m.modelDbId),
+                                member: c.member,
+                              }))}
+                            />
+                          )}
                       </TableCell>
                       {/* An adjusted figure must never read as a measurement.
                           The signs say a human moved it and which way, in the

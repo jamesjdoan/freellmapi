@@ -403,6 +403,59 @@ function getBudgetScore(m: { monthly_token_budget: string; tpd_limit: number | n
   return maxNum * mult;
 }
 
+const membershipSchema = z.object({
+  chain: z.string().min(1),
+  modelDbIds: z.array(z.number().int().positive()).min(1),
+  member: z.boolean(),
+});
+
+/**
+ * Add or remove models from ONE NAMED chain.
+ *
+ * Distinct from `PUT /api/fallback`, which rewrites the whole of whichever
+ * chain is active: this is for editing a chain you are not looking at, which is
+ * what judging a model against the others and then placing it actually
+ * requires. Added rows land at the end — position is a separate decision from
+ * membership, and the chain editor owns it.
+ *
+ * Removal clears the enabled flag rather than deleting the row, so a model put
+ * back keeps the position it had.
+ */
+fallbackRouter.post('/membership', (req: Request, res: Response) => {
+  const parsed = membershipSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
+    return;
+  }
+  const db = getDb();
+  const profile = db.prepare('SELECT id FROM profiles WHERE name = ?').get(parsed.data.chain) as { id: number } | undefined;
+  if (!profile) {
+    res.status(404).json({ error: { message: `Unknown chain ${parsed.data.chain}` } });
+    return;
+  }
+  const known = knownModelIds(db);
+  const tail = db.prepare('SELECT COALESCE(MAX(priority), 0) AS p FROM profile_models WHERE profile_id = ?')
+    .get(profile.id) as { p: number };
+  const upsert = db.prepare(`
+    INSERT INTO profile_models (profile_id, model_db_id, priority, enabled)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(profile_id, model_db_id) DO UPDATE SET enabled = excluded.enabled
+  `);
+
+  let changed = 0;
+  let next = tail.p;
+  db.transaction(() => {
+    for (const id of parsed.data.modelDbIds) {
+      if (!known.has(id)) continue;
+      if (parsed.data.member) next += 1;
+      upsert.run(profile.id, id, next, parsed.data.member ? 1 : 0);
+      changed++;
+    }
+  })();
+
+  res.json({ success: true, chain: parsed.data.chain, member: parsed.data.member, changed });
+});
+
 fallbackRouter.post('/sort/:preset', (req: Request, res: Response) => {
   const preset = String(req.params.preset);
   const db = getDb();
