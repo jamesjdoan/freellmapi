@@ -519,6 +519,17 @@ export function setReferenceSlugs(slugs: string[]): string[] {
  * ours — which is honest, because we do not serve it.
  */
 export function getReferenceGroups(db: Db = getDb()): CompareGroup[] {
+  // Strongest first, unmeasured last, ties on slug. Insertion order would mean
+  // the same set of baselines read differently depending on the order they
+  // happened to be pinned in, which is not a property a yardstick should have.
+  const byIndex = (a: CompareGroup, b: CompareGroup) => {
+    const x = a.analysis?.intelligenceIndex ?? null;
+    const y = b.analysis?.intelligenceIndex ?? null;
+    if (x == null && y == null) return (a.analysis?.slug ?? '').localeCompare(b.analysis?.slug ?? '');
+    if (x == null) return 1;
+    if (y == null) return -1;
+    return y - x || (a.analysis?.slug ?? '').localeCompare(b.analysis?.slug ?? '');
+  };
   return getReferenceSlugs().flatMap(slug => {
     const analysis = lookupAa(db, slug);
     if (!analysis) return [];
@@ -535,7 +546,7 @@ export function getReferenceGroups(db: Db = getDb()): CompareGroup[] {
       enabledMembers: 0,
       reference: true,
     }];
-  });
+  }).sort(byIndex);
 }
 
 export function getGroupedCompare(db: Db = getDb()): CompareGroup[] {

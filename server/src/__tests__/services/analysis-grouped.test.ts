@@ -179,3 +179,23 @@ describe('reference baselines', () => {
     expect(getGroupedCompare().some(g => g.reference)).toBe(false);
   });
 })
+
+describe('reference ordering', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    addAa('weak', 'Weak', 10);
+    addAa('strong', 'Strong', 50);
+    addAa('unscored', 'Unscored', null);
+  });
+
+  it('reads strongest first whatever order they were pinned in', () => {
+    // The same set of baselines must read the same way; insertion order would
+    // make a yardstick depend on when it happened to be added.
+    setReferenceSlugs(['weak', 'unscored', 'strong']);
+    expect(getReferenceGroups().map(g => g.analysis?.slug)).toEqual(['strong', 'weak', 'unscored']);
+
+    setReferenceSlugs(['strong', 'weak', 'unscored']);
+    expect(getReferenceGroups().map(g => g.analysis?.slug)).toEqual(['strong', 'weak', 'unscored']);
+  });
+})
