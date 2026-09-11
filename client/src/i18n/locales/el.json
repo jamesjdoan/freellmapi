@@ -1387,7 +1387,8 @@
     "scopeAdd": "+ key scope ({count})",
     "scopeAddConfirm": "Allow",
     "scopeAddHint": "This provider key does not name this model, so the router cannot use it. Add it to the key scope.",
-    "scopeRemove": "in key scope",
-    "scopeRemoveHint": "Remove this model from the provider key scope, so the router stops using it"
+    "scopeRemove": "− key scope ({count})",
+    "scopeRemoveHint": "Remove this model from the provider key scope, so the router stops using it",
+    "scopeRemoveConfirm": "Remove"
   }
 }

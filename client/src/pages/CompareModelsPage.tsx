@@ -550,9 +550,14 @@ export default function CompareModelsPage() {
                                 .filter(m => m.keyScope === 'in')
                                 .forEach(m => keyScope.mutate({ platform: m.platform, modelId: m.modelId, allow: false }))}
                               title={t('compare.scopeRemoveHint')}
+                              confirmLabel={t('compare.scopeRemoveConfirm')}
                               className="h-5 rounded-full border px-1.5 text-[10px] text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 group-hover/row:opacity-100"
                             >
-                              {t('compare.scopeRemove')}
+                              {/* Labelled as the ACTION, not the state. Reading
+                                  "in key scope" it looked like a status badge
+                                  that happened to be clickable, which is a poor
+                                  thing to attach a destructive edit to. */}
+                              {t('compare.scopeRemove', { count: g.members.filter(m => m.keyScope === 'in').length })}
                             </ConfirmButton>
                           )}
                           {g.reference && (
