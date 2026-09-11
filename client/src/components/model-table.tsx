@@ -244,7 +244,16 @@ export function RowContent({
           metadata and stays. */}
       <td className="py-2 pr-3 align-middle">{row.totalRequests === 0 ? <AxisNoData /> : <AxisBar value={row.reliability} color="#22c55e" />}</td>
       <td className="py-2 pr-3 align-middle">{row.totalRequests === 0 ? <AxisNoData /> : <AxisBar value={row.speed} color="#3b82f6" />}</td>
-      <td className="py-2 pr-3 align-middle"><AxisBar value={row.intelligence} color="#a855f7" /></td>
+      {/* Our ordering bar, with the MEASURED index beside it. The two are
+          different claims — a hand-tuned rank and a benchmark — and seeing them
+          together is how you find out the rank was wrong. `≈` marks an estimate
+          borrowed from a proxy. */}
+      <td className="py-2 pr-3 align-middle">
+        <span className="flex items-center gap-1.5">
+          <AxisBar value={row.intelligence} color="#a855f7" />
+          <MeasuredIndex analysis={row.analysis} />
+        </span>
+      </td>
       <td className="py-2 pr-3 align-middle font-mono text-[11px] text-muted-foreground tabular-nums">
         {guard < 0.999 ? `×${guard.toFixed(2)}` : '—'}
       </td>
@@ -388,7 +397,12 @@ export function GroupHeaderCells({ group, rank, dragHandle, onToggleGroup, allRo
       </td>
       <td className="py-2 pr-3 align-middle">{measured.length === 0 ? <AxisNoData /> : <AxisRangeBar values={measured.map(m => m.reliability)} color="#22c55e" />}</td>
       <td className="py-2 pr-3 align-middle">{measured.length === 0 ? <AxisNoData /> : <AxisRangeBar values={measured.map(m => m.speed)} color="#3b82f6" />}</td>
-      <td className="py-2 pr-3 align-middle"><AxisRangeBar values={group.members.map(m => m.intelligence)} color="#a855f7" /></td>
+      <td className="py-2 pr-3 align-middle">
+        <span className="flex items-center gap-1.5">
+          <AxisRangeBar values={group.members.map(m => m.intelligence)} color="#a855f7" />
+          <MeasuredIndex analysis={group.members.find(m => m.analysis)?.analysis} />
+        </span>
+      </td>
       <td className="py-2 pr-3 align-middle font-mono text-[11px] text-muted-foreground tabular-nums">{guard < 0.999 ? `×${guard.toFixed(2)}` : '—'}</td>
       <td className="py-2 pr-3 align-middle text-right font-mono text-xs font-medium tabular-nums">
         {solo ? (
@@ -457,5 +471,23 @@ export function SortableGroupRow({ group, rank, onToggleGroup, allRows, rateUsag
       )}
       <GroupHeaderCells group={group} rank={rank} dragHandle={handle} onToggleGroup={onToggleGroup} allRows={allRows} rateUsage={rateUsage} onUnmerge={onUnmerge} />
     </tr>
+  )
+}
+
+/**
+ * The benchmark index for a route, or nothing when it has no match. Deliberately
+ * small and muted: it sits beside our own ordering bar without competing with
+ * it, and a column of numbers is not what this table is for.
+ */
+function MeasuredIndex({ analysis }: { analysis?: Row['analysis'] }) {
+  if (!analysis || analysis.intelligence == null) return null
+  const estimate = analysis.source === 'proxy'
+  return (
+    <span
+      className="text-[10px] tabular-nums text-muted-foreground"
+      title={`${estimate ? 'Estimated from ' : 'Measured as '}${analysis.name}`}
+    >
+      {estimate ? '≈' : ''}{analysis.intelligence.toFixed(1)}
+    </span>
   )
 }

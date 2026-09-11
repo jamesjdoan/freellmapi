@@ -326,13 +326,13 @@ export function setManualLink(
   source: 'manual' | 'proxy' = 'manual',
 ): void {
   db.prepare(`
-    INSERT INTO aa_model_link (platform, model_id, aa_slug, source, match_reason, proxy_delta)
-    VALUES (?, ?, ?, ?, NULL, 0)
+    INSERT INTO aa_model_link (platform, model_id, aa_slug, source, match_reason)
+    VALUES (?, ?, ?, ?, NULL)
     ON CONFLICT(platform, model_id) DO UPDATE SET
       aa_slug = excluded.aa_slug, source = excluded.source, match_reason = NULL,
       -- The adjustment described the OLD stand-in; carrying it onto a new one
       -- would silently mis-state the new estimate.
-      proxy_delta = 0,
+      proxy_delta_intelligence = 0, proxy_delta_coding = 0, proxy_delta_agentic = 0,
       created_at = datetime('now')
   `).run(platform, modelId, aaSlug, source);
 }
@@ -384,9 +384,10 @@ export interface CompareRow {
     /** 'proxy' is a stand-in for a model the upstream does not publish: the
      *  scores are an estimate and do NOT say two routes are the same model. */
     slug: string | null;
-    /** Index points added to a PROXY's borrowed scores. Nothing but an estimate
-     *  can carry one: on a measurement it would be editing the measurement. */
-    proxyDelta: number;
+    /** Index points added to a PROXY's borrowed scores, per metric: a stand-in
+     *  can code like its proxy and reason worse. Nothing but an estimate can
+     *  carry one — on a measurement it would be editing the measurement. */
+    proxyDelta: Record<ProxyMetric, number>;
     source: 'auto' | 'manual' | 'proxy';
     matchReason: string | null;
     /** True when the link names a slug the cache no longer has — AA withdrew
@@ -412,7 +413,8 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
   const rows = db.prepare(`
     SELECT m.id AS model_db_id, m.platform, m.model_id, m.display_name, m.enabled, m.context_window,
            m.supports_tools, m.supports_vision, m.intelligence_rank, m.speed_rank,
-           l.aa_slug, l.source AS link_source, l.match_reason, l.proxy_delta,
+           l.aa_slug, l.source AS link_source, l.match_reason,
+           l.proxy_delta_intelligence, l.proxy_delta_coding, l.proxy_delta_agentic,
            a.slug AS aa_present, a.name AS aa_name, a.creator, a.intelligence_index,
            a.coding_index, a.agentic_index, a.price_1m_input, a.price_1m_output,
            a.median_output_tokens_per_second, a.median_time_to_first_token_seconds,
@@ -496,9 +498,9 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
           // The adjustment is applied HERE, not in the UI, so every table sorts
           // on the number it prints. Only a proxy carries one; on a measurement
           // it would be editing the measurement.
-          intelligenceIndex: nudge(numberOrNull(r.intelligence_index), r),
-          codingIndex: nudge(numberOrNull(r.coding_index), r),
-          agenticIndex: nudge(numberOrNull(r.agentic_index), r),
+          intelligenceIndex: nudge(numberOrNull(r.intelligence_index), r, 'intelligence'),
+          codingIndex: nudge(numberOrNull(r.coding_index), r, 'coding'),
+          agenticIndex: nudge(numberOrNull(r.agentic_index), r, 'agentic'),
           price1mInput: numberOrNull(r.price_1m_input),
           price1mOutput: numberOrNull(r.price_1m_output),
           medianOutputTokensPerSecond: numberOrNull(r.median_output_tokens_per_second),
@@ -511,7 +513,11 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
           source: r.link_source === 'manual' || r.link_source === 'proxy'
             ? r.link_source
             : 'auto' as const,
-          proxyDelta: Number(r.proxy_delta ?? 0),
+          proxyDelta: {
+            intelligence: Number(r.proxy_delta_intelligence ?? 0),
+            coding: Number(r.proxy_delta_coding ?? 0),
+            agentic: Number(r.proxy_delta_agentic ?? 0),
+          },
           matchReason: r.match_reason == null ? null : String(r.match_reason),
           unresolved: r.aa_slug != null && !r.aa_present,
         }
@@ -684,10 +690,10 @@ export function getGroupedCompare(db: Db = getDb()): CompareGroup[] {
  * negative index would sort beneath models that genuinely scored zero. Absent
  * scores stay absent — an estimate of nothing is still nothing.
  */
-function nudge(value: number | null, row: Record<string, unknown>): number | null {
+function nudge(value: number | null, row: Record<string, unknown>, metric: ProxyMetric): number | null {
   if (value == null) return null;
   if (row.link_source !== 'proxy') return value;
-  const delta = Number(row.proxy_delta ?? 0);
+  const delta = Number(row[`proxy_delta_${metric}`] ?? 0);
   if (!Number.isFinite(delta) || delta === 0) return value;
   return Math.max(0, Math.round((value + delta) * 10) / 10);
 }
@@ -730,13 +736,29 @@ function lookupAa(db: Db, slug: string): CompareRow['analysis'] {
  * measurement of the model itself, and "adjusting" those would be falsifying
  * them rather than estimating.
  */
-export function setProxyDelta(platform: string, modelId: string, delta: number, db: Db = getDb()): boolean {
+export type ProxyMetric = 'intelligence' | 'coding' | 'agentic';
+
+/** Steps available in each direction, rendered as +++ / --- rather than a
+ *  number: the scale is coarse on purpose. */
+export const PROXY_DELTA_MAX = 3;
+
+export function setProxyDelta(
+  platform: string,
+  modelId: string,
+  metric: ProxyMetric,
+  delta: number,
+  db: Db = getDb(),
+): boolean {
   const row = db.prepare(
     'SELECT source FROM aa_model_link WHERE platform = ? AND model_id = ?',
   ).get(platform, modelId) as { source: string } | undefined;
   if (row?.source !== 'proxy') return false;
-  const clamped = Math.max(-50, Math.min(50, Math.round(delta * 10) / 10));
-  db.prepare('UPDATE aa_model_link SET proxy_delta = ? WHERE platform = ? AND model_id = ?')
+  // Three steps each way and no further. The adjustment is a judgement — "a
+  // bit better", "clearly worse" — not a second scoring system, and an
+  // unbounded offset would let a stand-in be dragged anywhere, which is
+  // indistinguishable from inventing a measurement.
+  const clamped = Math.max(-PROXY_DELTA_MAX, Math.min(PROXY_DELTA_MAX, Math.round(delta)));
+  db.prepare(`UPDATE aa_model_link SET proxy_delta_${metric} = ? WHERE platform = ? AND model_id = ?`)
     .run(clamped, platform, modelId);
   return true;
 }
@@ -770,4 +792,44 @@ export function setModelKeyScope(platform: string, modelId: string, allow: boole
     changed++;
   }
   return { changed, refused };
+}
+
+/**
+ * Measured (or estimated) scores per route, keyed `platform:modelId`.
+ *
+ * The single place any screen gets these numbers. The Models page used to show
+ * only our own hand-tuned rank while Compare showed the measured index, so the
+ * two disagreed about the same model by construction — and a proxy adjustment
+ * made on Keys reached neither. Proxy deltas are applied here, so every caller
+ * sorts and prints the same figure.
+ */
+export function getAdjustedScores(db: Db = getDb()): Map<string, {
+  intelligence: number | null;
+  coding: number | null;
+  agentic: number | null;
+  source: 'auto' | 'manual' | 'proxy';
+  name: string;
+}> {
+  const rows = db.prepare(`
+    SELECT l.platform, l.model_id, l.source,
+           a.name, a.intelligence_index, a.coding_index, a.agentic_index,
+           l.proxy_delta_intelligence, l.proxy_delta_coding, l.proxy_delta_agentic
+      FROM aa_model_link l JOIN aa_model a ON a.slug = l.aa_slug
+  `).all() as Record<string, unknown>[];
+
+  const out = new Map<string, {
+    intelligence: number | null; coding: number | null; agentic: number | null;
+    source: 'auto' | 'manual' | 'proxy'; name: string;
+  }>();
+  for (const r of rows) {
+    const source = r.source === 'manual' || r.source === 'proxy' ? r.source : 'auto';
+    out.set(`${String(r.platform)}:${String(r.model_id)}`, {
+      intelligence: nudge(numberOrNull(r.intelligence_index), { ...r, link_source: source }, 'intelligence'),
+      coding: nudge(numberOrNull(r.coding_index), { ...r, link_source: source }, 'coding'),
+      agentic: nudge(numberOrNull(r.agentic_index), { ...r, link_source: source }, 'agentic'),
+      source,
+      name: String(r.name),
+    });
+  }
+  return out;
 }

@@ -7,6 +7,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { getDb } from '../db/index.js';
+import { getAdjustedScores } from '../services/analysis.js';
 import { getAllPenalties, getRoutingScores, getRoutingStrategy, setRoutingStrategy, setCustomWeights, getExploreEnabled, setExploreEnabled, getPeakHoursConfig, setPeakHoursConfig, getActiveRoutingWeights, getKeySelectionStrategy, setKeySelectionStrategy } from '../services/router.js';
 import { BANDIT_PRESETS, isValidTimezone, type RoutingStrategy } from '../services/scoring.js';
 import { parseBudget } from '../lib/budget.js';
@@ -232,6 +233,7 @@ fallbackRouter.get('/', (req: Request, res: Response) => {
   // Logical-model grouping per row, so the dashboard can collapse the same
   // model served by several providers into one expandable group. Always sent
   // (cheap); the client renders grouped only when its unify toggle is on.
+  const scores = getAdjustedScores(db);
   const groupByDbId = new Map<number, { groupKey: string; canonicalId: string; groupLabel: string; mergedKeys: string[] }>();
   for (const g of getModelGroups()) {
     for (const m of g.members) {
@@ -245,6 +247,10 @@ fallbackRouter.get('/', (req: Request, res: Response) => {
     return {
       modelDbId: r.model_db_id,
       groupKey: group?.groupKey,
+      // Same numbers Compare and the Keys panel print, proxy adjustments
+      // included: one source, so no screen can disagree with another about a
+      // model it is showing (#790).
+      analysis: scores.get(`${r.platform}:${r.model_id}`) ?? null,
       // What an undo would remove. Sent per row because the client rebuilds the
       // groups itself and cannot derive this (see tokenSourceForRow).
       mergedKeys: group?.mergedKeys ?? [],

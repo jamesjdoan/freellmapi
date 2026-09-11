@@ -35,7 +35,7 @@ interface Row {
     source: 'auto' | 'manual' | 'proxy'
     matchReason: string | null
     unresolved: boolean
-    proxyDelta: number
+    proxyDelta: { intelligence: number; coding: number; agentic: number }
   } | null
 }
 
@@ -106,7 +106,7 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
     onSuccess: invalidate,
   })
   const nudge = useMutation({
-    mutationFn: (body: { platform: string; modelId: string; delta: number }) =>
+    mutationFn: (body: { platform: string; modelId: string; metric: ProxyMetric; delta: number }) =>
       apiFetch('/api/analysis/proxy-delta', { method: 'PUT', body: JSON.stringify(body) }),
     onSuccess: invalidate,
   })
@@ -178,9 +178,9 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
                   <span className="block max-w-[260px] truncate font-medium" title={r.displayName}>{r.displayName}</span>
                   <code className="block max-w-[260px] truncate text-[10px] text-muted-foreground" title={r.modelId}>{r.modelId}</code>
                 </td>
-                <Num v={r.analysis?.intelligenceIndex} />
-                <Num v={r.analysis?.codingIndex} />
-                <Num v={r.analysis?.agenticIndex} />
+                <Num v={r.analysis?.intelligenceIndex} row={r} metric="intelligence" onNudge={nudge.mutate} busy={busy} />
+                <Num v={r.analysis?.codingIndex} row={r} metric="coding" onNudge={nudge.mutate} busy={busy} />
+                <Num v={r.analysis?.agenticIndex} row={r} metric="agentic" onNudge={nudge.mutate} busy={busy} />
                 <Num v={r.analysis?.medianOutputTokensPerSecond} digits={0} />
                 <td className="py-1 pr-2 text-right tabular-nums text-muted-foreground">
                   {r.contextWindow ? `${Math.round(r.contextWindow / 1000)}K` : '–'}
@@ -191,7 +191,6 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
                     catalogue={data?.catalogue ?? []}
                     disabled={link.isPending || nudge.isPending}
                     onLink={(slug, proxy) => link.mutate({ platform: r.platform, modelId: r.modelId, aaSlug: slug, proxy })}
-                    onNudge={delta => nudge.mutate({ platform: r.platform, modelId: r.modelId, delta })}
                   />
                 </td>
                 <td className="py-1 text-center">
@@ -226,28 +225,79 @@ function SortTh({ active, onClick, right, children }: {
   )
 }
 
-/** A dash, not a zero: an absent measurement is not a score of nothing. */
-function Num({ v, digits = 1 }: { v: number | null | undefined; digits?: number }) {
+/**
+ * A score cell. A dash, not a zero: an absent measurement is not a score of
+ * nothing.
+ *
+ * On a proxy the cell also carries its own adjustment, because a stand-in is
+ * rarely uniformly close — it can code like its proxy and reason worse. At rest
+ * that is one signed number, green up or red down and nothing when level; the
+ * − and + appear on hover so the column stays readable.
+ */
+function Num({ v, digits = 1, row, metric, onNudge, busy }: {
+  v: number | null | undefined
+  digits?: number
+  row?: Row
+  metric?: ProxyMetric
+  onNudge?: (body: { platform: string; modelId: string; metric: ProxyMetric; delta: number }) => void
+  busy?: boolean
+}) {
+  const { t } = useI18n()
+  const adjustable = row?.link?.source === 'proxy' && metric != null && onNudge != null && v != null
+  const delta = adjustable ? row.link!.proxyDelta[metric] : 0
+
   return (
-    <td className="py-1 pr-2 text-right tabular-nums">
-      {v == null ? <span className="text-muted-foreground">–</span> : v.toFixed(digits)}
+    <td className="group/num py-1 pr-2 text-right tabular-nums">
+      <span className="inline-flex items-center justify-end gap-1">
+        {adjustable && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onNudge({ platform: row.platform, modelId: row.modelId, metric, delta: delta - 1 })}
+            aria-label={t('keys.proxyNudgeDown')}
+            hidden={delta <= -PROXY_DELTA_MAX}
+            className="opacity-0 transition-opacity group-hover/num:opacity-100 focus-visible:opacity-100"
+          >−</button>
+        )}
+        {v == null ? <span className="text-muted-foreground">–</span> : v.toFixed(digits)}
+        {/* Signs, not a number: the scale is three coarse steps each way, and
+            "+++" reads as a judgement where "+3" reads as a measurement. */}
+        {delta !== 0 && (
+          <span className={`text-[10px] font-medium ${delta > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+            {(delta > 0 ? '+' : '−').repeat(Math.min(Math.abs(delta), PROXY_DELTA_MAX))}
+          </span>
+        )}
+        {adjustable && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onNudge({ platform: row.platform, modelId: row.modelId, metric, delta: delta + 1 })}
+            aria-label={t('keys.proxyNudgeUp')}
+            hidden={delta >= PROXY_DELTA_MAX}
+            className="opacity-0 transition-opacity group-hover/num:opacity-100 focus-visible:opacity-100"
+          >+</button>
+        )}
+      </span>
     </td>
   )
 }
 
+type ProxyMetric = 'intelligence' | 'coding' | 'agentic'
+
+/** Matches the server's clamp; the two must not drift. */
+const PROXY_DELTA_MAX = 3
+
 /** The benchmark this route is matched to, and the control to change it. */
-function MappingCell({ row, catalogue, onLink, onNudge, disabled }: {
+function MappingCell({ row, catalogue, onLink, disabled }: {
   row: Row
   catalogue: CatalogueEntry[]
   onLink: (slug: string | null, proxy: boolean) => void
-  onNudge: (delta: number) => void
   disabled?: boolean
 }) {
   const { t } = useI18n()
   const [editing, setEditing] = useState(false)
   const [proxy, setProxy] = useState(false)
   const isProxy = row.link?.source === 'proxy'
-  const delta = row.link?.proxyDelta ?? 0
 
   if (!editing) {
     return (
@@ -268,15 +318,6 @@ function MappingCell({ row, catalogue, onLink, onNudge, disabled }: {
               )
               : <span className="text-muted-foreground">{t('compare.matchNone')}</span>}
         </button>
-        {/* Only an estimate is adjustable, and only then are the buttons shown:
-            offering them on a measurement would invite falsifying it. */}
-        {isProxy && (
-          <span className="inline-flex items-center gap-0.5" title={t('keys.proxyNudgeHint')}>
-            <button type="button" disabled={disabled} onClick={() => onNudge(delta - 1)} className="px-0.5 text-[11px] text-muted-foreground hover:text-foreground" aria-label={t('keys.proxyNudgeDown')}>−</button>
-            <span className="tabular-nums text-[10px] text-muted-foreground">{delta > 0 ? `+${delta}` : delta}</span>
-            <button type="button" disabled={disabled} onClick={() => onNudge(delta + 1)} className="px-0.5 text-[11px] text-muted-foreground hover:text-foreground" aria-label={t('keys.proxyNudgeUp')}>+</button>
-          </span>
-        )}
       </span>
     )
   }

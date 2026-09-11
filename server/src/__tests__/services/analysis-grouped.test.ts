@@ -418,36 +418,49 @@ describe('proxy adjustment', () => {
     const r = getComparePayload().rows.find(x => x.modelId === modelId);
     return { i: r?.analysis?.intelligenceIndex, c: r?.analysis?.codingIndex, delta: r?.link?.proxyDelta };
   };
+  const zero = { intelligence: 0, coding: 0, agentic: 0 };
 
   it('shifts a proxy\'s borrowed scores so it can be ranked against them', () => {
     // A column of identical borrowed numbers sorts arbitrarily; "a bit worse
     // than Kimi K3" is the judgement an operator actually has.
     setManualLink('groq', 'probe/proxied', 'kimi-k3', getDb(), 'proxy');
 
-    expect(setProxyDelta('groq', 'probe/proxied', -2)).toBe(true);
-    expect(scoresOf('probe/proxied')).toEqual({ i: 42, c: 42, delta: -2 });
+    // Per metric: the coding score is untouched by an intelligence adjustment.
+    expect(setProxyDelta('groq', 'probe/proxied', 'intelligence', -2)).toBe(true);
+    expect(scoresOf('probe/proxied')).toEqual({
+      i: 42, c: 44, delta: { ...zero, intelligence: -2 },
+    });
   });
 
   it('refuses to adjust a measurement', () => {
     setManualLink('nvidia', 'probe/measured', 'kimi-k3', getDb(), 'manual');
 
-    expect(setProxyDelta('nvidia', 'probe/measured', -2)).toBe(false);
+    expect(setProxyDelta('nvidia', 'probe/measured', 'intelligence', -2)).toBe(false);
     expect(scoresOf('probe/measured').i).toBe(44);
   });
 
   it('never ranks a nudged proxy below a genuine zero', () => {
-    setManualLink('groq', 'probe/proxied', 'kimi-k3', getDb(), 'proxy');
-    setProxyDelta('groq', 'probe/proxied', -50);
+    addAa('tiny', 'Tiny', 1);
+    setManualLink('groq', 'probe/proxied', 'tiny', getDb(), 'proxy');
+    setProxyDelta('groq', 'probe/proxied', 'intelligence', -3);
 
     expect(scoresOf('probe/proxied').i).toBe(0);
   });
 
+  it('stops at three steps, which is a judgement and not a second score', () => {
+    setManualLink('groq', 'probe/proxied', 'kimi-k3', getDb(), 'proxy');
+    setProxyDelta('groq', 'probe/proxied', 'intelligence', 99);
+
+    expect(scoresOf('probe/proxied')).toEqual({ i: 47, c: 44, delta: { ...zero, intelligence: 3 } });
+  });
+
   it('drops the adjustment when the stand-in changes', () => {
     setManualLink('groq', 'probe/proxied', 'kimi-k3', getDb(), 'proxy');
-    setProxyDelta('groq', 'probe/proxied', -2);
+    setProxyDelta('groq', 'probe/proxied', 'intelligence', -2);
+    setProxyDelta('groq', 'probe/proxied', 'coding', 3);
     setManualLink('groq', 'probe/proxied', 'kimi-k3', getDb(), 'proxy');
 
-    // It described the old stand-in; carrying it over would mis-state the new one.
-    expect(scoresOf('probe/proxied')).toEqual({ i: 44, c: 44, delta: 0 });
+    // They described the old stand-in; carrying them over would mis-state the new one.
+    expect(scoresOf('probe/proxied')).toEqual({ i: 44, c: 44, delta: zero });
   });
 })

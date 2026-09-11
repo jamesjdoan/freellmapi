@@ -57,6 +57,16 @@ export interface FallbackEntry {
   // Override keys that folded rows into this row's group. Server-computed: the
   // finished group does not carry enough to work them out (see #790).
   mergedKeys?: string[]
+  /** Measured benchmark scores for this route, proxy adjustments applied.
+   *  Same numbers Compare and the Keys panel show — one server-side source, so
+   *  no screen disagrees with another about a model they both display. */
+  analysis?: {
+    intelligence: number | null
+    coding: number | null
+    agentic: number | null
+    source: 'auto' | 'manual' | 'proxy'
+    name: string
+  } | null
 }
 
 export type RoutingStrategy = 'priority' | 'balanced' | 'smartest' | 'fastest' | 'reliable' | 'custom'

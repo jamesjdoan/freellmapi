@@ -132,7 +132,10 @@ analysisRouter.put('/key-scope', (req: Request, res: Response) => {
 const proxyDeltaSchema = z.object({
   platform: z.string().min(1),
   modelId: z.string().min(1),
-  delta: z.number().min(-50).max(50),
+  // Per metric: a stand-in can code like its proxy and reason worse, and a
+  // single adjustment forced one judgement onto all three.
+  metric: z.enum(['intelligence', 'coding', 'agentic']),
+  delta: z.number().int().min(-3).max(3),
 });
 
 // Nudge a proxy's borrowed scores. Rejected for auto and manual links: there the
@@ -144,15 +147,15 @@ analysisRouter.put('/proxy-delta', (req: Request, res: Response) => {
     res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
     return;
   }
-  const { platform, modelId, delta } = parsed.data;
-  if (!setProxyDelta(platform, modelId, delta)) {
+  const { platform, modelId, metric, delta } = parsed.data;
+  if (!setProxyDelta(platform, modelId, metric, delta)) {
     res.status(409).json({ error: {
       message: 'Only a proxy link can be adjusted. Map this model as a proxy first.',
       type: 'invalid_request_error',
     } });
     return;
   }
-  res.json({ success: true, delta });
+  res.json({ success: true, metric, delta });
 });
 
 analysisRouter.get('/compare', (_req: Request, res: Response) => {
