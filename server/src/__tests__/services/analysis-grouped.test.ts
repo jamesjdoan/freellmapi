@@ -199,3 +199,38 @@ describe('reference ordering', () => {
     expect(getReferenceGroups().map(g => g.analysis?.slug)).toEqual(['strong', 'weak', 'unscored']);
   });
 })
+
+describe('reachability', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    const db = getDb();
+    db.prepare('DELETE FROM profile_models').run();
+    // Ids of our own: initDb seeds a default catalogue, and reusing a shipped
+    // id collides rather than testing anything.
+    addModel('groq', 'probe/reach-1', 'Reach Probe');
+    addModel('cerebras', 'probe/reach-1', 'Reach Probe (Cerebras)');
+    db.prepare(`
+      INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, enabled, status)
+      VALUES ('groq', 'k', 'x', 'x', 'x', 1, 'healthy')
+    `).run();
+  });
+
+  it('counts only the routes whose provider we hold a key for', () => {
+    const g = getGroupedCompare().find(x => /Reach Probe/.test(x.name));
+
+    // Both routes are enabled and merged into one logical model, but only one
+    // can serve: "enabled" and "reachable" are different questions.
+    expect(g?.members).toHaveLength(2);
+    expect(g?.enabledMembers).toBe(2);
+    expect(g?.keyedMembers).toBe(1);
+  });
+
+  it('reports zero for a model on a provider with no usable key', () => {
+    getDb().prepare("UPDATE api_keys SET status = 'invalid'").run();
+
+    const g = getGroupedCompare().find(x => /Reach Probe/.test(x.name));
+    expect(g?.enabledMembers).toBe(2);
+    expect(g?.keyedMembers).toBe(0);
+  });
+})

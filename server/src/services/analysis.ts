@@ -328,6 +328,9 @@ export interface CompareRow {
   displayName: string;
   enabled: boolean;
   contextWindow: number | null;
+  /** A usable key exists for this route's platform, so it can actually serve.
+   *  False means catalogue knowledge rather than supply. */
+  hasKey: boolean;
   supportsTools: boolean;
   supportsVision: boolean;
   /** Our own ordering numbers, kept alongside deliberately: seeing a
@@ -391,6 +394,13 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
      ORDER BY m.platform, m.model_id
   `).all() as Record<string, unknown>[];
 
+  // Platforms we hold a usable key for. Without one a model is catalogue
+  // knowledge, not supply: it can be enabled, ranked and merged and still be
+  // unreachable, which is the distinction "enabled" alone cannot make.
+  const keyedPlatforms = new Set((db.prepare(
+    "SELECT DISTINCT platform FROM api_keys WHERE enabled = 1 AND status IN ('healthy', 'unknown')",
+  ).all() as { platform: string }[]).map(r => r.platform));
+
   const catalogue = db.prepare(`
     SELECT slug, name, creator, intelligence_index
       FROM aa_model
@@ -404,6 +414,7 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
       displayName: String(r.display_name ?? r.model_id),
       enabled: r.enabled === 1,
       contextWindow: r.context_window == null ? null : Number(r.context_window),
+      hasKey: keyedPlatforms.has(String(r.platform)),
       supportsTools: r.supports_tools === 1,
       supportsVision: r.supports_vision === 1,
       intelligenceRank: Number(r.intelligence_rank ?? 0),
@@ -458,6 +469,9 @@ export interface CompareGroup {
   /** Every route this group condenses, newest-capable first is NOT implied:
    *  order is the members' own, so the reader can see all of them. */
   members: CompareRow[];
+  /** Routes backed by a usable provider key. Zero means the entry cannot serve
+   *  a request however it is configured. */
+  keyedMembers?: number;
   /** A pinned baseline rather than something we serve: no routes, no chains,
    *  no rank of ours. Rendered apart so it reads as a yardstick, not supply. */
   reference?: boolean;
@@ -544,6 +558,7 @@ export function getReferenceGroups(db: Db = getDb()): CompareGroup[] {
       conflicted: false,
       chains: [],
       enabledMembers: 0,
+      keyedMembers: 0,
       reference: true,
     }];
   }).sort(byIndex);
@@ -576,6 +591,9 @@ export function getGroupedCompare(db: Db = getDb()): CompareGroup[] {
       conflicted: linkedSlugs.length > 1,
       chains: [...new Set(members.flatMap(m => m.chains))],
       enabledMembers: members.filter(m => m.enabled).length,
+      /** Routes on a platform we hold a key for: how much of this entry is
+       *  reachable at all, as opposed to merely switched on. */
+      keyedMembers: members.filter(m => m.hasKey).length,
       reference: false,
     };
   }).filter(g => g.members.length > 0);

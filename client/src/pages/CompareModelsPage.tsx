@@ -63,6 +63,9 @@ interface CompareGroup {
   members: CompareRow[]
   analysis: CompareRow['analysis']
   analysisSource: 'inherited' | 'own' | null
+  /** Routes on a platform we hold a usable key for. Zero means the entry
+   *  cannot serve a request however it is configured. */
+  keyedMembers?: number
   /** A pinned baseline rather than a model we serve. */
   reference?: boolean
   conflicted: boolean
@@ -88,6 +91,28 @@ interface ComparePayload {
 
 type Metric = 'intelligenceIndex' | 'codingIndex' | 'agenticIndex'
 
+type Scope = 'routed' | 'keyed' | 'enabled' | 'all'
+
+const SCOPES: { key: Scope; labelKey: string; hintKey: string }[] = [
+  { key: 'routed', labelKey: 'compare.scopeRouted', hintKey: 'compare.scopeRoutedHint' },
+  { key: 'keyed', labelKey: 'compare.scopeKeyed', hintKey: 'compare.scopeKeyedHint' },
+  { key: 'enabled', labelKey: 'compare.scopeEnabled', hintKey: 'compare.scopeEnabledHint' },
+  { key: 'all', labelKey: 'compare.scopeAll', hintKey: 'compare.scopeAllHint' },
+]
+
+/**
+ * Widening rings, each a superset of the last: serving a chain now, reachable
+ * at all, switched on in the catalogue, known to exist.
+ */
+function inScope(g: CompareGroup, scope: Scope): boolean {
+  switch (scope) {
+    case 'routed': return g.chains.length > 0
+    case 'keyed': return (g.keyedMembers ?? 0) > 0
+    case 'enabled': return g.enabledMembers > 0
+    case 'all': return true
+  }
+}
+
 const METRICS: { key: Metric; labelKey: string }[] = [
   { key: 'intelligenceIndex', labelKey: 'compare.intelligence' },
   { key: 'codingIndex', labelKey: 'compare.coding' },
@@ -100,7 +125,12 @@ export default function CompareModelsPage() {
   const [keyDraft, setKeyDraft] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [metric, setMetric] = useState<Metric>('intelligenceIndex')
-  const [onlyRouted, setOnlyRouted] = useState(true)
+  // What "available" means, said out loud. The page used to offer one toggle
+  // between "in a chain" and "switched on", and neither answers the question
+  // that decides whether a model can serve at all: do we hold a key for its
+  // provider. On this install 510 of 588 models sit on providers we have no
+  // key for — enabled, ranked, merged, and unreachable.
+  const [scope, setScope] = useState<Scope>('routed')
 
   const { data, isLoading } = useQuery<ComparePayload>({
     queryKey: ['analysis', 'compare'],
@@ -179,12 +209,12 @@ export default function CompareModelsPage() {
         // References are never filtered out by "only routed": the whole point
         // is that they sit beside our models wherever those land.
         ...(references?.groups ?? []),
-        ...(grouped?.groups ?? []).filter(g => (onlyRouted ? g.chains.length > 0 : g.enabledMembers > 0)),
+        ...(grouped?.groups ?? []).filter(g => inScope(g, scope)),
       ],
       sort.key,
       sort.dir,
     ),
-    [grouped, references, onlyRouted, sort],
+    [grouped, references, scope, sort],
   )
   const chosen = useMemo(
     () => entries.filter(g => selected.has(entryKey(g))),
@@ -315,13 +345,22 @@ export default function CompareModelsPage() {
                     align="start"
                   />
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setOnlyRouted(o => !o)}
-                  className={`ml-2 rounded-full border px-2 py-0.5 text-[11px] ${onlyRouted ? 'bg-muted' : 'hover:bg-muted/50'}`}
-                >
-                  {t('compare.onlyRouted')}
-                </button>
+                {/* Counted from the same predicate that filters, so a label
+                    can never disagree with the list under it. */}
+                {SCOPES.map(sc => {
+                  const count = (grouped?.groups ?? []).filter(g => inScope(g, sc.key)).length
+                  return (
+                    <button
+                      key={sc.key}
+                      type="button"
+                      onClick={() => setScope(sc.key)}
+                      title={t(sc.hintKey)}
+                      className={`ml-1 rounded-full border px-2 py-0.5 text-[11px] ${scope === sc.key ? 'bg-muted' : 'hover:bg-muted/50'}`}
+                    >
+                      {t(sc.labelKey)} <span className="tabular-nums text-muted-foreground">{count}</span>
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
