@@ -226,7 +226,7 @@ export function upsertQuotaPolicy(input: QuotaPolicyInput): QuotaPolicy {
       platform, model_id, endpoint_scope, scope, metric, limit_value, period_kind, period_ms,
       timezone, anchor_day, priority, enabled, source, confidence, notes, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    ON CONFLICT(platform, IFNULL(model_id, ''), IFNULL(endpoint_scope, ''), scope, metric) DO UPDATE SET
+    ON CONFLICT(platform, IFNULL(model_id, ''), IFNULL(endpoint_scope, ''), scope, metric, period_kind) DO UPDATE SET
       limit_value = excluded.limit_value,
       period_kind = excluded.period_kind,
       period_ms   = excluded.period_ms,

@@ -10,6 +10,7 @@ import { Tooltip as HoverTooltip } from '@/components/tooltip';
 import { TimeTreeLog } from '@/components/time-tree-log';
 import { parseSqliteUtc } from '@/lib/time-tree';
 import { ConfirmButton } from '@/components/confirm-button';
+import { QuotaProbeLogPanel } from '@/components/quota-probe-log';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -631,6 +632,13 @@ export default function QuotaPage() {
           onSaved={() => { void queryClient.invalidateQueries({ queryKey: ['quota', 'policies'] }); }}
         />
       </Panel>
+
+      {/* Measured limits, beside the declared ones above: the policies panel
+          says what the system believes, this says what a provider was actually
+          observed to allow. Related to the burn runs below but not the same
+          record — a burn finds one platform's ceiling, a probe reads the limit
+          a single model names in its refusal. */}
+      <QuotaProbeLogPanel />
 
       <Panel icon={Flame} title={t('quota.burnTitle')}>
         <p className="text-xs text-muted-foreground">{t('quota.burnCaveat')}</p>

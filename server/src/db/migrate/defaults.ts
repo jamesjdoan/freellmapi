@@ -48,6 +48,8 @@ import * as dropModelGroups from '../migrations/20260911_000003_drop_model_group
 import * as proxyDelta from '../migrations/20260911_000004_proxy_delta.js';
 import * as proxyDeltaPerMetric from '../migrations/20260911_000005_proxy_delta_per_metric.js';
 import * as proxyDeltaSpeed from '../migrations/20260911_000006_proxy_delta_speed.js';
+import * as quotaProbeRun from '../migrations/20260911_000007_quota_probe_run.js';
+import * as quotaPolicyPeriodKey from '../migrations/20260911_000008_quota_policy_period_key.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -108,6 +110,8 @@ export const DROP_MODEL_GROUPS_FILENAME = '20260911_000003_drop_model_groups.ts'
 export const PROXY_DELTA_FILENAME = '20260911_000004_proxy_delta.ts';
 export const PROXY_DELTA_PER_METRIC_FILENAME = '20260911_000005_proxy_delta_per_metric.ts';
 export const PROXY_DELTA_SPEED_FILENAME = '20260911_000006_proxy_delta_speed.ts';
+export const QUOTA_PROBE_RUN_FILENAME = '20260911_000007_quota_probe_run.ts';
+export const QUOTA_POLICY_PERIOD_KEY_FILENAME = '20260911_000008_quota_policy_period_key.ts';
 
 export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: LEGACY_BASELINE_FILENAME, module: legacyBaseline },
@@ -159,4 +163,6 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: PROXY_DELTA_FILENAME, module: proxyDelta },
   { filename: PROXY_DELTA_PER_METRIC_FILENAME, module: proxyDeltaPerMetric },
   { filename: PROXY_DELTA_SPEED_FILENAME, module: proxyDeltaSpeed },
+{ filename: QUOTA_PROBE_RUN_FILENAME, module: quotaProbeRun },
+  { filename: QUOTA_POLICY_PERIOD_KEY_FILENAME, module: quotaPolicyPeriodKey },
 ];

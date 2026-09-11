@@ -53,6 +53,8 @@ const DROP_MODEL_GROUPS_FILENAME = '20260911_000003_drop_model_groups.ts';
 const PROXY_DELTA_FILENAME = '20260911_000004_proxy_delta.ts';
 const PROXY_DELTA_PER_METRIC_FILENAME = '20260911_000005_proxy_delta_per_metric.ts';
 const PROXY_DELTA_SPEED_FILENAME = '20260911_000006_proxy_delta_speed.ts';
+const QUOTA_PROBE_RUN_FILENAME = '20260911_000007_quota_probe_run.ts';
+const QUOTA_POLICY_PERIOD_KEY_FILENAME = '20260911_000008_quota_policy_period_key.ts';
 
 interface SchemaRow {
   type: string;
@@ -152,6 +154,8 @@ describe('migration round trip', () => {
         PROXY_DELTA_FILENAME,
         PROXY_DELTA_PER_METRIC_FILENAME,
         PROXY_DELTA_SPEED_FILENAME,
+        QUOTA_PROBE_RUN_FILENAME,
+        QUOTA_POLICY_PERIOD_KEY_FILENAME,
       ]);
     } finally {
       db.close();

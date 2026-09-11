@@ -220,6 +220,36 @@ describe('quota-policy storage', () => {
     expect(policies[0]!.limit).toBe(1000);
   });
 
+  it('holds a per-minute and a per-day limit for one subject at once', () => {
+    // Google states both in the same refusal, on the same metric, telling them
+    // apart only by value: `limit: 5` per minute and `limit: 20` per day for
+    // gemini-3.8-flash. Keyed without the period, writing the second silently
+    // replaced the first and the limit that binds intraday disappeared.
+    const base = {
+      platform: 'google', modelId: 'gemini-3.8-flash', scope: 'model' as const,
+      metric: 'requests' as const, timezone: 'UTC', anchorDay: null,
+    };
+    upsertQuotaPolicy({ ...base, limit: 5, periodKind: 'rolling', periodMs: 60_000 });
+    upsertQuotaPolicy({ ...base, limit: 20, periodKind: 'calendar_day', periodMs: null });
+
+    const policies = listQuotaPolicies('google');
+    expect(policies.map(p => [p.periodKind, p.limit]).sort()).toEqual([['calendar_day', 20], ['rolling', 5]]);
+  });
+
+  it('still replaces a policy for the same subject AND period', () => {
+    const base = {
+      platform: 'google', modelId: 'gemini-3.8-flash', scope: 'model' as const,
+      metric: 'requests' as const, periodKind: 'rolling' as const, periodMs: 60_000,
+      timezone: 'UTC', anchorDay: null,
+    };
+    upsertQuotaPolicy({ ...base, limit: 5 });
+    upsertQuotaPolicy({ ...base, limit: 10 });
+
+    const policies = listQuotaPolicies('google');
+    expect(policies).toHaveLength(1);
+    expect(policies[0]!.limit).toBe(10);
+  });
+
   it('rejects a limit the schema forbids', () => {
     expect(() => upsertQuotaPolicy({
       platform: 'groq', modelId: null, scope: 'provider_account', metric: 'requests',

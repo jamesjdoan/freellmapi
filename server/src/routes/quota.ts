@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
+import { listQuotaProbes } from '../services/quota-probe-log.js';
 import {
   listQuotaPolicies,
   upsertQuotaPolicy,
@@ -257,4 +258,16 @@ quotaRouter.post('/burn/:id/cancel', (req: Request, res: Response) => {
     return;
   }
   res.json({ run });
+});
+
+/**
+ * Quota probe measurement records, exposed alongside the declared policies.
+ * Optional `?platform=` filters by platform, `?limit=` caps the result set.
+ */
+quotaRouter.get('/probes', (req: Request, res: Response) => {
+  const platform = typeof req.query.platform === 'string' ? req.query.platform : undefined;
+  const asked = typeof req.query.limit === 'string' ? Number.parseInt(req.query.limit, 10) : NaN;
+  const limit = Number.isFinite(asked) && asked > 0 ? Math.min(asked, 500) : 500;
+  const probes = listQuotaProbes({ platform, limit });
+  res.json({ probes });
 });
