@@ -1,6 +1,6 @@
 # Imperium FreeLLMAPI Extension
 
-This checkout is the Imperium-maintained FreeLLMAPI extension, not upstream `main`. The public API stays FreeLLMAPI-compatible while this branch adds provider ordering, quota-pool correctness, provider-key model access and an Extensions dashboard index.
+This checkout is the Imperium-maintained FreeLLMAPI extension, not upstream `main`. The public API stays FreeLLMAPI-compatible while this branch adds provider ordering, quota-pool correctness, provider-key model access, measured benchmark comparison with proxy scores for unpublished models, a catalogue arrival/departure log, and an Extensions dashboard index.
 
 ## Read first
 
@@ -10,6 +10,7 @@ This checkout is the Imperium-maintained FreeLLMAPI extension, not upstream `mai
 | Change unified-model routing | `docs/architecture/01-routing-and-bandit-scoring.md` | `docs/adr/ARCH-20260901-unified-provider-preference-and-quota-pools.md` |
 | Change quota semantics | `docs/providers/02-quotas-and-cooldowns.md` | `server/src/services/provider-quota.ts` |
 | Update from upstream | `docs/deployment/03-imperium-extension-branch.md` | `docs/GOTCHAS.md` |
+| Change benchmark scores, mapping or key reachability | `docs/adr/ARCH-20260911-measured-benchmarks-and-proxy-scores.md` | `server/src/services/analysis.ts` |
 | Add another fork feature | `docs/adr/ARCH-20260902-extension-registry-dashboard.md` | `client/src/lib/extension-registry.ts` |
 
 ## Hard constraints
