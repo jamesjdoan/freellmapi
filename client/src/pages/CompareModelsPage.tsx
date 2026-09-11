@@ -602,15 +602,25 @@ export default function CompareModelsPage() {
                       <TableCell className="max-w-[120px] truncate text-[11px] text-muted-foreground" title={g.chains.join(', ')}>
                         {g.chains.join(', ') || '–'}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{score(g.analysis?.intelligenceIndex)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{score(g.analysis?.codingIndex)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{score(g.analysis?.agenticIndex)}</TableCell>
+                      {/* An adjusted figure must never read as a measurement.
+                          The signs say a human moved it and which way, in the
+                          same green/red as the Keys panel — this is the table
+                          people actually rank models in. */}
+                      <TableCell className="text-right tabular-nums">
+                        {score(g.analysis?.intelligenceIndex)}<DeltaMark delta={proxyDeltaOf(g, 'intelligence')} />
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {score(g.analysis?.codingIndex)}<DeltaMark delta={proxyDeltaOf(g, 'coding')} />
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {score(g.analysis?.agenticIndex)}<DeltaMark delta={proxyDeltaOf(g, 'agentic')} />
+                      </TableCell>
                       {/* Measured by Artificial Analysis, so they are blank
                           exactly where the scores are: an unmapped row shows
                           dashes rather than inventing a number from our own
                           catalogue. Context is ours — it comes from the routes. */}
                       <TableCell className="text-right tabular-nums" title={t('compare.speedHint')}>
-                        {stat(g.analysis?.medianOutputTokensPerSecond, 0)}
+                        {stat(g.analysis?.medianOutputTokensPerSecond, 0)}<DeltaMark delta={proxyDeltaOf(g, 'speed')} />
                       </TableCell>
                       <TableCell className="text-right tabular-nums" title={t('compare.latencyHint')}>
                         {stat(g.analysis?.medianTimeToFirstTokenSeconds, 2)}
@@ -723,6 +733,29 @@ function context(members: CompareRow[]) {
   return max >= 1000 ? `${Math.round(max / 1000)}K` : String(max)
 }
 
+/**
+ * The adjustment behind an entry's scores, if a proxy produced them.
+ *
+ * Read off the member whose analysis the group is showing: a merged entry
+ * inherits one member's figures, so it must inherit that member's adjustment
+ * too or the row would print a moved number with no sign on it.
+ */
+function proxyDeltaOf(g: CompareGroup, metric: 'intelligence' | 'coding' | 'agentic' | 'speed'): number {
+  const source = g.members.find(m => m.analysis)
+  if (source?.link?.source !== 'proxy') return 0
+  return source.link.proxyDelta[metric] ?? 0
+}
+
+/** Signs, not a number, in the same colours the Keys panel uses. */
+function DeltaMark({ delta }: { delta: number }) {
+  if (!delta) return null
+  return (
+    <span className={`ml-0.5 text-[10px] font-medium ${delta > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+      {(delta > 0 ? '+' : '−').repeat(Math.min(Math.abs(delta), 3))}
+    </span>
+  )
+}
+
 /** A dash, not a zero: their nulls mean "not measured". */
 function score(value: number | null | undefined) {
   return value == null ? <span className="text-muted-foreground">–</span> : value.toFixed(1)
@@ -767,6 +800,18 @@ function MappingCell({ members, catalogue, onLink }: {
     // unverifiable — the whole point of an automatic match is that it can be
     // wrong, and you cannot see that it is wrong without seeing what it picked.
     const their = scored.analysis
+    // A proxy is not a match, and labelling it one would hide that every score
+    // on the row is borrowed.
+    if (scored.link?.source === 'proxy') {
+      return (
+        <Tooltip text={t('compare.matchProxyHint', { name: their.name, slug: their.slug })}>
+          <span className="flex max-w-[118px] flex-col items-start">
+            <span className="w-full truncate">≈ {their.name}</span>
+            <span className="w-full truncate text-[10px] text-muted-foreground">{t('compare.matchProxy')}</span>
+          </span>
+        </Tooltip>
+      )
+    }
     const how = allManual
       ? t('compare.matchManual')
       : members.length > 1 && linked.length < members.length

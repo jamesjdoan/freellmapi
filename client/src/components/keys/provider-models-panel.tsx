@@ -22,6 +22,9 @@ interface Row {
   supportsTools: boolean
   supportsVision: boolean
   keyScope: 'none' | 'disabled' | 'unscoped' | 'in' | 'out'
+  /** Chains currently routing to this model. Empty means it can serve and
+   *  nothing asks it to. */
+  chains: string[]
   analysis: {
     slug: string
     name: string
@@ -166,6 +169,7 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
             <SortTh active={sort === 'agentic'} onClick={() => setSort('agentic')} right>{t('compare.agentic')}</SortTh>
             <SortTh active={sort === 'speed'} onClick={() => setSort('speed')} right>{t('compare.colSpeed')}</SortTh>
             <th className="py-1 pr-2 text-right font-normal">{t('compare.colContext')}</th>
+            <th className="py-1 pr-2 text-left font-normal">{t('keys.panelColChains')}</th>
             <th className="py-1 pr-2 text-left font-normal">{t('compare.colMatch')}</th>
             <th className="py-1 text-center font-normal">{t('keys.panelColEnabled')}</th>
           </tr>
@@ -173,7 +177,11 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
         <tbody>
           {rows.map(r => {
             return (
-              <tr key={r.modelDbId} className="border-t">
+              // Faded when it cannot route — switched off, or outside the
+              // key's scope. The row stays readable and stops competing with
+              // the models that are actually in play. The switch keeps full
+              // contrast so it is still obviously operable.
+              <tr key={r.modelDbId} className={`border-t ${routable(r) ? '' : 'opacity-45'}`}>
                 <td className="py-1 pr-2">
                   <span className="block max-w-[260px] truncate font-medium" title={r.displayName}>{r.displayName}</span>
                   <code className="block max-w-[260px] truncate text-[10px] text-muted-foreground" title={r.modelId}>{r.modelId}</code>
@@ -185,6 +193,20 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
                 <td className="py-1 pr-2 text-right tabular-nums text-muted-foreground">
                   {r.contextWindow ? `${Math.round(r.contextWindow / 1000)}K` : '–'}
                 </td>
+                {/* Which chains actually route here. An enabled, in-scope model
+                    serving nothing is the state worth seeing beside the switch:
+                    it is available and idle. */}
+                <td className="py-1 pr-2 text-[10px]">
+                  {r.chains.length > 0
+                    ? (
+                      <span className="flex max-w-[150px] flex-wrap gap-1" title={r.chains.join(', ')}>
+                        {r.chains.map(c => (
+                          <span key={c} className="rounded-full bg-muted px-1.5 py-0.5 text-muted-foreground">{c}</span>
+                        ))}
+                      </span>
+                    )
+                    : <span className="text-muted-foreground">{routable(r) ? t('keys.panelIdle') : '–'}</span>}
+                </td>
                 <td className="py-1 pr-2">
                   <MappingCell
                     row={r}
@@ -193,7 +215,7 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
                     onLink={(slug, proxy) => link.mutate({ platform: r.platform, modelId: r.modelId, aaSlug: slug, proxy })}
                   />
                 </td>
-                <td className="py-1 text-center">
+                <td className="py-1 text-center opacity-100">
                   <Switch
                     checked={routable(r)}
                     disabled={busy}

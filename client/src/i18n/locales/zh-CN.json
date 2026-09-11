@@ -656,7 +656,9 @@
     "proxyHint": "This model is not published by Artificial Analysis. Borrow another model's scores as an estimate - it will never be treated as the same model.",
     "proxyNudgeHint": "Adjust the borrowed scores up or down, so this model ranks where you judge it belongs",
     "proxyNudgeUp": "Raise the estimate",
-    "proxyNudgeDown": "Lower the estimate"
+    "proxyNudgeDown": "Lower the estimate",
+    "panelColChains": "Chains",
+    "panelIdle": "idle"
   },
   "backups": {
     "title": "备份",
@@ -1405,6 +1407,8 @@
     "scopeRemoveHint": "Remove this model from the provider key scope, so the router stops using it",
     "scopeRemoveConfirm": "Remove",
     "scopePickAdd": "Add which routes to the key scope?",
-    "scopePickRemove": "Remove which routes from the key scope?"
+    "scopePickRemove": "Remove which routes from the key scope?",
+    "matchProxy": "estimated",
+    "matchProxyHint": "Not published by Artificial Analysis. Scores are borrowed from {name} ({slug}) and adjusted by hand, so they are an estimate."
   }
 }
