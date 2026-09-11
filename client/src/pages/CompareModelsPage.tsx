@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink, RefreshCw, Scale } from 'lucide-react'
 import { useI18n } from '@/i18n'
+import { sortEntries, type SortKey } from '@/lib/compare-sort'
 import { apiFetch } from '@/lib/api'
 import { toast } from '@/lib/toast'
 import { Badge } from '@/components/ui/badge'
@@ -144,10 +145,23 @@ export default function CompareModelsPage() {
   // Condensed entries: one per group, one per ungrouped model. The catalogue is
   // 589 rows and most are switched off, so comparing all of them buries the
   // ones in use.
+  // Measured intelligence first: the reason to open this page is to see what
+  // the benchmarks say, and the payload order is the router's, not a ranking.
+  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'intelligenceIndex', dir: 'desc' })
+  // Second click reverses; moving to a new column starts descending, except for
+  // the three where "low is good" (name A-Z, latency, price).
+  const sortBy = (key: SortKey) =>
+    setSort(prev => prev.key === key
+      ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' }
+      : { key, dir: key === 'name' || key === 'latency' || key === 'price' ? 'asc' : 'desc' })
+
   const entries = useMemo(
-    () => (grouped?.groups ?? []).filter(g =>
-      onlyRouted ? g.chains.length > 0 : g.enabledMembers > 0),
-    [grouped, onlyRouted],
+    () => sortEntries(
+      (grouped?.groups ?? []).filter(g => (onlyRouted ? g.chains.length > 0 : g.enabledMembers > 0)),
+      sort.key,
+      sort.dir,
+    ),
+    [grouped, onlyRouted, sort],
   )
   const chosen = useMemo(
     () => entries.filter(g => selected.has(entryKey(g))),
@@ -314,16 +328,16 @@ export default function CompareModelsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead />
-                  <TableHead>{t('compare.colModel')}</TableHead>
-                  <TableHead>{t('compare.colChains')}</TableHead>
-                  <TableHead className="text-right">{t('compare.intelligence')}</TableHead>
-                  <TableHead className="text-right">{t('compare.coding')}</TableHead>
-                  <TableHead className="text-right">{t('compare.agentic')}</TableHead>
-                  <TableHead className="text-right">{t('compare.colSpeed')}</TableHead>
-                  <TableHead className="text-right">{t('compare.colLatency')}</TableHead>
-                  <TableHead className="text-right">{t('compare.colPrice')}</TableHead>
-                  <TableHead className="text-right">{t('compare.colContext')}</TableHead>
-                  <TableHead className="text-right">{t('compare.colOurRank')}</TableHead>
+                  <SortHead sort={sort} onSort={sortBy} col="name">{t('compare.colModel')}</SortHead>
+                  <SortHead sort={sort} onSort={sortBy} col="chains">{t('compare.colChains')}</SortHead>
+                  <SortHead sort={sort} onSort={sortBy} col="intelligenceIndex" right>{t('compare.intelligence')}</SortHead>
+                  <SortHead sort={sort} onSort={sortBy} col="codingIndex" right>{t('compare.coding')}</SortHead>
+                  <SortHead sort={sort} onSort={sortBy} col="agenticIndex" right>{t('compare.agentic')}</SortHead>
+                  <SortHead sort={sort} onSort={sortBy} col="speed" right>{t('compare.colSpeed')}</SortHead>
+                  <SortHead sort={sort} onSort={sortBy} col="latency" right>{t('compare.colLatency')}</SortHead>
+                  <SortHead sort={sort} onSort={sortBy} col="price" right>{t('compare.colPrice')}</SortHead>
+                  <SortHead sort={sort} onSort={sortBy} col="context" right>{t('compare.colContext')}</SortHead>
+                  <SortHead sort={sort} onSort={sortBy} col="ourRank" right>{t('compare.colOurRank')}</SortHead>
                   <TableHead>{t('compare.colMatch')}</TableHead>
                 </TableRow>
               </TableHeader>
@@ -344,13 +358,23 @@ export default function CompareModelsPage() {
                       <TableCell>
                         <span className="flex flex-wrap items-center gap-1.5">
                           {[...new Set(g.members.map(m => m.platform))].map(p => <PlatformDot key={p} platform={p} />)}
-                          <span className="font-medium">{g.name}</span>
+                          <span className="max-w-[260px] truncate font-medium" title={g.name}>{g.name}</span>
+                          {/* The routes live in a tooltip, not inline. Printed
+                              in the cell, seven `platform/modelId` pairs made
+                              this column 1584px wide inside a 1070px container
+                              and pushed every measured number off-screen. */}
                           {solo
-                            ? <code className="text-[11px] text-muted-foreground">{solo.modelId}</code>
+                            ? (
+                              <code className="max-w-[220px] truncate text-[11px] text-muted-foreground" title={solo.modelId}>
+                                {solo.modelId}
+                              </code>
+                            )
                             : (
-                              <Badge variant="secondary" className="text-[10px] tabular-nums">
-                                {t('compare.routeCount', { count: g.members.length })}
-                              </Badge>
+                              <Tooltip text={g.members.map(m => `${m.platform}/${m.modelId}`).join('\n')}>
+                                <Badge variant="secondary" className="text-[10px] tabular-nums">
+                                  {t('compare.routeCount', { count: g.members.length })}
+                                </Badge>
+                              </Tooltip>
                             )}
                           {g.conflicted && (
                             <Tooltip text={t('compare.conflictHint')}>
@@ -358,19 +382,8 @@ export default function CompareModelsPage() {
                             </Tooltip>
                           )}
                         </span>
-                        {/* The routes behind a merged entry, so the condensing
-                            never hides which providers actually serve it. */}
-                        {/* The routes behind this logical model. Grouping is the
-                            router's own unification, edited on the Models page —
-                            Compare reports it rather than keeping a second
-                            grouping that could disagree with what routes. */}
-                        {!solo && (
-                          <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                            {g.members.map(m => `${m.platform}/${m.modelId}`).join(' · ')}
-                          </span>
-                        )}
                       </TableCell>
-                      <TableCell className="text-[11px] text-muted-foreground">
+                      <TableCell className="max-w-[120px] truncate text-[11px] text-muted-foreground" title={g.chains.join(', ')}>
                         {g.chains.join(', ') || '–'}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{score(g.analysis?.intelligenceIndex)}</TableCell>
@@ -433,6 +446,35 @@ export default function CompareModelsPage() {
         </a>
       </p>
     </div>
+  )
+}
+
+/**
+ * A sortable column header. `aria-sort` is what makes the current column and
+ * direction readable without seeing the arrow.
+ */
+function SortHead({ col, sort, onSort, right, children }: {
+  col: SortKey
+  sort: { key: SortKey; dir: 'asc' | 'desc' }
+  onSort: (key: SortKey) => void
+  right?: boolean
+  children: ReactNode
+}) {
+  const active = sort.key === col
+  return (
+    <TableHead
+      className={right ? 'text-right' : undefined}
+      aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(col)}
+        className={`inline-flex items-center gap-0.5 hover:text-foreground ${active ? 'text-foreground' : ''}`}
+      >
+        {children}
+        <span className="text-[9px]">{active ? (sort.dir === 'asc' ? '▲' : '▼') : ''}</span>
+      </button>
+    </TableHead>
   )
 }
 
