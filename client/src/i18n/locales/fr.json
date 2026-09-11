@@ -642,7 +642,16 @@
     "churnPanelHint": "Inclure ou exclure un modèle du périmètre de cette clé. Un nouveau modèle doit en plus figurer dans une chaîne de routage avant de servir du trafic.",
     "churnLastModel": "Une clé ne peut pas être limitée à rien — désactivez plutôt la clé elle-même.",
     "churnNotScoped": "hors périmètre",
-    "churnNotScopedHint": "Le retrait a supprimé ce modèle du catalogue et cette clé ne l'a jamais listé : il n'y a rien à basculer."
+    "churnNotScopedHint": "Le retrait a supprimé ce modèle du catalogue et cette clé ne l'a jamais listé : il n'y a rien à basculer.",
+    "panelTitle": "{count} models on this provider",
+    "panelScopedCount": "{scoped} of {total} in key scope",
+    "panelOnlyScoped": "Only in scope",
+    "panelColModel": "Model",
+    "panelColScope": "In key scope",
+    "panelColEnabled": "Enabled",
+    "panelUnscoped": "all",
+    "panelUnscopedHint": "This key is unscoped, so it already permits every model here. Narrow it on the key itself.",
+    "panelNoModels": "No models discovered for this provider yet."
   },
   "backups": {
     "title": "Sauvegardes",

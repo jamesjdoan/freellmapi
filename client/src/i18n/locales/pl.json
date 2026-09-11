@@ -642,7 +642,16 @@
     "churnPanelHint": "Włącz model do zakresu tego klucza lub go usuń. Nowy model potrzebuje jeszcze łańcucha routingu, zanim zacznie obsługiwać ruch.",
     "churnLastModel": "Klucz nie może mieć pustego zakresu — wyłącz raczej sam klucz.",
     "churnNotScoped": "poza zakresem",
-    "churnNotScopedHint": "Wycofanie usunęło ten model z katalogu, a ten klucz nigdy go nie zawierał — nie ma czego przełączać."
+    "churnNotScopedHint": "Wycofanie usunęło ten model z katalogu, a ten klucz nigdy go nie zawierał — nie ma czego przełączać.",
+    "panelTitle": "{count} models on this provider",
+    "panelScopedCount": "{scoped} of {total} in key scope",
+    "panelOnlyScoped": "Only in scope",
+    "panelColModel": "Model",
+    "panelColScope": "In key scope",
+    "panelColEnabled": "Enabled",
+    "panelUnscoped": "all",
+    "panelUnscopedHint": "This key is unscoped, so it already permits every model here. Narrow it on the key itself.",
+    "panelNoModels": "No models discovered for this provider yet."
   },
   "backups": {
     "title": "Backups",

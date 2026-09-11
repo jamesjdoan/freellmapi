@@ -642,7 +642,16 @@
     "churnPanelHint": "将模型加入或移出此密钥的范围。新模型还需要加入路由链才会承接流量。",
     "churnLastModel": "密钥范围不能为空 — 请直接停用该密钥。",
     "churnNotScoped": "不在范围内",
-    "churnNotScopedHint": "撤下已将该模型从目录中删除，且此密钥从未包含它，没有可切换的内容。"
+    "churnNotScopedHint": "撤下已将该模型从目录中删除，且此密钥从未包含它，没有可切换的内容。",
+    "panelTitle": "{count} models on this provider",
+    "panelScopedCount": "{scoped} of {total} in key scope",
+    "panelOnlyScoped": "Only in scope",
+    "panelColModel": "Model",
+    "panelColScope": "In key scope",
+    "panelColEnabled": "Enabled",
+    "panelUnscoped": "all",
+    "panelUnscopedHint": "This key is unscoped, so it already permits every model here. Narrow it on the key itself.",
+    "panelNoModels": "No models discovered for this provider yet."
   },
   "backups": {
     "title": "备份",

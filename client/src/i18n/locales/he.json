@@ -642,7 +642,16 @@
     "churnPanelHint": "הכלל או הוצא דגם מתחום המפתח הזה. דגם חדש זקוק גם לשרשרת ניתוב לפני שישרת בקשות.",
     "churnLastModel": "לא ניתן לצמצם מפתח לכלום — כבה את המפתח עצמו במקום.",
     "churnNotScoped": "מחוץ לתחום",
-    "churnNotScopedHint": "ההסרה מחקה את הדגם מהקטלוג והמפתח הזה מעולם לא כלל אותו, ולכן אין מה להחליף."
+    "churnNotScopedHint": "ההסרה מחקה את הדגם מהקטלוג והמפתח הזה מעולם לא כלל אותו, ולכן אין מה להחליף.",
+    "panelTitle": "{count} models on this provider",
+    "panelScopedCount": "{scoped} of {total} in key scope",
+    "panelOnlyScoped": "Only in scope",
+    "panelColModel": "Model",
+    "panelColScope": "In key scope",
+    "panelColEnabled": "Enabled",
+    "panelUnscoped": "all",
+    "panelUnscopedHint": "This key is unscoped, so it already permits every model here. Narrow it on the key itself.",
+    "panelNoModels": "No models discovered for this provider yet."
   },
   "backups": {
     "title": "Backups",

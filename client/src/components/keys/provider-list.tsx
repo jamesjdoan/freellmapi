@@ -36,6 +36,7 @@ import {
 import type { HealthData } from './shared'
 import { ProviderChurnChip, ProviderChurnPanel } from './provider-churn'
 import { churnByPlatform, useCatalogueChanges } from '@/lib/catalogue-changes'
+import { ProviderModelsPanel } from '@/components/keys/provider-models-panel'
 import { DiscoverModelsDialog } from './discover-models-dialog'
 import { AddEndpointKeyDialog } from './add-endpoint-key-dialog'
 import { CopyKeyDialog } from './copy-key-dialog'
@@ -586,6 +587,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                 })()}
 
                 {(expanded || single) && (
+                  <>
                   <div className="rounded-2xl border divide-y bg-card overflow-hidden">
                     {group.keys.map(k => {
                       const status = statusOf(k)
@@ -921,6 +923,12 @@ export function ProviderList({ onAddKey, initialSearch }: {
                       )
                     })}
                   </div>
+                  {/* The provider's whole menu, scored, with the two switches
+                      that decide routing. Comparing models within one provider
+                      is the decision this screen exists for; it used to need
+                      the Compare page and the scope dialog side by side. */}
+                  <ProviderModelsPanel platform={group.value} />
+                  </>
                 )}
               </div>
             )

@@ -642,7 +642,16 @@
     "churnPanelHint": "Incluye o excluye un modelo del alcance de esta clave. Un modelo nuevo además necesita una cadena de enrutamiento antes de servir tráfico.",
     "churnLastModel": "Una clave no puede quedarse sin ningún modelo; desactiva la clave en su lugar.",
     "churnNotScoped": "fuera del alcance",
-    "churnNotScopedHint": "La retirada eliminó este modelo del catálogo y esta clave nunca lo incluyó, así que no hay nada que cambiar."
+    "churnNotScopedHint": "La retirada eliminó este modelo del catálogo y esta clave nunca lo incluyó, así que no hay nada que cambiar.",
+    "panelTitle": "{count} models on this provider",
+    "panelScopedCount": "{scoped} of {total} in key scope",
+    "panelOnlyScoped": "Only in scope",
+    "panelColModel": "Model",
+    "panelColScope": "In key scope",
+    "panelColEnabled": "Enabled",
+    "panelUnscoped": "all",
+    "panelUnscopedHint": "This key is unscoped, so it already permits every model here. Narrow it on the key itself.",
+    "panelNoModels": "No models discovered for this provider yet."
   },
   "backups": {
     "title": "Backups",

@@ -642,7 +642,16 @@
     "churnPanelHint": "Neem een model op in of haal het uit het bereik van deze sleutel. Een nieuw model heeft daarnaast een routeringsketen nodig voordat het verkeer bedient.",
     "churnLastModel": "Een sleutel kan niet tot niets beperkt worden — zet de sleutel zelf uit.",
     "churnNotScoped": "buiten bereik",
-    "churnNotScopedHint": "De terugtrekking heeft dit model uit de catalogus verwijderd en deze sleutel had het nooit; er is niets om te schakelen."
+    "churnNotScopedHint": "De terugtrekking heeft dit model uit de catalogus verwijderd en deze sleutel had het nooit; er is niets om te schakelen.",
+    "panelTitle": "{count} models on this provider",
+    "panelScopedCount": "{scoped} of {total} in key scope",
+    "panelOnlyScoped": "Only in scope",
+    "panelColModel": "Model",
+    "panelColScope": "In key scope",
+    "panelColEnabled": "Enabled",
+    "panelUnscoped": "all",
+    "panelUnscopedHint": "This key is unscoped, so it already permits every model here. Narrow it on the key itself.",
+    "panelNoModels": "No models discovered for this provider yet."
   },
   "backups": {
     "title": "Backups",

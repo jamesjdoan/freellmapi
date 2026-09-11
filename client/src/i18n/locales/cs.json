@@ -642,7 +642,16 @@
     "churnPanelHint": "Zařaďte model do rozsahu tohoto klíče nebo jej odeberte. Nový model navíc potřebuje směrovací řetěz, než začne obsluhovat provoz.",
     "churnLastModel": "Klíč nelze omezit na nic — vypněte místo toho samotný klíč.",
     "churnNotScoped": "mimo rozsah",
-    "churnNotScopedHint": "Odebrání smazalo tento model z katalogu a tento klíč jej nikdy neuváděl — není co přepínat."
+    "churnNotScopedHint": "Odebrání smazalo tento model z katalogu a tento klíč jej nikdy neuváděl — není co přepínat.",
+    "panelTitle": "{count} models on this provider",
+    "panelScopedCount": "{scoped} of {total} in key scope",
+    "panelOnlyScoped": "Only in scope",
+    "panelColModel": "Model",
+    "panelColScope": "In key scope",
+    "panelColEnabled": "Enabled",
+    "panelUnscoped": "all",
+    "panelUnscopedHint": "This key is unscoped, so it already permits every model here. Narrow it on the key itself.",
+    "panelNoModels": "No models discovered for this provider yet."
   },
   "backups": {
     "title": "Backups",

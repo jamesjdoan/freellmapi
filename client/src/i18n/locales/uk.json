@@ -642,7 +642,16 @@
     "churnPanelHint": "Додайте модель до області цього ключа або приберіть її. Новій моделі ще потрібен ланцюг маршрутизації, перш ніж вона обслуговуватиме запити.",
     "churnLastModel": "Ключ не можна обмежити порожнім списком — вимкніть сам ключ.",
     "churnNotScoped": "поза областю",
-    "churnNotScopedHint": "Відкликання видалило цю модель з каталогу, і цей ключ її ніколи не містив — перемикати нічого."
+    "churnNotScopedHint": "Відкликання видалило цю модель з каталогу, і цей ключ її ніколи не містив — перемикати нічого.",
+    "panelTitle": "{count} models on this provider",
+    "panelScopedCount": "{scoped} of {total} in key scope",
+    "panelOnlyScoped": "Only in scope",
+    "panelColModel": "Model",
+    "panelColScope": "In key scope",
+    "panelColEnabled": "Enabled",
+    "panelUnscoped": "all",
+    "panelUnscopedHint": "This key is unscoped, so it already permits every model here. Narrow it on the key itself.",
+    "panelNoModels": "No models discovered for this provider yet."
   },
   "backups": {
     "title": "Backups",

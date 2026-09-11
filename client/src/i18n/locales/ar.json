@@ -642,7 +642,16 @@
     "churnPanelHint": "أدرج طرازًا في نطاق هذا المفتاح أو أخرجه منه. الطراز الجديد يحتاج أيضًا إلى سلسلة توجيه قبل أن يخدم الطلبات.",
     "churnLastModel": "لا يمكن أن يكون نطاق المفتاح فارغًا — أوقف المفتاح نفسه بدلًا من ذلك.",
     "churnNotScoped": "خارج النطاق",
-    "churnNotScopedHint": "أدى السحب إلى حذف هذا الطراز من الفهرس، ولم يدرجه هذا المفتاح مطلقًا، فلا شيء لتبديله."
+    "churnNotScopedHint": "أدى السحب إلى حذف هذا الطراز من الفهرس، ولم يدرجه هذا المفتاح مطلقًا، فلا شيء لتبديله.",
+    "panelTitle": "{count} models on this provider",
+    "panelScopedCount": "{scoped} of {total} in key scope",
+    "panelOnlyScoped": "Only in scope",
+    "panelColModel": "Model",
+    "panelColScope": "In key scope",
+    "panelColEnabled": "Enabled",
+    "panelUnscoped": "all",
+    "panelUnscopedHint": "This key is unscoped, so it already permits every model here. Narrow it on the key itself.",
+    "panelNoModels": "No models discovered for this provider yet."
   },
   "backups": {
     "title": "Backups",

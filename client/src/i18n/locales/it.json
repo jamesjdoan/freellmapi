@@ -642,7 +642,16 @@
     "churnPanelHint": "Includi o escludi un modello dall'ambito di questa chiave. Un modello nuovo deve inoltre entrare in una catena di routing prima di servire traffico.",
     "churnLastModel": "Una chiave non può essere limitata a nulla: disattiva invece la chiave stessa.",
     "churnNotScoped": "fuori ambito",
-    "churnNotScopedHint": "Il ritiro ha eliminato questo modello dal catalogo e questa chiave non l'ha mai elencato: non c'è nulla da commutare."
+    "churnNotScopedHint": "Il ritiro ha eliminato questo modello dal catalogo e questa chiave non l'ha mai elencato: non c'è nulla da commutare.",
+    "panelTitle": "{count} models on this provider",
+    "panelScopedCount": "{scoped} of {total} in key scope",
+    "panelOnlyScoped": "Only in scope",
+    "panelColModel": "Model",
+    "panelColScope": "In key scope",
+    "panelColEnabled": "Enabled",
+    "panelUnscoped": "all",
+    "panelUnscopedHint": "This key is unscoped, so it already permits every model here. Narrow it on the key itself.",
+    "panelNoModels": "No models discovered for this provider yet."
   },
   "backups": {
     "title": "Backups",

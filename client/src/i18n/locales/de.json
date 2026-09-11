@@ -642,7 +642,16 @@
     "churnPanelHint": "Ein Modell in den Geltungsbereich dieses Schlüssels aufnehmen oder daraus entfernen. Ein neues Modell braucht zusätzlich eine Routing-Kette, bevor es Anfragen bedient.",
     "churnLastModel": "Ein Schlüssel kann nicht auf nichts eingeschränkt werden — schalten Sie stattdessen den Schlüssel selbst ab.",
     "churnNotScoped": "nicht im Bereich",
-    "churnNotScopedHint": "Die Abkündigung hat dieses Modell aus dem Katalog gelöscht, und dieser Schlüssel hat es nie geführt — es gibt nichts zu schalten."
+    "churnNotScopedHint": "Die Abkündigung hat dieses Modell aus dem Katalog gelöscht, und dieser Schlüssel hat es nie geführt — es gibt nichts zu schalten.",
+    "panelTitle": "{count} models on this provider",
+    "panelScopedCount": "{scoped} of {total} in key scope",
+    "panelOnlyScoped": "Only in scope",
+    "panelColModel": "Model",
+    "panelColScope": "In key scope",
+    "panelColEnabled": "Enabled",
+    "panelUnscoped": "all",
+    "panelUnscopedHint": "This key is unscoped, so it already permits every model here. Narrow it on the key itself.",
+    "panelNoModels": "No models discovered for this provider yet."
   },
   "backups": {
     "title": "Backups",

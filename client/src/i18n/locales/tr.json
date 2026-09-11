@@ -642,7 +642,16 @@
     "churnPanelHint": "Bir modeli bu anahtarın kapsamına alın veya çıkarın. Yeni bir modelin trafiğe hizmet etmesi için ayrıca bir yönlendirme zinciri gerekir.",
     "churnLastModel": "Bir anahtarın kapsamı boş olamaz — bunun yerine anahtarı kapatın.",
     "churnNotScoped": "kapsam dışı",
-    "churnNotScopedHint": "Çıkarma bu modeli katalogdan sildi ve bu anahtar onu hiç listelemedi — değiştirilecek bir şey yok."
+    "churnNotScopedHint": "Çıkarma bu modeli katalogdan sildi ve bu anahtar onu hiç listelemedi — değiştirilecek bir şey yok.",
+    "panelTitle": "{count} models on this provider",
+    "panelScopedCount": "{scoped} of {total} in key scope",
+    "panelOnlyScoped": "Only in scope",
+    "panelColModel": "Model",
+    "panelColScope": "In key scope",
+    "panelColEnabled": "Enabled",
+    "panelUnscoped": "all",
+    "panelUnscopedHint": "This key is unscoped, so it already permits every model here. Narrow it on the key itself.",
+    "panelNoModels": "No models discovered for this provider yet."
   },
   "backups": {
     "title": "Backups",

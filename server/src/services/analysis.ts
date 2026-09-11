@@ -324,6 +324,9 @@ export function clearManualLink(platform: string, modelId: string, db: Db = getD
 }
 
 export interface CompareRow {
+  /** Catalogue row id, so a caller can toggle the model itself and not only
+   *  its key scope. */
+  modelDbId: number;
   platform: string;
   modelId: string;
   displayName: string;
@@ -383,7 +386,7 @@ export interface ComparePayload {
  */
 export function getComparePayload(db: Db = getDb()): ComparePayload {
   const rows = db.prepare(`
-    SELECT m.platform, m.model_id, m.display_name, m.enabled, m.context_window,
+    SELECT m.id AS model_db_id, m.platform, m.model_id, m.display_name, m.enabled, m.context_window,
            m.supports_tools, m.supports_vision, m.intelligence_rank, m.speed_rank,
            l.aa_slug, l.source AS link_source, l.match_reason,
            a.slug AS aa_present, a.name AS aa_name, a.creator, a.intelligence_index,
@@ -448,6 +451,7 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
 
   return {
     rows: rows.map(r => ({
+      modelDbId: Number(r.model_db_id ?? r.id),
       platform: String(r.platform),
       modelId: String(r.model_id),
       displayName: String(r.display_name ?? r.model_id),
