@@ -36,6 +36,7 @@ export function ModelCombobox({
   triggerClassName,
   triggerPlaceholder,
   ariaInvalid,
+  stayOpen,
 }: {
   value: string
   options: ModelComboOption[]
@@ -53,6 +54,13 @@ export function ModelCombobox({
   triggerPlaceholder?: string
   /** Marks the trigger invalid for assistive tech (the border is a class). */
   ariaInvalid?: boolean
+  /**
+   * Keep the list open and the typed query intact after a selection, for
+   * callers that commit separately (an OK button in `footer`). Picking the
+   * wrong row out of a long list is easy, and closing on select meant the
+   * search had to be retyped to correct it.
+   */
+  stayOpen?: boolean
 }) {
   const { t } = useI18n()
   const [open, setOpen] = useState(false)
@@ -67,6 +75,9 @@ export function ModelCombobox({
 
   function pick(v: string) {
     onSelect(v)
+    // The caller commits, so the list stays put and the query survives —
+    // correcting a mis-click is one more click, not a retype.
+    if (stayOpen) return
     setOpen(false)
     setQuery('')
   }
@@ -89,8 +100,10 @@ export function ModelCombobox({
       open={open}
       onOpenChange={o => {
         setOpen(o)
-        if (!o) setQuery('')
-        else setActive(0)
+        // Reopening a stay-open picker returns to what was typed, which is the
+        // point: the reader is still working on the same question.
+        if (!o && !stayOpen) setQuery('')
+        if (o) setActive(0)
       }}
     >
       <PopoverTrigger

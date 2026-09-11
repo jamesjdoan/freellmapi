@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip } from '@/components/tooltip'
+import { ChainPicker } from '@/components/compare/chain-picker'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import { ModelCombobox } from '@/components/model-combobox'
@@ -112,6 +113,19 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
     onSuccess: invalidate,
   })
 
+  // Chain membership, the same control Compare carries. Judging a provider's
+  // menu and then placing the winner is one motion here too; sending the reader
+  // to a third screen to act on what this table just told them is the gap.
+  const { data: profiles } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ['profiles'],
+    queryFn: () => apiFetch('/api/profiles'),
+  })
+  const membership = useMutation({
+    mutationFn: (body: { chain: string; modelDbIds: number[]; member: boolean }) =>
+      apiFetch('/api/fallback/membership', { method: 'POST', body: JSON.stringify(body) }),
+    onSuccess: invalidate,
+  })
+
   const link = useMutation({
     mutationFn: (body: { platform: string; modelId: string; aaSlug: string | null; proxy?: boolean }) =>
       apiFetch('/api/analysis/link', {
@@ -213,15 +227,21 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
                     serving nothing is the state worth seeing beside the switch:
                     it is available and idle. */}
                 <td className="py-1 pr-2 text-[10px]">
-                  {r.chains.length > 0
-                    ? (
-                      <span className="flex max-w-[150px] flex-wrap gap-1" title={r.chains.join(', ')}>
-                        {r.chains.map(c => (
-                          <span key={c} className="rounded-full bg-muted px-1.5 py-0.5 text-muted-foreground">{c}</span>
-                        ))}
-                      </span>
-                    )
-                    : <span className="text-muted-foreground">{routable(r) ? t('keys.panelIdle') : '–'}</span>}
+                  <ChainPicker
+                    chains={(profiles ?? []).map(p => p.name)}
+                    member={r.chains}
+                    disabled={membership.isPending}
+                    onApply={changes => changes.forEach(c => membership.mutate({
+                      chain: c.chain,
+                      modelDbIds: [r.modelDbId],
+                      member: c.member,
+                    }))}
+                  />
+                  {/* Available and unused is the state worth naming, and only
+                      says anything once the model could actually route. */}
+                  {r.chains.length === 0 && routable(r) && (
+                    <span className="ml-1 text-muted-foreground">{t('keys.panelIdle')}</span>
+                  )}
                 </td>
                 <td className="py-1 pr-2">
                   <MappingCell
@@ -361,6 +381,13 @@ function MappingCell({ row, catalogue, onLink, disabled }: {
   const [pending, setPending] = useState<string | null>(null)
   const isProxy = row.link?.source === 'proxy'
 
+  const commit = () => {
+    const slug = pending ?? row.link?.slug ?? NO_COUNTERPART
+    onLink(slug === NO_COUNTERPART ? null : slug, proxy)
+    setPending(null)
+    setEditing(false)
+  }
+
   if (!editing) {
     return (
       <span className="flex items-center gap-1">
@@ -398,6 +425,18 @@ function MappingCell({ row, catalogue, onLink, disabled }: {
           })),
         ]}
         onSelect={setPending}
+        stayOpen
+        footer={
+          // Inside the popover, not beside it: a button outside would be an
+          // outside-click, closing the list before it could fire.
+          <span className="flex items-center justify-between gap-2 border-t pt-2">
+            <label className="inline-flex items-center gap-1 text-[10px] text-muted-foreground" title={t('keys.proxyHint')}>
+              <input type="checkbox" checked={proxy} onChange={e => setProxy(e.target.checked)} className="size-3 accent-foreground" />
+              {t('keys.proxyLabel')}
+            </label>
+            <Button size="xs" disabled={disabled} onClick={commit}>{t('common.ok')}</Button>
+          </span>
+        }
         ariaLabel={t('compare.mapAriaLabel')}
         placeholder={t('compare.mapSearchPlaceholder')}
         emptyText={t('compare.mapNoResults')}
@@ -406,25 +445,6 @@ function MappingCell({ row, catalogue, onLink, disabled }: {
         ariaInvalid={false}
         align="start"
       />
-      {/* "Closest thing to this" is a different claim from "this is that
-          model", and the picker cannot tell which was meant — so it is asked
-          here, in either order, and applied on OK. */}
-      <label className="inline-flex items-center gap-1 text-[10px] text-muted-foreground" title={t('keys.proxyHint')}>
-        <input type="checkbox" checked={proxy} onChange={e => setProxy(e.target.checked)} className="size-3 accent-foreground" />
-        {t('keys.proxyLabel')}
-      </label>
-      <Button
-        size="xs"
-        disabled={disabled}
-        onClick={() => {
-          const slug = pending ?? row.link?.slug ?? NO_COUNTERPART
-          onLink(slug === NO_COUNTERPART ? null : slug, proxy)
-          setPending(null)
-          setEditing(false)
-        }}
-      >
-        {t('common.ok')}
-      </Button>
       <button
         type="button"
         onClick={() => { setPending(null); setEditing(false) }}

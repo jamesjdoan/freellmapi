@@ -900,6 +900,13 @@ function MappingCell({ members, catalogue, onLink }: {
   // that would hide the operator's own decision back from them.
   const slugs = new Set(members.map(m => m.link?.slug ?? null))
   const common = slugs.size === 1 ? [...slugs][0] : null
+
+  const commitMapping = () => {
+    const slug = pending ?? common ?? NO_COUNTERPART
+    onLink(slug === NO_COUNTERPART ? null : slug)
+    setPending(null)
+    setEditing(false)
+  }
   const linked = members.filter(m => m.link != null)
   const allManual = linked.length === members.length && members.every(m => m.link?.source === 'manual')
   const unresolved = members.find(m => m.link?.unresolved)
@@ -984,6 +991,12 @@ function MappingCell({ members, catalogue, onLink }: {
         value={pending ?? common ?? NO_COUNTERPART}
         options={options}
         onSelect={setPending}
+        stayOpen
+        footer={
+          <span className="flex items-center justify-end border-t pt-2">
+            <Button size="xs" onClick={commitMapping}>{t('common.ok')}</Button>
+          </span>
+        }
         ariaLabel={t('compare.mapAriaLabel')}
         placeholder={t('compare.mapSearchPlaceholder')}
         emptyText={t('compare.mapNoResults')}
@@ -994,17 +1007,6 @@ function MappingCell({ members, catalogue, onLink }: {
       {members.length > 1 && (
         <span className="text-[10px] text-muted-foreground">{t('compare.appliesToRoutes', { count: members.length })}</span>
       )}
-      <Button
-        size="xs"
-        onClick={() => {
-          const slug = pending ?? common ?? NO_COUNTERPART
-          onLink(slug === NO_COUNTERPART ? null : slug)
-          setPending(null)
-          setEditing(false)
-        }}
-      >
-        {t('common.ok')}
-      </Button>
       <Tooltip text={t('common.cancel')}>
         <Button variant="ghost" size="icon-xs" onClick={() => { setPending(null); setEditing(false) }} aria-label={t('common.cancel')}>×</Button>
       </Tooltip>
