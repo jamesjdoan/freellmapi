@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { Switch } from '@/components/ui/switch'
+import { Tooltip } from '@/components/tooltip'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import { ModelCombobox } from '@/components/model-combobox'
@@ -97,6 +98,20 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
   // scores in these columns are only as good as the match behind them: a row
   // reading "-" is unjudgeable, and the provider's own menu is where you notice
   // that one of its models never got matched.
+  // Proxies the upstream has caught up with. Shared cache with Compare, so the
+  // same prompt reaches whichever screen the operator is on.
+  const { data: upgrades } = useQuery<{ upgrades: { platform: string; modelId: string; realName: string; matchReason: string }[] }>({
+    queryKey: ['analysis', 'proxy-upgrades'],
+    queryFn: () => apiFetch('/api/analysis/proxy-upgrades'),
+  })
+  const upgradeFor = (r: Row) =>
+    upgrades?.upgrades.find(u => u.platform === r.platform && u.modelId === r.modelId)
+  const acceptUpgrade = useMutation({
+    mutationFn: (body: { platform: string; modelId: string }) =>
+      apiFetch('/api/analysis/proxy-upgrades/accept', { method: 'POST', body: JSON.stringify(body) }),
+    onSuccess: invalidate,
+  })
+
   const link = useMutation({
     mutationFn: (body: { platform: string; modelId: string; aaSlug: string | null; proxy?: boolean }) =>
       apiFetch('/api/analysis/link', {
@@ -215,6 +230,25 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
                     disabled={link.isPending || nudge.isPending}
                     onLink={(slug, proxy) => link.mutate({ platform: r.platform, modelId: r.modelId, aaSlug: slug, proxy })}
                   />
+                  {/* The estimate has stopped being the best answer available.
+                      Offered here as well as on Compare, since this is where a
+                      proxy is set in the first place. */}
+                  {(() => {
+                    const u = upgradeFor(r)
+                    if (!u) return null
+                    return (
+                      <Tooltip text={t('keys.panelUpgradeHint', { name: u.realName, reason: u.matchReason })}>
+                        <button
+                          type="button"
+                          disabled={acceptUpgrade.isPending}
+                          onClick={() => acceptUpgrade.mutate({ platform: r.platform, modelId: r.modelId })}
+                          className="mt-0.5 block rounded-full border border-amber-500/50 px-1.5 text-[10px] text-amber-600 dark:text-amber-400"
+                        >
+                          {t('keys.panelUpgrade')}
+                        </button>
+                      </Tooltip>
+                    )
+                  })()}
                 </td>
                 <td className="py-1 text-center opacity-100">
                   <Switch

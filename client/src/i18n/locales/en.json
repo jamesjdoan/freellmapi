@@ -652,6 +652,8 @@
     "panelScopedCount": "{scoped} of {total} in key scope",
     "panelOnlyScoped": "Only in scope",
     "panelColChains": "Chains",
+    "panelUpgrade": "real data available",
+    "panelUpgradeHint": "Artificial Analysis now publishes this model. Replace the borrowed scores and your adjustments with measurements from {name}, matched by {reason}.",
     "panelIdle": "idle",
     "panelColModel": "Model",
     "panelColScope": "In key scope",

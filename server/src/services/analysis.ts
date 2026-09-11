@@ -875,6 +875,19 @@ export interface ProxyUpgrade {
  * guess without asking is how you lose trust in both.
  */
 export function findProxyUpgrades(db: Db = getDb()): ProxyUpgrade[] {
+  // Matching every proxy against the whole upstream catalogue is not free, and
+  // this is polled by two screens. The answer can only change when the
+  // catalogue changes or a proxy does, so both are fingerprinted and the result
+  // held until one moves — no timer, nothing to go stale behind.
+  const fingerprint = JSON.stringify(db.prepare(`
+    SELECT (SELECT COUNT(*) FROM aa_model) AS models,
+           (SELECT MAX(slug) FROM aa_model) AS lastSlug,
+           (SELECT COUNT(*) FROM aa_model_link WHERE source = 'proxy') AS proxies,
+           (SELECT MAX(created_at) FROM aa_model_link WHERE source = 'proxy') AS lastProxy
+  `).get());
+  const cached = upgradeCache.get(db);
+  if (cached?.fingerprint === fingerprint) return cached.upgrades;
+
   const candidates = db.prepare('SELECT slug, name FROM aa_model').all() as AaCandidate[];
   const names = new Map(candidates.map(c => [c.slug, c.name]));
   const proxies = db.prepare(`
@@ -899,8 +912,14 @@ export function findProxyUpgrades(db: Db = getDb()): ProxyUpgrade[] {
       matchReason: hit.reason,
     });
   }
+  upgradeCache.set(db, { fingerprint, upgrades: out });
   return out;
 }
+
+// Keyed on the connection, not module-global: two databases can hold the same
+// counts and still hold different rows, and a test opening a fresh in-memory DB
+// would otherwise read the previous one's answer.
+const upgradeCache = new WeakMap<Db, { fingerprint: string; upgrades: ProxyUpgrade[] }>();
 
 /**
  * Accept the real match for a proxied model: the link becomes a manual one and

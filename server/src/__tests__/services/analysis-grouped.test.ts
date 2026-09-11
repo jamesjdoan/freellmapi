@@ -552,3 +552,33 @@ describe('proxy upgrades', () => {
     expect(acceptProxyUpgrade('groq', 'probe/newcomer')).toBe(false);
   });
 })
+
+describe('proxy upgrade caching', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    addAa('kimi-k3', 'Kimi K3', 44);
+    addModel('groq', 'probe/cached', 'Cached Probe');
+    setManualLink('groq', 'probe/cached', 'kimi-k3', getDb(), 'proxy');
+  });
+
+  it('notices a newly published model without waiting for anything', () => {
+    // The memo is fingerprinted on the catalogue and the proxies, so a sync
+    // adding the real model invalidates it immediately — no timer, nothing to
+    // go stale behind.
+    expect(findProxyUpgrades()).toEqual([]);
+
+    addAa('probe-cached-probe', 'Cached Probe', 12);
+
+    expect(findProxyUpgrades().map(u => u.realSlug)).toEqual(['probe-cached-probe']);
+  });
+
+  it('notices a proxy being removed', () => {
+    addAa('probe-cached-probe', 'Cached Probe', 12);
+    expect(findProxyUpgrades()).toHaveLength(1);
+
+    acceptProxyUpgrade('groq', 'probe/cached');
+
+    expect(findProxyUpgrades()).toEqual([]);
+  });
+})

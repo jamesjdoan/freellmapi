@@ -659,7 +659,9 @@
     "proxyNudgeUp": "Raise the estimate",
     "proxyNudgeDown": "Lower the estimate",
     "panelColChains": "Chains",
-    "panelIdle": "idle"
+    "panelIdle": "idle",
+    "panelUpgrade": "real data available",
+    "panelUpgradeHint": "Artificial Analysis now publishes this model. Replace the borrowed scores and your adjustments with measurements from {name}, matched by {reason}."
   },
   "backups": {
     "title": "Sauvegardes",
