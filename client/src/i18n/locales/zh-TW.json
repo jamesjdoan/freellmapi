@@ -1410,6 +1410,11 @@
     "scopePickAdd": "Add which routes to the key scope?",
     "scopePickRemove": "Remove which routes from the key scope?",
     "matchProxy": "estimated",
-    "matchProxyHint": "Not published by Artificial Analysis. Scores are borrowed from {name} ({slug}) and adjusted by hand, so they are an estimate."
+    "matchProxyHint": "Not published by Artificial Analysis. Scores are borrowed from {name} ({slug}) and adjusted by hand, so they are an estimate.",
+    "upgradeTitle": "{count} estimated models now have real benchmark data",
+    "upgradeHint": "These were mapped to a stand-in because nothing measured them. Artificial Analysis now publishes the model itself, so the borrowed scores and your adjustments can be replaced with measurements.",
+    "upgradeSwap": "borrowing {from} - real match: {to} (by {reason})",
+    "upgradeAccept": "Use real data",
+    "upgradeTitleOne": "An estimated model now has real benchmark data"
   }
 }

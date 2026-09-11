@@ -10,6 +10,8 @@ import {
   setModelKeyScope,
   getComparePayload,
   setProxyDelta,
+  findProxyUpgrades,
+  acceptProxyUpgrade,
 } from '../../services/analysis.js';
 import { setUnifyOverrides } from '../../services/model-groups.js';
 
@@ -503,5 +505,50 @@ describe('proxy speed adjustment', () => {
     setProxyDelta('groq', 'probe/speedy', 'speed', -3);
 
     expect(speedOf()).toBe(110);
+  });
+})
+
+describe('proxy upgrades', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    addAa('kimi-k3', 'Kimi K3', 44);
+    addModel('groq', 'probe/newcomer', 'Newcomer 7B');
+    // Nothing measured it, so it borrows Kimi K3 and is nudged down.
+    setManualLink('groq', 'probe/newcomer', 'kimi-k3', getDb(), 'proxy');
+    setProxyDelta('groq', 'probe/newcomer', 'intelligence', -3);
+  });
+
+  it('reports nothing while the model is still unpublished', () => {
+    expect(findProxyUpgrades()).toEqual([]);
+  });
+
+  it('spots the real model once a sync publishes it', () => {
+    addAa('probe-newcomer-7b', 'Newcomer 7B', 18);
+
+    const [u] = findProxyUpgrades();
+    expect(u).toMatchObject({
+      modelId: 'probe/newcomer',
+      proxySlug: 'kimi-k3',
+      realSlug: 'probe-newcomer-7b',
+      realName: 'Newcomer 7B',
+    });
+  });
+
+  it('replaces the estimate with the measurement, dropping the adjustments', () => {
+    addAa('probe-newcomer-7b', 'Newcomer 7B', 18);
+
+    expect(acceptProxyUpgrade('groq', 'probe/newcomer')).toBe(true);
+    const row = getComparePayload().rows.find(r => r.modelId === 'probe/newcomer');
+    expect(row?.link?.source).toBe('manual');
+    expect(row?.link?.slug).toBe('probe-newcomer-7b');
+    // The adjustments described an estimate that no longer exists.
+    expect(row?.analysis?.intelligenceIndex).toBe(18);
+    expect(row?.link?.proxyDelta).toEqual({ intelligence: 0, coding: 0, agentic: 0, speed: 0 });
+    expect(findProxyUpgrades()).toEqual([]);
+  });
+
+  it('refuses to accept when there is nothing to accept', () => {
+    expect(acceptProxyUpgrade('groq', 'probe/newcomer')).toBe(false);
   });
 })

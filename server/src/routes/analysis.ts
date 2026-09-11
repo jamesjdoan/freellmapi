@@ -13,6 +13,8 @@ import {
   getReferenceGroups,
   setModelKeyScope,
   setProxyDelta,
+  findProxyUpgrades,
+  acceptProxyUpgrade,
   getReferenceSlugs,
   setReferenceSlugs,
 } from '../services/analysis.js';
@@ -156,6 +158,31 @@ analysisRouter.put('/proxy-delta', (req: Request, res: Response) => {
     return;
   }
   res.json({ success: true, metric, delta });
+});
+
+// Proxies the upstream has caught up with since they were set. Reported only:
+// a proxy is a deliberate judgement, and replacing it without asking would be
+// the same mistake as ignoring the new data.
+analysisRouter.get('/proxy-upgrades', (_req: Request, res: Response) => {
+  res.json({ upgrades: findProxyUpgrades() });
+});
+
+const upgradeSchema = z.object({ platform: z.string().min(1), modelId: z.string().min(1) });
+
+analysisRouter.post('/proxy-upgrades/accept', (req: Request, res: Response) => {
+  const parsed = upgradeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
+    return;
+  }
+  if (!acceptProxyUpgrade(parsed.data.platform, parsed.data.modelId)) {
+    res.status(409).json({ error: {
+      message: 'No real match is available for this model; its proxy stands.',
+      type: 'invalid_request_error',
+    } });
+    return;
+  }
+  res.json({ success: true });
 });
 
 analysisRouter.get('/compare', (_req: Request, res: Response) => {

@@ -848,3 +848,67 @@ export function getAdjustedScores(db: Db = getDb()): Map<string, {
   }
   return out;
 }
+
+export interface ProxyUpgrade {
+  platform: string;
+  modelId: string;
+  displayName: string;
+  /** The stand-in currently supplying this row's scores. */
+  proxySlug: string;
+  proxyName: string;
+  /** The model the matcher now finds for it — published since the proxy was set. */
+  realSlug: string;
+  realName: string;
+  matchReason: string;
+}
+
+/**
+ * Proxies the upstream has since caught up with.
+ *
+ * A proxy is set because nothing measured the model. Syncs add models, so the
+ * real one can appear later — and a proxy will go on quietly borrowing scores
+ * from a stand-in forever, because it is deliberate and no re-match will touch
+ * it. That silence is the problem: the estimate stops being the best available
+ * answer and nothing says so.
+ *
+ * Only reported, never applied: swapping an operator's judgement for a fresh
+ * guess without asking is how you lose trust in both.
+ */
+export function findProxyUpgrades(db: Db = getDb()): ProxyUpgrade[] {
+  const candidates = db.prepare('SELECT slug, name FROM aa_model').all() as AaCandidate[];
+  const names = new Map(candidates.map(c => [c.slug, c.name]));
+  const proxies = db.prepare(`
+    SELECT l.platform, l.model_id, l.aa_slug, m.display_name
+      FROM aa_model_link l JOIN models m ON m.platform = l.platform AND m.model_id = l.model_id
+     WHERE l.source = 'proxy' AND l.aa_slug IS NOT NULL
+  `).all() as { platform: string; model_id: string; aa_slug: string; display_name: string }[];
+
+  const out: ProxyUpgrade[] = [];
+  for (const p of proxies) {
+    const hit = matchAaModel(p.model_id, p.display_name, candidates);
+    // Matching the stand-in itself is not news: that is what a proxy is.
+    if (!hit || hit.slug === p.aa_slug) continue;
+    out.push({
+      platform: p.platform,
+      modelId: p.model_id,
+      displayName: p.display_name,
+      proxySlug: p.aa_slug,
+      proxyName: names.get(p.aa_slug) ?? p.aa_slug,
+      realSlug: hit.slug,
+      realName: names.get(hit.slug) ?? hit.slug,
+      matchReason: hit.reason,
+    });
+  }
+  return out;
+}
+
+/**
+ * Accept the real match for a proxied model: the link becomes a manual one and
+ * the adjustments go, because they described an estimate that no longer exists.
+ */
+export function acceptProxyUpgrade(platform: string, modelId: string, db: Db = getDb()): boolean {
+  const upgrade = findProxyUpgrades(db).find(u => u.platform === platform && u.modelId === modelId);
+  if (!upgrade) return false;
+  setManualLink(platform, modelId, upgrade.realSlug, db, 'manual');
+  return true;
+}

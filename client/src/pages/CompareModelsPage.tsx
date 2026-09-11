@@ -95,6 +95,17 @@ interface ComparePayload {
 
 type Metric = 'intelligenceIndex' | 'codingIndex' | 'agenticIndex'
 
+interface ProxyUpgrade {
+  platform: string
+  modelId: string
+  displayName: string
+  proxySlug: string
+  proxyName: string
+  realSlug: string
+  realName: string
+  matchReason: string
+}
+
 type Scope = 'routed' | 'keyed' | 'enabled' | 'all'
 
 const SCOPES: { key: Scope; labelKey: string; hintKey: string }[] = [
@@ -223,6 +234,20 @@ export default function CompareModelsPage() {
     return map
   }, [data?.rows])
 
+  // Proxies the upstream has caught up with. Prompted, never applied silently:
+  // the estimate was a deliberate judgement, and replacing it without asking
+  // is as bad as ignoring the new data.
+  const { data: upgrades } = useQuery<{ upgrades: ProxyUpgrade[] }>({
+    queryKey: ['analysis', 'proxy-upgrades'],
+    queryFn: () => apiFetch('/api/analysis/proxy-upgrades'),
+  })
+  const acceptUpgrade = useMutation({
+    mutationFn: (body: { platform: string; modelId: string }) =>
+      apiFetch('/api/analysis/proxy-upgrades/accept', { method: 'POST', body: JSON.stringify(body) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['analysis'] }),
+  })
+  const pendingUpgrades = upgrades?.upgrades ?? []
+
   const status = data?.status
 
   const entryKey = (g: CompareGroup) => g.groupKey
@@ -349,6 +374,31 @@ export default function CompareModelsPage() {
 
       {status != null && status.cachedModels > 0 && (
         <>
+          {pendingUpgrades.length > 0 && (
+            <section className="rounded-xl border border-amber-500/40 bg-amber-500/5 p-3">
+              <p className="text-xs font-medium">{t(pendingUpgrades.length === 1 ? 'compare.upgradeTitleOne' : 'compare.upgradeTitle', { count: pendingUpgrades.length })}</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">{t('compare.upgradeHint')}</p>
+              <ul className="mt-2 space-y-1">
+                {pendingUpgrades.map(u => (
+                  <li key={`${u.platform}:${u.modelId}`} className="flex flex-wrap items-center gap-2 text-[11px]">
+                    <PlatformDot platform={u.platform} />
+                    <span className="font-medium">{u.displayName}</span>
+                    <span className="text-muted-foreground">
+                      {t('compare.upgradeSwap', { from: u.proxyName, to: u.realName, reason: u.matchReason })}
+                    </span>
+                    <Button
+                      size="xs"
+                      disabled={acceptUpgrade.isPending}
+                      onClick={() => acceptUpgrade.mutate({ platform: u.platform, modelId: u.modelId })}
+                    >
+                      {t('compare.upgradeAccept')}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           <section className="rounded-xl border p-4">
             <div className="flex flex-wrap items-center gap-2">
               <Scale className="size-4 text-muted-foreground" />
