@@ -308,12 +308,14 @@
     "platformHasKey": "{platform} - key configured",
     "platformNoKey": "{platform} - no key. Click to add one.",
     "legendTitle": "Providers:",
-    "legendHollow": "hollow = no key",
     "scopeInList": "In key scope ({count})",
     "scopeOutList": "Present but not in key scope ({count})",
     "scopeNoKeyList": "Served here, no key ({count})",
     "andMore": "+{count} more",
-    "platformKeyDisabled": "{platform} - key is switched off. Click to open it."
+    "platformKeyDisabled": "{platform} - key is switched off. Click to open it.",
+    "legendKeyed": "key",
+    "legendDisabled": "key off",
+    "legendNoKey": "no key"
   },
   "strategies": {
     "explore": "Unvermessene Modelle erkunden",

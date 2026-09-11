@@ -11,12 +11,18 @@ import { createPortal } from 'react-dom'
 // focus itself - i.e. never. A tooltip carrying detail available nowhere else
 // needs it; one that merely labels a focusable button does not, so this is
 // opt-in rather than always on.
-export function Tooltip({ text, children, side = 'top', className, focusable }: {
-  text: string
+export function Tooltip({ text, children, side = 'top', className, focusable, wide }: {
+  // ReactNode, not string: the content is only ever rendered, never measured,
+  // and some tooltips need to colour parts of what they say. A plain string is
+  // still a ReactNode, so every existing caller is unaffected.
+  text: ReactNode
   children: ReactNode
   side?: 'top' | 'bottom'
   className?: string
   focusable?: boolean
+  /** Double-width panel for tooltips carrying lists rather than a label. The
+   *  viewport clamp below reads the same flag, so the two cannot drift. */
+  wide?: boolean
 }) {
   const ref = useRef<HTMLSpanElement>(null)
   const [coords, setCoords] = useState<{ x: number; y: number } | null>(null)
@@ -25,7 +31,7 @@ export function Tooltip({ text, children, side = 'top', className, focusable }: 
     const el = ref.current
     if (!el) return
     const r = el.getBoundingClientRect()
-    const half = 116 // ~half of the w-56 tooltip
+    const half = wide ? 192 : 116 // ~half of the panel width below
     const x = Math.min(Math.max(r.left + r.width / 2, half + 8), window.innerWidth - half - 8)
     setCoords({ x, y: side === 'top' ? r.top : r.bottom })
   }
@@ -88,7 +94,7 @@ export function Tooltip({ text, children, side = 'top', className, focusable }: 
             transform: side === 'top' ? 'translate(-50%, -100%)' : 'translate(-50%, 0)',
             zIndex: 9999,
           }}
-          className="pointer-events-none w-56 rounded-lg bg-foreground px-2.5 py-1.5 text-xs leading-snug text-background shadow-md whitespace-pre-line"
+          className={`pointer-events-none ${wide ? 'w-96' : 'w-56'} rounded-lg bg-foreground px-2.5 py-1.5 text-xs leading-snug text-background shadow-md whitespace-pre-line`}
         >
           {text}
         </span>,

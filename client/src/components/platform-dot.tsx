@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { platformColors } from '@/lib/routing'
 import { useI18n } from '@/i18n'
+import { Tooltip } from '@/components/tooltip'
 
 // Platform swatch. Same colour source as the token-usage legend
 // (lib/routing.ts), same gray fallback for a platform with no assigned colour.
@@ -35,11 +36,32 @@ export interface PlatformScope {
  *  hundred-line list is unreadable at any size. */
 const TOOLTIP_IDS = 8
 
-function summarise(t: (k: string, v?: Record<string, string | number>) => string, section: string, ids: string[]): string {
-  if (ids.length === 0) return ''
-  const shown = ids.slice(0, TOOLTIP_IDS).join(', ')
-  const rest = ids.length > TOOLTIP_IDS ? t('models.andMore', { count: ids.length - TOOLTIP_IDS }) : ''
-  return `${t(section, { count: ids.length })}: ${shown}${rest ? ' ' + rest : ''}`
+// The tooltip surface is inverted (bg-foreground / text-background), so these
+// are picked to read on a dark panel in light mode and a light one in dark:
+//   green      routable now
+//   dimmed     present and switched off — deliberately recessive, since the
+//              point is that it is NOT in play. True black would be invisible
+//              against this surface, so it is a dim neutral instead.
+//   light blue served here, no key at all
+const SECTION_CLASS = {
+  in: 'text-emerald-400',
+  off: 'text-background/50',
+  none: 'text-sky-300',
+} as const
+
+function Section({ tone, label, ids, t }: {
+  tone: keyof typeof SECTION_CLASS
+  label: string
+  ids: string[]
+  t: (k: string, v?: Record<string, string | number>) => string
+}) {
+  if (ids.length === 0) return null
+  const rest = ids.length > TOOLTIP_IDS ? ' ' + t('models.andMore', { count: ids.length - TOOLTIP_IDS }) : ''
+  return (
+    <span className={`block ${SECTION_CLASS[tone]}`}>
+      {t(label, { count: ids.length })}: {ids.slice(0, TOOLTIP_IDS).join(', ')}{rest}
+    </span>
+  )
 }
 
 export function PlatformDot({ platform, hasKey, linkToKeys, scope, keyState }: {
@@ -61,27 +83,42 @@ export function PlatformDot({ platform, hasKey, linkToKeys, scope, keyState }: {
   const colour = platformColor(platform)
   const missing = hasKey === false
   const disabled = keyState === 'disabled'
-  const title = [
-    !missing
-      ? t('models.platformHasKey', { platform })
-      : disabled
-        ? t('models.platformKeyDisabled', { platform })
-        : t('models.platformNoKey', { platform }),
-    scope && summarise(t, 'models.scopeInList', scope.inScope),
-    scope && summarise(t, 'models.scopeOutList', scope.outOfScope),
-    scope && summarise(t, 'models.scopeNoKeyList', scope.noKey),
-  ].filter(Boolean).join('\n')
+  const headline = !missing
+    ? t('models.platformHasKey', { platform })
+    : disabled
+      ? t('models.platformKeyDisabled', { platform })
+      : t('models.platformNoKey', { platform })
+  const headTone: keyof typeof SECTION_CLASS = !missing ? 'in' : disabled ? 'off' : 'none'
 
+  const detail = (
+    <span className="block space-y-1">
+      <span className={`block font-medium ${SECTION_CLASS[headTone]}`}>{headline}</span>
+      {scope && <Section tone="in" label="models.scopeInList" ids={scope.inScope} t={t} />}
+      {scope && <Section tone="off" label="models.scopeOutList" ids={scope.outOfScope} t={t} />}
+      {scope && <Section tone="none" label="models.scopeNoKeyList" ids={scope.noKey} t={t} />}
+    </span>
+  )
+  // Kept as a plain string too: the accessible name cannot carry colour, and a
+  // screen reader still needs the same facts.
+  const title = headline
+
+  // Shape carries the state, not just fill, so the three cases stay apart for a
+  // reader who cannot separate the colours — and colour keeps meaning provider
+  // rather than being overloaded with status:
+  //   filled circle   usable key
+  //   hollow circle   key exists, switched off
+  //   hollow square   no key at all
   const dot = (
-    <span
-      title={title}
-      aria-label={title}
-      className="size-2 rounded-full flex-shrink-0 border"
-      style={{
-        backgroundColor: missing ? 'transparent' : colour,
-        borderColor: colour,
-      }}
-    />
+    <Tooltip text={detail} wide>
+      <span
+        aria-label={title}
+        className={`size-2 flex-shrink-0 border ${keyState === 'none' ? 'rounded-[1px]' : 'rounded-full'}`}
+        style={{
+          backgroundColor: missing ? 'transparent' : colour,
+          borderColor: colour,
+        }}
+      />
+    </Tooltip>
   )
 
   if (!missing || !linkToKeys) return dot
@@ -121,7 +158,22 @@ export function PlatformLegend({ platforms, keyed, scopes, keyStates }: {
           <span>{p}</span>
         </span>
       ))}
-      {keyed && <span className="italic">{t('models.legendHollow')}</span>}
+      {keyed && (
+        <span className="inline-flex items-center gap-2 italic">
+          <span className="inline-flex items-center gap-1">
+            <span className="size-2 rounded-full border border-foreground bg-foreground" />
+            {t('models.legendKeyed')}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="size-2 rounded-full border border-foreground" />
+            {t('models.legendDisabled')}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="size-2 rounded-[1px] border border-foreground" />
+            {t('models.legendNoKey')}
+          </span>
+        </span>
+      )}
     </div>
   )
 }
