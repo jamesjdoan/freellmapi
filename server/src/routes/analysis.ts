@@ -12,6 +12,7 @@ import {
   getGroupedCompare,
   getReferenceGroups,
   setModelKeyScope,
+  setProxyDelta,
   getReferenceSlugs,
   setReferenceSlugs,
 } from '../services/analysis.js';
@@ -40,6 +41,10 @@ const linkSchema = z.object({
   // Null is meaningful: "this model has no counterpart", which stops the
   // matcher proposing one on every sync.
   aaSlug: z.string().min(1).nullable(),
+  // A stand-in for a model the upstream does not publish. Scores read as an
+  // estimate, and nothing may treat it as evidence that two routes are the
+  // same model.
+  proxy: z.boolean().optional(),
 });
 
 analysisRouter.get('/status', (_req: Request, res: Response) => {
@@ -124,6 +129,32 @@ analysisRouter.put('/key-scope', (req: Request, res: Response) => {
   res.json({ success: true, ...result });
 });
 
+const proxyDeltaSchema = z.object({
+  platform: z.string().min(1),
+  modelId: z.string().min(1),
+  delta: z.number().min(-50).max(50),
+});
+
+// Nudge a proxy's borrowed scores. Rejected for auto and manual links: there the
+// numbers measure the model itself, and shifting them would be falsification
+// rather than estimation.
+analysisRouter.put('/proxy-delta', (req: Request, res: Response) => {
+  const parsed = proxyDeltaSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
+    return;
+  }
+  const { platform, modelId, delta } = parsed.data;
+  if (!setProxyDelta(platform, modelId, delta)) {
+    res.status(409).json({ error: {
+      message: 'Only a proxy link can be adjusted. Map this model as a proxy first.',
+      type: 'invalid_request_error',
+    } });
+    return;
+  }
+  res.json({ success: true, delta });
+});
+
 analysisRouter.get('/compare', (_req: Request, res: Response) => {
   res.json(getComparePayload());
 });
@@ -134,8 +165,9 @@ analysisRouter.put('/link', (req: Request, res: Response) => {
     res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
     return;
   }
-  for (const m of parsed.data.models) setManualLink(m.platform, m.modelId, parsed.data.aaSlug);
-  res.json({ success: true, linked: parsed.data.models.length });
+  const source = parsed.data.proxy ? 'proxy' as const : 'manual' as const;
+  for (const m of parsed.data.models) setManualLink(m.platform, m.modelId, parsed.data.aaSlug, undefined, source);
+  res.json({ success: true, linked: parsed.data.models.length, source });
 });
 
 /** Hand a model back to the matcher, discarding the manual decision. */

@@ -288,7 +288,9 @@ export function relinkAll(db: Db = getDb()): { linked: number; unmatched: number
   let unmatched = 0;
   db.transaction(() => {
     for (const row of rows) {
-      if (row.link_source === 'manual') { linked++; continue; }
+      // Operator decisions of either kind are left alone; only 'auto' rows are
+      // re-proposed. A proxy is as deliberate as a manual match.
+      if (row.link_source === 'manual' || row.link_source === 'proxy') { linked++; continue; }
       const hit = matchAaModel(row.model_id, row.display_name, candidates);
       if (hit) {
         upsert.run(row.platform, row.model_id, hit.slug, hit.reason);
@@ -303,19 +305,36 @@ export function relinkAll(db: Db = getDb()): { linked: number; unmatched: number
 }
 
 /** Point one of our models at an AA slug by hand, or at nothing. */
+/**
+ * Pin a model to a benchmark by hand.
+ *
+ * `source: 'proxy'` records a DIFFERENT claim: not "this is that model", but
+ * "nothing here measures this one, so read it as roughly this". A model absent
+ * from the upstream catalogue has no scores at all, and a stand-in is more
+ * useful than a dash — but it is an estimate, and everything downstream has to
+ * keep being able to tell the two apart. In particular a proxy must never imply
+ * two routes are the same model.
+ *
+ * Both survive a re-match: relinkAll only overwrites rows whose source is
+ * 'auto'.
+ */
 export function setManualLink(
   platform: string,
   modelId: string,
   aaSlug: string | null,
   db: Db = getDb(),
+  source: 'manual' | 'proxy' = 'manual',
 ): void {
   db.prepare(`
-    INSERT INTO aa_model_link (platform, model_id, aa_slug, source, match_reason)
-    VALUES (?, ?, ?, 'manual', NULL)
+    INSERT INTO aa_model_link (platform, model_id, aa_slug, source, match_reason, proxy_delta)
+    VALUES (?, ?, ?, ?, NULL, 0)
     ON CONFLICT(platform, model_id) DO UPDATE SET
-      aa_slug = excluded.aa_slug, source = 'manual', match_reason = NULL,
+      aa_slug = excluded.aa_slug, source = excluded.source, match_reason = NULL,
+      -- The adjustment described the OLD stand-in; carrying it onto a new one
+      -- would silently mis-state the new estimate.
+      proxy_delta = 0,
       created_at = datetime('now')
-  `).run(platform, modelId, aaSlug);
+  `).run(platform, modelId, aaSlug, source);
 }
 
 /** Hand a model back to the matcher, discarding a manual decision. */
@@ -362,8 +381,13 @@ export interface CompareRow {
     medianTimeToFirstTokenSeconds: number | null;
   } | null;
   link: {
+    /** 'proxy' is a stand-in for a model the upstream does not publish: the
+     *  scores are an estimate and do NOT say two routes are the same model. */
     slug: string | null;
-    source: 'auto' | 'manual';
+    /** Index points added to a PROXY's borrowed scores. Nothing but an estimate
+     *  can carry one: on a measurement it would be editing the measurement. */
+    proxyDelta: number;
+    source: 'auto' | 'manual' | 'proxy';
     matchReason: string | null;
     /** True when the link names a slug the cache no longer has — AA withdrew
      *  it, or the operator mapped to a stale one. Distinct from unlinked. */
@@ -388,7 +412,7 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
   const rows = db.prepare(`
     SELECT m.id AS model_db_id, m.platform, m.model_id, m.display_name, m.enabled, m.context_window,
            m.supports_tools, m.supports_vision, m.intelligence_rank, m.speed_rank,
-           l.aa_slug, l.source AS link_source, l.match_reason,
+           l.aa_slug, l.source AS link_source, l.match_reason, l.proxy_delta,
            a.slug AS aa_present, a.name AS aa_name, a.creator, a.intelligence_index,
            a.coding_index, a.agentic_index, a.price_1m_input, a.price_1m_output,
            a.median_output_tokens_per_second, a.median_time_to_first_token_seconds,
@@ -469,9 +493,12 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
           slug: String(r.aa_slug),
           name: String(r.aa_name),
           creator: r.creator == null ? null : String(r.creator),
-          intelligenceIndex: numberOrNull(r.intelligence_index),
-          codingIndex: numberOrNull(r.coding_index),
-          agenticIndex: numberOrNull(r.agentic_index),
+          // The adjustment is applied HERE, not in the UI, so every table sorts
+          // on the number it prints. Only a proxy carries one; on a measurement
+          // it would be editing the measurement.
+          intelligenceIndex: nudge(numberOrNull(r.intelligence_index), r),
+          codingIndex: nudge(numberOrNull(r.coding_index), r),
+          agenticIndex: nudge(numberOrNull(r.agentic_index), r),
           price1mInput: numberOrNull(r.price_1m_input),
           price1mOutput: numberOrNull(r.price_1m_output),
           medianOutputTokensPerSecond: numberOrNull(r.median_output_tokens_per_second),
@@ -481,7 +508,10 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
       link: r.link_source
         ? {
           slug: r.aa_slug == null ? null : String(r.aa_slug),
-          source: r.link_source === 'manual' ? 'manual' : 'auto',
+          source: r.link_source === 'manual' || r.link_source === 'proxy'
+            ? r.link_source
+            : 'auto' as const,
+          proxyDelta: Number(r.proxy_delta ?? 0),
           matchReason: r.match_reason == null ? null : String(r.match_reason),
           unresolved: r.aa_slug != null && !r.aa_present,
         }
@@ -619,7 +649,11 @@ export function getGroupedCompare(db: Db = getDb()): CompareGroup[] {
     // Slugs the members' own links name. More than one means the merge put
     // together models Artificial Analysis considers different — worth saying
     // rather than silently showing one of them.
-    const linkedSlugs = [...new Set(members.map(m => m.analysis?.slug).filter(Boolean))] as string[];
+    // Proxies excluded: a stand-in disagreeing with a real match is not the
+    // group disagreeing about what it is, it is one route being estimated.
+    const linkedSlugs = [...new Set(
+      members.filter(m => m.link?.source !== 'proxy').map(m => m.analysis?.slug).filter(Boolean),
+    )] as string[];
     const inherited = members.find(m => m.analysis)?.analysis ?? null;
     const solo = members.length === 1;
     return {
@@ -641,6 +675,21 @@ export function getGroupedCompare(db: Db = getDb()): CompareGroup[] {
       reference: false,
     };
   }).filter(g => g.members.length > 0);
+}
+
+/**
+ * A proxy's borrowed score, shifted by the operator's adjustment.
+ *
+ * Clamped at zero: a stand-in nudged below nothing is not information, and a
+ * negative index would sort beneath models that genuinely scored zero. Absent
+ * scores stay absent — an estimate of nothing is still nothing.
+ */
+function nudge(value: number | null, row: Record<string, unknown>): number | null {
+  if (value == null) return null;
+  if (row.link_source !== 'proxy') return value;
+  const delta = Number(row.proxy_delta ?? 0);
+  if (!Number.isFinite(delta) || delta === 0) return value;
+  return Math.max(0, Math.round((value + delta) * 10) / 10);
 }
 
 function lookupAa(db: Db, slug: string): CompareRow['analysis'] {
@@ -674,6 +723,24 @@ function lookupAa(db: Db, slug: string): CompareRow['analysis'] {
  * silently revoking access to every model discovered afterwards. That is a
  * different decision from the one the button offers, so it is not taken here.
  */
+/**
+ * Shift a proxy's borrowed scores by `delta` index points.
+ *
+ * Only a proxy may carry one: on an auto or manual link the numbers are a
+ * measurement of the model itself, and "adjusting" those would be falsifying
+ * them rather than estimating.
+ */
+export function setProxyDelta(platform: string, modelId: string, delta: number, db: Db = getDb()): boolean {
+  const row = db.prepare(
+    'SELECT source FROM aa_model_link WHERE platform = ? AND model_id = ?',
+  ).get(platform, modelId) as { source: string } | undefined;
+  if (row?.source !== 'proxy') return false;
+  const clamped = Math.max(-50, Math.min(50, Math.round(delta * 10) / 10));
+  db.prepare('UPDATE aa_model_link SET proxy_delta = ? WHERE platform = ? AND model_id = ?')
+    .run(clamped, platform, modelId);
+  return true;
+}
+
 export function setModelKeyScope(platform: string, modelId: string, allow: boolean, db: Db = getDb()): {
   changed: number; refused: number;
 } {

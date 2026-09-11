@@ -651,7 +651,12 @@
     "panelColEnabled": "Enabled",
     "panelUnscoped": "all",
     "panelUnscopedHint": "This key is unscoped, so it already permits every model here. Narrow it on the key itself.",
-    "panelNoModels": "No models discovered for this provider yet."
+    "panelNoModels": "No models discovered for this provider yet.",
+    "proxyLabel": "closest match",
+    "proxyHint": "This model is not published by Artificial Analysis. Borrow another model's scores as an estimate - it will never be treated as the same model.",
+    "proxyNudgeHint": "Adjust the borrowed scores up or down, so this model ranks where you judge it belongs",
+    "proxyNudgeUp": "Raise the estimate",
+    "proxyNudgeDown": "Lower the estimate"
   },
   "backups": {
     "title": "备份",

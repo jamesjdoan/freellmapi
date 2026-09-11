@@ -30,7 +30,13 @@ interface Row {
     agenticIndex: number | null
     medianOutputTokensPerSecond: number | null
   } | null
-  link: { slug: string | null; source: 'auto' | 'manual'; matchReason: string | null; unresolved: boolean } | null
+  link: {
+    slug: string | null
+    source: 'auto' | 'manual' | 'proxy'
+    matchReason: string | null
+    unresolved: boolean
+    proxyDelta: number
+  } | null
 }
 
 interface CatalogueEntry {
@@ -88,11 +94,20 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
   // reading "-" is unjudgeable, and the provider's own menu is where you notice
   // that one of its models never got matched.
   const link = useMutation({
-    mutationFn: (body: { platform: string; modelId: string; aaSlug: string | null }) =>
+    mutationFn: (body: { platform: string; modelId: string; aaSlug: string | null; proxy?: boolean }) =>
       apiFetch('/api/analysis/link', {
         method: 'PUT',
-        body: JSON.stringify({ models: [{ platform: body.platform, modelId: body.modelId }], aaSlug: body.aaSlug }),
+        body: JSON.stringify({
+          models: [{ platform: body.platform, modelId: body.modelId }],
+          aaSlug: body.aaSlug,
+          proxy: body.proxy ?? false,
+        }),
       }),
+    onSuccess: invalidate,
+  })
+  const nudge = useMutation({
+    mutationFn: (body: { platform: string; modelId: string; delta: number }) =>
+      apiFetch('/api/analysis/proxy-delta', { method: 'PUT', body: JSON.stringify(body) }),
     onSuccess: invalidate,
   })
 
@@ -174,8 +189,9 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
                   <MappingCell
                     row={r}
                     catalogue={data?.catalogue ?? []}
-                    disabled={link.isPending}
-                    onLink={slug => link.mutate({ platform: r.platform, modelId: r.modelId, aaSlug: slug })}
+                    disabled={link.isPending || nudge.isPending}
+                    onLink={(slug, proxy) => link.mutate({ platform: r.platform, modelId: r.modelId, aaSlug: slug, proxy })}
+                    onNudge={delta => nudge.mutate({ platform: r.platform, modelId: r.modelId, delta })}
                   />
                 </td>
                 <td className="py-1 text-center">
@@ -220,29 +236,48 @@ function Num({ v, digits = 1 }: { v: number | null | undefined; digits?: number 
 }
 
 /** The benchmark this route is matched to, and the control to change it. */
-function MappingCell({ row, catalogue, onLink, disabled }: {
+function MappingCell({ row, catalogue, onLink, onNudge, disabled }: {
   row: Row
   catalogue: CatalogueEntry[]
-  onLink: (slug: string | null) => void
+  onLink: (slug: string | null, proxy: boolean) => void
+  onNudge: (delta: number) => void
   disabled?: boolean
 }) {
   const { t } = useI18n()
   const [editing, setEditing] = useState(false)
+  const [proxy, setProxy] = useState(false)
+  const isProxy = row.link?.source === 'proxy'
+  const delta = row.link?.proxyDelta ?? 0
 
   if (!editing) {
     return (
-      <button
-        type="button"
-        onClick={() => setEditing(true)}
-        className="max-w-[150px] truncate text-left text-[11px] underline decoration-dotted underline-offset-2 hover:text-foreground"
-        title={row.analysis ? `${row.analysis.name} (${row.analysis.slug})` : undefined}
-      >
-        {row.link?.unresolved
-          ? <span className="text-destructive">{t('compare.matchUnresolved', { slug: row.link.slug ?? '' })}</span>
-          : row.analysis
-            ? <span className={row.link?.source === 'manual' ? '' : 'text-muted-foreground'}>{row.analysis.name}</span>
-            : <span className="text-muted-foreground">{t('compare.matchNone')}</span>}
-      </button>
+      <span className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => { setProxy(isProxy); setEditing(true) }}
+          className="max-w-[130px] truncate text-left text-[11px] underline decoration-dotted underline-offset-2 hover:text-foreground"
+          title={row.analysis ? `${row.analysis.name} (${row.analysis.slug})` : undefined}
+        >
+          {row.link?.unresolved
+            ? <span className="text-destructive">{t('compare.matchUnresolved', { slug: row.link.slug ?? '' })}</span>
+            : row.analysis
+              ? (
+                <span className={row.link?.source === 'manual' ? '' : 'text-muted-foreground'}>
+                  {isProxy ? '≈ ' : ''}{row.analysis.name}
+                </span>
+              )
+              : <span className="text-muted-foreground">{t('compare.matchNone')}</span>}
+        </button>
+        {/* Only an estimate is adjustable, and only then are the buttons shown:
+            offering them on a measurement would invite falsifying it. */}
+        {isProxy && (
+          <span className="inline-flex items-center gap-0.5" title={t('keys.proxyNudgeHint')}>
+            <button type="button" disabled={disabled} onClick={() => onNudge(delta - 1)} className="px-0.5 text-[11px] text-muted-foreground hover:text-foreground" aria-label={t('keys.proxyNudgeDown')}>−</button>
+            <span className="tabular-nums text-[10px] text-muted-foreground">{delta > 0 ? `+${delta}` : delta}</span>
+            <button type="button" disabled={disabled} onClick={() => onNudge(delta + 1)} className="px-0.5 text-[11px] text-muted-foreground hover:text-foreground" aria-label={t('keys.proxyNudgeUp')}>+</button>
+          </span>
+        )}
+      </span>
     )
   }
 
@@ -259,7 +294,7 @@ function MappingCell({ row, catalogue, onLink, disabled }: {
             platforms: c.creator ? [c.creator] : undefined,
           })),
         ]}
-        onSelect={slug => { onLink(slug === NO_COUNTERPART ? null : slug); setEditing(false) }}
+        onSelect={slug => { onLink(slug === NO_COUNTERPART ? null : slug, proxy); setEditing(false) }}
         ariaLabel={t('compare.mapAriaLabel')}
         placeholder={t('compare.mapSearchPlaceholder')}
         emptyText={t('compare.mapNoResults')}
@@ -268,6 +303,12 @@ function MappingCell({ row, catalogue, onLink, disabled }: {
         ariaInvalid={false}
         align="start"
       />
+      {/* Ticked BEFORE choosing: "closest thing to this" is a different claim
+          from "this is that model", and the picker cannot tell which was meant. */}
+      <label className="inline-flex items-center gap-1 text-[10px] text-muted-foreground" title={t('keys.proxyHint')}>
+        <input type="checkbox" checked={proxy} onChange={e => setProxy(e.target.checked)} className="size-3 accent-foreground" />
+        {t('keys.proxyLabel')}
+      </label>
       <button type="button" onClick={() => setEditing(false)} disabled={disabled} aria-label={t('common.cancel')} className="text-muted-foreground">×</button>
     </span>
   )

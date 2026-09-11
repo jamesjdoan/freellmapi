@@ -50,6 +50,7 @@ const CATALOGUE_EVENT_LOG_FILENAME = '20260910_000002_catalogue_event_log.ts';
 const ANALYSIS_BENCHMARKS_FILENAME = '20260911_000001_analysis_benchmarks.ts';
 const MODEL_GROUPS_FILENAME = '20260911_000002_model_groups.ts';
 const DROP_MODEL_GROUPS_FILENAME = '20260911_000003_drop_model_groups.ts';
+const PROXY_DELTA_FILENAME = '20260911_000004_proxy_delta.ts';
 
 interface SchemaRow {
   type: string;
@@ -146,6 +147,7 @@ describe('migration round trip', () => {
         ANALYSIS_BENCHMARKS_FILENAME,
         MODEL_GROUPS_FILENAME,
         DROP_MODEL_GROUPS_FILENAME,
+        PROXY_DELTA_FILENAME,
       ]);
     } finally {
       db.close();

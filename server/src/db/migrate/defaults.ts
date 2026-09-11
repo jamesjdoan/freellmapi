@@ -45,6 +45,7 @@ import * as catalogueEventLog from '../migrations/20260910_000002_catalogue_even
 import * as analysisBenchmarks from '../migrations/20260911_000001_analysis_benchmarks.js';
 import * as modelGroups from '../migrations/20260911_000002_model_groups.js';
 import * as dropModelGroups from '../migrations/20260911_000003_drop_model_groups.js';
+import * as proxyDelta from '../migrations/20260911_000004_proxy_delta.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -102,6 +103,7 @@ export const CATALOGUE_EVENT_LOG_FILENAME = '20260910_000002_catalogue_event_log
 export const ANALYSIS_BENCHMARKS_FILENAME = '20260911_000001_analysis_benchmarks.ts';
 export const MODEL_GROUPS_FILENAME = '20260911_000002_model_groups.ts';
 export const DROP_MODEL_GROUPS_FILENAME = '20260911_000003_drop_model_groups.ts';
+export const PROXY_DELTA_FILENAME = '20260911_000004_proxy_delta.ts';
 
 export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: LEGACY_BASELINE_FILENAME, module: legacyBaseline },
@@ -150,4 +152,5 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: ANALYSIS_BENCHMARKS_FILENAME, module: analysisBenchmarks },
   { filename: MODEL_GROUPS_FILENAME, module: modelGroups },
   { filename: DROP_MODEL_GROUPS_FILENAME, module: dropModelGroups },
+  { filename: PROXY_DELTA_FILENAME, module: proxyDelta },
 ];

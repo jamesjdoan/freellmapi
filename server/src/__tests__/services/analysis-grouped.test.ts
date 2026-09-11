@@ -9,6 +9,7 @@ import {
   setReferenceSlugs,
   setModelKeyScope,
   getComparePayload,
+  setProxyDelta,
 } from '../../services/analysis.js';
 import { setUnifyOverrides } from '../../services/model-groups.js';
 
@@ -351,5 +352,102 @@ describe('a disabled key is not a missing key', () => {
     getDb().prepare("UPDATE api_keys SET enabled = 1, status = 'healthy'").run();
 
     expect(scopeOf(/HF Probe/)).toBe('unscoped');
+  });
+})
+
+describe('proxy links', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    addAa('kimi-k3', 'Kimi K3', 44);
+    addModel('groq', 'probe/unpublished', 'Unpublished Model');
+    addModel('nvidia', 'probe/real', 'Unpublished Model (NV)');
+  });
+
+  // By model id, not platform: initDb seeds a catalogue, so the first groq row
+  // is somebody else's.
+  const linkOf = (modelId: string) =>
+    getComparePayload().rows.find(r => r.modelId === modelId)?.link;
+
+  it('records a stand-in distinctly from a real match', () => {
+    setManualLink('groq', 'probe/unpublished', 'kimi-k3', getDb(), 'proxy');
+
+    expect(linkOf('probe/unpublished')?.source).toBe('proxy');
+    // The scores still resolve — an estimate is the whole point — but the
+    // caller can see it is one.
+    expect(getComparePayload().rows.find(r => r.modelId === 'probe/unpublished')?.analysis?.slug).toBe('kimi-k3');
+  });
+
+  it('survives a re-match, like a manual link', () => {
+    setManualLink('groq', 'probe/unpublished', 'kimi-k3', getDb(), 'proxy');
+    relinkAll();
+
+    expect(linkOf('probe/unpublished')?.source).toBe('proxy');
+    expect(linkOf('probe/unpublished')?.slug).toBe('kimi-k3');
+  });
+
+  it('does not make a group look conflicted', () => {
+    // A stand-in disagreeing with a real match is one route being estimated,
+    // not the group disagreeing about what it is — and a proxy must never read
+    // as evidence that two routes are the same model.
+    setManualLink('groq', 'probe/unpublished', 'kimi-k3', getDb(), 'proxy');
+    setManualLink('nvidia', 'probe/real', null, getDb(), 'manual');
+
+    const group = getGroupedCompare().find(g => /Unpublished Model/.test(g.name));
+    expect(group?.members.length).toBeGreaterThan(1);
+    expect(group?.conflicted).toBe(false);
+  });
+
+  it('a plain manual link is still manual', () => {
+    setManualLink('groq', 'probe/unpublished', 'kimi-k3');
+
+    expect(linkOf('probe/unpublished')?.source).toBe('manual');
+  });
+})
+
+describe('proxy adjustment', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    addAa('kimi-k3', 'Kimi K3', 44);
+    addModel('groq', 'probe/proxied', 'Proxied Model');
+    addModel('nvidia', 'probe/measured', 'Measured Model');
+  });
+
+  const scoresOf = (modelId: string) => {
+    const r = getComparePayload().rows.find(x => x.modelId === modelId);
+    return { i: r?.analysis?.intelligenceIndex, c: r?.analysis?.codingIndex, delta: r?.link?.proxyDelta };
+  };
+
+  it('shifts a proxy\'s borrowed scores so it can be ranked against them', () => {
+    // A column of identical borrowed numbers sorts arbitrarily; "a bit worse
+    // than Kimi K3" is the judgement an operator actually has.
+    setManualLink('groq', 'probe/proxied', 'kimi-k3', getDb(), 'proxy');
+
+    expect(setProxyDelta('groq', 'probe/proxied', -2)).toBe(true);
+    expect(scoresOf('probe/proxied')).toEqual({ i: 42, c: 42, delta: -2 });
+  });
+
+  it('refuses to adjust a measurement', () => {
+    setManualLink('nvidia', 'probe/measured', 'kimi-k3', getDb(), 'manual');
+
+    expect(setProxyDelta('nvidia', 'probe/measured', -2)).toBe(false);
+    expect(scoresOf('probe/measured').i).toBe(44);
+  });
+
+  it('never ranks a nudged proxy below a genuine zero', () => {
+    setManualLink('groq', 'probe/proxied', 'kimi-k3', getDb(), 'proxy');
+    setProxyDelta('groq', 'probe/proxied', -50);
+
+    expect(scoresOf('probe/proxied').i).toBe(0);
+  });
+
+  it('drops the adjustment when the stand-in changes', () => {
+    setManualLink('groq', 'probe/proxied', 'kimi-k3', getDb(), 'proxy');
+    setProxyDelta('groq', 'probe/proxied', -2);
+    setManualLink('groq', 'probe/proxied', 'kimi-k3', getDb(), 'proxy');
+
+    // It described the old stand-in; carrying it over would mis-state the new one.
+    expect(scoresOf('probe/proxied')).toEqual({ i: 44, c: 44, delta: 0 });
   });
 })
