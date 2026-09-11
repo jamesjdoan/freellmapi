@@ -416,6 +416,8 @@
     "agentic": "Agentic",
 "searchPlaceholder": "Search model, provider, chain or benchmark",
 "showingCount": "{shown} shown",
+"scopePickAdd": "Add which routes to the key scope?",
+"scopePickRemove": "Remove which routes from the key scope?",
 "scopeAdd": "+ key scope ({count})",
 "scopeAddConfirm": "Allow",
 "scopeAddHint": "This provider key does not name this model, so the router cannot use it. Add it to the key scope.",

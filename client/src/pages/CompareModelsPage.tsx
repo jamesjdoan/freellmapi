@@ -8,7 +8,7 @@ import { apiFetch } from '@/lib/api'
 import { toast } from '@/lib/toast'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ConfirmButton } from '@/components/confirm-button'
+import { ScopePicker } from '@/components/compare/scope-picker'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/page-header'
 import { PlatformDot, PlatformLegend, type PlatformScope } from '@/components/platform-dot'
@@ -532,33 +532,24 @@ export default function CompareModelsPage() {
                               does not name. One press each way, because this is
                               the difference between a model being unreachable
                               and being usable. */}
+                          {/* Several routes is several decisions — a generous
+                              free tier and a 10-cent trial are not one — so the
+                              picker lists them. One route needs no choosing. */}
                           {!g.reference && g.members.some(m => m.keyScope === 'out') && (
-                            <ConfirmButton
-                              onConfirm={() => g.members
-                                .filter(m => m.keyScope === 'out')
-                                .forEach(m => keyScope.mutate({ platform: m.platform, modelId: m.modelId, allow: true }))}
-                              confirmLabel={t('compare.scopeAddConfirm')}
-                              title={t('compare.scopeAddHint')}
-                              className="h-5 rounded-full border px-1.5 text-[10px] text-amber-600 dark:text-amber-400"
-                            >
-                              {t('compare.scopeAdd', { count: g.members.filter(m => m.keyScope === 'out').length })}
-                            </ConfirmButton>
+                            <ScopePicker
+                              allow
+                              disabled={keyScope.isPending}
+                              routes={g.members.filter(m => m.keyScope === 'out').map(m => ({ platform: m.platform, modelId: m.modelId }))}
+                              onApply={rs => rs.forEach(r => keyScope.mutate({ ...r, allow: true }))}
+                            />
                           )}
                           {!g.reference && g.members.some(m => m.keyScope === 'in') && (
-                            <ConfirmButton
-                              onConfirm={() => g.members
-                                .filter(m => m.keyScope === 'in')
-                                .forEach(m => keyScope.mutate({ platform: m.platform, modelId: m.modelId, allow: false }))}
-                              title={t('compare.scopeRemoveHint')}
-                              confirmLabel={t('compare.scopeRemoveConfirm')}
-                              className="h-5 rounded-full border px-1.5 text-[10px] text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 group-hover/row:opacity-100"
-                            >
-                              {/* Labelled as the ACTION, not the state. Reading
-                                  "in key scope" it looked like a status badge
-                                  that happened to be clickable, which is a poor
-                                  thing to attach a destructive edit to. */}
-                              {t('compare.scopeRemove', { count: g.members.filter(m => m.keyScope === 'in').length })}
-                            </ConfirmButton>
+                            <ScopePicker
+                              allow={false}
+                              disabled={keyScope.isPending}
+                              routes={g.members.filter(m => m.keyScope === 'in').map(m => ({ platform: m.platform, modelId: m.modelId }))}
+                              onApply={rs => rs.forEach(r => keyScope.mutate({ ...r, allow: false }))}
+                            />
                           )}
                           {g.reference && (
                             <Badge variant="secondary" className="bg-sky-500/15 text-[10px] text-sky-700 dark:text-sky-300">
