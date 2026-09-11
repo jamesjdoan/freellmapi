@@ -127,12 +127,12 @@ export default function CompareModelsPage() {
     },
     meta: { silenceToast: false },
   })
-  // Pull ONE route back out, leaving the rest merged. Whole-group unmerge is
-  // the blunt version; correcting a single wrong member should not cost the
-  // grouping of the others.
-
+  // Map a whole entry in one write. A merged entry is one logical model, so
+  // "this is Kimi K3" is one decision about it, not one decision per provider
+  // route — and a per-route control would let the copies disagree, which is
+  // exactly the `conflicted` state this page already has to warn about.
   const link = useMutation({
-    mutationFn: (body: { platform: string; modelId: string; aaSlug: string | null }) =>
+    mutationFn: (body: { models: { platform: string; modelId: string }[]; aaSlug: string | null }) =>
       apiFetch('/api/analysis/link', { method: 'PUT', body: JSON.stringify(body) }),
     onSuccess: invalidate,
   })
@@ -319,6 +319,10 @@ export default function CompareModelsPage() {
                   <TableHead className="text-right">{t('compare.intelligence')}</TableHead>
                   <TableHead className="text-right">{t('compare.coding')}</TableHead>
                   <TableHead className="text-right">{t('compare.agentic')}</TableHead>
+                  <TableHead className="text-right">{t('compare.colSpeed')}</TableHead>
+                  <TableHead className="text-right">{t('compare.colLatency')}</TableHead>
+                  <TableHead className="text-right">{t('compare.colPrice')}</TableHead>
+                  <TableHead className="text-right">{t('compare.colContext')}</TableHead>
                   <TableHead className="text-right">{t('compare.colOurRank')}</TableHead>
                   <TableHead>{t('compare.colMatch')}</TableHead>
                 </TableRow>
@@ -372,23 +376,38 @@ export default function CompareModelsPage() {
                       <TableCell className="text-right tabular-nums">{score(g.analysis?.intelligenceIndex)}</TableCell>
                       <TableCell className="text-right tabular-nums">{score(g.analysis?.codingIndex)}</TableCell>
                       <TableCell className="text-right tabular-nums">{score(g.analysis?.agenticIndex)}</TableCell>
+                      {/* Measured by Artificial Analysis, so they are blank
+                          exactly where the scores are: an unmapped row shows
+                          dashes rather than inventing a number from our own
+                          catalogue. Context is ours — it comes from the routes. */}
+                      <TableCell className="text-right tabular-nums" title={t('compare.speedHint')}>
+                        {stat(g.analysis?.medianOutputTokensPerSecond, 0)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums" title={t('compare.latencyHint')}>
+                        {stat(g.analysis?.medianTimeToFirstTokenSeconds, 2)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-[11px]" title={t('compare.priceHint')}>
+                        {price(g.analysis?.price1mInput, g.analysis?.price1mOutput)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-[11px] text-muted-foreground">
+                        {context(g.members)}
+                      </TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">
                         {solo ? solo.intelligenceRank : '–'}
                       </TableCell>
                       <TableCell>
-                        {solo
-                          ? (
-                            <MappingCell
-                              row={solo}
-                              catalogue={data?.catalogue ?? []}
-                              onLink={slug => link.mutate({ platform: solo.platform, modelId: solo.modelId, aaSlug: slug })}
-                            />
-                          )
-                          : (
-                            <span className="text-[11px] text-muted-foreground">
-                              {g.analysisSource === 'inherited' ? t('compare.matchInherited') : t('compare.matchNone')}
-                            </span>
-                          )}
+                        {/* Every entry is mappable, merged or not. A merged
+                            entry used to report "inherited" with no way to act
+                            on it, so a group the matcher got wrong — or never
+                            matched — could not be corrected at all. */}
+                        <MappingCell
+                          members={g.members}
+                          catalogue={data?.catalogue ?? []}
+                          onLink={slug => link.mutate({
+                            models: g.members.map(m => ({ platform: m.platform, modelId: m.modelId })),
+                            aaSlug: slug,
+                          })}
+                        />
                       </TableCell>
                     </TableRow>
                   )
@@ -417,6 +436,26 @@ export default function CompareModelsPage() {
   )
 }
 
+/** Compact numeric stat; a dash where the measurement is absent. */
+function stat(value: number | null | undefined, digits: number) {
+  return value == null ? <span className="text-muted-foreground">–</span> : value.toFixed(digits)
+}
+
+/** Input/output price per million tokens. Free routes really do read 0. */
+function price(input: number | null | undefined, output: number | null | undefined) {
+  if (input == null && output == null) return <span className="text-muted-foreground">–</span>
+  const fmt = (v: number | null | undefined) => (v == null ? '?' : v < 1 ? v.toFixed(2) : v.toFixed(1))
+  return <span>{fmt(input)}/{fmt(output)}</span>
+}
+
+/** The widest context any route of this entry offers — what you would actually
+ *  get, since the router can serve the request from any of them. */
+function context(members: CompareRow[]) {
+  const max = members.reduce((m, r) => Math.max(m, r.contextWindow ?? 0), 0)
+  if (max === 0) return <span className="text-muted-foreground">–</span>
+  return max >= 1000 ? `${Math.round(max / 1000)}K` : String(max)
+}
+
 /** A dash, not a zero: their nulls mean "not measured". */
 function score(value: number | null | undefined) {
   return value == null ? <span className="text-muted-foreground">–</span> : value.toFixed(1)
@@ -429,14 +468,43 @@ function score(value: number | null | undefined) {
  * by index so the plausible candidates are near the top, and a native select
  * is keyboard- and mobile-navigable for free.
  */
-function MappingCell({ row, catalogue, onLink }: {
-  row: CompareRow
+function MappingCell({ members, catalogue, onLink }: {
+  members: CompareRow[]
   catalogue: ComparePayload['catalogue']
   onLink: (slug: string | null) => void
 }) {
   const { t } = useI18n()
   const [editing, setEditing] = useState(false)
-  const current = row.link?.slug ?? ''
+
+  // Read the state off the routes themselves. The group's own `analysisSource`
+  // says "inherited" whenever the score reaches it through a member, which is
+  // true even when every member was mapped by hand a second ago — reporting
+  // that would hide the operator's own decision back from them.
+  const slugs = new Set(members.map(m => m.link?.slug ?? null))
+  const common = slugs.size === 1 ? [...slugs][0] : null
+  const linked = members.filter(m => m.link != null)
+  const allManual = linked.length === members.length && members.every(m => m.link?.source === 'manual')
+  const unresolved = members.find(m => m.link?.unresolved)
+  const scored = members.find(m => m.analysis != null)
+
+  const label = () => {
+    if (unresolved) {
+      return <span className="text-destructive">{t('compare.matchUnresolved', { slug: unresolved.link?.slug ?? '' })}</span>
+    }
+    if (allManual && common !== null) return <span>{t('compare.matchManual')}</span>
+    // Mapped by hand to nothing: a decision, and one worth showing, or the row
+    // reads identically to one nobody has looked at.
+    if (allManual) return <span>{t('compare.matchManualNone')}</span>
+    if (!scored) return <span className="text-muted-foreground">{t('compare.matchNone')}</span>
+    if (members.length > 1 && linked.length < members.length) {
+      return <span className="text-muted-foreground">{t('compare.matchInherited')}</span>
+    }
+    return (
+      <span className="text-muted-foreground">
+        {t('compare.matchAuto', { reason: scored.link?.matchReason ?? '' })}
+      </span>
+    )
+  }
 
   if (!editing) {
     return (
@@ -445,17 +513,7 @@ function MappingCell({ row, catalogue, onLink }: {
         onClick={() => setEditing(true)}
         className="text-left text-[11px] underline decoration-dotted underline-offset-2 hover:text-foreground"
       >
-        {row.link?.unresolved
-          ? <span className="text-destructive">{t('compare.matchUnresolved', { slug: row.link.slug ?? '' })}</span>
-          : row.analysis
-            ? (
-              <span className={row.link?.source === 'manual' ? '' : 'text-muted-foreground'}>
-                {row.link?.source === 'manual'
-                  ? t('compare.matchManual')
-                  : t('compare.matchAuto', { reason: row.link?.matchReason ?? '' })}
-              </span>
-            )
-            : <span className="text-muted-foreground">{t('compare.matchNone')}</span>}
+        {label()}
       </button>
     )
   }
@@ -463,7 +521,7 @@ function MappingCell({ row, catalogue, onLink }: {
   return (
     <span className="flex items-center gap-1">
       <select
-        value={current}
+        value={common ?? ''}
         onChange={e => { onLink(e.target.value || null); setEditing(false) }}
         className="h-7 max-w-[220px] rounded border bg-background px-1 text-[11px]"
       >
@@ -474,6 +532,9 @@ function MappingCell({ row, catalogue, onLink }: {
           </option>
         ))}
       </select>
+      {members.length > 1 && (
+        <span className="text-[10px] text-muted-foreground">{t('compare.appliesToRoutes', { count: members.length })}</span>
+      )}
       <Tooltip text={t('common.cancel')}>
         <Button variant="ghost" size="icon-xs" onClick={() => setEditing(false)} aria-label={t('common.cancel')}>×</Button>
       </Tooltip>

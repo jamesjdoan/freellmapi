@@ -24,9 +24,15 @@ export const analysisRouter = Router();
 
 const keySchema = z.object({ key: z.string().min(8, 'Key looks too short') });
 
+// A set of routes, not one: a logical model on the Compare page is however many
+// provider routes the router unified, and mapping it to a benchmark is one
+// decision about the model rather than N decisions about its copies. A single
+// route is just a one-element set.
 const linkSchema = z.object({
-  platform: z.string().min(1),
-  modelId: z.string().min(1),
+  models: z.array(z.object({
+    platform: z.string().min(1),
+    modelId: z.string().min(1),
+  })).min(1),
   // Null is meaningful: "this model has no counterpart", which stops the
   // matcher proposing one on every sync.
   aaSlug: z.string().min(1).nullable(),
@@ -76,8 +82,8 @@ analysisRouter.put('/link', (req: Request, res: Response) => {
     res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
     return;
   }
-  setManualLink(parsed.data.platform, parsed.data.modelId, parsed.data.aaSlug);
-  res.json({ success: true });
+  for (const m of parsed.data.models) setManualLink(m.platform, m.modelId, parsed.data.aaSlug);
+  res.json({ success: true, linked: parsed.data.models.length });
 });
 
 /** Hand a model back to the matcher, discarding the manual decision. */
@@ -87,8 +93,8 @@ analysisRouter.delete('/link', (req: Request, res: Response) => {
     res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
     return;
   }
-  clearManualLink(parsed.data.platform, parsed.data.modelId);
-  res.json({ success: true });
+  for (const m of parsed.data.models) clearManualLink(m.platform, m.modelId);
+  res.json({ success: true, cleared: parsed.data.models.length });
 });
 
 /**
