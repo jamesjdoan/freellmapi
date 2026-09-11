@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink, RefreshCw, Scale } from 'lucide-react'
 import { useI18n } from '@/i18n'
 import { sortEntries, type SortKey } from '@/lib/compare-sort'
+import { ModelCombobox, type ModelComboOption } from '@/components/model-combobox'
 import { apiFetch } from '@/lib/api'
 import { toast } from '@/lib/toast'
 import { Badge } from '@/components/ui/badge'
@@ -356,8 +357,11 @@ export default function CompareModelsPage() {
                         />
                       </TableCell>
                       <TableCell>
+                        {/* Name first, dots underneath. Leading the row with a
+                            variable number of provider swatches indented every
+                            name differently, so the column could not be read
+                            down. */}
                         <span className="flex flex-wrap items-center gap-1.5">
-                          {[...new Set(g.members.map(m => m.platform))].map(p => <PlatformDot key={p} platform={p} />)}
                           <span className="max-w-[260px] truncate font-medium" title={g.name}>{g.name}</span>
                           {/* The routes live in a tooltip, not inline. Printed
                               in the cell, seven `platform/modelId` pairs made
@@ -381,6 +385,9 @@ export default function CompareModelsPage() {
                               <span className="text-[11px] text-destructive">{t('compare.conflict')}</span>
                             </Tooltip>
                           )}
+                        </span>
+                        <span className="mt-0.5 flex flex-wrap items-center gap-1">
+                          {[...new Set(g.members.map(m => m.platform))].map(p => <PlatformDot key={p} platform={p} />)}
                         </span>
                       </TableCell>
                       <TableCell className="max-w-[120px] truncate text-[11px] text-muted-foreground" title={g.chains.join(', ')}>
@@ -448,6 +455,11 @@ export default function CompareModelsPage() {
     </div>
   )
 }
+
+/** The combobox works in option values, so "no counterpart" needs one of its
+ *  own — an empty string would read as "nothing picked yet", and those are
+ *  different answers (see the manual-none label). */
+const NO_COUNTERPART = '__none__'
 
 /**
  * A sortable column header. `aria-sort` is what makes the current column and
@@ -560,20 +572,34 @@ function MappingCell({ members, catalogue, onLink }: {
     )
   }
 
+  // Searchable, not a 646-option native select: picking "Kimi K3" out of every
+  // model Artificial Analysis publishes meant scrolling an alphabetical list.
+  // The dashboard already has one searchable model picker, so this is that one
+  // rather than a second control that behaves almost the same.
+  const options: ModelComboOption[] = [
+    { value: NO_COUNTERPART, label: t('compare.matchNoneOption') },
+    ...catalogue.map(c => ({
+      value: c.slug,
+      label: c.name,
+      // Creator is searchable too, so "google" finds the Gemini family.
+      sub: c.intelligenceIndex == null ? (c.creator ?? undefined) : `${c.intelligenceIndex.toFixed(0)}`,
+      platforms: c.creator ? [c.creator] : undefined,
+    })),
+  ]
+
   return (
     <span className="flex items-center gap-1">
-      <select
-        value={common ?? ''}
-        onChange={e => { onLink(e.target.value || null); setEditing(false) }}
-        className="h-7 max-w-[220px] rounded border bg-background px-1 text-[11px]"
-      >
-        <option value="">{t('compare.matchNoneOption')}</option>
-        {catalogue.map(c => (
-          <option key={c.slug} value={c.slug}>
-            {c.intelligenceIndex == null ? c.name : `${c.name} · ${c.intelligenceIndex.toFixed(0)}`}
-          </option>
-        ))}
-      </select>
+      <ModelCombobox
+        value={common ?? NO_COUNTERPART}
+        options={options}
+        onSelect={slug => { onLink(slug === NO_COUNTERPART ? null : slug); setEditing(false) }}
+        ariaLabel={t('compare.mapAriaLabel')}
+        placeholder={t('compare.mapSearchPlaceholder')}
+        emptyText={t('compare.mapNoResults')}
+        triggerPlaceholder={t('compare.matchNoneOption')}
+        triggerClassName="h-7 max-w-[200px] text-[11px]"
+        align="end"
+      />
       {members.length > 1 && (
         <span className="text-[10px] text-muted-foreground">{t('compare.appliesToRoutes', { count: members.length })}</span>
       )}

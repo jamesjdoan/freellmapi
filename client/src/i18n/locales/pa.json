@@ -1354,6 +1354,9 @@
     "latencyHint": "Median time to first token in seconds, measured by Artificial Analysis",
     "priceHint": "USD per million tokens, input/output",
     "appliesToRoutes": "applies to all {count} routes",
-    "matchManualNone": "no counterpart (by hand)"
+    "matchManualNone": "no counterpart (by hand)",
+    "mapAriaLabel": "Map this model to a benchmark",
+    "mapSearchPlaceholder": "Search benchmarks...",
+    "mapNoResults": "No benchmark matches that"
   }
 }

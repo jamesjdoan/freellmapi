@@ -428,6 +428,9 @@
     "matchManual": "mapped by hand",
     "matchNone": "no match",
 "matchManualNone": "no counterpart (by hand)",
+"mapAriaLabel": "Map this model to a benchmark",
+"mapSearchPlaceholder": "Search benchmarks...",
+"mapNoResults": "No benchmark matches that",
     "matchNoneOption": "\u2014 no counterpart \u2014",
     "matchUnresolved": "{slug} is no longer published",
     "attribution": "Benchmark data from"
