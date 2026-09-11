@@ -297,6 +297,11 @@ export default function CompareModelsPage() {
   const peak = scored.length > 0 ? (scored[0].analysis![metric] as number) : 0
   const unscored = comparing.filter(g => g.analysis?.[metric] == null)
 
+  // Collapsed only when the key is both present and usable: an unreadable one
+  // needs the form, since replacing it is the fix.
+  const keySettled = Boolean(status?.configured) && !status?.unreadable
+  const [editingKey, setEditingKey] = useState(false)
+
   const toggle = (key: string) => {
     setSelected(prev => {
       const next = new Set(prev)
@@ -325,48 +330,74 @@ export default function CompareModelsPage() {
       />
 
       {/* The key. Kept on this page rather than in Settings because it is
-          useless anywhere else, and this is where its absence is felt. */}
-      <section className="rounded-xl border p-4">
-        <h2 className="text-sm font-medium">{t('compare.keyTitle')}</h2>
-        <p className="mt-1 text-xs text-muted-foreground">{t('compare.keyHint')}</p>
-        {status?.unreadable && (
-          <p className="mt-2 text-xs text-destructive">{t('compare.keyUnreadable')}</p>
-        )}
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Input
-            type="password"
-            value={keyDraft}
-            onChange={e => setKeyDraft(e.target.value)}
-            placeholder={status?.configured ? t('compare.keyReplace') : t('compare.keyPlaceholder')}
-            className="h-8 w-[280px] text-xs"
-          />
-          <Button size="sm" disabled={keyDraft.trim().length < 8 || saveKey.isPending} onClick={() => saveKey.mutate(keyDraft)}>
-            {t('common.save')}
-          </Button>
-          {status?.configured && (
-            <Button size="sm" variant="ghost" onClick={() => clearKey.mutate()} disabled={clearKey.isPending}>
-              {t('common.remove')}
-            </Button>
-          )}
-          {status && (
-            <span className="ml-auto flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-              {status.tier && <Badge variant="secondary">{status.tier}</Badge>}
-              {status.indexVersion && <Badge variant="outline">{status.indexVersion}</Badge>}
-              <span className="tabular-nums">
-                {t('compare.cacheState', { cached: status.cachedModels, linked: status.linkedModels })}
-              </span>
-              {/* Their quota is a fixed 100/day on Free, shared across the
-                  organisation — worth seeing before pressing Refresh again. */}
-              {status.rateLimit?.remaining != null && (
-                <span className="tabular-nums">
-                  {t('compare.quota', { remaining: status.rateLimit.remaining, limit: status.rateLimit.limit ?? 0 })}
-                </span>
-              )}
+          useless anywhere else, and this is where its absence is felt.
+
+          Once saved it collapses to what a reader can act on — tier, index
+          version, what is cached and how much of today's quota is left. A
+          password box you cannot read back, above a hint explaining how to get
+          a key you already have, is a permanent instruction for a job done
+          once. */}
+      {keySettled && !editingKey
+        ? (
+          <section className="flex flex-wrap items-center gap-2 rounded-xl border px-4 py-2.5 text-[11px]">
+            <span className="text-xs font-medium">{t('compare.keyTitle')}</span>
+            <Badge variant="secondary" className="text-[10px]">{t('compare.keySaved')}</Badge>
+            {status?.tier && <Badge variant="secondary">{status.tier}</Badge>}
+            {status?.indexVersion && <Badge variant="outline">{status.indexVersion}</Badge>}
+            <span className="tabular-nums text-muted-foreground">
+              {t('compare.cacheState', { cached: status?.cachedModels ?? 0, linked: status?.linkedModels ?? 0 })}
             </span>
-          )}
-        </div>
-        {status?.lastError && <p className="mt-2 text-xs text-destructive">{status.lastError}</p>}
-      </section>
+            {status?.rateLimit?.remaining != null && (
+              <span className="tabular-nums text-muted-foreground">
+                {t('compare.quota', { remaining: status.rateLimit.remaining, limit: status.rateLimit.limit ?? 0 })}
+              </span>
+            )}
+            {status?.lastSyncMs != null && (
+              <span className="text-muted-foreground">
+                {t('compare.lastSync', { when: new Date(status.lastSyncMs).toLocaleString() })}
+              </span>
+            )}
+            <span className="flex-1" />
+            <Button size="xs" variant="ghost" onClick={() => setEditingKey(true)}>{t('compare.keyChange')}</Button>
+            {status?.lastError && <p className="w-full text-xs text-destructive">{status.lastError}</p>}
+          </section>
+        )
+        : (
+          <section className="rounded-xl border p-4">
+            <h2 className="text-sm font-medium">{t('compare.keyTitle')}</h2>
+            <p className="mt-1 text-xs text-muted-foreground">{t('compare.keyHint')}</p>
+            {status?.unreadable && (
+              <p className="mt-2 text-xs text-destructive">{t('compare.keyUnreadable')}</p>
+            )}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Input
+                type="password"
+                value={keyDraft}
+                onChange={e => setKeyDraft(e.target.value)}
+                placeholder={status?.configured ? t('compare.keyReplace') : t('compare.keyPlaceholder')}
+                className="h-8 w-[280px] text-xs"
+              />
+              <Button
+                size="sm"
+                disabled={keyDraft.trim().length < 8 || saveKey.isPending}
+                onClick={() => { saveKey.mutate(keyDraft); setEditingKey(false) }}
+              >
+                {t('common.save')}
+              </Button>
+              {status?.configured && (
+                <Button size="sm" variant="ghost" onClick={() => clearKey.mutate()} disabled={clearKey.isPending}>
+                  {t('common.remove')}
+                </Button>
+              )}
+              {keySettled && (
+                <Button size="sm" variant="ghost" onClick={() => { setKeyDraft(''); setEditingKey(false) }}>
+                  {t('common.cancel')}
+                </Button>
+              )}
+            </div>
+            {status?.lastError && <p className="mt-2 text-xs text-destructive">{status.lastError}</p>}
+          </section>
+        )}
 
       {!isLoading && status?.cachedModels === 0 && (
         <p className="text-xs text-muted-foreground">{t('compare.empty')}</p>

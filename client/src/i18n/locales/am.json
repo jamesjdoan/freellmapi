@@ -1417,6 +1417,9 @@
     "upgradeHint": "These were mapped to a stand-in because nothing measured them. Artificial Analysis now publishes the model itself, so the borrowed scores and your adjustments can be replaced with measurements.",
     "upgradeSwap": "borrowing {from} - real match: {to} (by {reason})",
     "upgradeAccept": "Use real data",
-    "upgradeTitleOne": "An estimated model now has real benchmark data"
+    "upgradeTitleOne": "An estimated model now has real benchmark data",
+    "keySaved": "key saved",
+    "keyChange": "Change key",
+    "lastSync": "synced {when}"
   }
 }
