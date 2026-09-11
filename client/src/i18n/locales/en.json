@@ -432,6 +432,10 @@
 "mapSearchPlaceholder": "Search benchmarks...",
 "mapNoResults": "No benchmark matches that",
 "matchedToHint": "{name} ({creator})\nTheir slug: {slug}\nOur model: {model}\n{how}",
+"referenceAdd": "Add a baseline",
+"referenceBadge": "baseline",
+"referenceRemove": "Remove this baseline",
+"referenceSource": "benchmark itself",
     "matchNoneOption": "\u2014 no counterpart \u2014",
     "matchUnresolved": "{slug} is no longer published",
     "attribution": "Benchmark data from"

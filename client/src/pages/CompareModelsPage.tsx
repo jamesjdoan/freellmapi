@@ -63,6 +63,8 @@ interface CompareGroup {
   members: CompareRow[]
   analysis: CompareRow['analysis']
   analysisSource: 'inherited' | 'own' | null
+  /** A pinned baseline rather than a model we serve. */
+  reference?: boolean
   conflicted: boolean
   chains: string[]
   enabledMembers: number
@@ -139,6 +141,21 @@ export default function CompareModelsPage() {
     onSuccess: invalidate,
   })
 
+  // Baselines: models we do not serve, kept on the page so our own numbers mean
+  // something. They flow through sorting and the chart as memberless entries.
+  const { data: references } = useQuery<{ slugs: string[]; groups: CompareGroup[] }>({
+    queryKey: ['analysis', 'references'],
+    queryFn: () => apiFetch('/api/analysis/references'),
+  })
+  const referenceMutation = useMutation({
+    mutationFn: (slugs: string[]) =>
+      apiFetch('/api/analysis/references', { method: 'PUT', body: JSON.stringify({ slugs }) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['analysis'] }),
+  })
+  const referenceSlugs = references?.slugs ?? []
+  const addReference = (slug: string) => referenceMutation.mutate([...referenceSlugs, slug])
+  const removeReference = (slug: string) => referenceMutation.mutate(referenceSlugs.filter(s => s !== slug))
+
   const status = data?.status
 
   const entryKey = (g: CompareGroup) => g.groupKey
@@ -158,11 +175,16 @@ export default function CompareModelsPage() {
 
   const entries = useMemo(
     () => sortEntries(
-      (grouped?.groups ?? []).filter(g => (onlyRouted ? g.chains.length > 0 : g.enabledMembers > 0)),
+      [
+        // References are never filtered out by "only routed": the whole point
+        // is that they sit beside our models wherever those land.
+        ...(references?.groups ?? []),
+        ...(grouped?.groups ?? []).filter(g => (onlyRouted ? g.chains.length > 0 : g.enabledMembers > 0)),
+      ],
       sort.key,
       sort.dir,
     ),
-    [grouped, onlyRouted, sort],
+    [grouped, references, onlyRouted, sort],
   )
   const chosen = useMemo(
     () => entries.filter(g => selected.has(entryKey(g))),
@@ -273,6 +295,26 @@ export default function CompareModelsPage() {
                     {t(m.labelKey)}
                   </button>
                 ))}
+                <span className="ml-2">
+                  <ModelCombobox
+                    value=""
+                    options={(data?.catalogue ?? [])
+                      .filter(c => !referenceSlugs.includes(c.slug))
+                      .map(c => ({
+                        value: c.slug,
+                        label: c.name,
+                        sub: c.intelligenceIndex == null ? (c.creator ?? undefined) : c.intelligenceIndex.toFixed(0),
+                        platforms: c.creator ? [c.creator] : undefined,
+                      }))}
+                    onSelect={addReference}
+                    ariaLabel={t('compare.referenceAdd')}
+                    placeholder={t('compare.mapSearchPlaceholder')}
+                    emptyText={t('compare.mapNoResults')}
+                    triggerPlaceholder={t('compare.referenceAdd')}
+                    triggerClassName="h-6 max-w-[190px] text-[11px]"
+                    align="start"
+                  />
+                </span>
                 <button
                   type="button"
                   onClick={() => setOnlyRouted(o => !o)}
@@ -287,7 +329,7 @@ export default function CompareModelsPage() {
               {scored.map(g => {
                 const value = g.analysis![metric] as number
                 return (
-                  <li key={entryKey(g)} className="flex items-center gap-2 text-xs">
+                  <li key={entryKey(g)} className={`flex items-center gap-2 text-xs ${g.reference ? 'text-sky-700 dark:text-sky-300' : ''}`}>
                     {/* One dot per provider behind this entry: a merged model
                         is exactly as available as the routes it condenses. */}
                     <span className="flex flex-shrink-0 items-center gap-0.5">
@@ -304,7 +346,7 @@ export default function CompareModelsPage() {
                           indices are not percentages and the gap between the
                           top few is what a reader is looking for. */}
                       <div
-                        className="h-3 rounded bg-emerald-500/70"
+                        className={`h-3 rounded ${g.reference ? 'bg-sky-500/70' : 'bg-emerald-500/70'}`}
                         style={{ width: peak > 0 ? `${Math.max((value / peak) * 100, 2)}%` : '2%' }}
                       />
                     </div>
@@ -346,15 +388,28 @@ export default function CompareModelsPage() {
                 {entries.map(g => {
                   const solo = g.members.length === 1 ? g.members[0] : null
                   return (
-                    <TableRow key={entryKey(g)}>
+                    <TableRow key={entryKey(g)} className={g.reference ? 'bg-sky-500/5' : undefined}>
                       <TableCell>
-                        <input
-                          type="checkbox"
-                          checked={selected.has(entryKey(g))}
-                          onChange={() => toggle(entryKey(g))}
-                          aria-label={g.name}
-                          className="size-3.5 accent-foreground"
-                        />
+                        {g.reference
+                          ? (
+                            <Tooltip text={t('compare.referenceRemove')}>
+                              <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                aria-label={t('compare.referenceRemove')}
+                                onClick={() => removeReference(g.analysis?.slug ?? '')}
+                              >×</Button>
+                            </Tooltip>
+                          )
+                          : (
+                            <input
+                              type="checkbox"
+                              checked={selected.has(entryKey(g))}
+                              onChange={() => toggle(entryKey(g))}
+                              aria-label={g.name}
+                              className="size-3.5 accent-foreground"
+                            />
+                          )}
                       </TableCell>
                       <TableCell>
                         {/* Name first, dots underneath. Leading the row with a
@@ -362,12 +417,21 @@ export default function CompareModelsPage() {
                             name differently, so the column could not be read
                             down. */}
                         <span className="flex flex-wrap items-center gap-1.5">
-                          <span className="max-w-[190px] truncate font-medium" title={g.name}>{g.name}</span>
+                          <span className="max-w-[175px] truncate font-medium" title={g.name}>{g.name}</span>
+                          {g.reference && (
+                            <Badge variant="secondary" className="bg-sky-500/15 text-[10px] text-sky-700 dark:text-sky-300">
+                              {t('compare.referenceBadge')}
+                            </Badge>
+                          )}
                           {/* The routes live in a tooltip, not inline. Printed
                               in the cell, seven `platform/modelId` pairs made
                               this column 1584px wide inside a 1070px container
                               and pushed every measured number off-screen. */}
-                          {solo
+                          {/* A baseline has no routes at all, so neither the id
+                              nor a "0 routes" badge says anything true. */}
+                          {g.reference
+                            ? null
+                            : solo
                             ? (
                               <code className="max-w-[150px] truncate text-[11px] text-muted-foreground" title={solo.modelId}>
                                 {solo.modelId}
@@ -420,14 +484,18 @@ export default function CompareModelsPage() {
                             entry used to report "inherited" with no way to act
                             on it, so a group the matcher got wrong — or never
                             matched — could not be corrected at all. */}
-                        <MappingCell
+                        {/* A reference IS the benchmark, so there is nothing to
+                            map it to. */}
+                        {g.reference
+                          ? <span className="text-[11px] text-muted-foreground">{t('compare.referenceSource')}</span>
+                          : <MappingCell
                           members={g.members}
                           catalogue={data?.catalogue ?? []}
                           onLink={slug => link.mutate({
                             models: g.members.map(m => ({ platform: m.platform, modelId: m.modelId })),
                             aaSlug: slug,
                           })}
-                        />
+                        />}
                       </TableCell>
                     </TableRow>
                   )

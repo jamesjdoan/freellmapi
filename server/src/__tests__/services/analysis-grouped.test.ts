@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initDb, getDb } from '../../db/index.js';
-import { getGroupedCompare, relinkAll, setManualLink } from '../../services/analysis.js';
+import {
+  getGroupedCompare,
+  getReferenceGroups,
+  getReferenceSlugs,
+  relinkAll,
+  setManualLink,
+  setReferenceSlugs,
+} from '../../services/analysis.js';
 import { setUnifyOverrides } from '../../services/model-groups.js';
 
 // Compare mirrors the ROUTER's grouping — the unification that decides which
@@ -137,3 +144,38 @@ describe('grouped compare', () => {
     expect(getGroupedCompare()).toHaveLength(0);
   });
 });
+
+describe('reference baselines', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    addAa('kimi-k3', 'Kimi K3', 44);
+  });
+
+  it('shapes a pinned slug as an entry with no supply behind it', () => {
+    setReferenceSlugs(['kimi-k3']);
+    const [ref] = getReferenceGroups();
+
+    expect(ref.reference).toBe(true);
+    expect(ref.analysis?.slug).toBe('kimi-k3');
+    // A baseline is a yardstick, not something we serve. Anything that reads
+    // these as available capacity would be wrong.
+    expect(ref.members).toEqual([]);
+    expect(ref.chains).toEqual([]);
+    expect(ref.enabledMembers).toBe(0);
+  });
+
+  it('drops a slug the upstream no longer publishes, rather than showing a stale score', () => {
+    setReferenceSlugs(['kimi-k3', 'withdrawn-slug']);
+
+    expect(getReferenceGroups().map(g => g.analysis?.slug)).toEqual(['kimi-k3']);
+    // The slug stays stored: it may come back, and silently editing the
+    // operator's list on read would hide that it ever existed.
+    expect(getReferenceSlugs()).toEqual(['kimi-k3', 'withdrawn-slug']);
+  });
+
+  it('de-duplicates and keeps references out of the routed catalogue', () => {
+    expect(setReferenceSlugs(['kimi-k3', 'kimi-k3', ' '])).toEqual(['kimi-k3']);
+    expect(getGroupedCompare().some(g => g.reference)).toBe(false);
+  });
+})

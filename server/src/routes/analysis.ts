@@ -10,6 +10,9 @@ import {
   setManualLink,
   syncAnalysis,
   getGroupedCompare,
+  getReferenceGroups,
+  getReferenceSlugs,
+  setReferenceSlugs,
 } from '../services/analysis.js';
 
 // Artificial Analysis benchmark data. Read-only against routing: nothing here
@@ -70,6 +73,25 @@ analysisRouter.post('/sync', async (_req: Request, res: Response) => {
 /** Re-run the matcher without spending a request on the upstream API. */
 analysisRouter.post('/relink', (_req: Request, res: Response) => {
   res.json(relinkAll());
+});
+
+const referencesSchema = z.object({ slugs: z.array(z.string().min(1)).max(20) });
+
+// Baseline models to read the catalogue against. Capped: a baseline is a
+// handful of yardsticks, and a list long enough to need scrolling is just a
+// second catalogue.
+analysisRouter.get('/references', (_req: Request, res: Response) => {
+  res.json({ slugs: getReferenceSlugs(), groups: getReferenceGroups() });
+});
+
+analysisRouter.put('/references', (req: Request, res: Response) => {
+  const parsed = referencesSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
+    return;
+  }
+  const slugs = setReferenceSlugs(parsed.data.slugs);
+  res.json({ slugs, groups: getReferenceGroups() });
 });
 
 analysisRouter.get('/compare', (_req: Request, res: Response) => {

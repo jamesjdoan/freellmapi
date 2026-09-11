@@ -458,6 +458,9 @@ export interface CompareGroup {
   /** Every route this group condenses, newest-capable first is NOT implied:
    *  order is the members' own, so the reader can see all of them. */
   members: CompareRow[];
+  /** A pinned baseline rather than something we serve: no routes, no chains,
+   *  no rank of ours. Rendered apart so it reads as a yardstick, not supply. */
+  reference?: boolean;
   /** The AA data the whole group is compared on. */
   analysis: CompareRow['analysis'];
   /** Where the score came from: this model's own link, or inherited from a
@@ -484,6 +487,57 @@ export interface CompareGroup {
  * So a merge made on the Models page shows up here, and the benchmark scores
  * attach to the logical model rather than to each provider's copy of it.
  */
+const REFERENCE_SLUGS_KEY = 'analysis_reference_slugs';
+
+/**
+ * Benchmarks pinned as a baseline to read the catalogue against.
+ *
+ * A reference is a model we do NOT serve — a paid frontier model, typically —
+ * kept on the page so "12.3 coding" means something. Stored as slugs rather
+ * than copied scores: a sync refreshes them like everything else, and a slug
+ * the upstream withdrew resolves to nothing rather than to a stale number.
+ */
+export function getReferenceSlugs(): string[] {
+  const raw = getSetting(REFERENCE_SLUGS_KEY);
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch { return []; }
+}
+
+export function setReferenceSlugs(slugs: string[]): string[] {
+  const unique = [...new Set(slugs.map(s => s.trim()).filter(Boolean))];
+  setSetting(REFERENCE_SLUGS_KEY, JSON.stringify(unique));
+  return unique;
+}
+
+/**
+ * References shaped as memberless groups, so they sort, render and chart
+ * through exactly the same path as a real entry. Nothing downstream needs a
+ * second code path; a reference simply has no routes, no chains and no rank of
+ * ours — which is honest, because we do not serve it.
+ */
+export function getReferenceGroups(db: Db = getDb()): CompareGroup[] {
+  return getReferenceSlugs().flatMap(slug => {
+    const analysis = lookupAa(db, slug);
+    if (!analysis) return [];
+    return [{
+      groupKey: `ref:${slug}`,
+      canonicalId: `ref:${slug}`,
+      name: analysis.name,
+      userDefined: false,
+      members: [],
+      analysis,
+      analysisSource: 'own' as const,
+      conflicted: false,
+      chains: [],
+      enabledMembers: 0,
+      reference: true,
+    }];
+  });
+}
+
 export function getGroupedCompare(db: Db = getDb()): CompareGroup[] {
   const { rows } = getComparePayload(db);
   const byKey = new Map(rows.map(r => [`${r.platform}:${r.modelId}`, r]));
@@ -511,6 +565,7 @@ export function getGroupedCompare(db: Db = getDb()): CompareGroup[] {
       conflicted: linkedSlugs.length > 1,
       chains: [...new Set(members.flatMap(m => m.chains))],
       enabledMembers: members.filter(m => m.enabled).length,
+      reference: false,
     };
   }).filter(g => g.members.length > 0);
 }
