@@ -1251,11 +1251,11 @@ export function getCooldownDecisionForLimit(
     // Guessed exhaustion (no published RPD/TPD) never benches past the cap.
     if (!dailyExhausted) base = Math.min(base, UNKNOWN_LIMIT_MAX_COOLDOWN_MS);
   }
-  // Honor an upstream Retry-After as a floor: never bench shorter than our own
-  // heuristic, but extend (capped at a day) when the provider explicitly asks
-  // to wait longer than we otherwise would.
-  if (retryAfterMs != null && retryAfterMs > base) {
-    return { durationMs: Math.min(retryAfterMs, DAY), source: 'authoritative' };
+  // If the provider stated a retry time (from the Retry-After header or from the error body via parseStatedRetryMs), honor it as authoritative.
+  // A short floor (5 seconds) prevents a too‑short body hint from producing a hot loop when the provider says “retry in 0.2s”. A header, when present, already wins over the body because providerHttpError prefers the header.
+  if (retryAfterMs != null) {
+    const floored = Math.max(retryAfterMs, 5_000); // floor of 5 seconds
+    return { durationMs: Math.min(floored, DAY), source: 'authoritative' };
   }
   return { durationMs: base, source: 'heuristic' };
 }

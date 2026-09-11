@@ -414,8 +414,12 @@ describe('Cooldown duration with upstream Retry-After', () => {
     expect(getCooldownDurationForLimit('groq', 'm', testId, noLimits)).toBe(90_000);
   });
 
-  it('never benches shorter than the heuristic (ignores a shorter Retry-After)', () => {
-    expect(getCooldownDurationForLimit('groq', 'm', testId, noLimits, 30_000)).toBe(90_000);
+  it('honours a Retry-After shorter than the heuristic — the provider knows when its window clears', () => {
+    // Reversed deliberately. Held out for the full 90s, a Google model whose
+    // per-minute window clears in 38s reads as exhausted for the rest of the
+    // minute: observed live, where auto:apex reported "exhausted" while a
+    // direct call to the same model returned 200.
+    expect(getCooldownDurationForLimit('groq', 'm', testId, noLimits, 30_000)).toBe(30_000);
   });
 
   it('honors a Retry-After longer than the heuristic', () => {

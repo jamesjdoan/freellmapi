@@ -277,11 +277,13 @@ describe('cooldown provenance (cooldownDecisionForError)', () => {
     const long = cooldownDecisionForError(fakeRoute(), longRetry);
     expect(long).toEqual({ durationMs: 10 * MINUTE, source: 'authoritative' });
 
-    // Retry-After SHORTER than our bench: everything past the provider's own
-    // retry time is our pessimism, so early recovery stays on the table.
+    // Retry-After SHORTER than our bench now sets the expiry too: the provider
+    // stating when its window clears is better evidence than our pessimism, and
+    // there is nothing left to probe early for. Floored at 5s so a "retry in
+    // 0.2s" cannot become a hot loop.
     const shortRetry = Object.assign(new Error('429 Too Many Requests'), { retryAfterMs: 1_000 });
     const short = cooldownDecisionForError(fakeRoute(), shortRetry);
-    expect(short).toEqual({ durationMs: 90_000, source: 'heuristic' });
+    expect(short).toEqual({ durationMs: 5_000, source: 'authoritative' });
   });
 });
 
