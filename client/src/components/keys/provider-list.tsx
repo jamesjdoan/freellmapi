@@ -66,8 +66,9 @@ export function ProviderList({ onAddKey, initialSearch }: {
   // Separate from expandedKeyIds: the custom-model strip and the catalogue-churn
   // strip are different disclosures on the same row and must open independently.
   const [churnOpenKeyIds, setChurnOpenKeyIds] = useState<Set<number>>(new Set())
-  // Explicit user open/closed overrides per provider group; absent = default.
-  const [groupOverrides, setGroupOverrides] = useState<Map<string, boolean>>(new Map())
+  // The one open provider group, or '' for none. Accordion rather than a set of
+  // independent disclosures (see isGroupExpanded).
+  const [openGroup, setOpenGroup] = useState('')
   const [search, setSearch] = useState(initialSearch ?? '')
   // The prop arrives AFTER mount — the URL parameter is read in an effect one
   // level up — so seeding useState alone silently did nothing.
@@ -384,20 +385,18 @@ export function ProviderList({ onAddKey, initialSearch }: {
     })
     .filter(group => group.keys.length > 0 && matchStatus(group))
 
+  // Closed on arrival, one open at a time. Each expanded provider renders its
+  // whole scored model table, so several at once is a wall rather than a
+  // comparison — and the question being asked is about ONE provider's menu.
+  // A search still expands its matches: filtering to three rows and hiding
+  // them behind disclosures would be worse than useless.
   function isGroupExpanded(group: (typeof grouped)[number]): boolean {
     if (q) return true // an active search auto-expands every matching group
-    const override = groupOverrides.get(group.value)
-    if (override !== undefined) return override
-    const hasIssue = group.keys.some(k => statusOf(k) !== 'healthy')
-    return hasIssue || grouped.length <= 3
+    return openGroup === group.value
   }
 
   function toggleGroup(value: string, expanded: boolean) {
-    setGroupOverrides(prev => {
-      const next = new Map(prev)
-      next.set(value, !expanded)
-      return next
-    })
+    setOpenGroup(expanded ? '' : value)
   }
 
   if (isLoading) return <TableSkeleton rows={4} />
@@ -465,7 +464,10 @@ export function ProviderList({ onAddKey, initialSearch }: {
             const models = enabledModelCount(fallback, group.value, scopeAccess.get(group.value))
             return (
               <div key={group.value}>
-                <div className={`flex items-center gap-2 pb-2 ${single ? 'hidden' : ''}`}>
+                {/* Shown for single-key groups too, unlike before: it carries
+                    the only disclosure control, and a group that cannot be
+                    closed would leave its model table open on arrival. */}
+                <div className="flex items-center gap-2 pb-2">
                   <Switch
                     checked={group.keys.some(k => k.enabled)}
                     onCheckedChange={(checked) =>
@@ -586,7 +588,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                   )
                 })()}
 
-                {(expanded || single) && (
+                {expanded && (
                   <>
                   <div className="rounded-2xl border divide-y bg-card overflow-hidden">
                     {group.keys.map(k => {

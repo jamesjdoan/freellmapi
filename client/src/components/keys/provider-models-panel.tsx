@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { Switch } from '@/components/ui/switch'
-import { Tooltip } from '@/components/tooltip'
 import { useI18n } from '@/i18n'
+import { ModelCombobox } from '@/components/model-combobox'
 
 // Every model this provider serves, with the measured scores beside the two
 // switches that decide whether it can route. Lives inside the expanded provider
@@ -23,11 +23,21 @@ interface Row {
   supportsVision: boolean
   keyScope: 'none' | 'disabled' | 'unscoped' | 'in' | 'out'
   analysis: {
+    slug: string
+    name: string
     intelligenceIndex: number | null
     codingIndex: number | null
     agenticIndex: number | null
     medianOutputTokensPerSecond: number | null
   } | null
+  link: { slug: string | null; source: 'auto' | 'manual'; matchReason: string | null; unresolved: boolean } | null
+}
+
+interface CatalogueEntry {
+  slug: string
+  name: string
+  creator: string | null
+  intelligenceIndex: number | null
 }
 
 type SortKey = 'intelligence' | 'coding' | 'agentic' | 'speed' | 'name'
@@ -40,7 +50,7 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
 
   // Shared cache with the Compare page: the scores, the scope state and the
   // enabled flag all come from one payload, so the two views cannot disagree.
-  const { data, isLoading } = useQuery<{ rows: Row[] }>({
+  const { data, isLoading } = useQuery<{ rows: Row[]; catalogue: CatalogueEntry[] }>({
     queryKey: ['analysis', 'compare'],
     queryFn: () => apiFetch('/api/analysis/compare'),
   })
@@ -51,14 +61,38 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
     queryClient.invalidateQueries({ queryKey: ['fallback'] })
   }
 
-  const setScope = useMutation({
-    mutationFn: (body: { platform: string; modelId: string; allow: boolean }) =>
-      apiFetch('/api/analysis/key-scope', { method: 'PUT', body: JSON.stringify(body) }),
+  // ONE switch, because the operator's question is "does this key route this
+  // model", and answering it needed two: the catalogue flag and the key's
+  // scope. They are still separate underneath — one is a judgement about the
+  // model, the other is what the credential permits — but nothing is served by
+  // making a reader hold both to decide one thing.
+  //
+  // An unscoped key has no per-model list to edit, so only the flag moves. A
+  // scope edit that would empty the list is refused by the server (409); the
+  // flag still lands, which is the half that matters.
+  const setRoutable = useMutation({
+    mutationFn: async ({ row, on }: { row: Row; on: boolean }) => {
+      await apiFetch(`/api/models/${row.modelDbId}`, { method: 'PATCH', body: JSON.stringify({ enabled: on }) })
+      if (row.keyScope === 'in' || row.keyScope === 'out') {
+        await apiFetch('/api/analysis/key-scope', {
+          method: 'PUT',
+          body: JSON.stringify({ platform: row.platform, modelId: row.modelId, allow: on }),
+        }).catch(() => { /* 409: unscoped key, or the last id — the flag stands */ })
+      }
+    },
     onSuccess: invalidate,
   })
-  const setEnabled = useMutation({
-    mutationFn: (body: { id: number; enabled: boolean }) =>
-      apiFetch(`/api/models/${body.id}`, { method: 'PATCH', body: JSON.stringify({ enabled: body.enabled }) }),
+
+  // Same endpoint the Compare page uses. Mapping here matters because the
+  // scores in these columns are only as good as the match behind them: a row
+  // reading "-" is unjudgeable, and the provider's own menu is where you notice
+  // that one of its models never got matched.
+  const link = useMutation({
+    mutationFn: (body: { platform: string; modelId: string; aaSlug: string | null }) =>
+      apiFetch('/api/analysis/link', {
+        method: 'PUT',
+        body: JSON.stringify({ models: [{ platform: body.platform, modelId: body.modelId }], aaSlug: body.aaSlug }),
+      }),
     onSuccess: invalidate,
   })
 
@@ -71,7 +105,7 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
       : sort === 'agentic' ? r.analysis?.agenticIndex ?? null
       : r.analysis?.intelligenceIndex ?? null
     return [...mine]
-      .filter(r => !onlyScoped || r.keyScope === 'in' || r.keyScope === 'unscoped')
+      .filter(r => !onlyScoped || (r.enabled && (r.keyScope === 'in' || r.keyScope === 'unscoped')))
       // Unmeasured last in every ordering: a model with no score is not a zero.
       .sort((a, b) => {
         if (sort === 'name') return a.displayName.localeCompare(b.displayName)
@@ -86,8 +120,9 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
   if (isLoading) return <p className="px-3 py-2 text-xs text-muted-foreground">{t('common.loading')}</p>
   if (rows.length === 0) return <p className="px-3 py-2 text-xs text-muted-foreground">{t('keys.panelNoModels')}</p>
 
-  const scoped = rows.filter(r => r.keyScope === 'in' || r.keyScope === 'unscoped').length
-  const busy = setScope.isPending || setEnabled.isPending
+  const routable = (r: Row) => r.enabled && (r.keyScope === 'in' || r.keyScope === 'unscoped')
+  const scoped = rows.filter(routable).length
+  const busy = setRoutable.isPending
 
   return (
     <div className="mt-2 rounded-2xl border bg-card p-3">
@@ -116,16 +151,12 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
             <SortTh active={sort === 'agentic'} onClick={() => setSort('agentic')} right>{t('compare.agentic')}</SortTh>
             <SortTh active={sort === 'speed'} onClick={() => setSort('speed')} right>{t('compare.colSpeed')}</SortTh>
             <th className="py-1 pr-2 text-right font-normal">{t('compare.colContext')}</th>
-            <th className="py-1 pr-2 text-center font-normal">{t('keys.panelColScope')}</th>
+            <th className="py-1 pr-2 text-left font-normal">{t('compare.colMatch')}</th>
             <th className="py-1 text-center font-normal">{t('keys.panelColEnabled')}</th>
           </tr>
         </thead>
         <tbody>
           {rows.map(r => {
-            // An unscoped key permits everything, so there is no per-model
-            // switch to offer: narrowing it is a decision about the KEY.
-            const unscoped = r.keyScope === 'unscoped'
-            const inScope = r.keyScope === 'in' || unscoped
             return (
               <tr key={r.modelDbId} className="border-t">
                 <td className="py-1 pr-2">
@@ -139,27 +170,20 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
                 <td className="py-1 pr-2 text-right tabular-nums text-muted-foreground">
                   {r.contextWindow ? `${Math.round(r.contextWindow / 1000)}K` : '–'}
                 </td>
-                <td className="py-1 pr-2 text-center">
-                  {unscoped ? (
-                    <Tooltip text={t('keys.panelUnscopedHint')}>
-                      <span className="text-[10px] text-muted-foreground">{t('keys.panelUnscoped')}</span>
-                    </Tooltip>
-                  ) : (
-                    <Switch
-                      checked={inScope}
-                      disabled={busy}
-                      aria-label={t('keys.panelColScope')}
-                      onCheckedChange={checked =>
-                        setScope.mutate({ platform: r.platform, modelId: r.modelId, allow: checked })}
-                    />
-                  )}
+                <td className="py-1 pr-2">
+                  <MappingCell
+                    row={r}
+                    catalogue={data?.catalogue ?? []}
+                    disabled={link.isPending}
+                    onLink={slug => link.mutate({ platform: r.platform, modelId: r.modelId, aaSlug: slug })}
+                  />
                 </td>
                 <td className="py-1 text-center">
                   <Switch
-                    checked={r.enabled}
+                    checked={routable(r)}
                     disabled={busy}
                     aria-label={t('keys.panelColEnabled')}
-                    onCheckedChange={checked => setEnabled.mutate({ id: r.modelDbId, enabled: checked })}
+                    onCheckedChange={on => setRoutable.mutate({ row: r, on })}
                   />
                 </td>
               </tr>
@@ -194,3 +218,61 @@ function Num({ v, digits = 1 }: { v: number | null | undefined; digits?: number 
     </td>
   )
 }
+
+/** The benchmark this route is matched to, and the control to change it. */
+function MappingCell({ row, catalogue, onLink, disabled }: {
+  row: Row
+  catalogue: CatalogueEntry[]
+  onLink: (slug: string | null) => void
+  disabled?: boolean
+}) {
+  const { t } = useI18n()
+  const [editing, setEditing] = useState(false)
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="max-w-[150px] truncate text-left text-[11px] underline decoration-dotted underline-offset-2 hover:text-foreground"
+        title={row.analysis ? `${row.analysis.name} (${row.analysis.slug})` : undefined}
+      >
+        {row.link?.unresolved
+          ? <span className="text-destructive">{t('compare.matchUnresolved', { slug: row.link.slug ?? '' })}</span>
+          : row.analysis
+            ? <span className={row.link?.source === 'manual' ? '' : 'text-muted-foreground'}>{row.analysis.name}</span>
+            : <span className="text-muted-foreground">{t('compare.matchNone')}</span>}
+      </button>
+    )
+  }
+
+  return (
+    <span className="flex items-center gap-1">
+      <ModelCombobox
+        value={row.link?.slug ?? NO_COUNTERPART}
+        options={[
+          { value: NO_COUNTERPART, label: t('compare.matchNoneOption') },
+          ...catalogue.map(c => ({
+            value: c.slug,
+            label: c.name,
+            sub: c.intelligenceIndex == null ? (c.creator ?? undefined) : c.intelligenceIndex.toFixed(0),
+            platforms: c.creator ? [c.creator] : undefined,
+          })),
+        ]}
+        onSelect={slug => { onLink(slug === NO_COUNTERPART ? null : slug); setEditing(false) }}
+        ariaLabel={t('compare.mapAriaLabel')}
+        placeholder={t('compare.mapSearchPlaceholder')}
+        emptyText={t('compare.mapNoResults')}
+        triggerPlaceholder={t('compare.matchNoneOption')}
+        triggerClassName="h-6 max-w-[160px] text-[11px]"
+        ariaInvalid={false}
+        align="start"
+      />
+      <button type="button" onClick={() => setEditing(false)} disabled={disabled} aria-label={t('common.cancel')} className="text-muted-foreground">×</button>
+    </span>
+  )
+}
+
+/** "No counterpart" is a decision, so it needs a value of its own: an empty
+ *  string would read as "nothing picked yet". */
+const NO_COUNTERPART = '__none__'
