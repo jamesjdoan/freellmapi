@@ -14,7 +14,7 @@ export type SortKey =
 export interface SortableEntry {
   name: string
   chains: string[]
-  members: { contextWindow: number | null; intelligenceRank: number }[]
+  members: { contextWindow: number | null; intelligenceRank: number; platform?: string; modelId?: string }[]
   analysis: {
     intelligenceIndex: number | null
     codingIndex: number | null
@@ -67,4 +67,34 @@ export function sortEntries<T extends SortableEntry>(entries: readonly T[], key:
     const cmp = typeof a === 'string' && typeof b === 'string' ? a.localeCompare(b) : Number(a) - Number(b)
     return cmp === 0 ? x.name.localeCompare(y.name) : cmp * sign
   })
+}
+
+/**
+ * Substring match for the Compare table.
+ *
+ * Searches everything the row can be recognised by, not just its label: the
+ * provider and model id behind each route (so "groq" or "gpt-oss" find it), the
+ * chains it serves, and the benchmark it is mapped to. A merged row hides its
+ * route ids behind a tooltip, so a name-only search could not find a model by
+ * the id the operator actually types.
+ *
+ * Every term must match somewhere, so terms narrow rather than widen.
+ */
+export function matchesCompareQuery(entry: {
+  name: string
+  chains: string[]
+  members: readonly { platform?: string; modelId?: string }[]
+  analysis?: { name: string; slug: string; creator: string | null } | null
+}, query: string): boolean {
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
+  if (terms.length === 0) return true
+  const hay = [
+    entry.name,
+    ...entry.chains,
+    ...entry.members.flatMap(m => [m.platform ?? '', m.modelId ?? '']),
+    entry.analysis?.name ?? '',
+    entry.analysis?.slug ?? '',
+    entry.analysis?.creator ?? '',
+  ].join(' ').toLowerCase()
+  return terms.every(t => hay.includes(t))
 }

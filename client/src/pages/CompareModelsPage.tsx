@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink, RefreshCw, Scale } from 'lucide-react'
 import { useI18n } from '@/i18n'
-import { sortEntries, type SortKey } from '@/lib/compare-sort'
+import { matchesCompareQuery, sortEntries, type SortKey } from '@/lib/compare-sort'
 import { ModelCombobox, type ModelComboOption } from '@/components/model-combobox'
 import { apiFetch } from '@/lib/api'
 import { toast } from '@/lib/toast'
@@ -131,6 +131,7 @@ export default function CompareModelsPage() {
   // provider. On this install 510 of 588 models sit on providers we have no
   // key for — enabled, ranked, merged, and unreachable.
   const [scope, setScope] = useState<Scope>('routed')
+  const [query, setQuery] = useState('')
 
   const { data, isLoading } = useQuery<ComparePayload>({
     queryKey: ['analysis', 'compare'],
@@ -209,12 +210,14 @@ export default function CompareModelsPage() {
         // References are never filtered out by "only routed": the whole point
         // is that they sit beside our models wherever those land.
         ...(references?.groups ?? []),
-        ...(grouped?.groups ?? []).filter(g => inScope(g, scope)),
+        // Baselines are never searched away: they are the thing being compared
+        // against, and a filtered table with no yardstick left is worse.
+        ...(grouped?.groups ?? []).filter(g => inScope(g, scope) && matchesCompareQuery(g, query)),
       ],
       sort.key,
       sort.dir,
     ),
-    [grouped, references, scope, sort],
+    [grouped, references, scope, sort, query],
   )
   const chosen = useMemo(
     () => entries.filter(g => selected.has(entryKey(g))),
@@ -406,6 +409,27 @@ export default function CompareModelsPage() {
               <h2 className="text-sm font-medium">{t('compare.tableTitle')}</h2>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">{t('compare.tableHint')}</p>
+            <div className="mt-2 flex items-center gap-2">
+              <input
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder={t('compare.searchPlaceholder')}
+                aria-label={t('compare.searchPlaceholder')}
+                className="h-7 w-[260px] rounded border bg-background px-2 text-[11px]"
+              />
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => setQuery('')}
+                  className="rounded-full border px-2 py-0.5 text-[11px] hover:bg-muted/50"
+                >
+                  {t('models.clearFilters')}
+                </button>
+              )}
+              <span className="text-[11px] text-muted-foreground tabular-nums">
+                {t('compare.showingCount', { shown: entries.length })}
+              </span>
+            </div>
             <Table className="mt-3">
               <TableHeader>
                 <TableRow>

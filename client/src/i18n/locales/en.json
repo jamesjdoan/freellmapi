@@ -403,6 +403,8 @@
     "intelligence": "Intelligence",
     "coding": "Coding",
     "agentic": "Agentic",
+"searchPlaceholder": "Search model, provider, chain or benchmark",
+"showingCount": "{shown} shown",
 "scopeRouted": "In a chain",
 "scopeRoutedHint": "Models a routing chain is using right now",
 "scopeKeyed": "Have a key",

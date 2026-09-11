@@ -1370,6 +1370,8 @@
     "scopeEnabled": "Enabled",
     "scopeEnabledHint": "Switched on in the catalogue, whether or not we can reach the provider",
     "scopeAll": "All discovered",
-    "scopeAllHint": "Every model discovered from every provider, including ones we have no key for"
+    "scopeAllHint": "Every model discovered from every provider, including ones we have no key for",
+    "searchPlaceholder": "Search model, provider, chain or benchmark",
+    "showingCount": "{shown} shown"
   }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sortEntries, sortValue, type SortableEntry } from './compare-sort'
+import { matchesCompareQuery, sortEntries, sortValue, type SortableEntry } from './compare-sort'
 
 const entry = (
   name: string,
@@ -79,5 +79,38 @@ describe('sortValue', () => {
     const paid = entry('Paid', { price1mOutput: 15 })
     expect(sortValue(free, 'price')).toBe(0)
     expect(sortEntries([paid, free], 'price', 'asc').map(e => e.name)).toEqual(['Free', 'Paid'])
+  })
+})
+
+describe('matchesCompareQuery', () => {
+  const row = {
+    name: 'GPT-OSS 120B',
+    chains: ['Coding', 'Apex'],
+    members: [
+      { contextWindow: 131072, intelligenceRank: 6, platform: 'groq', modelId: 'openai/gpt-oss-120b' },
+      { contextWindow: 131072, intelligenceRank: 6, platform: 'cerebras', modelId: 'gpt-oss-120b' },
+    ],
+    analysis: { name: 'GPT-OSS 120B (high)', slug: 'gpt-oss-120b', creator: 'OpenAI' },
+  }
+
+  it('finds a row by provider or route id, which a merged row only shows on hover', () => {
+    expect(matchesCompareQuery(row, 'groq')).toBe(true)
+    expect(matchesCompareQuery(row, 'openai/gpt-oss')).toBe(true)
+    expect(matchesCompareQuery(row, 'cerebras')).toBe(true)
+  })
+
+  it('finds a row by chain and by the benchmark it is mapped to', () => {
+    expect(matchesCompareQuery(row, 'apex')).toBe(true)
+    expect(matchesCompareQuery(row, 'openai')).toBe(true)
+  })
+
+  it('narrows with each term rather than widening', () => {
+    expect(matchesCompareQuery(row, 'groq 120b')).toBe(true)
+    expect(matchesCompareQuery(row, 'groq kimi')).toBe(false)
+  })
+
+  it('is case-insensitive and empty query matches everything', () => {
+    expect(matchesCompareQuery(row, 'GpT-OsS')).toBe(true)
+    expect(matchesCompareQuery(row, '   ')).toBe(true)
   })
 })
