@@ -56,7 +56,7 @@ interface CompareRow {
     medianOutputTokensPerSecond: number | null
     medianTimeToFirstTokenSeconds: number | null
   } | null
-  link: { slug: string | null; source: 'auto' | 'manual' | 'proxy'; matchReason: string | null; unresolved: boolean; proxyDelta: { intelligence: number; coding: number; agentic: number } } | null
+  link: { slug: string | null; source: 'auto' | 'manual' | 'proxy'; matchReason: string | null; unresolved: boolean; proxyDelta: { intelligence: number; coding: number; agentic: number; speed: number } } | null
 }
 
 interface CompareGroup {

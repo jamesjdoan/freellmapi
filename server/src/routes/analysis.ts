@@ -134,7 +134,7 @@ const proxyDeltaSchema = z.object({
   modelId: z.string().min(1),
   // Per metric: a stand-in can code like its proxy and reason worse, and a
   // single adjustment forced one judgement onto all three.
-  metric: z.enum(['intelligence', 'coding', 'agentic']),
+  metric: z.enum(['intelligence', 'coding', 'agentic', 'speed']),
   delta: z.number().int().min(-3).max(3),
 });
 

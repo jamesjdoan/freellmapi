@@ -52,6 +52,7 @@ const MODEL_GROUPS_FILENAME = '20260911_000002_model_groups.ts';
 const DROP_MODEL_GROUPS_FILENAME = '20260911_000003_drop_model_groups.ts';
 const PROXY_DELTA_FILENAME = '20260911_000004_proxy_delta.ts';
 const PROXY_DELTA_PER_METRIC_FILENAME = '20260911_000005_proxy_delta_per_metric.ts';
+const PROXY_DELTA_SPEED_FILENAME = '20260911_000006_proxy_delta_speed.ts';
 
 interface SchemaRow {
   type: string;
@@ -150,6 +151,7 @@ describe('migration round trip', () => {
         DROP_MODEL_GROUPS_FILENAME,
         PROXY_DELTA_FILENAME,
         PROXY_DELTA_PER_METRIC_FILENAME,
+        PROXY_DELTA_SPEED_FILENAME,
       ]);
     } finally {
       db.close();

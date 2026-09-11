@@ -333,6 +333,7 @@ export function setManualLink(
       -- The adjustment described the OLD stand-in; carrying it onto a new one
       -- would silently mis-state the new estimate.
       proxy_delta_intelligence = 0, proxy_delta_coding = 0, proxy_delta_agentic = 0,
+      proxy_delta_speed = 0,
       created_at = datetime('now')
   `).run(platform, modelId, aaSlug, source);
 }
@@ -414,7 +415,7 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
     SELECT m.id AS model_db_id, m.platform, m.model_id, m.display_name, m.enabled, m.context_window,
            m.supports_tools, m.supports_vision, m.intelligence_rank, m.speed_rank,
            l.aa_slug, l.source AS link_source, l.match_reason,
-           l.proxy_delta_intelligence, l.proxy_delta_coding, l.proxy_delta_agentic,
+           l.proxy_delta_intelligence, l.proxy_delta_coding, l.proxy_delta_agentic, l.proxy_delta_speed,
            a.slug AS aa_present, a.name AS aa_name, a.creator, a.intelligence_index,
            a.coding_index, a.agentic_index, a.price_1m_input, a.price_1m_output,
            a.median_output_tokens_per_second, a.median_time_to_first_token_seconds,
@@ -503,7 +504,7 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
           agenticIndex: nudge(numberOrNull(r.agentic_index), r, 'agentic'),
           price1mInput: numberOrNull(r.price_1m_input),
           price1mOutput: numberOrNull(r.price_1m_output),
-          medianOutputTokensPerSecond: numberOrNull(r.median_output_tokens_per_second),
+          medianOutputTokensPerSecond: nudge(numberOrNull(r.median_output_tokens_per_second), r, 'speed'),
           medianTimeToFirstTokenSeconds: numberOrNull(r.median_time_to_first_token_seconds),
         }
         : null,
@@ -517,6 +518,7 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
             intelligence: Number(r.proxy_delta_intelligence ?? 0),
             coding: Number(r.proxy_delta_coding ?? 0),
             agentic: Number(r.proxy_delta_agentic ?? 0),
+            speed: Number(r.proxy_delta_speed ?? 0),
           },
           matchReason: r.match_reason == null ? null : String(r.match_reason),
           unresolved: r.aa_slug != null && !r.aa_present,
@@ -695,8 +697,18 @@ function nudge(value: number | null, row: Record<string, unknown>, metric: Proxy
   if (row.link_source !== 'proxy') return value;
   const delta = Number(row[`proxy_delta_${metric}`] ?? 0);
   if (!Number.isFinite(delta) || delta === 0) return value;
+  // Speed is tokens per second, not an index: it runs from about 30 to 350
+  // here, so a one-point step would be noise on a fast route and decisive on a
+  // slow one. A step is a proportion of the borrowed figure instead, which
+  // means the same thing at either end.
+  if (metric === 'speed') {
+    return Math.max(0, Math.round(value * (1 + SPEED_STEP * delta)));
+  }
   return Math.max(0, Math.round((value + delta) * 10) / 10);
 }
+
+/** One speed step, as a fraction of the proxy's own figure. */
+const SPEED_STEP = 0.15;
 
 function lookupAa(db: Db, slug: string): CompareRow['analysis'] {
   const r = db.prepare(`
@@ -736,7 +748,7 @@ function lookupAa(db: Db, slug: string): CompareRow['analysis'] {
  * measurement of the model itself, and "adjusting" those would be falsifying
  * them rather than estimating.
  */
-export type ProxyMetric = 'intelligence' | 'coding' | 'agentic';
+export type ProxyMetric = 'intelligence' | 'coding' | 'agentic' | 'speed';
 
 /** Steps available in each direction, rendered as +++ / --- rather than a
  *  number: the scale is coarse on purpose. */
@@ -807,18 +819,20 @@ export function getAdjustedScores(db: Db = getDb()): Map<string, {
   intelligence: number | null;
   coding: number | null;
   agentic: number | null;
+  speed: number | null;
   source: 'auto' | 'manual' | 'proxy';
   name: string;
 }> {
   const rows = db.prepare(`
     SELECT l.platform, l.model_id, l.source,
            a.name, a.intelligence_index, a.coding_index, a.agentic_index,
-           l.proxy_delta_intelligence, l.proxy_delta_coding, l.proxy_delta_agentic
+           a.median_output_tokens_per_second,
+           l.proxy_delta_intelligence, l.proxy_delta_coding, l.proxy_delta_agentic, l.proxy_delta_speed
       FROM aa_model_link l JOIN aa_model a ON a.slug = l.aa_slug
   `).all() as Record<string, unknown>[];
 
   const out = new Map<string, {
-    intelligence: number | null; coding: number | null; agentic: number | null;
+    intelligence: number | null; coding: number | null; agentic: number | null; speed: number | null;
     source: 'auto' | 'manual' | 'proxy'; name: string;
   }>();
   for (const r of rows) {
@@ -827,6 +841,7 @@ export function getAdjustedScores(db: Db = getDb()): Map<string, {
       intelligence: nudge(numberOrNull(r.intelligence_index), { ...r, link_source: source }, 'intelligence'),
       coding: nudge(numberOrNull(r.coding_index), { ...r, link_source: source }, 'coding'),
       agentic: nudge(numberOrNull(r.agentic_index), { ...r, link_source: source }, 'agentic'),
+      speed: nudge(numberOrNull(r.median_output_tokens_per_second), { ...r, link_source: source }, 'speed'),
       source,
       name: String(r.name),
     });

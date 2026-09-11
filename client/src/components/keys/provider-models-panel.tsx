@@ -35,7 +35,7 @@ interface Row {
     source: 'auto' | 'manual' | 'proxy'
     matchReason: string | null
     unresolved: boolean
-    proxyDelta: { intelligence: number; coding: number; agentic: number }
+    proxyDelta: { intelligence: number; coding: number; agentic: number; speed: number }
   } | null
 }
 
@@ -181,7 +181,7 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
                 <Num v={r.analysis?.intelligenceIndex} row={r} metric="intelligence" onNudge={nudge.mutate} busy={busy} />
                 <Num v={r.analysis?.codingIndex} row={r} metric="coding" onNudge={nudge.mutate} busy={busy} />
                 <Num v={r.analysis?.agenticIndex} row={r} metric="agentic" onNudge={nudge.mutate} busy={busy} />
-                <Num v={r.analysis?.medianOutputTokensPerSecond} digits={0} />
+                <Num v={r.analysis?.medianOutputTokensPerSecond} digits={0} row={r} metric="speed" onNudge={nudge.mutate} busy={busy} />
                 <td className="py-1 pr-2 text-right tabular-nums text-muted-foreground">
                   {r.contextWindow ? `${Math.round(r.contextWindow / 1000)}K` : '–'}
                 </td>
@@ -282,7 +282,7 @@ function Num({ v, digits = 1, row, metric, onNudge, busy }: {
   )
 }
 
-type ProxyMetric = 'intelligence' | 'coding' | 'agentic'
+type ProxyMetric = 'intelligence' | 'coding' | 'agentic' | 'speed'
 
 /** Matches the server's clamp; the two must not drift. */
 const PROXY_DELTA_MAX = 3

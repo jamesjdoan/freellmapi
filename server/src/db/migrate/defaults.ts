@@ -47,6 +47,7 @@ import * as modelGroups from '../migrations/20260911_000002_model_groups.js';
 import * as dropModelGroups from '../migrations/20260911_000003_drop_model_groups.js';
 import * as proxyDelta from '../migrations/20260911_000004_proxy_delta.js';
 import * as proxyDeltaPerMetric from '../migrations/20260911_000005_proxy_delta_per_metric.js';
+import * as proxyDeltaSpeed from '../migrations/20260911_000006_proxy_delta_speed.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -106,6 +107,7 @@ export const MODEL_GROUPS_FILENAME = '20260911_000002_model_groups.ts';
 export const DROP_MODEL_GROUPS_FILENAME = '20260911_000003_drop_model_groups.ts';
 export const PROXY_DELTA_FILENAME = '20260911_000004_proxy_delta.ts';
 export const PROXY_DELTA_PER_METRIC_FILENAME = '20260911_000005_proxy_delta_per_metric.ts';
+export const PROXY_DELTA_SPEED_FILENAME = '20260911_000006_proxy_delta_speed.ts';
 
 export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: LEGACY_BASELINE_FILENAME, module: legacyBaseline },
@@ -156,4 +158,5 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: DROP_MODEL_GROUPS_FILENAME, module: dropModelGroups },
   { filename: PROXY_DELTA_FILENAME, module: proxyDelta },
   { filename: PROXY_DELTA_PER_METRIC_FILENAME, module: proxyDeltaPerMetric },
+  { filename: PROXY_DELTA_SPEED_FILENAME, module: proxyDeltaSpeed },
 ];

@@ -418,7 +418,7 @@ describe('proxy adjustment', () => {
     const r = getComparePayload().rows.find(x => x.modelId === modelId);
     return { i: r?.analysis?.intelligenceIndex, c: r?.analysis?.codingIndex, delta: r?.link?.proxyDelta };
   };
-  const zero = { intelligence: 0, coding: 0, agentic: 0 };
+  const zero = { intelligence: 0, coding: 0, agentic: 0, speed: 0 };
 
   it('shifts a proxy\'s borrowed scores so it can be ranked against them', () => {
     // A column of identical borrowed numbers sorts arbitrarily; "a bit worse
@@ -462,5 +462,46 @@ describe('proxy adjustment', () => {
 
     // They described the old stand-in; carrying them over would mis-state the new one.
     expect(scoresOf('probe/proxied')).toEqual({ i: 44, c: 44, delta: zero });
+  });
+})
+
+describe('proxy speed adjustment', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare(`
+      INSERT INTO aa_model (slug, name, intelligence_index, coding_index, agentic_index,
+                            median_output_tokens_per_second, index_version)
+      VALUES ('fast', 'Fast Model', 20, 20, 20, 200, 'v4.3')
+    `).run();
+    addModel('groq', 'probe/speedy', 'Speedy Probe');
+    setManualLink('groq', 'probe/speedy', 'fast', getDb(), 'proxy');
+  });
+
+  const speedOf = () =>
+    getComparePayload().rows.find(r => r.modelId === 'probe/speedy')?.analysis?.medianOutputTokensPerSecond;
+
+  it('steps speed proportionally, not by a point', () => {
+    // Tokens per second runs from ~30 to ~350 here, so a one-point step would
+    // be noise on a fast route and decisive on a slow one.
+    setProxyDelta('groq', 'probe/speedy', 'speed', 1);
+    expect(speedOf()).toBe(230);
+
+    setProxyDelta('groq', 'probe/speedy', 'speed', -2);
+    expect(speedOf()).toBe(140);
+  });
+
+  it('leaves the indices alone', () => {
+    setProxyDelta('groq', 'probe/speedy', 'speed', 3);
+
+    const row = getComparePayload().rows.find(r => r.modelId === 'probe/speedy');
+    expect(row?.analysis?.intelligenceIndex).toBe(20);
+    expect(row?.link?.proxyDelta).toEqual({ intelligence: 0, coding: 0, agentic: 0, speed: 3 });
+  });
+
+  it('never goes negative', () => {
+    setProxyDelta('groq', 'probe/speedy', 'speed', -3);
+
+    expect(speedOf()).toBe(110);
   });
 })
