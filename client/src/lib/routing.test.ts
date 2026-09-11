@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  applyStagedEdits,
   groupMatchesQuery,
   isMemberSplit,
   memberEndpointTitle,
@@ -297,5 +298,39 @@ describe('groupMatchesQuery (#1056)', () => {
     expect(groupMatchesQuery(g, 'glm')).toBe(true)
     expect(groupMatchesQuery(g, 'groq')).toBe(true)
     expect(groupMatchesQuery(g, 'mistral')).toBe(false)
+  })
+})
+
+describe('applyStagedEdits', () => {
+  const fresh = [
+    { modelDbId: 1, priority: 1, enabled: true, groupKey: 'qwen3.6 27b', mergedKeys: ['qwen3.8 27b'] },
+    { modelDbId: 2, priority: 2, enabled: true, groupKey: 'qwen3.6 27b', mergedKeys: ['qwen3.8 27b'] },
+  ]
+
+  it('keeps unsaved priority and enabled edits', () => {
+    const out = applyStagedEdits(fresh, [{ modelDbId: 2, priority: 0, enabled: false }])
+    expect(out.map(e => e.modelDbId)).toEqual([2, 1])
+    expect(out[0].enabled).toBe(false)
+    expect(out[0].priority).toBe(0)
+  })
+
+  it('takes grouping from the fetched row, not the staged snapshot', () => {
+    // The live bug: a merge saved while edits were unsaved refetched correctly
+    // but never reached the screen, because the stale snapshot replaced it.
+    const stale = [
+      { modelDbId: 1, priority: 1, enabled: true, groupKey: 'qwen3.6 27b', mergedKeys: [] },
+      { modelDbId: 2, priority: 2, enabled: true, groupKey: 'qwen3.8 27b', mergedKeys: [] },
+    ]
+    const out = applyStagedEdits(fresh, stale)
+    expect(out.map(e => e.groupKey)).toEqual(['qwen3.6 27b', 'qwen3.6 27b'])
+    expect(out.every(e => e.mergedKeys.length === 1)).toBe(true)
+  })
+
+  it('leaves rows the staged copy never saw alone, and passes fetched rows through', () => {
+    // Row 2 is untouched and keeps its fetched priority, so the re-sort puts it
+    // ahead of the row just pushed down to 5.
+    const out = applyStagedEdits(fresh, [{ modelDbId: 1, priority: 5, enabled: false }])
+    expect(out[0]).toEqual(fresh[1])
+    expect(applyStagedEdits(fresh, null)).toEqual(fresh)
   })
 })

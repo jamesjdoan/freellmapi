@@ -482,3 +482,29 @@ export function groupMatchesQuery(
   ].join(' ').toLowerCase()
   return hay.includes(query)
 }
+
+/**
+ * Lay unsaved chain edits over freshly fetched rows.
+ *
+ * The staged copy must NOT replace the fetched list. Replacing it froze the
+ * page at the moment editing began: a merge written while edits were unsaved
+ * refetched correctly and changed nothing on screen, so the undo control looked
+ * like it appeared only sometimes (#790).
+ *
+ * Only priority and enabled are edited here — that is all the save sends — so
+ * those ride on top and everything else, grouping identity included, stays
+ * live. Rows the staged copy never saw keep their fetched priority.
+ */
+export function applyStagedEdits<T extends { modelDbId: number; priority: number; enabled: boolean }>(
+  entries: readonly T[],
+  staged: readonly { modelDbId: number; priority: number; enabled: boolean }[] | null,
+): T[] {
+  if (!staged) return [...entries]
+  const edits = new Map(staged.map(e => [e.modelDbId, e]))
+  return entries
+    .map(e => {
+      const edit = edits.get(e.modelDbId)
+      return edit ? { ...e, priority: edit.priority, enabled: edit.enabled } : e
+    })
+    .sort((a, b) => a.priority - b.priority)
+}

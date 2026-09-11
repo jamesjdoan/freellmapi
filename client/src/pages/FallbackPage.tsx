@@ -22,6 +22,7 @@ import { apiFetch } from '@/lib/api'
 import {
   buildGroups,
   groupMatchesQuery,
+  applyStagedEdits,
   groupMaxContext,
   type FallbackEntry,
   type ModelGroupRow,
@@ -247,7 +248,19 @@ export default function FallbackPage() {
     () => new Map((routing?.scores ?? []).map(s => [s.modelDbId, s])),
     [routing?.scores],
   )
-  const allEntries = useMemo(() => localEntries ?? entries, [localEntries, entries])
+  // Unsaved chain edits are an overlay, NOT a replacement for the fetched rows.
+  //
+  // Replacing them froze the whole page at the moment editing began: merging two
+  // models wrote the override, refetched correctly, and changed nothing on
+  // screen, because the stale snapshot was still being rendered. The undo chip
+  // then looked like it appeared only sometimes — it appeared when nothing was
+  // staged (#790).
+  //
+  // Only priority and enabled are being edited here (that is all handleSave
+  // sends), so those two ride on top of fresh rows and everything else —
+  // grouping identity included — stays live. Rows the staged copy never saw
+  // keep their fetched priority, and the list re-sorts to match.
+  const allEntries = useMemo(() => applyStagedEdits(entries, localEntries), [localEntries, entries])
   const configured = useMemo(() => allEntries.filter(e => e.keyCount > 0), [allEntries])
   const unconfiguredPlatforms = useMemo(
     () => [...new Set(allEntries.filter(e => e.keyCount === 0).map(e => e.platform))],
