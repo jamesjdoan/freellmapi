@@ -234,3 +234,31 @@ describe('reachability', () => {
     expect(g?.keyedMembers).toBe(0);
   });
 })
+
+describe('key scope', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    addModel('groq', 'probe/in-scope', 'In Scope');
+    addModel('groq', 'probe/out-of-scope', 'Out Of Scope');
+    getDb().prepare(`
+      INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, enabled, status, model_scope_json)
+      VALUES ('groq', 'k', 'x', 'x', 'x', 1, 'healthy', '["probe/in-scope"]')
+    `).run();
+  });
+
+  it('does not call a model reachable when the key is scoped to other models', () => {
+    // Holding a key for a platform is not the same as being able to call a
+    // given model on it. A scoped key that omits the id is exactly the case
+    // that made an unreachable model look available on the Compare page.
+    const groups = getGroupedCompare();
+    expect(groups.find(g => /In Scope/.test(g.name))?.keyedMembers).toBe(1);
+    expect(groups.find(g => /Out Of Scope/.test(g.name))?.keyedMembers).toBe(0);
+  });
+
+  it('treats an unscoped key as covering every model on its platform', () => {
+    getDb().prepare('UPDATE api_keys SET model_scope_json = NULL').run();
+
+    expect(getGroupedCompare().find(g => /Out Of Scope/.test(g.name))?.keyedMembers).toBe(1);
+  });
+})

@@ -1,4 +1,5 @@
 import { getDb, getSetting, setSetting } from '../db/index.js';
+import { parseModelScope, scopeAllows } from '../lib/model-scope.js';
 import type { Db } from '../db/types.js';
 import { encrypt, decrypt } from '../lib/crypto.js';
 import { matchAaModel, type AaCandidate } from './analysis-match.js';
@@ -394,12 +395,22 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
      ORDER BY m.platform, m.model_id
   `).all() as Record<string, unknown>[];
 
-  // Platforms we hold a usable key for. Without one a model is catalogue
-  // knowledge, not supply: it can be enabled, ranked and merged and still be
-  // unreachable, which is the distinction "enabled" alone cannot make.
-  const keyedPlatforms = new Set((db.prepare(
-    "SELECT DISTINCT platform FROM api_keys WHERE enabled = 1 AND status IN ('healthy', 'unknown')",
-  ).all() as { platform: string }[]).map(r => r.platform));
+  // Keys we could actually serve with. Holding a key for a platform is NOT the
+  // same as being able to call a given model on it: keys carry a model scope,
+  // and a scoped key covers only the ids it names. Judged with the same
+  // `scopeAllows` routing uses, so this column cannot claim a route is
+  // reachable that the router would reject for want of a key.
+  const usableKeys = db.prepare(
+    "SELECT platform, model_scope_json FROM api_keys WHERE enabled = 1 AND status IN ('healthy', 'unknown')",
+  ).all() as { platform: string; model_scope_json: string | null }[];
+  const keysByPlatform = new Map<string, (Set<string> | null)[]>();
+  for (const k of usableKeys) {
+    const list = keysByPlatform.get(k.platform) ?? [];
+    list.push(parseModelScope(k.model_scope_json));
+    keysByPlatform.set(k.platform, list);
+  }
+  const hasUsableKey = (platform: string, modelId: string) =>
+    (keysByPlatform.get(platform) ?? []).some(scope => scopeAllows(scope, modelId));
 
   const catalogue = db.prepare(`
     SELECT slug, name, creator, intelligence_index
@@ -414,7 +425,7 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
       displayName: String(r.display_name ?? r.model_id),
       enabled: r.enabled === 1,
       contextWindow: r.context_window == null ? null : Number(r.context_window),
-      hasKey: keyedPlatforms.has(String(r.platform)),
+      hasKey: hasUsableKey(String(r.platform), String(r.model_id)),
       supportsTools: r.supports_tools === 1,
       supportsVision: r.supports_vision === 1,
       intelligenceRank: Number(r.intelligence_rank ?? 0),
