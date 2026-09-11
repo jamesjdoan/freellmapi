@@ -22,19 +22,46 @@ export function platformColor(platform: string): string {
  * to the Keys page with the provider preselected, because the next useful
  * action after noticing a missing key is adding one.
  */
-export function PlatformDot({ platform, hasKey, linkToKeys }: {
+export interface PlatformScope {
+  /** Models on this provider the key names, so the router may call them. */
+  inScope: string[]
+  /** Models on this provider the key does NOT name — present, unreachable. */
+  outOfScope: string[]
+  /** Models this provider serves while we hold no key at all. */
+  noKey: string[]
+}
+
+/** At most this many ids per section: a swatch tooltip is a summary, and a
+ *  hundred-line list is unreadable at any size. */
+const TOOLTIP_IDS = 8
+
+function summarise(t: (k: string, v?: Record<string, string | number>) => string, section: string, ids: string[]): string {
+  if (ids.length === 0) return ''
+  const shown = ids.slice(0, TOOLTIP_IDS).join(', ')
+  const rest = ids.length > TOOLTIP_IDS ? t('models.andMore', { count: ids.length - TOOLTIP_IDS }) : ''
+  return `${t(section, { count: ids.length })}: ${shown}${rest ? ' ' + rest : ''}`
+}
+
+export function PlatformDot({ platform, hasKey, linkToKeys, scope }: {
   platform: string
   /** Omit when reachability is unknown or irrelevant: the dot renders solid. */
   hasKey?: boolean
   /** Turn an unkeyed dot into a link to add that provider's key. */
   linkToKeys?: boolean
+  /** What this provider serves and how much of it the key permits. Hovering a
+   *  dot is the only place that question gets asked, so it is answered here in
+   *  full rather than by sending the reader to the Keys page to compare lists. */
+  scope?: PlatformScope
 }) {
   const { t } = useI18n()
   const colour = platformColor(platform)
   const missing = hasKey === false
-  const title = missing
-    ? t('models.platformNoKey', { platform })
-    : t('models.platformHasKey', { platform })
+  const title = [
+    missing ? t('models.platformNoKey', { platform }) : t('models.platformHasKey', { platform }),
+    scope && summarise(t, 'models.scopeInList', scope.inScope),
+    scope && summarise(t, 'models.scopeOutList', scope.outOfScope),
+    scope && summarise(t, 'models.scopeNoKeyList', scope.noKey),
+  ].filter(Boolean).join('\n')
 
   const dot = (
     <span
@@ -61,10 +88,12 @@ export function PlatformDot({ platform, hasKey, linkToKeys }: {
  * screen rather than the whole catalogue: a legend naming providers that are
  * not in the table teaches nothing.
  */
-export function PlatformLegend({ platforms, keyed }: {
+export function PlatformLegend({ platforms, keyed, scopes }: {
   platforms: string[]
   /** Platforms we hold a usable key for; the rest render hollow, as the dots do. */
   keyed?: ReadonlySet<string>
+  /** Same per-provider detail the row dots carry, so the legend is hoverable too. */
+  scopes?: ReadonlyMap<string, PlatformScope>
 }) {
   const { t } = useI18n()
   if (platforms.length === 0) return null
@@ -73,7 +102,7 @@ export function PlatformLegend({ platforms, keyed }: {
       <span>{t('models.legendTitle')}</span>
       {platforms.map(p => (
         <span key={p} className="inline-flex items-center gap-1">
-          <PlatformDot platform={p} hasKey={keyed ? keyed.has(p) : undefined} />
+          <PlatformDot platform={p} hasKey={keyed ? keyed.has(p) : undefined} scope={scopes?.get(p)} />
           <span>{p}</span>
         </span>
       ))}

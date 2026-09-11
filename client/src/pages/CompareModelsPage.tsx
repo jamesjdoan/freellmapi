@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { ConfirmButton } from '@/components/confirm-button'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/page-header'
-import { PlatformDot, PlatformLegend } from '@/components/platform-dot'
+import { PlatformDot, PlatformLegend, type PlatformScope } from '@/components/platform-dot'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tooltip } from '@/components/tooltip'
 
@@ -199,6 +199,22 @@ export default function CompareModelsPage() {
       apiFetch('/api/analysis/key-scope', { method: 'PUT', body: JSON.stringify(body) }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['analysis'] }),
   })
+
+  // What each provider serves and how much of it our key permits. Built from
+  // the whole payload, not the visible rows: hovering a dot asks about the
+  // provider, and answering with "the models that happen to be on screen" would
+  // be a different, misleading question.
+  const platformScopes = useMemo(() => {
+    const map = new Map<string, PlatformScope>()
+    for (const r of data?.rows ?? []) {
+      const e = map.get(r.platform) ?? { inScope: [], outOfScope: [], noKey: [] }
+      if (r.keyScope === 'none') e.noKey.push(r.modelId)
+      else if (r.keyScope === 'out') e.outOfScope.push(r.modelId)
+      else e.inScope.push(r.modelId)
+      map.set(r.platform, e)
+    }
+    return map
+  }, [data?.rows])
 
   const status = data?.status
 
@@ -396,7 +412,7 @@ export default function CompareModelsPage() {
                     </span>
                     <span className="flex w-[70px] flex-shrink-0 items-center gap-0.5">
                       {[...new Map(g.members.map(m => [m.platform, m])).values()].slice(0, 7).map(m => (
-                        <PlatformDot key={m.platform} platform={m.platform} hasKey={m.hasKey} />
+                        <PlatformDot key={m.platform} platform={m.platform} hasKey={m.hasKey} scope={platformScopes.get(m.platform)} />
                       ))}
                     </span>
                     <div className="h-3 min-w-0 flex-1 rounded bg-muted">
@@ -450,6 +466,7 @@ export default function CompareModelsPage() {
               <PlatformLegend
                 platforms={[...new Set(entries.flatMap(g => g.members.map(m => m.platform)))].sort()}
                 keyed={new Set(entries.flatMap(g => g.members.filter(m => m.hasKey).map(m => m.platform)))}
+                scopes={platformScopes}
               />
             </div>
             <Table className="mt-3">
@@ -567,7 +584,13 @@ export default function CompareModelsPage() {
                             with the provider preselected. */}
                         <span className="mt-0.5 flex flex-wrap items-center gap-1">
                           {[...new Map(g.members.map(m => [m.platform, m])).values()].map(m => (
-                            <PlatformDot key={m.platform} platform={m.platform} hasKey={m.hasKey} linkToKeys />
+                            <PlatformDot
+                              key={m.platform}
+                              platform={m.platform}
+                              hasKey={m.hasKey}
+                              scope={platformScopes.get(m.platform)}
+                              linkToKeys
+                            />
                           ))}
                         </span>
                       </TableCell>

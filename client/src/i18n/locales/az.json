@@ -308,7 +308,11 @@
     "platformHasKey": "{platform} - key configured",
     "platformNoKey": "{platform} - no key. Click to add one.",
     "legendTitle": "Providers:",
-    "legendHollow": "hollow = no key"
+    "legendHollow": "hollow = no key",
+    "scopeInList": "In key scope ({count})",
+    "scopeOutList": "Present but not in key scope ({count})",
+    "scopeNoKeyList": "Served here, no key ({count})",
+    "andMore": "+{count} more"
   },
   "strategies": {
     "explore": "Ölçülməmiş modelləri araşdır",
