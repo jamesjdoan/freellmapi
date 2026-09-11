@@ -161,3 +161,14 @@ The current machine paths, image tag, backup boundary, exact update workflow and
 ## Adding another extension feature
 
 Add one typed metadata entry to `client/src/lib/extension-registry.ts`, point it at the page that owns the real state, extend the registry/render test and update this guide. Do not put feature state, mutations or independent configuration inside the registry or Extensions dialog.
+
+## Design records
+
+| Subsystem | ADR |
+| --- | --- |
+| Provider preference and quota pools | `docs/adr/ARCH-20260901-unified-provider-preference-and-quota-pools.md` |
+| Extensions registry | `docs/adr/ARCH-20260902-extension-registry-dashboard.md` |
+| Provider model details copy | `docs/adr/ARCH-20260902-provider-model-details-copy.md` |
+| Provider quota guidance | `docs/adr/ARCH-20260902-provider-quota-guidance.md` |
+| Quota ledger and quota-aware router | `docs/adr/ARCH-20260905-quota-ledger-and-quota-aware-router.md` |
+| Measured benchmarks, proxy scores and key reachability | `docs/adr/ARCH-20260911-measured-benchmarks-and-proxy-scores.md` |
