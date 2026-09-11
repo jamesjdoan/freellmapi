@@ -17,6 +17,14 @@ describe('Imperium extension registry', () => {
       'quota-pool-routing',
       'quota-capacity-dashboard',
       'nav-playground-agents-menu',
+      'catalogue-log',
+      'provider-churn',
+      'model-benchmarks',
+      'benchmark-mapping',
+      'benchmark-proxy',
+      'logical-model-merge',
+      'provider-models-panel',
+      'key-reachability',
       'separate-extension-branch',
     ])
     expect(new Set(IMPERIUM_EXTENSIONS.map(feature => feature.id)).size).toBe(IMPERIUM_EXTENSIONS.length)
