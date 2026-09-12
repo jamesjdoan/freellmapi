@@ -38,6 +38,18 @@ interface InferredWindow {
 }
 
 interface ProviderOverviewRow extends QuotaForecastEntry {
+  /** Seconds for one unit to refill, when this allowance is a bucket. */
+  refillSeconds?: number | null;
+  /** Other windows on this same counter, folded onto one row by the server. */
+  alsoBound?: Array<{
+    pool: string | null;
+    limit: number | null;
+    used: number | null;
+    remaining: number | null;
+    remaining_pct: number | null;
+    seconds_until_reset: number | null;
+    source: string | null;
+  }>;
   source: string | null;
   confidence: number | null;
   /** False when the provider has never reported a usable limit — shown as
@@ -516,8 +528,13 @@ export default function QuotaPage() {
       if (list) list.push(p); else byPlatform.set(p.platform, [p]);
     }
     return [...byPlatform.entries()].map(([platform, pools]) => {
+      // A refilling bucket is a RATE. Three Groq models at 1,000 each are not
+      // 3,000 of anything you can spend before a deadline — there is no
+      // deadline — and the header totalled them into "3,000 remaining,
+      // resets —". Only balances add up.
       const summable = pools.every(p =>
-        p.metered && p.metric === 'requests' && p.unit == null && p.limit != null && p.used != null);
+        p.metered && p.metric === 'requests' && p.unit == null && p.limit != null && p.used != null
+        && p.refillSeconds == null);
       const resets = pools.map(p => p.seconds_until_reset).filter((n): n is number => n != null);
       const perModelPools = pools.length > 1
         && pools.every(p => p.metric === 'requests' && p.memberModelIds.length === 1);
@@ -781,8 +798,23 @@ export default function QuotaPage() {
                           : '—'
                         : <>
                             {formatAmount(p.limit, p.unit)}
-                            <span className="text-muted-foreground">{poolPeriodSuffix(p.pool)}</span>
+                            <span className="text-muted-foreground">
+                              {p.refillSeconds != null
+                                ? t('quota.refillRate', { seconds: p.refillSeconds })
+                                : poolPeriodSuffix(p.pool)}
+                            </span>
                           </>}
+                      {/* The other windows bounding this same counter, rendered
+                          for every shape of row. Ollama's balance takes the
+                          derived-allowance branch above, so a copy inside the
+                          plain-count branch left its session window invisible —
+                          a limit that still refuses requests, hidden by the
+                          fold meant to clarify it. */}
+                      {(p.alsoBound ?? []).map(w => (
+                        <span key={w.pool ?? 'w'} className="text-muted-foreground">
+                          {' · '}{formatAmount(w.limit, p.unit)}{poolPeriodSuffix(w.pool)}
+                        </span>
+                      ))}
                     </TableCell>
                     {/* A predicted countdown is marked, because for these
                         pools the provider sends no reset at all: its 429

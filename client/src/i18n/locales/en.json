@@ -1124,7 +1124,8 @@
     "rowsHiddenCount": "{count} hidden",
     "rowHide": "Hide",
     "rowShow": "Show",
-    "policyRefillSeconds": "Seconds per unit"
+    "policyRefillSeconds": "Seconds per unit",
+    "refillRate": " refilling 1 per {{seconds}}s"
   },
   "logs": {
     "title": "Logs",

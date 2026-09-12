@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { initDb, getDb } from '../../db/index.js';
-import { upsertQuotaPolicy } from '../../services/quota-policy.js';
 import { upsertQuotaPolicy, invalidateQuotaPolicyCache } from '../../services/quota-policy.js';
 import { getQuotaForecast, getProviderQuotaOverview, invalidateQuotaInference } from '../../services/quota-forecast.js';
 
@@ -122,7 +121,71 @@ describe('quota-forecast: daily balance aggregation (#1104)', () => {
 
 // The overview is where inference reaches an operator, so the row has to carry
 // it — and has to keep it separate from anything measured.
+describe('one counter, one row', () => {
+  // Own reset: these blocks seed pool state, and without clearing it the rows
+  // survive into the next block and answer for models it never created.
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare('DELETE FROM provider_quota_state').run();
+    getDb().prepare('DELETE FROM requests').run();
+    getDb().prepare('DELETE FROM api_keys').run();
+    getDb().prepare('DELETE FROM quota_policy').run();
+    invalidateQuotaPolicyCache();
+    invalidateQuotaInference();
+  });
+
+  function keyFor2(platform: string): void {
+    getDb().prepare(`INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, status, enabled)
+                     VALUES (?, 'k', 'x', 'x', 'x', 'active', 1)`).run(platform);
+  }
+  function statePool(platform: string, pool: string, limit: number, remaining: number): void {
+    getDb().prepare(`
+      INSERT INTO provider_quota_state (platform, key_id, quota_pool_key, metric, limit_value, remaining_value, reset_at, reset_strategy, source, confidence)
+      VALUES (?, 1, ?, 'requests', ?, ?, NULL, 'provider_reported', 'header', 1.0)
+    `).run(platform, pool, limit, remaining);
+  }
+
+  it('folds two windows on one counter, leading with the one that binds first', () => {
+    // OpenRouter bounds account requests at 20/min AND 1,000/day: one pot,
+    // measured twice. Two rows read as two allowances and could not say which
+    // was about to refuse the next request.
+    keyFor2('openrouter');
+    statePool('openrouter', 'openrouter::rolling-60s', 20, 19);   // 95% left
+    statePool('openrouter', 'openrouter::calendar_day', 1000, 50); // 5% left — binds
+
+    const rows = getProviderQuotaOverview().filter(r => r.platform === 'openrouter' && r.metric === 'requests');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].pool).toBe('openrouter::calendar_day');
+    expect(rows[0].alsoBound.map(w => w.pool)).toEqual(['openrouter::rolling-60s']);
+  });
+
+  it('keeps two genuinely separate counters apart', () => {
+    // Groq's per-model buckets are three counters, not one measured thrice.
+    keyFor2('groq');
+    statePool('groq', 'groq::model::a', 1000, 900);
+    statePool('groq', 'groq::model::b', 1000, 100);
+
+    const pools = getProviderQuotaOverview().filter(r => r.platform === 'groq').map(r => r.pool);
+    expect(pools).toContain('groq::model::a');
+    expect(pools).toContain('groq::model::b');
+  });
+});
+
 describe('what may be added together', () => {
+  // Own reset: these blocks seed pool state, and without clearing it the rows
+  // survive into the next block and answer for models it never created.
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare('DELETE FROM provider_quota_state').run();
+    getDb().prepare('DELETE FROM requests').run();
+    getDb().prepare('DELETE FROM api_keys').run();
+    getDb().prepare('DELETE FROM quota_policy').run();
+    invalidateQuotaPolicyCache();
+    invalidateQuotaInference();
+  });
+
   it('refuses to total a refill rate into a daily allowance', () => {
     // Groq measured 2026-09-12: 1,000 capacity refilling one request every
     // 86.4s, no boundary. Three such models summed to "2,250/day, resets in
@@ -148,6 +211,28 @@ describe('what may be added together', () => {
 });
 
 describe('which models a pool lists', () => {
+  // Own reset: these blocks seed pool state, and without clearing it the rows
+  // survive into the next block and answer for models it never created.
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare('DELETE FROM provider_quota_state').run();
+    getDb().prepare('DELETE FROM requests').run();
+    getDb().prepare('DELETE FROM api_keys').run();
+    getDb().prepare('DELETE FROM quota_policy').run();
+    invalidateQuotaPolicyCache();
+    invalidateQuotaInference();
+  });
+
+  // A pool row exists only where the provider reported a counter, so each test
+  // seeds its own rather than inheriting one from a neighbouring block.
+  function poolFor(platform: string, pool: string): void {
+    getDb().prepare(`
+      INSERT INTO provider_quota_state (platform, key_id, quota_pool_key, metric, limit_value, remaining_value, reset_at, reset_strategy, source, confidence)
+      VALUES (?, 1, ?, 'requests', 1000, 900, NULL, 'provider_reported', 'header', 1.0)
+    `).run(platform, pool);
+  }
+
   function keyFor(platform: string): void {
     getDb().prepare(`
       INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, status, enabled)
@@ -159,6 +244,7 @@ describe('which models a pool lists', () => {
     // A model outside every chain still spends the provider's allowance as soon
     // as a caller names it directly. Listing only chain members hid its quota.
     keyFor('groq');
+    poolFor('groq', 'groq::model::unchained-model');
     const db = getDb();
     db.prepare(`INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, size_label, context_window, enabled)
                 VALUES ('groq', 'unchained-model', 'Unchained', 1, 1, 'Small', 128000, 1)`).run();
@@ -196,6 +282,7 @@ describe('which models a pool lists', () => {
     const id = db.prepare(`INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, size_label, context_window, enabled)
                 VALUES ('groq', 'shelved-by-chain', 'Shelved', 1, 1, 'Small', 128000, 1)`).run().lastInsertRowid;
     db.prepare(`INSERT INTO fallback_config (model_db_id, priority, enabled) VALUES (?, 99, 0)`).run(id);
+    poolFor('groq', 'groq::model::shelved-by-chain');
 
     const rows = getProviderQuotaOverview().filter(r => r.platform === 'groq');
     expect(rows.flatMap(r => r.memberModelIds)).not.toContain('shelved-by-chain');
@@ -203,6 +290,7 @@ describe('which models a pool lists', () => {
 
   it('hides a disabled model, which can spend nothing', () => {
     keyFor('groq');
+    poolFor('groq', 'groq::model::switched-off');
     const db = getDb();
     db.prepare(`INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, size_label, context_window, enabled)
                 VALUES ('groq', 'switched-off', 'Switched Off', 1, 1, 'Small', 128000, 0)`).run();

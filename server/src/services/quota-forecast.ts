@@ -199,6 +199,37 @@ export interface ProviderQuotaOverviewRow {
    * whose retry-after header is empty.
    */
   resetSource: 'provider' | 'inferred' | null;
+  /**
+   * The OTHER windows bounding this same counter, folded onto one row.
+   *
+   * Ollama publishes its credit balance on a session window AND a weekly one;
+   * OpenRouter bounds account requests at 20/min AND 1,000/day. Those were two
+   * rows each, which read as two separate allowances when they are one pot
+   * measured twice — and the panel could not say which of them was about to
+   * stop a request. The row that binds FIRST leads, and the rest sit here.
+   *
+   * Only ever windows on the same platform AND the same metric. Two counters
+   * that really are independent — Groq's per-model buckets, OpenRouter's credit
+   * balance beside its request count — keep their own rows, because merging
+   * those is how one allowance gets counted twice.
+   */
+  /**
+   * Seconds for ONE unit to come back, when this pool's allowance is a
+   * refilling bucket rather than a balance with a boundary. Null everywhere
+   * else. The panel needs it for the same reason the server does: a client that
+   * cannot tell a rate from a balance adds three Groq buckets into "3,000
+   * remaining, resets —", which is the fiction removed from the server totals.
+   */
+  refillSeconds: number | null;
+  alsoBound: Array<{
+    pool: string | null;
+    limit: number | null;
+    used: number | null;
+    remaining: number | null;
+    remaining_pct: number | null;
+    seconds_until_reset: number | null;
+    source: string | null;
+  }>;
   /** What behaviour suggests, for providers that publish nothing. Empty when
    *  there is no evidence, or when the provider reports its own numbers and
    *  guessing would add nothing. Never merged into `limit`/`remaining` — an
@@ -237,7 +268,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
     const seenMeasured = new Set<string>(reported.map(r => r.pool ?? ''));
     for (const pool of reported) {
       const state = states.find(s => s.platform === platform && s.quotaPoolKey === pool.pool);
-      rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true, usedSource: 'provider', inferred: [], members: [], memberModelIds: [], metric: 'requests', unit: null, derivedAllowance: null, resetSource: pool.reset_at ? 'provider' : null });
+      rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true, usedSource: 'provider', inferred: [], members: [], memberModelIds: [], alsoBound: [], refillSeconds: null, metric: 'requests', unit: null, derivedAllowance: null, resetSource: pool.reset_at ? 'provider' : null });
     }
 
     // 1b. Pools the provider measured in some OTHER unit — Ollama Cloud reports
@@ -273,7 +304,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         metered: true,
         usedSource: 'provider',
         inferred: [],
-        members: [], memberModelIds: [],
+        members: [], memberModelIds: [], alsoBound: [], refillSeconds: null,
         metric: state.metric,
         unit: state.unit ?? null,
         derivedAllowance: state.unit === 'per_10k' ? allowanceFor(platform, state.quotaPoolKey, now) : null,
@@ -308,7 +339,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
 
       rows.push({
         platform,
-        members: [], memberModelIds: [],
+        members: [], memberModelIds: [], alsoBound: [], refillSeconds: null,
         pool: poolLabel,
         used,
         remaining,
@@ -346,7 +377,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         metered: false,
         usedSource: null,
         inferred: [],
-        members: [], memberModelIds: [],
+        members: [], memberModelIds: [], alsoBound: [], refillSeconds: null,
         metric: null,
         unit: null,
         derivedAllowance: null,
@@ -419,13 +450,21 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
          ?? (perModelPool ? [] : platformMembersFor(row.pool, byPlatform.get(row.platform) ?? [])));
     row.members = members.map(m => m.displayName);
     row.memberModelIds = members.map(m => m.modelId);
+    if (row.metric === 'requests' && members.length > 0) {
+      const period = effectiveRouteWindows(row.platform, members[0].modelId, now).rpd?.period;
+      row.refillSeconds = period?.kind === 'bucket' ? Math.round(period.refillMs / 100) / 10 : null;
+    }
   }
 
   aggregateMemberLimits(rows, now);
   addMemberSumRows(rows, now);
 
+  // After the syntheses: a member-sum row is its own claim, never folded into
+  // a window beside it.
+  const folded = foldWindowsOntoOneRow(rows);
+
   // Measured pools first, then unknowns — the rows a reader can act on lead.
-  return rows.sort((a, b) => (Number(b.metered) - Number(a.metered)) || a.platform.localeCompare(b.platform));
+  return folded.sort((a, b) => (Number(b.metered) - Number(a.metered)) || a.platform.localeCompare(b.platform));
 }
 
 /**
@@ -562,6 +601,72 @@ function aggregateMemberLimits(rows: ProviderQuotaOverviewRow[], now: number): v
  * own limit. A shared pool synthesises nothing, because its account figure is
  * already the truth and summing it would invent capacity.
  */
+/**
+ * Fold the windows that bound ONE counter onto a single row.
+ *
+ * A pool is a counter; a window is how far back it counts. Ollama reports its
+ * credit balance on both a session window and a weekly one, OpenRouter bounds
+ * account requests at 20/min and 1,000/day — one pot each, measured twice, and
+ * previously shown as two rows that looked like two allowances.
+ *
+ * Which one leads matters more than the tidying: the row that BINDS FIRST is
+ * the one that will refuse the next request. Ranked by fraction remaining, so
+ * a weekly balance at 5% leads a session at 100% even though the session
+ * window is shorter.
+ *
+ * Strictly same platform AND same metric, and never a per-model pool. Groq's
+ * three buckets are three counters; OpenRouter's dollars are not its requests.
+ * Folding either would state one allowance twice, which is the error this file
+ * exists to prevent.
+ */
+function foldWindowsOntoOneRow(rows: ProviderQuotaOverviewRow[]): ProviderQuotaOverviewRow[] {
+  const groups = new Map<string, ProviderQuotaOverviewRow[]>();
+  const untouched: ProviderQuotaOverviewRow[] = [];
+
+  for (const row of rows) {
+    // A per-model pool names one model's own counter; an aggregated row is
+    // already a synthesis of others. Neither may absorb a sibling.
+    if (row.pool == null || row.pool.includes('::model::') || row.aggregated) { untouched.push(row); continue; }
+    const key = `${row.platform}\u0000${row.metric}`;
+    const group = groups.get(key);
+    if (group) group.push(row);
+    else groups.set(key, [row]);
+  }
+
+  const out = [...untouched];
+  for (const group of groups.values()) {
+    if (group.length === 1) { out.push(group[0]); continue; }
+
+    // Pressure first: an unmeasured window cannot be said to bind, so it sorts
+    // last rather than counting as empty.
+    const ranked = [...group].sort((a, b) => {
+      const pa = a.remaining_pct ?? Number.POSITIVE_INFINITY;
+      const pb = b.remaining_pct ?? Number.POSITIVE_INFINITY;
+      if (pa !== pb) return pa - pb;
+      return (a.seconds_until_reset ?? Number.POSITIVE_INFINITY) - (b.seconds_until_reset ?? Number.POSITIVE_INFINITY);
+    });
+
+    const [binding, ...rest] = ranked;
+    binding.alsoBound = rest.map(r => ({
+      pool: r.pool,
+      limit: r.limit,
+      used: r.used,
+      remaining: r.remaining,
+      remaining_pct: r.remaining_pct,
+      seconds_until_reset: r.seconds_until_reset,
+      source: r.source,
+    }));
+    // Members are a property of the counter, not of the window: whichever row
+    // led, the folded row speaks for every model that spends it.
+    const members = new Map<string, string>();
+    for (const r of ranked) r.memberModelIds.forEach((id, i) => members.set(id, r.members[i] ?? id));
+    binding.memberModelIds = [...members.keys()];
+    binding.members = [...members.values()];
+    out.push(binding);
+  }
+  return out;
+}
+
 function addMemberSumRows(rows: ProviderQuotaOverviewRow[], now: number): void {
   const { byPlatform } = routedMembers();
 
@@ -619,6 +724,8 @@ function addMemberSumRows(rows: ProviderQuotaOverviewRow[], now: number): void {
       inferred: [],
       members: members.map(m => m.displayName),
       memberModelIds: members.map(m => m.modelId),
+      alsoBound: [],
+      refillSeconds: null,
       aggregated: true,
       metric: 'requests',
       unit: null,
