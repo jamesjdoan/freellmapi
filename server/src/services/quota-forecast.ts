@@ -214,6 +214,17 @@ export interface ProviderQuotaOverviewRow {
    * those is how one allowance gets counted twice.
    */
   /**
+   * Enabled models this provider has that the ACTIVE CHAIN excludes.
+   *
+   * Two switches look alike on the Models page and are not: a model can be
+   * enabled in the catalogue yet switched off in the chain, and the router
+   * then never picks it (`COALESCE(pm.enabled, fc.enabled, 1)`). Such a model
+   * spends nothing, so it must not be a pool member — but silently omitting it
+   * left an operator reading six of eleven enabled OpenRouter models with no
+   * hint the other five existed. Listed apart, never counted.
+   */
+  unroutedModelIds: string[];
+  /**
    * Seconds for ONE unit to come back, when this pool's allowance is a
    * refilling bucket rather than a balance with a boundary. Null everywhere
    * else. The panel needs it for the same reason the server does: a client that
@@ -268,7 +279,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
     const seenMeasured = new Set<string>(reported.map(r => r.pool ?? ''));
     for (const pool of reported) {
       const state = states.find(s => s.platform === platform && s.quotaPoolKey === pool.pool);
-      rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true, usedSource: 'provider', inferred: [], members: [], memberModelIds: [], alsoBound: [], refillSeconds: null, metric: 'requests', unit: null, derivedAllowance: null, resetSource: pool.reset_at ? 'provider' : null });
+      rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true, usedSource: 'provider', inferred: [], members: [], memberModelIds: [], alsoBound: [], refillSeconds: null, unroutedModelIds: [], metric: 'requests', unit: null, derivedAllowance: null, resetSource: pool.reset_at ? 'provider' : null });
     }
 
     // 1b. Pools the provider measured in some OTHER unit — Ollama Cloud reports
@@ -304,7 +315,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         metered: true,
         usedSource: 'provider',
         inferred: [],
-        members: [], memberModelIds: [], alsoBound: [], refillSeconds: null,
+        members: [], memberModelIds: [], alsoBound: [], refillSeconds: null, unroutedModelIds: [],
         metric: state.metric,
         unit: state.unit ?? null,
         derivedAllowance: state.unit === 'per_10k' ? allowanceFor(platform, state.quotaPoolKey, now) : null,
@@ -339,7 +350,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
 
       rows.push({
         platform,
-        members: [], memberModelIds: [], alsoBound: [], refillSeconds: null,
+        members: [], memberModelIds: [], alsoBound: [], refillSeconds: null, unroutedModelIds: [],
         pool: poolLabel,
         used,
         remaining,
@@ -377,7 +388,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         metered: false,
         usedSource: null,
         inferred: [],
-        members: [], memberModelIds: [], alsoBound: [], refillSeconds: null,
+        members: [], memberModelIds: [], alsoBound: [], refillSeconds: null, unroutedModelIds: [],
         metric: null,
         unit: null,
         derivedAllowance: null,
@@ -458,6 +469,10 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
 
   aggregateMemberLimits(rows, now);
   addMemberSumRows(rows, now);
+
+  // Enabled, but the chain excludes it — shown apart from the spenders.
+  const unrouted = unroutedByPlatform();
+  for (const row of rows) row.unroutedModelIds = unrouted.get(row.platform) ?? [];
 
   // After the syntheses: a member-sum row is its own claim, never folded into
   // a window beside it.
@@ -726,6 +741,7 @@ function addMemberSumRows(rows: ProviderQuotaOverviewRow[], now: number): void {
       memberModelIds: members.map(m => m.modelId),
       alsoBound: [],
       refillSeconds: null,
+      unroutedModelIds: [],
       aggregated: true,
       metric: 'requests',
       unit: null,
@@ -733,6 +749,39 @@ function addMemberSumRows(rows: ProviderQuotaOverviewRow[], now: number): void {
       resetSource: soonestReset == null ? null : 'provider',
     });
   }
+}
+
+/**
+ * Enabled models the active chain excludes, per platform.
+ *
+ * The exact complement of `routedMembers`: same `models.enabled = 1` filter,
+ * opposite answer on the chain predicate. Kept as its own query rather than
+ * derived by subtraction so the two cannot drift into disagreeing about which
+ * profile is active.
+ */
+function unroutedByPlatform(): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  try {
+    const rows = getDb().prepare(`
+      SELECT m.platform, m.model_id
+        FROM models m
+        LEFT JOIN profile_models pm
+               ON pm.model_db_id = m.id
+              AND pm.profile_id = (SELECT CAST(value AS INTEGER) FROM settings WHERE key = 'active_profile_id')
+        LEFT JOIN fallback_config fc ON fc.model_db_id = m.id
+       WHERE m.enabled = 1
+         AND COALESCE(pm.enabled, fc.enabled, 1) = 0
+       ORDER BY m.model_id
+    `).all() as { platform: string; model_id: string }[];
+    for (const row of rows) {
+      const list = out.get(row.platform);
+      if (list) list.push(row.model_id);
+      else out.set(row.platform, [row.model_id]);
+    }
+  } catch {
+    // An annotation is never a reason the panel fails to render.
+  }
+  return out;
 }
 
 function routedMembers(): { byPool: Map<string, PlatformMember[]>; byPlatform: Map<string, PlatformMember[]> } {

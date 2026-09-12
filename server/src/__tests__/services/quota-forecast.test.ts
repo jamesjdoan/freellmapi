@@ -274,6 +274,24 @@ describe('which models a pool lists', () => {
     expect(row?.memberModelIds).toEqual([]);
   });
 
+  it('names a chain-excluded model apart, rather than dropping it silently', () => {
+    // Six of eleven enabled OpenRouter models were shown and the other five
+    // simply were not there. They spend nothing, so they are not members —
+    // but an operator reading the Models page sees eleven enabled routes.
+    keyFor('groq');
+    poolFor('groq', 'groq::model::visible-model');
+    const db = getDb();
+    db.prepare(`INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, size_label, context_window, enabled)
+                VALUES ('groq', 'visible-model', 'Visible', 1, 1, 'Small', 128000, 1)`).run();
+    const excluded = db.prepare(`INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, size_label, context_window, enabled)
+                VALUES ('groq', 'chain-excluded', 'Excluded', 1, 1, 'Small', 128000, 1)`).run().lastInsertRowid;
+    db.prepare(`INSERT INTO fallback_config (model_db_id, priority, enabled) VALUES (?, 99, 0)`).run(excluded);
+
+    const row = getProviderQuotaOverview().find(r => r.platform === 'groq');
+    expect(row?.unroutedModelIds).toContain('chain-excluded');
+    expect(row?.memberModelIds).not.toContain('chain-excluded');
+  });
+
   it('hides a model whose chain row is switched off', () => {
     // The middle state: the model is enabled, but the active chain excludes it,
     // so the router will never pick it and the pool feels no pressure from it.

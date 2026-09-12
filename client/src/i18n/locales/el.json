@@ -1003,7 +1003,11 @@
     "rowHide": "Hide",
     "rowShow": "Show",
     "policyRefillSeconds": "Seconds per unit",
-    "refillRate": " refilling 1 per {{seconds}}s"
+    "refillRate": " refilling 1 per {seconds}s",
+    "notInChain": "enabled, but excluded by the active chain — spends nothing",
+    "limitFromPool": "pool",
+    "limitFromPoolHint": "No limit of its own: this model spends the provider allowance shown on the pool row above.",
+    "modelPerMinuteNoLimit": "this minute {used}"
   },
   "logs": {
     "title": "Καταγραφές",

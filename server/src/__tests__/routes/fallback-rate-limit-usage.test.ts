@@ -144,12 +144,16 @@ describe('GET /api/fallback/rate-limit-usage', () => {
     expect(row.tpm).toBeNull();
   });
 
-  it('omits windows the model has no limit for', async () => {
+  it('still counts a window the model has no limit for', async () => {
+    // An uncapped count, not an absent one. OpenRouter's allowance is
+    // account-wide, so its models carry no per-model limit — and omitting the
+    // window took their usage with it, leaving the panel unable to answer
+    // which model had spent the account's 1,000.
     addKey('solo');
     const row = await probeRow(app);
     expect(row.modelDbId).toBe(modelDbId);
     expect(row.platform).toBe(PLATFORM);
-    expect(row.rpd).toBeNull();
-    expect(row.tpm).toBeNull();
+    expect(row.rpd).toMatchObject({ limit: null });
+    expect(typeof row.rpd.used).toBe('number');
   });
 });

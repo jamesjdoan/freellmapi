@@ -38,6 +38,8 @@ interface InferredWindow {
 }
 
 interface ProviderOverviewRow extends QuotaForecastEntry {
+  /** Enabled models the active chain excludes: listed, never counted. */
+  unroutedModelIds?: string[];
   /** Seconds for one unit to refill, when this allowance is a bucket. */
   refillSeconds?: number | null;
   /** Other windows on this same counter, folded onto one row by the server. */
@@ -107,7 +109,9 @@ interface DecisionRow {
 
 interface UsageWindow {
   used: number;
-  limit: number;
+  /** Null where the model has no ceiling of its own and spends a provider-wide
+   *  allowance instead — the count is still real. */
+  limit: number | null;
   resetAtMs: number | null;
   /** How the window ends. A countdown alone cannot distinguish a rolling
    *  window, which frees one call at a time, from a calendar one that returns
@@ -195,8 +199,13 @@ function ModelUsageRow({ row, rowKey }: { row: ModelUsageRow; rowKey: string }) 
   const { t, locale } = useI18n();
   const day = row.rpd;
   const minute = row.rpm;
-  const left = day ? Math.max(0, day.limit - day.used) : null;
-  const spent = day && day.limit > 0 ? day.used / day.limit : 0;
+  // A window with no limit is an uncapped COUNT, not an absent one: OpenRouter
+  // bounds the account rather than the model, so its models spend against the
+  // pool above with no ceiling of their own. "Left" and pressure are then
+  // undefined — the pool row owns those — while the count is still the answer
+  // to "which model spent it".
+  const left = day && day.limit != null ? Math.max(0, day.limit - day.used) : null;
+  const spent = day && day.limit != null && day.limit > 0 ? day.used / day.limit : 0;
   return (
     <TableRow key={rowKey} className="bg-muted/20">
       <TableCell />
@@ -208,7 +217,9 @@ function ModelUsageRow({ row, rowKey }: { row: ModelUsageRow; rowKey: string }) 
         {left ?? '—'}
       </TableCell>
       <TableCell className="py-1 text-right tabular-nums">
-        {day ? <>{day.limit}<span className="text-muted-foreground">/day</span></> : '—'}
+        {day?.limit != null
+          ? <>{day.limit}<span className="text-muted-foreground">/day</span></>
+          : <span className="text-muted-foreground" title={t('quota.limitFromPoolHint')}>{t('quota.limitFromPool')}</span>}
       </TableCell>
       {/* Seconds from the resolved window, not a guess: null when the limit
           came from a catalogue column, which states no period to reset. */}
@@ -228,7 +239,11 @@ function ModelUsageRow({ row, rowKey }: { row: ModelUsageRow; rowKey: string }) 
         )}
       </TableCell>
       <TableCell className="py-1 text-[11px] text-muted-foreground">
-        {minute ? t('quota.modelPerMinute', { used: minute.used, limit: minute.limit }) : ''}
+        {minute
+          ? minute.limit != null
+            ? t('quota.modelPerMinute', { used: minute.used, limit: minute.limit })
+            : t('quota.modelPerMinuteNoLimit', { used: minute.used })
+          : ''}
       </TableCell>
     </TableRow>
   );
@@ -698,6 +713,8 @@ export default function QuotaPage() {
                 const status = getStatus(p.metered ? p.remaining_pct : null, p.low_balance);
                 const poolKey = `${p.platform}:${p.pool ?? 'unknown'}`;
                 const open = expandedPools.has(poolKey);
+                // Platform-wide, so it belongs under the first pool only.
+                const isFirstPoolOfPlatform = group.pools[0] === p;
                 const memberRows = (p.memberModelIds ?? [])
                   .map(id => usageByModel.get(`${p.platform}\u0000${id}`))
                   .filter((r): r is ModelUsageRow => r != null);
@@ -708,7 +725,7 @@ export default function QuotaPage() {
                       {/* The pool total answers "is there room"; the models
                           answer "room for WHICH route", which is the question
                           asked next and previously required another page. */}
-                      {memberRows.length > 0 ? (
+                      {memberRows.length > 0 || (isFirstPoolOfPlatform && (p.unroutedModelIds ?? []).length > 0) ? (
                         <button
                           type="button"
                           onClick={() => setExpandedPools(prev => {
@@ -835,6 +852,18 @@ export default function QuotaPage() {
                   </TableRow>
                   {open && memberRows.map(r => (
                     <ModelUsageRow key={`${poolKey}:${r.modelId}`} rowKey={`${poolKey}:${r.modelId}`} row={r} />
+                  ))}
+                  {/* Enabled in the catalogue, excluded by the chain. They
+                      spend nothing, so they are named rather than counted —
+                      omitting them left five of eleven enabled OpenRouter
+                      models invisible with no hint they existed. */}
+                  {open && isFirstPoolOfPlatform && (p.unroutedModelIds ?? []).map(id => (
+                    <TableRow key={`${poolKey}:unrouted:${id}`} className="bg-muted/20">
+                      <TableCell className="py-1 text-[11px] text-muted-foreground">{id}</TableCell>
+                      <TableCell className="py-1 text-[11px] text-muted-foreground" colSpan={7}>
+                        {t('quota.notInChain')}
+                      </TableCell>
+                    </TableRow>
                   ))}
                   </Fragment>
                 );

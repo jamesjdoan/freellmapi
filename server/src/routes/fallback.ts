@@ -767,13 +767,21 @@ fallbackRouter.get('/rate-limit-usage', (_req: Request, res: Response) => {
     if (!best) {
       return { modelDbId: m.model_db_id, platform: m.platform, modelId: m.model_id, rpm: null, rpd: null, tpm: null };
     }
+    // Usage is a FACT; a limit is optional. These were reported only when the
+    // model carried its own limit, so clearing OpenRouter's per-model columns —
+    // correct, since its allowance is account-wide — made every OpenRouter
+    // model's usage vanish from the panel, and with it the answer to "which
+    // model spent the account's 1,000?". A null limit now means an uncapped
+    // count, not an absent one.
+    const window = (used: number, limit: number | null, w: Parameters<typeof resetOf>[0]) =>
+      ({ used, limit, resetAtMs: resetOf(w, now), period: periodShape(w) });
     return {
       modelDbId: m.model_db_id,
       platform: m.platform,
       modelId: m.model_id,
-      rpm: limits.rpm != null ? { used: best.rpm, limit: limits.rpm, resetAtMs: resetOf(windows.rpm, now), period: periodShape(windows.rpm) } : null,
-      rpd: limits.rpd != null ? { used: best.rpd, limit: limits.rpd, resetAtMs: resetOf(windows.rpd, now), period: periodShape(windows.rpd) } : null,
-      tpm: limits.tpm != null ? { used: best.tpm, limit: limits.tpm, resetAtMs: resetOf(windows.tpm, now), period: periodShape(windows.tpm) } : null,
+      rpm: window(best.rpm, limits.rpm, windows.rpm),
+      rpd: window(best.rpd, limits.rpd, windows.rpd),
+      tpm: window(best.tpm, limits.tpm, windows.tpm),
     };
   });
 
