@@ -89,18 +89,33 @@ function GuidanceFacts({ guidance }: { guidance: Pick<ProviderQuotaGuidance, 'fa
   )
 }
 
+/** What this install observed, as opposed to what the shipped guide documents.
+ *  Deliberately not merged into the guidance catalogue: that file is research
+ *  about a provider, reviewed on a date and shared by every install, while this
+ *  is one key's behaviour on one account. Shown beside it, never over it. */
+export interface MeasuredLimits {
+  rpm: number | null
+  rpd: number | null
+  finding: string
+  ranAt: string
+}
+
 export function QuotaGuidancePanel({
   guidance,
   modelGuidance,
   selectedModelId,
+  measured,
   onUseLimits,
   onUseModelLimits,
+  onUseMeasured,
 }: {
   guidance: ProviderQuotaGuidance
   modelGuidance?: ModelQuotaGuidance | null
   selectedModelId?: string | null
+  measured?: MeasuredLimits | null
   onUseLimits?: (limits: QuotaGuidanceLimits) => void
   onUseModelLimits?: (limits: QuotaGuidanceLimits) => void
+  onUseMeasured?: (limits: QuotaGuidanceLimits) => void
 }) {
   const stale = isStale(guidance.reviewAfter)
   const canApply = guidance.status === 'verified' && !stale
@@ -143,6 +158,34 @@ export function QuotaGuidancePanel({
           <GuidanceFacts guidance={modelGuidance} />
           {modelGuidance.advisory && <p className="text-xs text-amber-700 dark:text-amber-300">{modelGuidance.advisory.message}</p>}
           <LimitAction limits={modelGuidance.recommendedLimits} disabled={!modelCanApply} onUseLimits={onUseModelLimits} />
+        </div>
+      )}
+
+      {measured && (measured.rpm != null || measured.rpd != null) && (
+        <div className="space-y-2 border-t pt-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Measured here</p>
+            <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-700 dark:text-emerald-300">
+              observed
+            </span>
+          </div>
+          <p className="text-xs tabular-nums">
+            {[measured.rpm == null ? null : `${measured.rpm}/min`, measured.rpd == null ? null : `${measured.rpd}/day`]
+              .filter(Boolean).join(' · ')}
+          </p>
+          <p className="text-[11px] leading-relaxed text-muted-foreground">{measured.finding}</p>
+          {/* The guide above documents a provider in general; this is what this
+              key was actually allowed, which is the number worth applying when
+              the two disagree. */}
+          {onUseMeasured && (
+            <button
+              type="button"
+              onClick={() => onUseMeasured({ rpmLimit: measured.rpm, rpdLimit: measured.rpd, tpmLimit: null, tpdLimit: null })}
+              className="rounded-full border px-2 py-0.5 text-[10px] hover:bg-muted"
+            >
+              Use measured limits
+            </button>
+          )}
         </div>
       )}
 

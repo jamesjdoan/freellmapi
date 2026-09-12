@@ -205,13 +205,23 @@ function ModelRow({ probes }: { probes: QuotaProbe[] }) {
   )
 }
 
-export function QuotaProbeLogPanel() {
+export function QuotaProbeLogPanel({ modelIds }: { modelIds?: string[] } = {}) {
   const { t } = useI18n()
   const [platform, setPlatform] = useState<string | null>(null)
 
+  // Scoped to one logical model, that model is served by several provider ids,
+  // so ask for each and merge. Unscoped, one request gets the lot.
+  const scoped = modelIds && modelIds.length > 0
   const { data } = useQuery<{ probes: QuotaProbe[] }>({
-    queryKey: ['quota', 'probes'],
-    queryFn: () => apiFetch('/api/quota/probes'),
+    queryKey: ['quota', 'probes', modelIds ?? null],
+    queryFn: async () => {
+      if (!scoped) return apiFetch('/api/quota/probes')
+      const pages = await Promise.all(
+        [...new Set(modelIds)].map(id =>
+          apiFetch(`/api/quota/probes?modelId=${encodeURIComponent(id)}`) as Promise<{ probes: QuotaProbe[] }>),
+      )
+      return { probes: pages.flatMap(p => p.probes) }
+    },
   })
 
   const probes = data?.probes ?? []
@@ -248,7 +258,7 @@ export function QuotaProbeLogPanel() {
             {t('quota.probeDisagreeCount', { count: disagreeing })}
           </Badge>
         )}
-        {platforms.length > 1 && (
+        {platforms.length > 1 && !scoped && (
           <div className="ml-auto flex flex-wrap items-center gap-1">
             <button
               type="button"

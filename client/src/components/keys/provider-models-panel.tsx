@@ -45,6 +45,27 @@ interface Row {
   } | null
 }
 
+interface RateUsageWindow { used: number; limit: number }
+interface RateUsageRow {
+  modelDbId: number
+  rpm: RateUsageWindow | null
+  rpd: RateUsageWindow | null
+}
+
+interface QuotaProbe {
+  modelId: string
+  statusCodes: Record<string, number>
+  catalogueRpm: number | null
+  catalogueRpd: number | null
+  ranAt: string
+  measuredRpm: number | null
+  measuredRpd: number | null
+  currentRpm: number | null
+  currentRpd: number | null
+  finding: string
+  recommendation: string | null
+}
+
 interface CatalogueEntry {
   slug: string
   name: string
@@ -53,6 +74,71 @@ interface CatalogueEntry {
 }
 
 type SortKey = 'intelligence' | 'coding' | 'agentic' | 'speed' | 'name'
+
+/**
+ * What this route may still spend today, and where the number came from.
+ *
+ * The allowance leads because it is the decision: a model with 2 of 20 left is
+ * one a chain should stop reaching for, whatever its scores say. The
+ * measurement sits behind it in the tooltip — it is how the allowance is known,
+ * not what a reader needs at a glance.
+ */
+function AllowanceCell({ probe, usage }: { probe?: QuotaProbe; usage?: RateUsageRow }) {
+  const { t } = useI18n()
+  const day = usage?.rpd ?? null
+  const minute = usage?.rpm ?? null
+
+  if (!probe && !day && !minute) {
+    return <td className="py-1 pr-2 text-right text-[10px] text-muted-foreground">–</td>
+  }
+
+  const part = (was: number | null, now: number | null, unit: string) =>
+    now == null ? null
+    : was != null && was !== now ? `${was}→${now}${unit}`
+    : `${now}${unit}`
+  const parts = [
+    part(probe?.catalogueRpm ?? null, probe?.measuredRpm ?? null, '/min'),
+    part(probe?.catalogueRpd ?? null, probe?.measuredRpd ?? null, '/day'),
+  ].filter(Boolean)
+
+  // Serving nothing because the model is gone is not the same as serving
+  // everything sent and finding no ceiling. Same empty measurement, opposite
+  // meanings.
+  const codes = Object.keys(probe?.statusCodes ?? {})
+  const delisted = codes.length > 0 && codes.every(c => c === '404' || c === '410')
+
+  // Spent fraction decides the colour: amber past two thirds, red past nine
+  // tenths. A chain reaching for a route at 19 of 20 will be refused on the
+  // next call but one.
+  const spent = day && day.limit > 0 ? day.used / day.limit : 0
+  const tone = spent >= 0.9 ? 'text-rose-600 dark:text-rose-400'
+    : spent >= 0.67 ? 'text-amber-700 dark:text-amber-400'
+    : 'text-foreground'
+
+  const detail = [
+    probe?.finding,
+    parts.length > 0 ? t('keys.allowanceMeasuredAs', { measured: parts.join(' · ') }) : null,
+    minute ? t('keys.allowancePerMinute', { used: minute.used, limit: minute.limit }) : null,
+  ].filter(Boolean).join('\n')
+
+  return (
+    <td className="py-1 pr-2 text-right text-[10px] tabular-nums">
+      <Tooltip text={detail || t('keys.panelMeasuredNoCeiling')} wide>
+        {day ? (
+          <span className={tone}>
+            {t('keys.allowanceLeft', { left: Math.max(0, day.limit - day.used), limit: day.limit })}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">
+            {delisted ? t('quota.probeDelisted')
+              : parts.length > 0 ? parts.join(' · ')
+              : t('keys.panelMeasuredNoCeiling')}
+          </span>
+        )}
+      </Tooltip>
+    </td>
+  )
+}
 
 export function ProviderModelsPanel({ platform }: { platform: string }) {
   const { t } = useI18n()
@@ -116,6 +202,41 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
   // Chain membership, the same control Compare carries. Judging a provider's
   // menu and then placing the winner is one motion here too; sending the reader
   // to a third screen to act on what this table just told them is the gap.
+  const { data: probeData } = useQuery<{ probes: QuotaProbe[] }>({
+    queryKey: ['quota', 'probes', platform],
+    queryFn: () => apiFetch(`/api/quota/probes?platform=${encodeURIComponent(platform)}`),
+  })
+  // Newest first from the API, but the two halves of a limit are usually found
+  // by different runs: a burst finds the per-minute ceiling, a paced walk finds
+  // the daily one. Taking only the latest run would hide whichever was measured
+  // first, so each figure keeps the newest run that actually established it.
+  const latestProbe = useMemo(() => {
+    const byModel = new Map<string, QuotaProbe>()
+    for (const p of probeData?.probes ?? []) {
+      const seen = byModel.get(p.modelId)
+      if (!seen) { byModel.set(p.modelId, { ...p }); continue }
+      if (seen.measuredRpm == null && p.measuredRpm != null) {
+        seen.measuredRpm = p.measuredRpm
+        seen.catalogueRpm = p.catalogueRpm
+      }
+      if (seen.measuredRpd == null && p.measuredRpd != null) {
+        seen.measuredRpd = p.measuredRpd
+        seen.catalogueRpd = p.catalogueRpd
+      }
+    }
+    return byModel
+  }, [probeData?.probes])
+
+  const { data: usage } = useQuery<{ rows: RateUsageRow[] }>({
+    queryKey: ['fallback', 'rate-limit-usage'],
+    queryFn: () => apiFetch('/api/fallback/rate-limit-usage'),
+  })
+  const usageByModel = useMemo(() => {
+    const byId = new Map<number, RateUsageRow>()
+    for (const r of usage?.rows ?? []) byId.set(r.modelDbId, r)
+    return byId
+  }, [usage?.rows])
+
   const { data: profiles } = useQuery<{ id: number; name: string }[]>({
     queryKey: ['profiles'],
     queryFn: () => apiFetch('/api/profiles'),
@@ -170,6 +291,9 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
 
   const routable = (r: Row) => r.enabled && (r.keyScope === 'in' || r.keyScope === 'unscoped')
   const scoped = rows.filter(routable).length
+  // Only routable rows count: measuring a model this key cannot serve is not
+  // coverage of anything.
+  const probedScoped = rows.filter(r => routable(r) && latestProbe.has(r.modelId)).length
   const busy = setRoutable.isPending
 
   return (
@@ -179,6 +303,11 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
         <span className="text-[11px] text-muted-foreground tabular-nums">
           {t('keys.panelScopedCount', { scoped, total: rows.length })}
         </span>
+        {probedScoped > 0 && (
+          <span className="text-[11px] text-muted-foreground tabular-nums" title={t('keys.panelProbedHint')}>
+            {t('keys.panelProbedCount', { probed: probedScoped, scoped })}
+          </span>
+        )}
         <span className="flex-1" />
         <button
           type="button"
@@ -199,6 +328,7 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
             <SortTh active={sort === 'agentic'} onClick={() => setSort('agentic')} right>{t('compare.agentic')}</SortTh>
             <SortTh active={sort === 'speed'} onClick={() => setSort('speed')} right>{t('compare.colSpeed')}</SortTh>
             <th className="py-1 pr-2 text-right font-normal">{t('compare.colContext')}</th>
+            <th className="py-1 pr-2 text-right font-normal">{t('keys.panelColAllowance')}</th>
             <th className="py-1 pr-2 text-left font-normal">{t('keys.panelColChains')}</th>
             <th className="py-1 pr-2 text-left font-normal">{t('compare.colMatch')}</th>
             <th className="py-1 text-center font-normal">{t('keys.panelColEnabled')}</th>
@@ -223,6 +353,10 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
                 <td className="py-1 pr-2 text-right tabular-nums text-muted-foreground">
                   {r.contextWindow ? `${Math.round(r.contextWindow / 1000)}K` : '–'}
                 </td>
+                {/* What this route was measured to allow, newest run. Blank is
+                    a real answer: nobody has checked, and the number beside it
+                    in the catalogue is only a claim. */}
+                <AllowanceCell probe={latestProbe.get(r.modelId)} usage={usageByModel.get(r.modelDbId)} />
                 {/* Which chains actually route here. An enabled, in-scope model
                     serving nothing is the state worth seeing beside the switch:
                     it is available and idle. */}

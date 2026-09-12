@@ -266,8 +266,9 @@ quotaRouter.post('/burn/:id/cancel', (req: Request, res: Response) => {
  */
 quotaRouter.get('/probes', (req: Request, res: Response) => {
   const platform = typeof req.query.platform === 'string' ? req.query.platform : undefined;
+  const modelId = typeof req.query.modelId === 'string' ? req.query.modelId : undefined;
   const asked = typeof req.query.limit === 'string' ? Number.parseInt(req.query.limit, 10) : NaN;
   const limit = Number.isFinite(asked) && asked > 0 ? Math.min(asked, 500) : 500;
-  const probes = listQuotaProbes({ platform, limit });
+  const probes = listQuotaProbes({ platform, modelId, limit });
   res.json({ probes });
 });

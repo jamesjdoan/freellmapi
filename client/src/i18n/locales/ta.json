@@ -661,7 +661,17 @@
     "panelColChains": "Chains",
     "panelIdle": "idle",
     "panelUpgrade": "real data available",
-    "panelUpgradeHint": "Artificial Analysis now publishes this model. Replace the borrowed scores and your adjustments with measurements from {name}, matched by {reason}."
+    "panelUpgradeHint": "Artificial Analysis now publishes this model. Replace the borrowed scores and your adjustments with measurements from {name}, matched by {reason}.",
+    "panelColMeasured": "Measured",
+    "panelMeasuredNoCeiling": "no ceiling hit",
+    "panelProbedCount": "{probed}/{scoped} measured",
+    "panelProbedHint": "Routable models whose limits have been measured from the provider, rather than taken from the catalogue.",
+    "limitsMeasured": "Measured: {measured}",
+    "limitsUseMeasured": "Use measured",
+    "panelColAllowance": "Left today",
+    "allowanceLeft": "{left} of {limit}",
+    "allowanceMeasuredAs": "Measured: {measured}",
+    "allowancePerMinute": "This minute: {used} of {limit}"
   },
   "backups": {
     "title": "Backups",

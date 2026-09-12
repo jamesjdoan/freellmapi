@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initDb, getDb } from '../../db/index.js';
+import { upsertQuotaPolicy } from '../../services/quota-policy.js';
 import {
   recordQuotaProbe,
   listQuotaProbes,
@@ -62,6 +63,10 @@ describe('quota probe records', () => {
     expect(listQuotaProbes().map(p => p.modelId)).toEqual(['other', 'second', 'first']);
     expect(listQuotaProbes({ platform: 'google' }).map(p => p.modelId)).toEqual(['second', 'first']);
     expect(listQuotaProbes({ limit: 1 }).map(p => p.modelId)).toEqual(['other']);
+    // A model id on its own: the same id is probed on several platforms, and the
+    // model's own page wants every one of them.
+    recordQuotaProbe(probe({ platform: 'openrouter', model_id: 'second' }));
+    expect(listQuotaProbes({ modelId: 'second' }).map(p => p.platform)).toEqual(['openrouter', 'google']);
   });
 
   it('stops recommending a correction once the catalogue has been corrected', () => {
@@ -76,6 +81,25 @@ describe('quota probe records', () => {
 
     const row = listQuotaProbes()[0]!;
     expect([row.catalogueRpm, row.currentRpm]).toEqual([10, 5]);
+    expect(row.recommendation).toBeNull();
+  });
+
+  it('reads the measured limit, not the shipped one, when both describe the model', () => {
+    // The catalogue ships 20/day and an operator policy records the measured
+    // 500/day. Taking the smaller would report a corrected limit as still
+    // wrong forever; the model page showed exactly that.
+    const db = getDb();
+    db.prepare(`INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank,
+                                    size_label, context_window, rpm_limit, rpd_limit, enabled, supports_tools, supports_vision)
+                VALUES ('google', 'gemini-3.5-flash-lite', 'Flash-Lite', 1, 1, 'Large', 1048576, 15, 20, 1, 1, 1)`).run();
+    upsertQuotaPolicy({
+      platform: 'google', modelId: 'gemini-3.5-flash-lite', endpointScope: null, scope: 'model',
+      metric: 'requests', limit: 500, periodKind: 'calendar_day', periodMs: null, timezone: 'UTC', anchorDay: null,
+    });
+    recordQuotaProbe(probe({ model_id: 'gemini-3.5-flash-lite', measured_rpm: 15, catalogue_rpm: 15, measured_rpd: 500 }));
+
+    const row = listQuotaProbes({ modelId: 'gemini-3.5-flash-lite' })[0]!;
+    expect(row.currentRpd).toBe(500);
     expect(row.recommendation).toBeNull();
   });
 

@@ -17,6 +17,7 @@ import { TableSkeleton } from '@/components/ui/skeleton'
 import { Tooltip } from '@/components/tooltip'
 import { PageHeader } from '@/components/page-header'
 import { ModelsTabs } from '@/components/models-tabs'
+import { QuotaProbeLogPanel } from '@/components/quota-probe-log'
 import { ModelTableHead, RateLimitBadge, RowContent } from '@/components/model-table'
 import {
   groupQuotaBadge,
@@ -395,6 +396,12 @@ export default function ModelDetailPage() {
                 ))}
               </div>
             </div>
+
+            {/* What this model's limits were MEASURED to be, per provider route.
+                It belongs here as much as on the Quota page: the numbers differ
+                by route, and this is the page where someone asks what one model
+                can actually do. Renders nothing until a route has been probed. */}
+            <QuotaProbeLogPanel modelIds={members.map(m => m.modelId)} />
 
             {/* #790: merge a custom provider's model alias into this unified
                 model, so requests for the primary model id are served through

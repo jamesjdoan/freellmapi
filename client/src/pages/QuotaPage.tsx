@@ -99,6 +99,8 @@ interface PolicyRow {
   scope: string;
   limit: number | null;
   period: string;
+  periodKind: string;
+  periodMs: number | null;
   source: string;
   confidence: string | number;
 }
@@ -152,6 +154,18 @@ function formatCountdown(seconds: number | null): string {
  * key is left exactly as the router knows it, because it is the identifier an
  * operator matches against `quota_policy` and the routing diagnostics.
  */
+/** A rolling window reads as its width, not as the word "rolling": one model
+ *  legitimately holds 5 per minute AND 20 per day, and without the width those
+ *  two rows look like one number contradicting itself. */
+export function policyPeriodLabel(p: { periodKind: string; periodMs: number | null }): string {
+  if (p.periodKind !== 'rolling') return p.periodKind.replace('calendar_', 'per ').replace('_', ' ');
+  if (p.periodMs == null) return 'rolling';
+  const minutes = p.periodMs / 60_000;
+  if (minutes < 60) return minutes === 1 ? 'per minute' : `per ${minutes} minutes`;
+  const hours = minutes / 60;
+  return hours === 24 ? 'per day' : hours === 1 ? 'per hour' : `per ${hours} hours`;
+}
+
 export function poolLabel(row: { platform: string; pool: string | null }): string {
   if (!row.pool) return '—';
   const prefix = `${row.platform}::`;
@@ -599,6 +613,7 @@ export default function QuotaPage() {
                 <TableHead>{t('quota.colMetric')}</TableHead>
                 <TableHead>{t('quota.colScope')}</TableHead>
                 <TableHead className="text-right">{t('quota.colLimit')}</TableHead>
+                <TableHead>{t('quota.colPeriod')}</TableHead>
                 <TableHead>{t('quota.colSource')}</TableHead>
                 <TableHead className="text-right">{t('quota.colAction')}</TableHead>
               </TableRow>
@@ -610,7 +625,8 @@ export default function QuotaPage() {
                   <TableCell className="text-muted-foreground">{p.modelId ?? t('quota.allModels')}</TableCell>
                   <TableCell>{p.metric}</TableCell>
                   <TableCell>{p.scope}</TableCell>
-                  <TableCell className="text-right">{p.limit ?? '—'}</TableCell>
+                  <TableCell className="text-right tabular-nums">{p.limit ?? '—'}</TableCell>
+                  <TableCell className="text-muted-foreground">{policyPeriodLabel(p)}</TableCell>
                   <TableCell className="text-muted-foreground">{p.source}</TableCell>
                   <TableCell className="text-right">
                     {/* Only an operator declaration can be deleted; a derived

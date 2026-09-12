@@ -763,7 +763,17 @@
     "bulkDelete": "Delete all",
     "bulkDeleteConfirm": "Delete {count}?",
     "bulkResult": "Updated {done}; failed {failed}.",
-    "bulkDeleteResult": "Deleted {done}; failed {failed}."
+    "bulkDeleteResult": "Deleted {done}; failed {failed}.",
+    "panelColMeasured": "Measured",
+    "panelMeasuredNoCeiling": "no ceiling hit",
+    "panelProbedCount": "{probed}/{scoped} measured",
+    "panelProbedHint": "Routable models whose limits have been measured from the provider, rather than taken from the catalogue.",
+    "limitsMeasured": "Measured: {measured}",
+    "limitsUseMeasured": "Use measured",
+    "panelColAllowance": "Left today",
+    "allowanceLeft": "{left} of {limit}",
+    "allowanceMeasuredAs": "Measured: {measured}",
+    "allowancePerMinute": "This minute: {used} of {limit}"
   },
   "backups": {
     "title": "Backups",

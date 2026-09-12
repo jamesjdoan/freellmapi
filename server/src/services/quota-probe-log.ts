@@ -1,7 +1,6 @@
 import { getDb } from '../db/index.js';
 import type { Db } from '../db/types.js';
-import { resolveEffectiveQuotas } from './quota-policy.js';
-import { MINUTE_MS, DAY_MS } from './quota-clock.js';
+import { effectiveRouteLimits } from './quota-policy.js';
 
 export interface QuotaProbeRun {
   id: number;
@@ -91,17 +90,23 @@ export function recordQuotaProbe(
 }
 
 export function listQuotaProbes(
-  opts: { platform?: string; limit?: number } = {},
+  opts: { platform?: string; modelId?: string; limit?: number } = {},
   db: Db = getDb(),
 ): QuotaProbe[] {
   const limit = opts.limit ?? 500;
   // `ran_at` has one-second resolution, so two probes in the same second tie
   // and "newest first" degrades to whatever order SQLite returns. The id
   // breaks it: callers read [0] as the current answer for a model.
-  const order = 'ORDER BY ran_at DESC, id DESC LIMIT ?';
-  const rows = (opts.platform
-    ? db.prepare(`SELECT * FROM quota_probe_run WHERE platform = ? ${order}`).all(opts.platform, limit)
-    : db.prepare(`SELECT * FROM quota_probe_run ${order}`).all(limit)) as QuotaProbeRun[];
+  // A model id alone is a legitimate filter: the same id is probed on several
+  // platforms, and a reader on the model's own page wants all of them.
+  const where: string[] = [];
+  const params: (string | number)[] = [];
+  if (opts.platform) { where.push('platform = ?'); params.push(opts.platform); }
+  if (opts.modelId) { where.push('model_id = ?'); params.push(opts.modelId); }
+  const clause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+  const rows = db
+    .prepare(`SELECT * FROM quota_probe_run ${clause} ORDER BY ran_at DESC, id DESC LIMIT ?`)
+    .all(...params, limit) as QuotaProbeRun[];
 
   // One resolve per model, not per row: a model with six runs has one current
   // limit, and the resolver reads policies and the catalogue on each call.
@@ -129,33 +134,11 @@ function isRouted(platform: string, modelId: string, db: Db): boolean {
   return (row?.n ?? 0) > 0;
 }
 
-/**
- * The per-minute and per-day request limits as the router would apply them.
- *
- * Deliberately NOT `models.rpm_limit`: that column belongs to catalogue sync
- * and is rewritten from the shipped catalogue on the next one, so a measured
- * correction written there disappears and the panel reports the same finding
- * as outstanding forever. An operator policy survives, and the resolver is the
- * one place that knows which source wins.
- */
+/** What the ROUTER would enforce for this route right now. Shared with the
+ *  gate itself, so the panel cannot report a limit the router does not apply. */
 function effectiveRequestLimits(platform: string, modelId: string): { rpm: number | null; rpd: number | null } {
-  // Model scope only. An account-wide or shared-pool allowance also governs
-  // this model, but it is not this model's limit: comparing a measured
-  // per-model ceiling against the account's daily budget reports a mismatch
-  // that no catalogue edit could ever resolve.
-  const quotas = resolveEffectiveQuotas(platform, modelId)
-    .filter(q => q.metric === 'requests' && q.scope === 'model');
-  // A daily allowance arrives either as a rolling 24h window or as a calendar
-  // day, depending on which source declared it; both mean "per day" here.
-  const tightest = (matches: (q: (typeof quotas)[number]) => boolean): number | null => {
-    const hit = quotas.filter(matches);
-    return hit.length > 0 ? Math.min(...hit.map(q => q.limit)) : null;
-  };
-  return {
-    rpm: tightest(q => q.period.kind === 'rolling' && q.period.windowMs === MINUTE_MS),
-    rpd: tightest(q =>
-      q.period.kind === 'calendar_day' || (q.period.kind === 'rolling' && q.period.windowMs === DAY_MS)),
-  };
+  const { rpm, rpd } = effectiveRouteLimits(platform, modelId);
+  return { rpm, rpd };
 }
 
 type CurrentLimits = QuotaProbeRun & {
@@ -241,7 +224,9 @@ export function deriveFindingAndRecommendation(row: QuotaProbeRun & Partial<Pick
       ? `${measured} observed in live traffic, where usage stopped.`
       : `No ceiling observed in live traffic.`;
   } else {
-    const sent = `${row.concurrency} concurrent (${row.served} served, ${row.refused} refused)`;
+    // "requests", not "concurrent": a per-minute ceiling is found by sending at
+    // once, a daily one by pacing to it over an hour, and both are bursts here.
+    const sent = `${row.concurrency} requests (${row.served} served, ${row.refused} refused)`;
     finding = measured
       ? `${measured} measured from ${sent}.`
       : `No limit reached from ${sent} — the ceiling is above what was sent.`;

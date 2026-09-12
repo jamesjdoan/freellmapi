@@ -43,6 +43,15 @@ function parsedLimit(value: string): number | null {
 // deliberately light editor: a chip list plus a free-text id field. Suggestions
 // come only from data the key row already carries (a custom endpoint's
 // registered models) — no extra fetching for catalog platforms.
+interface MeasuredProbe {
+  modelId: string
+  measuredRpm: number | null
+  measuredRpd: number | null
+  catalogueRpm: number | null
+  catalogueRpd: number | null
+  finding: string
+}
+
 export function ModelScopeDialog({
   apiKey,
   onOpenChange,
@@ -91,6 +100,35 @@ export function ModelScopeDialog({
     queryFn: () => apiFetch('/api/keys/quota-guidance'),
     enabled: apiKey.platform !== 'custom',
   })
+
+  const { data: probeData } = useQuery<{ probes: MeasuredProbe[] }>({
+    queryKey: ['quota', 'probes', apiKey.platform],
+    queryFn: () => apiFetch(`/api/quota/probes?platform=${encodeURIComponent(apiKey.platform)}`),
+  })
+  // Each half of a limit is usually found by a different run: a burst finds the
+  // per-minute ceiling, a paced walk the daily one.
+  const measured = useMemo(() => {
+    const byModel = new Map<string, { rpm: number | null; rpd: number | null; wasRpm: number | null; wasRpd: number | null; finding: string }>()
+    for (const p of probeData?.probes ?? []) {
+      const seen = byModel.get(p.modelId)
+      if (!seen) {
+        byModel.set(p.modelId, {
+          rpm: p.measuredRpm, rpd: p.measuredRpd,
+          wasRpm: p.catalogueRpm, wasRpd: p.catalogueRpd, finding: p.finding,
+        })
+        continue
+      }
+      if (seen.rpm == null && p.measuredRpm != null) { seen.rpm = p.measuredRpm; seen.wasRpm = p.catalogueRpm }
+      if (seen.rpd == null && p.measuredRpd != null) { seen.rpd = p.measuredRpd; seen.wasRpd = p.catalogueRpd }
+    }
+    return byModel
+  }, [probeData?.probes])
+
+  const selectedMeasured = useMemo(() => {
+    if (!selectedModelId) return null
+    const m = measured.get(selectedModelId)
+    return m ? { rpm: m.rpm, rpd: m.rpd, finding: m.finding, ranAt: '' } : null
+  }, [measured, selectedModelId])
   const quotaGuidance = quotaCatalog?.providers.find(provider => provider.platform === apiKey.platform)
   const selectedModelGuidance = quotaGuidance?.models.find(model => model.modelId === selectedModelId) ?? null
   const liveCandidates = useMemo<ScopeCandidate[]>(() => {
@@ -398,7 +436,39 @@ export function ModelScopeDialog({
                       tpmLimit: row.tpmLimit ?? null,
                       tpdLimit: row.tpdLimit ?? null,
                     })
+                    const m = measured.get(model.modelId)
+                    const differs = m && ((m.rpm != null && String(m.rpm) !== draft.rpmLimit)
+                      || (m.rpd != null && String(m.rpd) !== draft.rpdLimit))
                     return (
+                      <>
+                      {m && (m.rpm != null || m.rpd != null) && (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 pl-6 text-[10px] text-muted-foreground">
+                          <span title={m.finding}>
+                            {t('keys.limitsMeasured', {
+                              measured: [
+                                m.rpm == null ? null : m.wasRpm != null && m.wasRpm !== m.rpm ? `${m.wasRpm}→${m.rpm}/min` : `${m.rpm}/min`,
+                                m.rpd == null ? null : m.wasRpd != null && m.wasRpd !== m.rpd ? `${m.wasRpd}→${m.rpd}/day` : `${m.rpd}/day`,
+                              ].filter(Boolean).join(' · '),
+                            })}
+                          </span>
+                          {differs && (
+                            <button
+                              type="button"
+                              onClick={() => setModelLimitDrafts(previous => ({
+                                ...previous,
+                                [row.modelDbId]: {
+                                  ...draft,
+                                  rpmLimit: m.rpm == null ? draft.rpmLimit : String(m.rpm),
+                                  rpdLimit: m.rpd == null ? draft.rpdLimit : String(m.rpd),
+                                },
+                              }))}
+                              className="rounded-full border px-1.5 py-0.5 text-[9px] hover:bg-muted"
+                            >
+                              {t('keys.limitsUseMeasured')}
+                            </button>
+                          )}
+                        </div>
+                      )}
                       <div className="mt-2 grid grid-cols-4 gap-1.5 pl-6">
                         {(['rpmLimit', 'rpdLimit', 'tpmLimit', 'tpdLimit'] as const).map(field => (
                           <label key={field} className="text-[9px] uppercase tracking-wide text-muted-foreground">
@@ -418,6 +488,7 @@ export function ModelScopeDialog({
                           </label>
                         ))}
                       </div>
+                      </>
                     )
                   })()}
                 </div>
@@ -531,6 +602,26 @@ export function ModelScopeDialog({
                   const row = providerModelRows.find(model => model.modelId === selectedModelId)
                   if (!row) return
                   setModelLimitDrafts(previous => ({ ...previous, [row.modelDbId]: toDraft(limits) }))
+                }}
+                measured={selectedMeasured}
+                onUseMeasured={limits => {
+                  const row = providerModelRows.find(model => model.modelId === selectedModelId)
+                  if (!row) return
+                  // Only the fields a probe established: a measured per-minute
+                  // ceiling says nothing about tokens, and blanking those would
+                  // read as "no limit".
+                  const draft = modelLimitDrafts[row.modelDbId] ?? toDraft({
+                    rpmLimit: row.rpmLimit, rpdLimit: row.rpdLimit,
+                    tpmLimit: row.tpmLimit ?? null, tpdLimit: row.tpdLimit ?? null,
+                  })
+                  setModelLimitDrafts(previous => ({
+                    ...previous,
+                    [row.modelDbId]: {
+                      ...draft,
+                      rpmLimit: limits.rpmLimit == null ? draft.rpmLimit : String(limits.rpmLimit),
+                      rpdLimit: limits.rpdLimit == null ? draft.rpdLimit : String(limits.rpdLimit),
+                    },
+                  }))
                 }}
               />
             ) : apiKey.platform !== 'custom' ? (
