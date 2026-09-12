@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { listQuotaProbes } from '../services/quota-probe-log.js';
+import { getSetting, setSetting } from '../db/index.js';
 import {
   listQuotaPolicies,
   upsertQuotaPolicy,
@@ -264,6 +265,47 @@ quotaRouter.post('/burn/:id/cancel', (req: Request, res: Response) => {
  * Quota probe measurement records, exposed alongside the declared policies.
  * Optional `?platform=` filters by platform, `?limit=` caps the result set.
  */
+const HIDDEN_POOLS_KEY = 'quota_hidden_pools';
+
+/** Tolerant of a malformed value: a bad setting should hide nothing, never
+ *  take the panel down. */
+function readHiddenPools(): string[] {
+  try {
+    const raw = getSetting(HIDDEN_POOLS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Pools an operator has taken off the overview.
+ *
+ * Not every pool a provider reports is one this install wants to look at:
+ * OpenRouter publishes a credit balance beside its free request allowance, and
+ * on an install that only routes `:free` models the money row is noise on a
+ * panel read for free capacity.
+ *
+ * Presentation only — a hidden pool is still resolved, still gates requests and
+ * still appears in the API. Hiding a row must never quietly stop enforcing it.
+ */
+quotaRouter.get('/hidden-pools', (_req: Request, res: Response) => {
+  res.json({ pools: readHiddenPools() });
+});
+
+quotaRouter.put('/hidden-pools', (req: Request, res: Response) => {
+  const parsed = z.object({ pools: z.array(z.string().min(1)).max(200) }).strict().safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.issues[0]?.message ?? 'Invalid pool list' } });
+    return;
+  }
+  const pools = [...new Set(parsed.data.pools)].sort();
+  setSetting(HIDDEN_POOLS_KEY, JSON.stringify(pools));
+  res.json({ pools });
+});
+
 quotaRouter.get('/probes', (req: Request, res: Response) => {
   const platform = typeof req.query.platform === 'string' ? req.query.platform : undefined;
   const modelId = typeof req.query.modelId === 'string' ? req.query.modelId : undefined;

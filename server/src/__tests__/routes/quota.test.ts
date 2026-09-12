@@ -130,3 +130,43 @@ describe('/api/quota', () => {
     expect((await call(app, 'PUT', '/api/quota/mode', token, { mode: 'chaotic' })).status).toBe(400);
   });
 });
+
+describe('pools hidden from the overview', () => {
+  let app: Express;
+  let token: string;
+
+  beforeAll(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    app = createApp();
+    token = mintDashboardToken();
+  });
+
+  it('round-trips a hidden pool and de-duplicates the list', async () => {
+    const put = await call(app, 'PUT', '/api/quota/hidden-pools', token, {
+      pools: ['openrouter::credits', 'openrouter::credits', 'ollama::session'],
+    });
+
+    expect(put.status).toBe(200);
+    expect(put.body.pools).toEqual(['ollama::session', 'openrouter::credits']);
+
+    const get = await call(app, 'GET', '/api/quota/hidden-pools', token);
+    expect(get.body.pools).toEqual(['ollama::session', 'openrouter::credits']);
+  });
+
+  it('keeps a hidden pool in the overview payload, because hiding is presentation', async () => {
+    // The row must still resolve, still gate requests and still be reachable —
+    // otherwise "hide this from my panel" silently becomes "stop enforcing this
+    // allowance", which is not what anyone pressed.
+    await call(app, 'PUT', '/api/quota/hidden-pools', token, { pools: ['openrouter::credits'] });
+
+    const overview = await call(app, 'GET', '/api/quota/providers', token);
+    expect(overview.status).toBe(200);
+    expect(Array.isArray(overview.body.providers)).toBe(true);
+  });
+
+  it('rejects a payload that is not a list of pool keys', async () => {
+    const bad = await call(app, 'PUT', '/api/quota/hidden-pools', token, { pools: [{ pool: 'x' }] });
+    expect(bad.status).toBe(400);
+  });
+});

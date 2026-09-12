@@ -287,12 +287,19 @@ function getStatus(remainingPct: number | null, lowBalance: boolean): { labelKey
   return { labelKey: 'quota.status.healthy', variant: 'default' };
 }
 
-function Panel({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: ReactNode }) {
+function Panel({ icon: Icon, title, action, children }: {
+  icon: LucideIcon;
+  title: string;
+  /** Header-level control, to the right of the title. */
+  action?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <div className="border bg-card rounded-3xl px-4 py-3">
       <div className="flex items-center gap-2">
         <Icon className="size-4" aria-hidden="true" />
         <h3 className="text-sm font-semibold">{title}</h3>
+        {action && <div className="ml-auto">{action}</div>}
       </div>
       <div className="mt-4">{children}</div>
     </div>
@@ -464,6 +471,23 @@ export default function QuotaPage() {
   // else: a model outside this pool cannot appear beneath it.
   const [expandedPools, setExpandedPools] = useState<Set<string>>(new Set());
   const [expandedPlatforms, setExpandedPlatforms] = useState<Set<string>>(new Set());
+  const [editingRows, setEditingRows] = useState(false);
+
+  const { data: hiddenData = { pools: [] as string[] } } = useQuery({
+    queryKey: ['quota', 'hidden-pools'],
+    queryFn: () => apiFetch<{ pools: string[] }>('/api/quota/hidden-pools'),
+  });
+  const hiddenPools = new Set(hiddenData.pools);
+  const setHidden = useMutation({
+    mutationFn: (pools: string[]) =>
+      apiFetch('/api/quota/hidden-pools', { method: 'PUT', body: JSON.stringify({ pools }) }),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['quota', 'hidden-pools'] }); },
+  });
+  const toggleHidden = (pool: string) => {
+    const next = new Set(hiddenPools);
+    if (next.has(pool)) next.delete(pool); else next.add(pool);
+    setHidden.mutate([...next]);
+  };
 
   // One group per provider, so a provider that reports three per-model pools
   // (Groq) and one that reports a single account window (Google) read the same
@@ -472,7 +496,8 @@ export default function QuotaPage() {
   // count would produce a number with no meaning.
   const providerGroups = (() => {
     const byPlatform = new Map<string, ProviderOverviewRow[]>();
-    for (const p of providers) {
+    const visible = editingRows ? providers : providers.filter(p => !hiddenPools.has(p.pool ?? ''));
+    for (const p of visible) {
       const list = byPlatform.get(p.platform);
       if (list) list.push(p); else byPlatform.set(p.platform, [p]);
     }
@@ -547,7 +572,23 @@ export default function QuotaPage() {
         <p className="text-muted-foreground">{t('quota.description')}</p>
       </div>
 
-      <Panel icon={Server} title={t('quota.overviewTitle')}>
+      <Panel
+        icon={Server}
+        title={t('quota.overviewTitle')}
+        action={
+          <button
+            type="button"
+            onClick={() => setEditingRows(v => !v)}
+            aria-pressed={editingRows}
+            className={`rounded-full border px-2 py-0.5 text-[11px] ${editingRows ? 'bg-muted' : 'hover:bg-muted/50'}`}
+          >
+            {editingRows ? t('quota.rowsDone') : t('quota.rowsEdit')}
+            {hiddenPools.size > 0 && !editingRows && (
+              <span className="ml-1 text-muted-foreground tabular-nums">{t('quota.rowsHiddenCount', { count: hiddenPools.size })}</span>
+            )}
+          </button>
+        }
+      >
         <PanelState loading={providerLoading} error={providerError} empty={providers.length === 0} emptyKey="quota.emptyOverview">
           <Table containerClassName="max-h-[70vh] overflow-auto">
             {/* Pinned: with every provider expanded the numbers scroll far past
@@ -680,6 +721,16 @@ export default function QuotaPage() {
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {p.metric ? t(`quota.metric_${p.metric}`) : '—'}
+                      {editingRows && p.pool && (
+                        <button
+                          type="button"
+                          onClick={() => toggleHidden(p.pool!)}
+                          disabled={setHidden.isPending}
+                          className="ml-2 rounded-full border px-1.5 py-0.5 text-[10px] hover:bg-muted"
+                        >
+                          {hiddenPools.has(p.pool) ? t('quota.rowShow') : t('quota.rowHide')}
+                        </button>
+                      )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums whitespace-nowrap">{formatAmount(p.used, p.unit)}</TableCell>
                     <TableCell className="text-right tabular-nums whitespace-nowrap">{formatAmount(p.remaining, p.unit)}</TableCell>

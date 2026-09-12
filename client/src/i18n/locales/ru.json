@@ -996,7 +996,12 @@
     "poolSummed": "sum of members",
     "poolCount": "{count} pools",
     "windowRolling": "rolling",
-    "windowKindHint": "A rolling window frees one call at a time as the oldest ages out. A calendar window returns the whole allowance at midnight in the named zone."
+    "windowKindHint": "A rolling window frees one call at a time as the oldest ages out. A calendar window returns the whole allowance at midnight in the named zone.",
+    "rowsEdit": "Edit rows",
+    "rowsDone": "Done",
+    "rowsHiddenCount": "{count} hidden",
+    "rowHide": "Hide",
+    "rowShow": "Show"
   },
   "logs": {
     "title": "Журнал",
