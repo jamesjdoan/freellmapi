@@ -51,6 +51,29 @@ describe('summarizeExhaustion', () => {
     expect(msg).toContain('1 rate-limited or on cooldown');
   });
 
+  it('separates a provider block from a rate limit, because waiting cannot clear it', () => {
+    // Live: Groq answers `qwen/qwen3.8-27b` with 403 "blocked at the
+    // organization level". The route is benched for 24h so we stop hammering,
+    // and the caller was told "1 rate-limited or on cooldown ... Soonest reset
+    // ~24h" — sending an operator to wait for a clock that fixes nothing.
+    const msg = summarizeExhaustion(
+      ['groq/qwen3.8-27b: 1 key(s) — provider-blocked:1', 'groq/gpt-oss-20b: 1 key(s) — cooldown:1'],
+      null,
+      now,
+    );
+    expect(msg).toContain('1 blocked by the provider for this account');
+    expect(msg).toContain('1 rate-limited or on cooldown');
+  });
+
+  it('leads with the block, the one bucket time cannot resolve', () => {
+    const msg = summarizeExhaustion(
+      ['a/b: cooldown:1', 'c/d: provider-blocked:1'],
+      null,
+      now,
+    );
+    expect(msg.indexOf('blocked by the provider')).toBeLessThan(msg.indexOf('rate-limited'));
+  });
+
   it('classifies prompt-too-large lines, not as rate limits', () => {
     const diag = [
       'groq/gpt-oss-120b: tpm_limit 8000 < estimated 33476',

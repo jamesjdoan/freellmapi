@@ -1129,7 +1129,9 @@
     "notInChain": "enabled, but excluded by the active chain — spends nothing",
     "limitFromPool": "pool",
     "limitFromPoolHint": "No limit of its own: this model spends the provider allowance shown on the pool row above.",
-    "modelPerMinuteNoLimit": "this minute {used}"
+    "modelPerMinuteNoLimit": "this minute {used}",
+    "excludedMark": "not in chain",
+    "excludedShow": "Excluded models"
   },
   "logs": {
     "title": "Logs",

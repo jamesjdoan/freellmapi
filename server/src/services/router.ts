@@ -6,6 +6,7 @@ import {
   canMakeRequest,
   canUseTokens,
   isOnCooldown,
+  activeCooldownSource,
   canUseProvider,
   canUseProviderMinute,
   canUseProviderTokens,
@@ -107,12 +108,15 @@ export function summarizeExhaustion(
     else if (l.includes('no tool-calling support')) bump('model lacks tool-calling');
     else if (l.includes('drops response_format')) bump('platform cannot honor response_format');
     else if (/ruled out|already-failed/.test(l)) bump('failed earlier this request');
+    else if (l.includes('provider-blocked')) bump('blocked by the provider for this account');
     else if (l.includes('quota-domain-exhausted')) bump('quota allowance spent');
     else if (/cooldown|rpm|rpd|tpm|tpd|provider-daily-cap|quota-exhausted/.test(l)) bump('rate-limited or on cooldown');
     else bump('unavailable');
   }
   // Most actionable buckets first.
   const order = [
+    // First: it is the only bucket waiting cannot clear.
+    'blocked by the provider for this account',
     'quota allowance spent',
     'rate-limited or on cooldown',
     'no usable key configured',
@@ -1768,7 +1772,14 @@ function selectKeyForModel(entry: ChainRow, estimatedTokens: number, skipKeys?: 
     const skipId = `${entry.platform}:${entry.model_id}:${key.id}`;
     if (skipKeys?.has(skipId)) { note('already-failed-this-request'); continue; }
 
-    if (isOnCooldown(entry.platform, entry.model_id, key.id)) { note('cooldown'); continue; }
+    if (isOnCooldown(entry.platform, entry.model_id, key.id)) {
+      // A 403/402 bench is an ACCESS decision, not a rate limit, and saying so
+      // here is what stops the summary telling the caller to wait 24h for a
+      // model the account is simply not allowed to use.
+      const why = activeCooldownSource(entry.platform, entry.model_id, key.id);
+      note(why === 'tier' || why === 'credit' ? 'provider-blocked' : 'cooldown');
+      continue;
+    }
     if (!isQuotaPoolAvailable(entry.platform as Platform, key.id, entry.model_id, key.base_url)) { note('observed-quota-exhausted'); continue; }
     if (!canUseProvider(entry.platform, key.id)) { note('provider-daily-cap'); continue; }
     // Account-wide per-minute budget, checked before the per-model gates: a model

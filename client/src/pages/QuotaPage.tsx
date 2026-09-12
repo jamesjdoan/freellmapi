@@ -195,7 +195,7 @@ function formatCountdown(seconds: number | null): string {
  *  two rows look like one number contradicting itself. */
 /** A model's live counters beneath its provider: spent, left, ceiling, reset.
  *  Left is coloured by pressure, because that is the number a reader acts on. */
-function ModelUsageRow({ row, rowKey }: { row: ModelUsageRow; rowKey: string }) {
+function ModelUsageRow({ row, rowKey, excluded }: { row: ModelUsageRow; rowKey: string; excluded?: boolean }) {
   const { t, locale } = useI18n();
   const day = row.rpd;
   const minute = row.rpm;
@@ -211,6 +211,15 @@ function ModelUsageRow({ row, rowKey }: { row: ModelUsageRow; rowKey: string }) 
       <TableCell />
       <TableCell colSpan={2} className="py-1">
         <code className="text-[11px] text-muted-foreground">{row.modelId}</code>
+        {/* Excluded from the chain, but its counters are history: what this
+            route cost while it WAS on is the number that decides whether
+            turning it back on is affordable. */}
+        {excluded && (
+          <span className="ml-2 rounded-full border px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                title={t('quota.notInChain')}>
+            {t('quota.excludedMark')}
+          </span>
+        )}
       </TableCell>
       <TableCell className="py-1 text-right tabular-nums">{day ? day.used : '—'}</TableCell>
       <TableCell className={`py-1 text-right tabular-nums ${spent >= 0.9 ? 'text-rose-600 dark:text-rose-400' : spent >= 0.67 ? 'text-amber-700 dark:text-amber-400' : ''}`}>
@@ -352,6 +361,9 @@ function PanelState({ loading, error, empty, emptyKey, children }: {
 }
 
 /** Period kinds the API accepts, and what each additionally requires. */
+/** Reserved entry in the hidden-rows list: the chain-excluded model listing. */
+const EXCLUDED_ROWS_KEY = 'excluded-models';
+
 const PERIOD_KINDS = ['rolling', 'calendar_day', 'calendar_week', 'calendar_month', 'billing_cycle', 'bucket'] as const;
 const METRICS = ['requests', 'input_tokens', 'output_tokens', 'total_tokens', 'credits'] as const;
 const SCOPES = ['provider_account', 'provider_key', 'model', 'shared_pool'] as const;
@@ -519,6 +531,11 @@ export default function QuotaPage() {
     queryFn: () => apiFetch<{ pools: string[] }>('/api/quota/hidden-pools'),
   });
   const hiddenPools = new Set(hiddenData.pools);
+  // The excluded-model list is a row preference like any other, so it rides the
+  // same server-side store instead of a second one. Reserved rather than
+  // guessed-at: every real pool key contains '::', so this cannot collide with
+  // one, and hiding it never hides a pool.
+  const excludedHidden = hiddenPools.has(EXCLUDED_ROWS_KEY);
   const setHidden = useMutation({
     mutationFn: (pools: string[]) =>
       apiFetch('/api/quota/hidden-pools', { method: 'PUT', body: JSON.stringify({ pools }) }),
@@ -622,6 +639,7 @@ export default function QuotaPage() {
         icon={Server}
         title={t('quota.overviewTitle')}
         action={
+          <>
           <button
             type="button"
             onClick={() => setEditingRows(v => !v)}
@@ -633,6 +651,18 @@ export default function QuotaPage() {
               <span className="ml-1 text-muted-foreground tabular-nums">{t('quota.rowsHiddenCount', { count: hiddenPools.size })}</span>
             )}
           </button>
+          {/* Excluded routes carry real history — what they cost while they
+              were on — so the default is to show them, and hiding is a
+              deliberate act stored beside the hidden pools. */}
+          <button
+            type="button"
+            onClick={() => toggleHidden(EXCLUDED_ROWS_KEY)}
+            aria-pressed={!excludedHidden}
+            className={`ml-2 rounded-full border px-2 py-0.5 text-[11px] ${excludedHidden ? 'hover:bg-muted/50' : 'bg-muted'}`}
+          >
+            {t('quota.excludedShow')}
+          </button>
+        </>
         }
       >
         <PanelState loading={providerLoading} error={providerError} empty={providers.length === 0} emptyKey="quota.emptyOverview">
@@ -725,7 +755,8 @@ export default function QuotaPage() {
                       {/* The pool total answers "is there room"; the models
                           answer "room for WHICH route", which is the question
                           asked next and previously required another page. */}
-                      {memberRows.length > 0 || (isFirstPoolOfPlatform && (p.unroutedModelIds ?? []).length > 0) ? (
+                      {memberRows.length > 0
+                        || (!excludedHidden && isFirstPoolOfPlatform && (p.unroutedModelIds ?? []).length > 0) ? (
                         <button
                           type="button"
                           onClick={() => setExpandedPools(prev => {
@@ -857,14 +888,25 @@ export default function QuotaPage() {
                       spend nothing, so they are named rather than counted —
                       omitting them left five of eleven enabled OpenRouter
                       models invisible with no hint they existed. */}
-                  {open && isFirstPoolOfPlatform && (p.unroutedModelIds ?? []).map(id => (
-                    <TableRow key={`${poolKey}:unrouted:${id}`} className="bg-muted/20">
-                      <TableCell className="py-1 text-[11px] text-muted-foreground">{id}</TableCell>
-                      <TableCell className="py-1 text-[11px] text-muted-foreground" colSpan={7}>
-                        {t('quota.notInChain')}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {open && !excludedHidden && isFirstPoolOfPlatform && (p.unroutedModelIds ?? []).map(id => {
+                    const usage = usageByModel.get(`${p.platform}\u0000${id}`);
+                    return usage
+                      ? <ModelUsageRow key={`${poolKey}:unrouted:${id}`} rowKey={`${poolKey}:unrouted:${id}`} row={usage} excluded />
+                      : (
+                        <TableRow key={`${poolKey}:unrouted:${id}`} className="bg-muted/20">
+                          <TableCell />
+                          <TableCell colSpan={2} className="py-1">
+                            <code className="text-[11px] text-muted-foreground">{id}</code>
+                            <span className="ml-2 rounded-full border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                              {t('quota.excludedMark')}
+                            </span>
+                          </TableCell>
+                          <TableCell className="py-1 text-[11px] text-muted-foreground" colSpan={5}>
+                            {t('quota.notInChain')}
+                          </TableCell>
+                        </TableRow>
+                      );
+                  })}
                   </Fragment>
                 );
               })}

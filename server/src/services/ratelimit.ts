@@ -1363,6 +1363,27 @@ export function hasActiveCooldown(platform: string, modelId: string, now = Date.
   }
 }
 
+/**
+ * Why a route is benched, when it is.
+ *
+ * 'tier' and 'credit' are NOT rate limits: a 403 "blocked at the organization
+ * level" or a 402 says the account may not use this model at all. Both get a
+ * long cooldown so we stop hammering, but reporting them as "rate-limited,
+ * soonest reset ~24h" sends an operator away to wait for a clock that will
+ * never fix it — the remedy is enabling the model with the provider or
+ * dropping the route. Null when the route is not benched.
+ */
+export function activeCooldownSource(platform: string, modelId: string, keyId: number): CooldownSource | null {
+  if (!isOnCooldown(platform, modelId, keyId)) return null;
+  return withDb(db => {
+    const row = db.prepare(`
+      SELECT source FROM rate_limit_cooldowns
+       WHERE platform = ? AND model_id = ? AND key_id = ?
+    `).get(platform, modelId, keyId) as { source: CooldownSource | null } | undefined;
+    return row?.source ?? null;
+  }) ?? null;
+}
+
 export function isOnCooldown(platform: string, modelId: string, keyId: number): boolean {
   const key = `${platform}:${modelId}:${keyId}:cooldown`;
   const now = Date.now();
