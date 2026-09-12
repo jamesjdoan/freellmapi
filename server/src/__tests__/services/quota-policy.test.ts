@@ -4,6 +4,8 @@ import { invalidateShadowCounts } from '../../services/ratelimit.js';
 
 import { initDb, getDb } from '../../db/index.js';
 import {
+  effectiveRouteLimits,
+  invalidateQuotaPolicyCache,
   listQuotaPolicies,
   upsertQuotaPolicy,
   deleteQuotaPolicy,
@@ -284,6 +286,49 @@ describe('quota-policy storage', () => {
 // "For Zen we keep count and track and work out the details": some providers
 // publish nothing and only ever say no. The point at which they refused is the
 // only evidence of a ceiling there is.
+describe('the limits the router gates on', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare('DELETE FROM quota_policy').run();
+    invalidateQuotaPolicyCache();
+  });
+
+  const addModel = (rpm: number | null, rpd: number | null) => {
+    getDb().prepare(`INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank,
+                                         size_label, context_window, rpm_limit, rpd_limit, enabled, supports_tools, supports_vision)
+                     VALUES ('google', 'gemini-3.5-flash-lite', 'Flash-Lite', 1, 1, 'Large', 1048576, ?, ?, 1, 1, 1)`)
+      .run(rpm, rpd);
+  };
+
+  it('prefers a measured operator limit over the shipped catalogue column', () => {
+    // The reason this function exists. The catalogue ships 20/day; Google was
+    // observed allowing 500 and that was recorded as an operator policy. Gating
+    // on the column throttled the route to a number already proven wrong.
+    addModel(15, 20);
+    upsertQuotaPolicy({
+      platform: 'google', modelId: 'gemini-3.5-flash-lite', endpointScope: null, scope: 'model',
+      metric: 'requests', limit: 500, periodKind: 'calendar_day', periodMs: null, timezone: 'UTC', anchorDay: null,
+    });
+    invalidateQuotaPolicyCache();
+
+    expect(effectiveRouteLimits('google', 'gemini-3.5-flash-lite').rpd).toBe(500);
+  });
+
+  it('keeps the catalogue limit when no policy speaks to it', () => {
+    addModel(15, 20);
+    const limits = effectiveRouteLimits('google', 'gemini-3.5-flash-lite');
+    expect([limits.rpm, limits.rpd]).toEqual([15, 20]);
+  });
+
+  it('falls back to the row rather than reporting no limit at all', () => {
+    // A resolver that cannot answer must not turn a metered route into an
+    // unmetered one: silence here would remove the gate entirely.
+    const limits = effectiveRouteLimits('google', 'not-in-catalogue', { rpm: 5, rpd: 20 });
+    expect([limits.rpm, limits.rpd]).toEqual([5, 20]);
+  });
+});
+
 describe('learned ceilings from refusals', () => {
   beforeEach(() => {
     process.env.ENCRYPTION_KEY = '0'.repeat(64);

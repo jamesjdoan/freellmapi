@@ -22,6 +22,8 @@ import { parseModelScope } from '../lib/model-scope.js';
 import { KEY_PROXY_URL_ERROR, KEY_PROXY_URL_MAX, decryptProxyUrl, encryptProxyUrl, isValidKeyProxyUrl, maskProxyUrl } from '../lib/key-proxy.js';
 import { isCatalogManagedModel, upsertModelOverrides } from '../services/model-state.js';
 import { QUOTA_GUIDANCE_CATALOG } from '../data/quota-guidance.js';
+import { upsertQuotaPolicy, invalidateQuotaPolicyCache } from '../services/quota-policy.js';
+import { MINUTE_MS } from '../services/quota-clock.js';
 
 export const keysRouter = Router();
 
@@ -1521,6 +1523,49 @@ keysRouter.patch('/platform/:platform', (req: Request, res: Response) => {
 });
 
 // Update key (toggle enable/disable or edit label)
+/**
+ * Mirror a typed per-model limit into `quota_policy` as an operator
+ * declaration, so the routing gate honours it.
+ *
+ * A cleared field deletes the policy rather than storing zero: "no limit I
+ * know of" and "a limit of nothing" are different claims, and the schema
+ * rejects the second anyway.
+ */
+function writeOperatorModelLimits(
+  db: Db,
+  platform: string,
+  modelId: string,
+  entry: { rpmLimit?: number | null; rpdLimit?: number | null; tpmLimit?: number | null; tpdLimit?: number | null },
+): void {
+  const specs = [
+    { value: entry.rpmLimit, metric: 'requests' as const, periodKind: 'rolling' as const, periodMs: MINUTE_MS },
+    { value: entry.rpdLimit, metric: 'requests' as const, periodKind: 'calendar_day' as const, periodMs: null },
+    { value: entry.tpmLimit, metric: 'total_tokens' as const, periodKind: 'rolling' as const, periodMs: MINUTE_MS },
+    { value: entry.tpdLimit, metric: 'total_tokens' as const, periodKind: 'calendar_day' as const, periodMs: null },
+  ];
+
+  for (const spec of specs) {
+    if (spec.value === undefined) continue;
+    if (spec.value === null) {
+      // By subject, not through the cached list: this runs inside the same
+      // request that may have just written the row, and the cache is only
+      // rebuilt on invalidation.
+      db.prepare(`
+        DELETE FROM quota_policy
+         WHERE platform = ? AND model_id = ? AND endpoint_scope IS NULL
+           AND scope = 'model' AND metric = ? AND period_kind = ?
+      `).run(platform, modelId, spec.metric, spec.periodKind);
+      invalidateQuotaPolicyCache(platform);
+      continue;
+    }
+    upsertQuotaPolicy({
+      platform, modelId, endpointScope: null, scope: 'model', metric: spec.metric,
+      limit: spec.value, periodKind: spec.periodKind, periodMs: spec.periodMs,
+      timezone: 'UTC', anchorDay: null,
+    });
+  }
+}
+
 keysRouter.patch('/:id', (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) {
@@ -1617,6 +1662,13 @@ keysRouter.patch('/:id', (req: Request, res: Response) => {
       db.prepare(`UPDATE models SET ${assignments.join(', ')} WHERE id = ?`).run(...modelValues, entry.modelDbId);
       const row = rowById.get(entry.modelDbId)!;
       if (isCatalogManagedModel(row)) upsertModelOverrides(db, row.platform, row.model_id, override);
+      // A typed limit is an operator DECLARATION and has to be stored as one.
+      // The column alone resolves at catalogue rank, below any measured policy
+      // on the same model — so editing this dialog would change the number on
+      // screen and leave the router enforcing the measurement it disagreed
+      // with. Same subject and period as a measured policy, so this replaces
+      // it: deciding otherwise is what the operator just did.
+      writeOperatorModelLimits(db, row.platform, row.model_id, entry);
     }
   });
   apply();

@@ -41,6 +41,7 @@ import { isDegraded } from './degradation.js';
 import { modelStatsKey, endpointScopeForBaseUrl } from '../lib/endpoint-scope.js';
 import { parseModelScope, scopeAllows } from '../lib/model-scope.js';
 import { getKeyQuotaHeadroom, inferQuotaPoolKey, isQuotaPoolAvailable, resolveQuotaPolicy, consumesPaidBalance } from './provider-quota.js';
+import { effectiveRouteLimits } from './quota-policy.js';
 import { normalizeGroupKey } from './model-groups.js';
 import { getQuotaRoutingMode, evaluateShadowDecision, recordRoutingDecision, type QuotaRoutingMode, type QuotaCandidate } from './quota-routing.js';
 import { quotaPressure, quotaDomainsAdmit, inFlightPoolShare } from './quota-pressure.js';
@@ -1098,7 +1099,9 @@ function scoreChainEntry(
   const windowHeadroom = rateWindowHeadroomFactor(
     modelWindowUsedFraction(
       { platform: entry.platform, modelId: entry.model_id, keyId: entry.key_id },
-      { rpm: entry.rpm_limit, rpd: entry.rpd_limit, tpm: entry.tpm_limit, tpd: entry.tpd_limit },
+      effectiveRouteLimits(entry.platform, entry.model_id, {
+        rpm: entry.rpm_limit, rpd: entry.rpd_limit, tpm: entry.tpm_limit, tpd: entry.tpd_limit,
+      }),
     ),
     headroomCfg,
   );
@@ -1720,12 +1723,12 @@ function selectKeyForModel(entry: ChainRow, estimatedTokens: number, skipKeys?: 
   const skipTally: Record<string, number> = {};
   const note = (reason: string) => { skipTally[reason] = (skipTally[reason] ?? 0) + 1; };
 
-  const limits = {
-    rpm: entry.rpm_limit,
-    rpd: entry.rpd_limit,
-    tpm: entry.tpm_limit,
-    tpd: entry.tpd_limit,
-  };
+  // Not the raw catalogue columns: a measured limit recorded as an operator
+  // policy has to gate the request, or the ledger and the router disagree and
+  // only one of them is the one that refuses callers.
+  const limits = effectiveRouteLimits(entry.platform, entry.model_id, {
+    rpm: entry.rpm_limit, rpd: entry.rpd_limit, tpm: entry.tpm_limit, tpd: entry.tpd_limit,
+  });
 
   // Score-ordered walk over this model's keys (#580): when any key has recorded
   // reliability/speed data, try them best-sampled-score first so a chronically
@@ -1868,7 +1871,9 @@ export function hasOtherUsableKey(modelDbId: number, excludingKeyId: number, ski
   } | undefined;
   if (!m) return false;
 
-  const limits = { rpm: m.rpm_limit, rpd: m.rpd_limit, tpm: m.tpm_limit, tpd: m.tpd_limit };
+  const limits = effectiveRouteLimits(m.platform, m.model_id, {
+    rpm: m.rpm_limit, rpd: m.rpd_limit, tpm: m.tpm_limit, tpd: m.tpd_limit,
+  });
   const keys = db.prepare(
     "SELECT id, model_scope_json, base_url FROM api_keys WHERE platform = ? AND enabled = 1 AND status IN ('healthy', 'unknown')"
   ).all(m.platform) as { id: number; model_scope_json: string | null; base_url: string | null }[];

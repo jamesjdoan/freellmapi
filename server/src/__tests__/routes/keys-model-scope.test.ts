@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import type { Express } from 'express';
 import { createApp } from '../../app.js';
+import { effectiveRouteLimits, upsertQuotaPolicy, listQuotaPolicies, invalidateQuotaPolicyCache } from '../../services/quota-policy.js';
 import { initDb, getDb } from '../../db/index.js';
 import { encrypt } from '../../lib/crypto.js';
 import { mintDashboardToken, isGatedApiPath } from '../helpers/auth.js';
@@ -153,6 +154,47 @@ describe('Keys API — model scope', () => {
     });
     const overrides = getDb().prepare("SELECT overrides_json FROM model_overrides WHERE platform = 'groq' AND model_id = 'openai/gpt-oss-120b'").get() as { overrides_json: string };
     expect(JSON.parse(overrides.overrides_json)).toMatchObject({ rpmLimit: 30, rpdLimit: 1000, tpmLimit: 8000, tpdLimit: 200000 });
+  });
+
+  it('a typed limit outranks a measured one at the routing gate', async () => {
+    // The whole point of typing it. Stored only as a catalogue column it
+    // resolves BELOW an operator policy, so a measured 5/min would keep
+    // gating a model the operator had just set to 30 — the number on screen
+    // and the number enforced would disagree with no way to tell.
+    const id = insertKey();
+    const model = getDb().prepare("SELECT id FROM models WHERE platform = 'groq' AND model_id = 'openai/gpt-oss-120b'").get() as { id: number };
+    upsertQuotaPolicy({
+      platform: 'groq', modelId: 'openai/gpt-oss-120b', endpointScope: null, scope: 'model',
+      metric: 'requests', limit: 5, periodKind: 'rolling', periodMs: 60_000, timezone: 'UTC', anchorDay: null,
+    });
+    invalidateQuotaPolicyCache();
+    expect(effectiveRouteLimits('groq', 'openai/gpt-oss-120b').rpm).toBe(5);
+
+    await request(app, 'PATCH', `/api/keys/${id}`, {
+      modelLimits: [{ modelDbId: model.id, rpmLimit: 30, rpdLimit: 900 }],
+    });
+    invalidateQuotaPolicyCache();
+
+    const limits = effectiveRouteLimits('groq', 'openai/gpt-oss-120b');
+    expect([limits.rpm, limits.rpd]).toEqual([30, 900]);
+  });
+
+  it('clearing a limit removes the declaration rather than storing a zero', async () => {
+    // "No limit I know of" and "a limit of nothing" are different claims, and
+    // leaving a stale policy behind would keep gating on a number the operator
+    // has just erased.
+    const id = insertKey();
+    const model = getDb().prepare("SELECT id FROM models WHERE platform = 'groq' AND model_id = 'openai/gpt-oss-120b'").get() as { id: number };
+    await request(app, 'PATCH', `/api/keys/${id}`, { modelLimits: [{ modelDbId: model.id, rpmLimit: 30 }] });
+    await request(app, 'PATCH', `/api/keys/${id}`, { modelLimits: [{ modelDbId: model.id, rpmLimit: null }] });
+    invalidateQuotaPolicyCache();
+
+    // Only the cleared window: this suite shares one database, and a daily
+    // policy written by an earlier case is not this assertion's business.
+    const perMinute = listQuotaPolicies('groq').filter(p =>
+      p.modelId === 'openai/gpt-oss-120b' && p.metric === 'requests' && p.periodKind === 'rolling');
+    expect(perMinute).toEqual([]);
+    expect(effectiveRouteLimits('groq', 'openai/gpt-oss-120b').rpm).not.toBe(30);
   });
 
   it('rejects cross-provider model-limit edits without partially saving the key', async () => {

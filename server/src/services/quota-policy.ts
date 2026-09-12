@@ -544,3 +544,69 @@ export function resolveEffectiveQuotas(
 
   return [...best.values()];
 }
+
+/**
+ * The limits the ROUTER should gate on, resolved through the same precedence
+ * everything else reports.
+ *
+ * `models.rpm_limit` is one input among several and the weakest of them: it is
+ * the shipped catalogue's guess, rewritten on every sync. Gating directly on
+ * that column meant a measured limit recorded as an operator policy changed
+ * what the dashboard said and not what the router did — this install enforced
+ * 20/day on a route Google had just been observed allowing 500.
+ *
+ * Model scope only. An account-wide allowance bounds the key across all its
+ * models and cannot be applied to one of them without multiplying it.
+ */
+export interface RouteLimits {
+  rpm: number | null;
+  rpd: number | null;
+  tpm: number | null;
+  tpd: number | null;
+}
+
+export function effectiveRouteLimits(
+  platform: string,
+  modelId: string,
+  /** The row's own catalogue columns, used for any limit the resolver has no
+   *  opinion on. Passed explicitly because the alternative — treating silence
+   *  as "no limit" — turns a resolver failure into an unmetered route. */
+  fallback: Partial<RouteLimits> = {},
+  now: number = Date.now(),
+): RouteLimits {
+  let quotas: EffectiveQuota[] = [];
+  try {
+    quotas = resolveEffectiveQuotas(platform, modelId, now).filter(q => q.scope === 'model');
+  } catch {
+    // A database without the policy table (an older schema, a partial test
+    // fixture) must still gate on what the row itself declares.
+    return { rpm: fallback.rpm ?? null, rpd: fallback.rpd ?? null, tpm: fallback.tpm ?? null, tpd: fallback.tpd ?? null };
+  }
+
+  const pick = (metric: QuotaPolicyMetric, windowMs: number): number | null => {
+    const hit = quotas.filter(q => {
+      if (q.metric !== metric) return false;
+      if (q.period.kind === 'rolling') return q.period.windowMs === windowMs;
+      // A calendar day and a rolling 24h both bound a day. The distinction
+      // matters for when it resets, not for what the ceiling is.
+      return windowMs === DAY_MS && q.period.kind === 'calendar_day';
+    });
+    if (hit.length === 0) return null;
+    // Best-evidenced source wins; the tighter number only breaks a tie between
+    // equals. Taking the smallest outright would let the catalogue's guess
+    // override a measurement it had already been proven wrong by.
+    return hit.reduce((a, b) => {
+      const ra = SOURCE_RANK[a.source] ?? 0;
+      const rb = SOURCE_RANK[b.source] ?? 0;
+      if (ra !== rb) return ra > rb ? a : b;
+      return a.limit <= b.limit ? a : b;
+    }).limit;
+  };
+
+  return {
+    rpm: pick('requests', MINUTE_MS) ?? fallback.rpm ?? null,
+    rpd: pick('requests', DAY_MS) ?? fallback.rpd ?? null,
+    tpm: pick('total_tokens', MINUTE_MS) ?? fallback.tpm ?? null,
+    tpd: pick('total_tokens', DAY_MS) ?? fallback.tpd ?? null,
+  };
+}
