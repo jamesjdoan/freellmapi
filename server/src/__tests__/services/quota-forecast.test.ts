@@ -121,6 +121,71 @@ describe('quota-forecast: daily balance aggregation (#1104)', () => {
 
 // The overview is where inference reaches an operator, so the row has to carry
 // it — and has to keep it separate from anything measured.
+describe('which models a pool lists', () => {
+  function keyFor(platform: string): void {
+    getDb().prepare(`
+      INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, status, enabled)
+      VALUES (?, 'k', 'x', 'x', 'x', 'active', 1)
+    `).run(platform);
+  }
+
+  it('lists an enabled model that no chain routes to', () => {
+    // A model outside every chain still spends the provider's allowance as soon
+    // as a caller names it directly. Listing only chain members hid its quota.
+    keyFor('groq');
+    const db = getDb();
+    db.prepare(`INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, size_label, context_window, enabled)
+                VALUES ('groq', 'unchained-model', 'Unchained', 1, 1, 'Small', 128000, 1)`).run();
+
+    const rows = getProviderQuotaOverview().filter(r => r.platform === 'groq');
+    expect(rows.flatMap(r => r.memberModelIds)).toContain('unchained-model');
+  });
+
+  it('never lends a per-model pool someone else\'s models', () => {
+    // Seen live: `groq::model::qwen/qwen3.6-27b` listed gpt-oss-120b, gpt-oss-20b
+    // and qwen3.8-27b, because its own model was chain-disabled and the row fell
+    // back to every model on the platform. It reads as four models sharing one
+    // allowance when each in fact holds its own.
+    keyFor('groq');
+    const db = getDb();
+    const shelved = db.prepare(`INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, size_label, context_window, enabled)
+                VALUES ('groq', 'qwen/lonely', 'Lonely', 1, 1, 'Small', 128000, 1)`).run().lastInsertRowid;
+    db.prepare(`INSERT INTO fallback_config (model_db_id, priority, enabled) VALUES (?, 99, 0)`).run(shelved);
+    db.prepare(`INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, size_label, context_window, enabled)
+                VALUES ('groq', 'openai/other', 'Other', 1, 1, 'Small', 128000, 1)`).run();
+    getDb().prepare(`
+      INSERT INTO provider_quota_state (platform, key_id, quota_pool_key, metric, limit_value, remaining_value, reset_at, reset_strategy, source, confidence)
+      VALUES ('groq', 1, 'groq::model::qwen/lonely', 'requests', 1000, 900, NULL, 'provider_reported', 'header', 1.0)
+    `).run();
+
+    const row = getProviderQuotaOverview().find(r => r.pool === 'groq::model::qwen/lonely');
+    expect(row?.memberModelIds).toEqual([]);
+  });
+
+  it('hides a model whose chain row is switched off', () => {
+    // The middle state: the model is enabled, but the active chain excludes it,
+    // so the router will never pick it and the pool feels no pressure from it.
+    keyFor('groq');
+    const db = getDb();
+    const id = db.prepare(`INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, size_label, context_window, enabled)
+                VALUES ('groq', 'shelved-by-chain', 'Shelved', 1, 1, 'Small', 128000, 1)`).run().lastInsertRowid;
+    db.prepare(`INSERT INTO fallback_config (model_db_id, priority, enabled) VALUES (?, 99, 0)`).run(id);
+
+    const rows = getProviderQuotaOverview().filter(r => r.platform === 'groq');
+    expect(rows.flatMap(r => r.memberModelIds)).not.toContain('shelved-by-chain');
+  });
+
+  it('hides a disabled model, which can spend nothing', () => {
+    keyFor('groq');
+    const db = getDb();
+    db.prepare(`INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, size_label, context_window, enabled)
+                VALUES ('groq', 'switched-off', 'Switched Off', 1, 1, 'Small', 128000, 0)`).run();
+
+    const rows = getProviderQuotaOverview().filter(r => r.platform === 'groq');
+    expect(rows.flatMap(r => r.memberModelIds)).not.toContain('switched-off');
+  });
+});
+
 describe('provider overview: inferred windows', () => {
   beforeEach(() => {
     process.env.ENCRYPTION_KEY = '0'.repeat(64);

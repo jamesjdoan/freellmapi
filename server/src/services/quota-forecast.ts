@@ -406,9 +406,17 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
     // an env RPM cap or an operator's provider-wide daily limit — so every
     // routed model on the platform spends them, and platform-wide is the
     // truthful membership rather than the empty set string matching produces.
+    //
+    // The platform-wide fallback is ONLY for those window rows. A per-model pool
+    // names exactly one model, so when that model is not routable the honest
+    // answer is no members — falling back listed three unrelated Groq models
+    // under `groq::model::qwen/qwen3.6-27b`, which reads as four models sharing
+    // one allowance when in fact each has its own.
+    const perModelPool = row.pool != null && row.pool.includes('::model::');
     const members = row.pool == null
       ? []
-      : (byPool.get(row.pool) ?? platformMembersFor(row.pool, byPlatform.get(row.platform) ?? []));
+      : (byPool.get(row.pool)
+         ?? (perModelPool ? [] : platformMembersFor(row.pool, byPlatform.get(row.platform) ?? [])));
     row.members = members.map(m => m.displayName);
     row.memberModelIds = members.map(m => m.modelId);
   }
@@ -447,9 +455,24 @@ function platformMembersFor(pool: string, platformMembers: readonly PlatformMemb
 interface PlatformMember { platform: string; modelId: string; displayName: string }
 
 /**
- * Routed models grouped by the quota pool they draw on.
+ * A provider's models grouped by the quota pool they draw on.
  *
- * Enabled chain members only. `resolveQuotaPolicy` is the same pure function
+ * Membership mirrors the ROUTER's own eligibility rule exactly —
+ * `COALESCE(pm.enabled, fc.enabled, 1) = 1` (router.ts:1498). Three states, and
+ * the middle one is what this had wrong:
+ *
+ *   model disabled          -> hidden. It can spend nothing.
+ *   no chain row at all     -> LISTED. A fresh catalogue row is routable the
+ *                              moment anyone names it, and the old query — an
+ *                              INNER JOIN on profile_models — hid every one of
+ *                              them, understating the pool.
+ *   chain row switched off  -> hidden. The router will not pick it, so listing
+ *                              it would overstate pressure on the pool.
+ *
+ * Anything looser invents capacity, which is the error this file warns about
+ * everywhere else; anything tighter hides quota an operator is spending.
+ *
+ * `resolveQuotaPolicy` is the same pure function
  * the router uses to pick a pool, so the grouping cannot disagree with the
  * accounting — deriving it from the pool-key STRING instead would break the
  * first time a provider's identity changes shape, which has already happened
@@ -606,10 +629,14 @@ function routedMembers(): { byPool: Map<string, PlatformMember[]>; byPlatform: M
   const byPlatform = new Map<string, PlatformMember[]>();
   try {
     const rows = getDb().prepare(`
-      SELECT DISTINCT m.platform, m.model_id, m.display_name
-        FROM profile_models pm
-        JOIN models m ON m.id = pm.model_db_id
-       WHERE pm.enabled = 1 AND m.enabled = 1
+      SELECT m.platform, m.model_id, m.display_name
+        FROM models m
+        LEFT JOIN profile_models pm
+               ON pm.model_db_id = m.id
+              AND pm.profile_id = (SELECT CAST(value AS INTEGER) FROM settings WHERE key = 'active_profile_id')
+        LEFT JOIN fallback_config fc ON fc.model_db_id = m.id
+       WHERE m.enabled = 1
+         AND COALESCE(pm.enabled, fc.enabled, 1) = 1
     `).all() as { platform: string; model_id: string; display_name: string }[];
     for (const row of rows) {
       const poolKey = resolveQuotaPolicy(row.platform as Platform, row.model_id).poolKey;
