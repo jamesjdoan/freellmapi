@@ -13,11 +13,13 @@ import type { Platform } from '@freellmapi/shared/types.js';
 // was carrying the low end of a documented token range at confidence 0.25. Its
 // undocumented /api/usage endpoint answers the question directly:
 //
-//   "limits": { "session": { "usage": 0.121 }, "weekly": { "usage": 0.05 } }
+//   "limits": { "monthly": { "usage": 0.296 } }        (2026-09-12)
+//   "limits": { "session": { "usage": 0.121 }, "weekly": { "usage": 0.05 } }   (until ~2026-09-09)
 //
 // Fractions of the real allowance, per window, from the account itself. That
-// also settles the shape: the free tier binds on a session window and a weekly
-// one, not the monthly cycle the pricing page describes for paid plans.
+// The window NAMES are not stable — they changed under us once already — so
+// every key under `limits` is read rather than a fixed pair, and the pool key
+// follows whatever the provider called it.
 
 /** Scale for a provider that reports a fraction rather than a count. Ten
  *  thousand units keeps 0.01% of resolution through integer columns, which is
@@ -50,7 +52,13 @@ async function readOllamaUsage(apiKey: string): Promise<UsageObservation[]> {
     limits?: Record<string, { usage?: unknown } | undefined>;
   };
   const out: UsageObservation[] = [];
-  for (const window of ['session', 'weekly'] as const) {
+  // Whatever windows it names TODAY, not the two it named when this was
+  // written. On 2026-09-12 the response carries `limits.monthly` alone, with no
+  // `session` and no `weekly` — and because those two were hardcoded, the panel
+  // went on showing a weekly balance captured on 9 September, reading "5.4%
+  // left, Low" while the provider itself said 29.6% spent. A pinned list cannot
+  // tell an exhausted window from a renamed one.
+  for (const window of Object.keys(body?.limits ?? {})) {
     const usage = body?.limits?.[window]?.usage;
     // 0 is a legitimate reading — a freshly reset window — so only a
     // non-number is missing data.

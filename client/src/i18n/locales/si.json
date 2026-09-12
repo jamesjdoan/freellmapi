@@ -973,7 +973,7 @@
     "resetInferredHint": "නිරීක්ෂිත යළි සැකසුම් සීමා මත පදනම්ව පුරෝකථනය කළා — මෙම සැපයුම්කරු යළි සැකසුම් වේලාවක් නොයවයි. පෝලිං පරාසය තුළ නිරවද්‍යයි.",
     "poolMembers": "{count} ආකෘති",
     "poolMembersOne": "ආකෘති 1",
-    "locallyCountedMark": "·දේශීය",
+    "locallyCountedMark": "දේශීය",
     "locallyCountedHint": "සපයන්නා මෙම එකතුව කිසිදා වාර්තා කර නැත; මෙම ගණන අපගේය, අප තබා ගන්නා සීමාවට එරෙහිව.",
     "divergenceRecent": "Latest disagreements",
     "probesTitle": "Limit probes",
@@ -1013,7 +1013,10 @@
     "bucketNoReset": "never empties",
     "bucketNoResetHint": "This allowance refills continuously rather than resetting: spend one and it returns after the interval shown, so there is no boundary to wait for.",
     "bindsFirst": "{window} binds first",
-    "bindsFirstHint": "One allowance, measured over more than one window. This is the window with the least headroom, so it is the one that will refuse the next request."
+    "bindsFirstHint": "One allowance, measured over more than one window. This is the window with the least headroom, so it is the one that will refuse the next request.",
+    "poolSummedMark": "summed",
+    "poolSummedHint": "This total is the sum of the models below, each of which holds its own allowance — not a ceiling the provider stated.",
+    "inferredCount": "{count} estimated"
   },
   "logs": {
     "title": "ලොග",

@@ -973,7 +973,7 @@
     "resetInferredHint": "관측된 초기화 경계로부터 예측 — 이 제공자는 초기화 시각을 제공하지 않습니다. 폴링 간격 범위 내에서 정확합니다.",
     "poolMembers": "{count}개 모델",
     "poolMembersOne": "1개 모델",
-    "locallyCountedMark": "·로컬",
+    "locallyCountedMark": "로컬",
     "locallyCountedHint": "공급자가 이 풀을 보고한 적이 없습니다. 이 집계는 자체 계산이며, 우리가 보유한 한도를 기준으로 합니다.",
     "divergenceRecent": "Latest disagreements",
     "probesTitle": "Limit probes",
@@ -1013,7 +1013,10 @@
     "bucketNoReset": "never empties",
     "bucketNoResetHint": "This allowance refills continuously rather than resetting: spend one and it returns after the interval shown, so there is no boundary to wait for.",
     "bindsFirst": "{window} binds first",
-    "bindsFirstHint": "One allowance, measured over more than one window. This is the window with the least headroom, so it is the one that will refuse the next request."
+    "bindsFirstHint": "One allowance, measured over more than one window. This is the window with the least headroom, so it is the one that will refuse the next request.",
+    "poolSummedMark": "summed",
+    "poolSummedHint": "This total is the sum of the models below, each of which holds its own allowance — not a ceiling the provider stated.",
+    "inferredCount": "{count} estimated"
   },
   "logs": {
     "title": "로그",

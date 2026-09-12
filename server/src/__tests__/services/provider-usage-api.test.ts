@@ -62,6 +62,20 @@ describe('provider usage APIs', () => {
     expect(rows[0]!.confidence).toBeGreaterThan(0.8);
   });
 
+  it('follows the provider when it renames its windows', async () => {
+    // 2026-09-12: the response carries `limits.monthly` alone — no `session`,
+    // no `weekly`. Those two were hardcoded, so the panel kept showing a weekly
+    // balance captured three days earlier, reading "5.4% left, Low" while
+    // Ollama itself reported 29.6% spent. A window that vanishes must not
+    // freeze at its last reading.
+    stubUsage({ limits: { monthly: { usage: 0.296 } } });
+    expect(await pollProviderUsageApis()).toBe(1);
+
+    const rows = observations();
+    expect(rows.map(r => r.quota_pool_key)).toEqual(['ollama::monthly']);
+    expect(rows[0]!.remaining_value).toBe(7040);
+  });
+
   it('records a freshly reset window rather than treating zero as missing', async () => {
     stubUsage({ limits: { session: { usage: 0 }, weekly: { usage: 0 } } });
     expect(await pollProviderUsageApis()).toBe(2);

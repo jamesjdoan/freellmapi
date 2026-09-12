@@ -973,7 +973,7 @@
     "resetInferredHint": "கவனிக்கப்பட்ட மீட்டமைவு எல்லைகளிலிருந்து கணிக்கப்பட்டது — இந்த வழங்குநர் மீட்டமைவு நேரத்தை அனுப்புவதில்லை. துல்லியம் பாலிங் இடைவெளிக்குள் இருக்கும்.",
     "poolMembers": "{count} மாதிரிகள்",
     "poolMembersOne": "1 மாதிரி",
-    "locallyCountedMark": "·உள்ளூர்",
+    "locallyCountedMark": "உள்ளூர்",
     "locallyCountedHint": "வழங்குநர் இந்தத் தொகுப்பைப் பற்றி எப்போதும் தெரிவிக்கவில்லை; இந்த எண்ணிக்கை நமது, நாம் வைத்திருக்கும் வரம்பை ஒப்பிட்டு.",
     "divergenceRecent": "Latest disagreements",
     "probesTitle": "Limit probes",
@@ -1013,7 +1013,10 @@
     "bucketNoReset": "never empties",
     "bucketNoResetHint": "This allowance refills continuously rather than resetting: spend one and it returns after the interval shown, so there is no boundary to wait for.",
     "bindsFirst": "{window} binds first",
-    "bindsFirstHint": "One allowance, measured over more than one window. This is the window with the least headroom, so it is the one that will refuse the next request."
+    "bindsFirstHint": "One allowance, measured over more than one window. This is the window with the least headroom, so it is the one that will refuse the next request.",
+    "poolSummedMark": "summed",
+    "poolSummedHint": "This total is the sum of the models below, each of which holds its own allowance — not a ceiling the provider stated.",
+    "inferredCount": "{count} estimated"
   },
   "logs": {
     "title": "பதிவுகள்",

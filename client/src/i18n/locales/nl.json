@@ -973,7 +973,7 @@
     "resetInferredHint": "Voorspeld op basis van waargenomen resetgrenzen — deze provider stuurt geen resettijd. Nauwkeurig tot op het polling-interval.",
     "poolMembers": "{count} modellen",
     "poolMembersOne": "1 model",
-    "locallyCountedMark": "·lokaal",
+    "locallyCountedMark": "lokaal",
     "locallyCountedHint": "De provider heeft deze pool nooit gerapporteerd; de telling is de onze, tegen een limiet die wij aanhouden.",
     "divergenceRecent": "Latest disagreements",
     "probesTitle": "Limit probes",
@@ -1013,7 +1013,10 @@
     "bucketNoReset": "never empties",
     "bucketNoResetHint": "This allowance refills continuously rather than resetting: spend one and it returns after the interval shown, so there is no boundary to wait for.",
     "bindsFirst": "{window} binds first",
-    "bindsFirstHint": "One allowance, measured over more than one window. This is the window with the least headroom, so it is the one that will refuse the next request."
+    "bindsFirstHint": "One allowance, measured over more than one window. This is the window with the least headroom, so it is the one that will refuse the next request.",
+    "poolSummedMark": "summed",
+    "poolSummedHint": "This total is the sum of the models below, each of which holds its own allowance — not a ceiling the provider stated.",
+    "inferredCount": "{count} estimated"
   },
   "logs": {
     "title": "Logs",

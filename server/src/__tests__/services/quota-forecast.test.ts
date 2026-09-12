@@ -121,6 +121,61 @@ describe('quota-forecast: daily balance aggregation (#1104)', () => {
 
 // The overview is where inference reaches an operator, so the row has to carry
 // it — and has to keep it separate from anything measured.
+describe('a window the provider stopped reporting', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare('DELETE FROM provider_quota_state').run();
+    getDb().prepare('DELETE FROM requests').run();
+    getDb().prepare('DELETE FROM api_keys').run();
+    invalidateQuotaPolicyCache();
+    invalidateQuotaInference();
+  });
+
+  it('retires the old window once a newer poll omits it', () => {
+    // Ollama answered `session` and `weekly` until 9 September and answers
+    // `monthly` alone now. The dead windows kept their last reading, so the
+    // panel showed "5.4% left, Low" for an allowance the provider reports as
+    // 29.6% spent.
+    const db = getDb();
+    db.prepare(`INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, status, enabled)
+                VALUES ('ollama', 'k', 'x', 'x', 'x', 'active', 1)`).run();
+    const state = db.prepare(`
+      INSERT INTO provider_quota_state (platform, key_id, quota_pool_key, metric, limit_value, remaining_value, reset_at, reset_strategy, source, confidence, observed_at)
+      VALUES ('ollama', 1, ?, 'credits', 10000, ?, NULL, 'provider_reported', 'quota_api', 0.9, ?)`);
+    const days = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().replace('T', ' ').replace('Z', '');
+    state.run('ollama::weekly', 540, days(3));
+    state.run('ollama::session', 10000, days(3));
+    state.run('ollama::monthly', 7040, days(0));
+
+    const pools = getProviderQuotaOverview().filter(r => r.platform === 'ollama').map(r => r.pool);
+    expect(pools).toContain('ollama::monthly');
+    expect(pools).not.toContain('ollama::weekly');
+    expect(pools).not.toContain('ollama::session');
+  });
+
+  it('keeps every window a single poll reported together', () => {
+    // Two windows read minutes apart are both live; only a window left behind
+    // by newer readings is gone.
+    const db = getDb();
+    db.prepare(`INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, status, enabled)
+                VALUES ('ollama', 'k', 'x', 'x', 'x', 'active', 1)`).run();
+    const state = db.prepare(`
+      INSERT INTO provider_quota_state (platform, key_id, quota_pool_key, metric, limit_value, remaining_value, reset_at, reset_strategy, source, confidence, observed_at)
+      VALUES ('ollama', 1, ?, 'credits', 10000, ?, NULL, 'provider_reported', 'quota_api', 0.9, ?)`);
+    const minutesAgo = (n: number) => new Date(Date.now() - n * 60_000).toISOString().replace('T', ' ').replace('Z', '');
+    state.run('ollama::weekly', 540, minutesAgo(31));
+    state.run('ollama::session', 10000, minutesAgo(30));
+
+    // Both survive; they are FOLDED onto one row, which is a separate rule —
+    // one counter, two windows, the binding one leading.
+    const row = getProviderQuotaOverview().find(r => r.platform === 'ollama');
+    const windows = [row?.pool, ...(row?.alsoBound ?? []).map(w => w.pool)];
+    expect(windows).toContain('ollama::weekly');
+    expect(windows).toContain('ollama::session');
+  });
+});
+
 describe('a provider that publishes nothing', () => {
   beforeEach(() => {
     process.env.ENCRYPTION_KEY = '0'.repeat(64);

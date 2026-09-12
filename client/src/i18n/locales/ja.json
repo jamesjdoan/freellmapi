@@ -973,7 +973,7 @@
     "resetInferredHint": "観測されたリセット境界からの予測 — このプロバイダーはリセット時刻を送信しません。精度はポーリング間隔の範囲内です。",
     "poolMembers": "{count} モデル",
     "poolMembersOne": "1 モデル",
-    "locallyCountedMark": "·ローカル",
+    "locallyCountedMark": "ローカル",
     "locallyCountedHint": "プロバイダーはこのプールを報告していません。この件数は自前の集計で、こちらで保持している上限に対する値です。",
     "divergenceRecent": "Latest disagreements",
     "probesTitle": "Limit probes",
@@ -1013,7 +1013,10 @@
     "bucketNoReset": "never empties",
     "bucketNoResetHint": "This allowance refills continuously rather than resetting: spend one and it returns after the interval shown, so there is no boundary to wait for.",
     "bindsFirst": "{window} binds first",
-    "bindsFirstHint": "One allowance, measured over more than one window. This is the window with the least headroom, so it is the one that will refuse the next request."
+    "bindsFirstHint": "One allowance, measured over more than one window. This is the window with the least headroom, so it is the one that will refuse the next request.",
+    "poolSummedMark": "summed",
+    "poolSummedHint": "This total is the sum of the models below, each of which holds its own allowance — not a ceiling the provider stated.",
+    "inferredCount": "{count} estimated"
   },
   "logs": {
     "title": "ログ",

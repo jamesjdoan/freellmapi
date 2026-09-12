@@ -973,7 +973,7 @@
     "resetInferredHint": "Спрогнозировано по наблюдаемым границам сброса — провайдер не сообщает время сброса. Точность в пределах интервала опроса.",
     "poolMembers": "{count} моделей",
     "poolMembersOne": "1 модель",
-    "locallyCountedMark": "·локально",
+    "locallyCountedMark": "локально",
     "locallyCountedHint": "Провайдер никогда не сообщал об этом пуле; подсчёт наш, относительно лимита, который мы храним сами.",
     "divergenceRecent": "Latest disagreements",
     "probesTitle": "Limit probes",
@@ -1013,7 +1013,10 @@
     "bucketNoReset": "never empties",
     "bucketNoResetHint": "This allowance refills continuously rather than resetting: spend one and it returns after the interval shown, so there is no boundary to wait for.",
     "bindsFirst": "{window} binds first",
-    "bindsFirstHint": "One allowance, measured over more than one window. This is the window with the least headroom, so it is the one that will refuse the next request."
+    "bindsFirstHint": "One allowance, measured over more than one window. This is the window with the least headroom, so it is the one that will refuse the next request.",
+    "poolSummedMark": "summed",
+    "poolSummedHint": "This total is the sum of the models below, each of which holds its own allowance — not a ceiling the provider stated.",
+    "inferredCount": "{count} estimated"
   },
   "logs": {
     "title": "Журнал",

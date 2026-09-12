@@ -20,6 +20,20 @@ import { countRequestsInWindow, countPlatformUsageInWindow } from './ratelimit.j
 // low-balance warning an agent can gate on BEFORE sending a request that would
 // 429.
 
+export /**
+ * How far behind its provider's freshest measured reading a window may fall
+ * before it is treated as no longer reported. Six hours is many poll intervals
+ * — the usage APIs are read twice an hour — so a transient miss cannot trip it,
+ * while a window dropped from the response disappears the same day.
+ */
+const STALE_WINDOW_MS = 6 * 60 * 60 * 1000;
+
+/** Stored as a SQLite timestamp string. `parseStoredUtc` already owns reading
+ *  those as UTC, which is how they are written. */
+function observedAtMs(state: { observedAt?: string | null }): number | null {
+  return state.observedAt ? parseStoredUtc(state.observedAt) : null;
+}
+
 export const LOW_BALANCE_THRESHOLD = 0.1; // <10% of the daily window left → warn
 export const LOW_BALANCE_ABSOLUTE = 20; // ...or fewer than 20 requests left
 // The absolute floor is a statement about big windows: "20 left" is alarming
@@ -438,6 +452,29 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
     const legacy = legacyPoolKey(state.platform as Platform, state.quotaPoolKey);
     if (legacy) superseded.add(`${state.platform}\u0000${legacy}`);
   }
+  // A window the provider has STOPPED reporting is superseded too. Ollama's
+  // /api/usage answered `session` and `weekly` until 9 September and answers
+  // `monthly` alone now; the two dead windows kept their last reading and the
+  // panel went on showing "5.4% left, Low" for an allowance the provider says
+  // is 29.6% spent. Judged per platform against its own freshest measured
+  // reading — a poll that returns a window proves the window still exists, and
+  // one that omits it while returning others proves it does not.
+  const freshestMeasured = new Map<string, number>();
+  for (const state of states) {
+    const at = observedAtMs(state);
+    if (state.source !== 'quota_api' || at == null) continue;
+    const seen = freshestMeasured.get(state.platform);
+    if (seen == null || at > seen) freshestMeasured.set(state.platform, at);
+  }
+  for (const state of states) {
+    const at = observedAtMs(state);
+    if (state.source !== 'quota_api' || at == null) continue;
+    const freshest = freshestMeasured.get(state.platform);
+    if (freshest != null && freshest - at > STALE_WINDOW_MS) {
+      superseded.add(`${state.platform}\u0000${state.quotaPoolKey}`);
+    }
+  }
+
   const liveRows = rows.filter(r => r.pool == null || !superseded.has(`${r.platform}\u0000${r.pool}`));
   rows.length = 0;
   rows.push(...liveRows);

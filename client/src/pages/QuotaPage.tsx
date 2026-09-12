@@ -393,6 +393,25 @@ function PanelState({ loading, error, empty, emptyKey, children }: {
 }
 
 /** Period kinds the API accepts, and what each additionally requires. */
+/**
+ * How each provider spells itself. Capitalising the first letter blind gives
+ * "Openrouter", "Opencode" and "Nvidia", none of which is the company's own
+ * mark — so the ones we know are listed, and anything unknown falls back to a
+ * leading capital rather than a guess at inner casing.
+ */
+const PLATFORM_LABELS: Record<string, string> = {
+  google: 'Google', groq: 'Groq', nvidia: 'NVIDIA', ollama: 'Ollama',
+  openrouter: 'OpenRouter', opencode: 'OpenCode', huggingface: 'Hugging Face',
+  openai: 'OpenAI', mistral: 'Mistral', cohere: 'Cohere', cloudflare: 'Cloudflare',
+  zhipu: 'Zhipu', github: 'GitHub', ovh: 'OVHcloud', siliconflow: 'SiliconFlow',
+  deepseek: 'DeepSeek', anthropic: 'Anthropic', xkiro: 'xKiro', llm7: 'LLM7',
+  aihorde: 'AI Horde', modelscope: 'ModelScope', ainative: 'AI Native',
+};
+
+export function platformLabel(platform: string): string {
+  return PLATFORM_LABELS[platform] ?? platform.charAt(0).toUpperCase() + platform.slice(1);
+}
+
 /** Reserved entry in the hidden-rows list: the chain-excluded model listing. */
 const EXCLUDED_ROWS_KEY = 'excluded-models';
 
@@ -737,7 +756,7 @@ export default function QuotaPage() {
                           className="inline-flex items-center gap-1 hover:underline"
                         >
                           <ChevronDown className={`size-3 transition-transform ${expandedPlatforms.has(group.platform) ? '' : '-rotate-90'}`} aria-hidden="true" />
-                          {group.platform}
+                          {platformLabel(group.platform)}
                         </button>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
@@ -811,9 +830,9 @@ export default function QuotaPage() {
                           className="inline-flex items-center gap-1 hover:underline"
                         >
                           <ChevronDown className={`size-3 transition-transform ${open ? '' : '-rotate-90'}`} aria-hidden="true" />
-                          {p.platform}
+                          {platformLabel(p.platform)}
                         </button>
-                      ) : p.platform}
+                      ) : platformLabel(p.platform)}
                     </TableCell>
                     {/* The pool key drops its platform prefix: the Provider
                         column to the left already says `nvidia`, and repeating
@@ -826,34 +845,48 @@ export default function QuotaPage() {
                         down to unreadable — the panel's whole job. The count is
                         the part that is scanned ("is this one route or seven?");
                         the names are what you ask for once. */}
+                    {/* Two lines, not four. The window name is what gets
+                        scanned; provenance, estimates and membership are what
+                        you ask for once, so they share one muted line with the
+                        detail on hover. Spelling every estimate out inline
+                        wrapped this cell to four rows and squeezed the numbers
+                        that are the panel's whole job. */}
                     <TableCell className="text-muted-foreground">
-                      <div className="whitespace-nowrap">{poolLabel(p)}</div>
-                      {p.aggregated && (
-                        <div className="text-[10px] text-muted-foreground">{t('quota.poolSummed')}</div>
-                      )}
-                      <div className="text-[10px] text-muted-foreground">
+                      <div className="whitespace-nowrap">
+                        {poolWindowName(p.pool) || poolLabel(p)}
+                        {p.pool?.includes('::rolling-') && (
+                          <HoverTooltip text={t('quota.windowKindHint')}>
+                            <span className="ml-1 text-[10px] opacity-75">{t('quota.windowRolling')}</span>
+                          </HoverTooltip>
+                        )}
+                        {p.aggregated && (
+                          <HoverTooltip text={t('quota.poolSummedHint')}>
+                            <span className="ml-1 text-[10px] opacity-75">{t('quota.poolSummedMark')}</span>
+                          </HoverTooltip>
+                        )}
+                      </div>
+                      <div className="whitespace-nowrap text-[10px] text-muted-foreground">
                         {p.source ?? '—'}
                         {p.usedSource === 'local' && (
                           <HoverTooltip text={t('quota.locallyCountedHint')}>
                             <span className="ml-1">{t('quota.locallyCountedMark')}</span>
                           </HoverTooltip>
                         )}
-                        {/* Estimates stay prefixed and keep their sample count:
-                            a reader must be able to tell one from a number the
-                            provider stated. */}
-                        {p.inferred.map(w => (
-                          <span key={`${w.method}:${w.period}`} className="ml-1" title={w.note}>
-                            {t('quota.inferredWindow', { period: t(`quota.period_${w.period}`), samples: w.samples })}
-                          </span>
-                        ))}
+                        {p.inferred.length > 0 && (
+                          <HoverTooltip text={p.inferred.map(w => `${t(`quota.period_${w.period}`)}: ${w.note}`).join('\n')}>
+                            <span className="ml-1 underline decoration-dotted underline-offset-2">
+                              {t('quota.inferredCount', { count: p.inferred.length })}
+                            </span>
+                          </HoverTooltip>
+                        )}
+                        {p.members.length > 0 && (
+                          <HoverTooltip text={p.members.join('\n')}>
+                            <span className="ml-1 underline decoration-dotted underline-offset-2">
+                              {p.members.length === 1 ? t('quota.poolMembersOne') : t('quota.poolMembers', { count: p.members.length })}
+                            </span>
+                          </HoverTooltip>
+                        )}
                       </div>
-                      {p.members.length > 0 && (
-                        <HoverTooltip text={p.members.join('\n')}>
-                          <span className="text-xs opacity-75 underline decoration-dotted underline-offset-2">
-                            {p.members.length === 1 ? t('quota.poolMembersOne') : t('quota.poolMembers', { count: p.members.length })}
-                          </span>
-                        </HoverTooltip>
-                      )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {p.metric ? t(`quota.metric_${p.metric}`) : '—'}
@@ -907,13 +940,13 @@ export default function QuotaPage() {
                           weekly balance at 5% binds long before its session
                           window at 100%, though the session is the shorter. */}
                       {(p.alsoBound ?? []).length > 0 && (
-                        <span className="ml-1 text-[10px] text-muted-foreground" title={t('quota.bindsFirstHint')}>
+                        <span className="ml-1.5 whitespace-nowrap text-[10px] text-muted-foreground" title={t('quota.bindsFirstHint')}>
                           {t('quota.bindsFirst', { window: poolWindowName(p.pool) })}
                         </span>
                       )}
                       {(p.alsoBound ?? []).map(w => (
                         <span key={w.pool ?? 'w'} className="text-muted-foreground">
-                          {' · '}{formatAmount(w.limit, p.unit)}
+                          {'\u00a0· '}{formatAmount(w.limit, p.unit)}
                           <span className="text-[10px]">{' '}{poolWindowName(w.pool)}</span>
                         </span>
                       ))}
@@ -922,12 +955,10 @@ export default function QuotaPage() {
                         pools the provider sends no reset at all: its 429
                         carries none and retry-after is empty. */}
                     <TableCell className="text-right tabular-nums whitespace-nowrap">
+                      {/* The window KIND belongs beside the window name, not
+                          jammed against the countdown, where "—rolling" read as
+                          one unreadable token. */}
                       {formatCountdown(p.seconds_until_reset)}
-                      {p.pool?.includes('::rolling-') && (
-                        <span className="ml-1 text-[10px] text-muted-foreground" title={t('quota.windowKindHint')}>
-                          {t('quota.windowRolling')}
-                        </span>
-                      )}
                       {p.resetSource === 'inferred' && p.seconds_until_reset != null
                         ? <span className="ml-1 text-xs text-muted-foreground"
                             title={t('quota.resetInferredHint')}>{t('quota.resetInferredMark')}</span>
@@ -985,7 +1016,7 @@ export default function QuotaPage() {
             <TableBody>
               {resets.map(r => (
                 <TableRow key={`${r.platform}:${r.pool}`}>
-                  <TableCell className="font-medium">{r.platform}</TableCell>
+                  <TableCell className="font-medium">{platformLabel(r.platform)}</TableCell>
                   <TableCell>{formatSqliteUtcToLocalTime(r.reset_at, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</TableCell>
                   <TableCell className="text-right">{formatCountdown(r.seconds_until_reset)}</TableCell>
                   <TableCell className="text-right">{r.remaining ?? '—'}</TableCell>
@@ -1084,7 +1115,7 @@ export default function QuotaPage() {
             <TableBody>
               {policiesData.policies.map(p => (
                 <TableRow key={p.id}>
-                  <TableCell className="font-medium">{p.platform}</TableCell>
+                  <TableCell className="font-medium">{platformLabel(p.platform)}</TableCell>
                   <TableCell className="text-muted-foreground">{p.modelId ?? t('quota.allModels')}</TableCell>
                   <TableCell>{p.metric}</TableCell>
                   <TableCell>{p.scope}</TableCell>

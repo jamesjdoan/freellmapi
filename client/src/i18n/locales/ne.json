@@ -973,7 +973,7 @@
     "resetInferredHint": "अवलोकन गरिएका रिसेट सीमाबाट अनुमानित — यो प्रदायकले रिसेट समय पठाउँदैन। पोलिङ अन्तरालभित्रको शुद्धता।",
     "poolMembers": "{count} मोडेल",
     "poolMembersOne": "1 मोडेल",
-    "locallyCountedMark": "·स्थानीय",
+    "locallyCountedMark": "स्थानीय",
     "locallyCountedHint": "प्रदायकले यो पूलबारे कहिल्यै रिपोर्ट गरेको छैन; यो गणना हाम्रो हो, हामीले राखेको सीमाविरुद्ध।",
     "divergenceRecent": "Latest disagreements",
     "probesTitle": "Limit probes",
@@ -1013,7 +1013,10 @@
     "bucketNoReset": "never empties",
     "bucketNoResetHint": "This allowance refills continuously rather than resetting: spend one and it returns after the interval shown, so there is no boundary to wait for.",
     "bindsFirst": "{window} binds first",
-    "bindsFirstHint": "One allowance, measured over more than one window. This is the window with the least headroom, so it is the one that will refuse the next request."
+    "bindsFirstHint": "One allowance, measured over more than one window. This is the window with the least headroom, so it is the one that will refuse the next request.",
+    "poolSummedMark": "summed",
+    "poolSummedHint": "This total is the sum of the models below, each of which holds its own allowance — not a ceiling the provider stated.",
+    "inferredCount": "{count} estimated"
   },
   "logs": {
     "title": "लग",
