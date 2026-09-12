@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { Clock, FileText, Flame, Server, Shield, Trash2 } from 'lucide-react';
+import { ChevronDown, Clock, FileText, Flame, Server, Shield, Trash2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { useI18n } from '@/i18n';
@@ -14,7 +14,7 @@ import { QuotaProbeLogPanel } from '@/components/quota-probe-log';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { formatSqliteUtcToLocalTime } from '@/lib/utils';
 
 // Define interfaces based on API contracts
@@ -50,6 +50,8 @@ interface ProviderOverviewRow extends QuotaForecastEntry {
   derivedAllowance: { metric: string; limit: number; low: number; high: number; samples: number } | null;
   /** Routed models drawing on this pool. Empty when nothing routes to it. */
   members: string[];
+  memberModelIds: string[];
+  aggregated?: boolean;
   resetSource: 'provider' | 'inferred' | null;
 }
 
@@ -89,6 +91,24 @@ interface DecisionRow {
   agreed: boolean;
   reason: string | null;
   candidates: unknown;
+}
+
+interface UsageWindow {
+  used: number;
+  limit: number;
+  resetAtMs: number | null;
+  /** How the window ends. A countdown alone cannot distinguish a rolling
+   *  window, which frees one call at a time, from a calendar one that returns
+   *  the whole allowance at a fixed local hour. */
+  period: { kind: string; timezone: string | null } | null;
+}
+interface ModelUsageRow {
+  modelDbId: number;
+  platform: string;
+  modelId: string;
+  rpm: UsageWindow | null;
+  rpd: UsageWindow | null;
+  tpm: UsageWindow | null;
 }
 
 interface PolicyRow {
@@ -157,6 +177,88 @@ function formatCountdown(seconds: number | null): string {
 /** A rolling window reads as its width, not as the word "rolling": one model
  *  legitimately holds 5 per minute AND 20 per day, and without the width those
  *  two rows look like one number contradicting itself. */
+/** A model's live counters beneath its provider: spent, left, ceiling, reset.
+ *  Left is coloured by pressure, because that is the number a reader acts on. */
+function ModelUsageRow({ row, rowKey }: { row: ModelUsageRow; rowKey: string }) {
+  const { t, locale } = useI18n();
+  const day = row.rpd;
+  const minute = row.rpm;
+  const left = day ? Math.max(0, day.limit - day.used) : null;
+  const spent = day && day.limit > 0 ? day.used / day.limit : 0;
+  return (
+    <TableRow key={rowKey} className="bg-muted/20">
+      <TableCell />
+      <TableCell colSpan={2} className="py-1">
+        <code className="text-[11px] text-muted-foreground">{row.modelId}</code>
+      </TableCell>
+      <TableCell className="py-1 text-right tabular-nums">{day ? day.used : '—'}</TableCell>
+      <TableCell className={`py-1 text-right tabular-nums ${spent >= 0.9 ? 'text-rose-600 dark:text-rose-400' : spent >= 0.67 ? 'text-amber-700 dark:text-amber-400' : ''}`}>
+        {left ?? '—'}
+      </TableCell>
+      <TableCell className="py-1 text-right tabular-nums">
+        {day ? <>{day.limit}<span className="text-muted-foreground">/day</span></> : '—'}
+      </TableCell>
+      {/* Seconds from the resolved window, not a guess: null when the limit
+          came from a catalogue column, which states no period to reset. */}
+      <TableCell className="py-1 text-right tabular-nums">
+        {day?.resetAtMs != null
+          ? formatCountdown(Math.max(0, Math.round((day.resetAtMs - Date.now()) / 1000)))
+          : '—'}
+        {day?.period && (
+          <span
+            className="ml-1 text-[10px] text-muted-foreground"
+            title={`${t('quota.windowKindHint')}${day.period.timezone ? ` (${day.period.timezone})` : ''}`}
+          >
+            {day.period.kind === 'rolling'
+              ? t('quota.windowRolling')
+              : shortZone(day.period.timezone ?? 'UTC', locale)}
+          </span>
+        )}
+      </TableCell>
+      <TableCell className="py-1 text-[11px] text-muted-foreground" colSpan={3}>
+        {minute ? t('quota.modelPerMinute', { used: minute.used, limit: minute.limit }) : ''}
+      </TableCell>
+    </TableRow>
+  );
+}
+
+/**
+ * The window a limit is counted over, read off the pool key.
+ *
+ * A bare "1000" in a Limit column is unreadable: per minute, per day and per
+ * week are three different providers' worth of capacity. Empty when the key
+ * names no window — a credit balance is an amount, not a rate, and guessing a
+ * period for it would be worse than the silence.
+ */
+/** A zone as a reader recognises it — PDT, not America/Los_Angeles. The full
+ *  name stays in the title, because the abbreviation is ambiguous worldwide and
+ *  the column is four characters wide. */
+function shortZone(timeZone: string, locale: string): string {
+  try {
+    const part = new Intl.DateTimeFormat(locale, { timeZone, timeZoneName: 'short' })
+      .formatToParts(new Date())
+      .find(p => p.type === 'timeZoneName');
+    return part?.value ?? timeZone;
+  } catch {
+    return timeZone;
+  }
+}
+
+export function poolPeriodSuffix(pool: string | null | undefined): string {
+  if (!pool) return '';
+  const tail = pool.slice(pool.lastIndexOf('::') + 2);
+  if (tail === 'calendar_day') return '/day';
+  if (tail === 'calendar_week' || tail === 'weekly') return '/week';
+  if (tail === 'calendar_month' || tail === 'monthly') return '/month';
+  const rolling = /^rolling-(\d+)s$/.exec(tail);
+  if (!rolling) return '';
+  const seconds = Number(rolling[1]);
+  if (seconds === 60) return '/min';
+  if (seconds === 3600) return '/hour';
+  if (seconds === 86_400) return '/day';
+  return `/${seconds}s`;
+}
+
 export function policyPeriodLabel(p: { periodKind: string; periodMs: number | null }): string {
   if (p.periodKind !== 'rolling') return p.periodKind.replace('calendar_', 'per ').replace('_', ' ');
   if (p.periodMs == null) return 'rolling';
@@ -349,6 +451,55 @@ export default function QuotaPage() {
 
   const providers = providerData.providers;
 
+  // Per-model usage, refreshed while the page is open: this panel is read to
+  // decide whether a route can serve NOW, and a stale count answers a question
+  // nobody asked.
+  const { data: modelUsage = { rows: [] as ModelUsageRow[] } } = useQuery({
+    queryKey: ['fallback', 'rate-limit-usage'],
+    queryFn: () => apiFetch<{ rows: ModelUsageRow[] }>('/api/fallback/rate-limit-usage'),
+    refetchInterval: 15_000,
+  });
+  const usageByModel = new Map(modelUsage.rows.map(r => [`${r.platform}\u0000${r.modelId}`, r]));
+  // A pool lists its members, so an expansion shows those rows and nothing
+  // else: a model outside this pool cannot appear beneath it.
+  const [expandedPools, setExpandedPools] = useState<Set<string>>(new Set());
+  const [expandedPlatforms, setExpandedPlatforms] = useState<Set<string>>(new Set());
+
+  // One group per provider, so a provider that reports three per-model pools
+  // (Groq) and one that reports a single account window (Google) read the same
+  // way. A total is offered only where the pools count SEPARATELY, in the same
+  // unit and window — summing a session credit balance onto a daily request
+  // count would produce a number with no meaning.
+  const providerGroups = (() => {
+    const byPlatform = new Map<string, ProviderOverviewRow[]>();
+    for (const p of providers) {
+      const list = byPlatform.get(p.platform);
+      if (list) list.push(p); else byPlatform.set(p.platform, [p]);
+    }
+    return [...byPlatform.entries()].map(([platform, pools]) => {
+      const summable = pools.every(p =>
+        p.metered && p.metric === 'requests' && p.unit == null && p.limit != null && p.used != null);
+      const resets = pools.map(p => p.seconds_until_reset).filter((n): n is number => n != null);
+      const perModelPools = pools.length > 1
+        && pools.every(p => p.metric === 'requests' && p.memberModelIds.length === 1);
+      return {
+        platform,
+        pools,
+        // Union, in pool order: the fold is presentational and must not change
+        // which models a provider is shown to have.
+        foldedModelIds: perModelPools ? pools.flatMap(p => p.memberModelIds) : null,
+        total: summable && pools.length > 1
+          ? {
+              used: pools.reduce((n, p) => n + (p.used ?? 0), 0),
+              limit: pools.reduce((n, p) => n + (p.limit ?? 0), 0),
+              remaining: pools.reduce((n, p) => n + (p.remaining ?? 0), 0),
+              secondsUntilReset: resets.length > 0 ? Math.min(...resets) : null,
+            }
+          : null,
+      };
+    });
+  })();
+
   // Burn runs: the experiment record per provider. Polled while one is live so
   // the count climbs in view; the newest run per platform is the one shown.
   const queryClient = useQueryClient();
@@ -398,8 +549,10 @@ export default function QuotaPage() {
 
       <Panel icon={Server} title={t('quota.overviewTitle')}>
         <PanelState loading={providerLoading} error={providerError} empty={providers.length === 0} emptyKey="quota.emptyOverview">
-          <Table>
-            <TableHeader>
+          <Table containerClassName="max-h-[70vh] overflow-auto">
+            {/* Pinned: with every provider expanded the numbers scroll far past
+                the column names, and a row of bare figures says nothing. */}
+            <TableHeader className="sticky top-0 z-10 bg-card">
               <TableRow>
                 <TableHead>{t('quota.colProvider')}</TableHead>
                 <TableHead>{t('quota.colPool')}</TableHead>
@@ -414,13 +567,93 @@ export default function QuotaPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {providers.map(p => {
+              {providerGroups.map(group => (
+                <Fragment key={`group:${group.platform}`}>
+                  {group.pools.length > 1 && (
+                    <TableRow className="border-t-2">
+                      <TableCell className="font-medium">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedPlatforms(prev => {
+                            const next = new Set(prev);
+                            if (next.has(group.platform)) next.delete(group.platform); else next.add(group.platform);
+                            return next;
+                          })}
+                          aria-expanded={expandedPlatforms.has(group.platform)}
+                          className="inline-flex items-center gap-1 hover:underline"
+                        >
+                          <ChevronDown className={`size-3 transition-transform ${expandedPlatforms.has(group.platform) ? '' : '-rotate-90'}`} aria-hidden="true" />
+                          {group.platform}
+                        </button>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {group.foldedModelIds
+                          ? t('quota.poolMembers', { count: group.foldedModelIds.length })
+                          : t('quota.poolCount', { count: group.pools.length })}
+                        {group.total && <div className="text-[10px]">{t('quota.poolSummed')}</div>}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {group.total ? t('quota.metric_requests') : '—'}
+                      </TableCell>
+                      {/* Summed only across pools that count separately and in
+                          the same unit and window. Anything else — Ollama's
+                          session credits beside its daily requests — has no
+                          meaningful total, and a dash says so. */}
+                      <TableCell className="text-right tabular-nums">{group.total ? group.total.used : '—'}</TableCell>
+                      <TableCell className="text-right tabular-nums">{group.total ? group.total.remaining : '—'}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {group.total ? <>
+                          {group.total.limit}
+                          <span className="text-muted-foreground">
+                            {group.foldedModelIds ? '/day' : poolPeriodSuffix(group.pools[0]?.pool)}
+                          </span>
+                        </> : '—'}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {group.total?.secondsUntilReset != null ? formatCountdown(group.total.secondsUntilReset) : '—'}
+                      </TableCell>
+                      <TableCell colSpan={3} />
+                    </TableRow>
+                  )}
+                  {group.foldedModelIds && expandedPlatforms.has(group.platform) && group.foldedModelIds
+                    .map(id => usageByModel.get(`${group.platform}\u0000${id}`))
+                    .filter((r): r is ModelUsageRow => r != null)
+                    .map(r => (
+                      <ModelUsageRow key={`${group.platform}:${r.modelId}`} rowKey={`${group.platform}:${r.modelId}`} row={r} />
+                    ))}
+                  {!group.foldedModelIds
+                    && (group.pools.length === 1 || expandedPlatforms.has(group.platform)) && group.pools.map(p => {
                 // An unmetered provider has no percentage to judge; getStatus
                 // already reports null as Unknown rather than as healthy.
                 const status = getStatus(p.metered ? p.remaining_pct : null, p.low_balance);
+                const poolKey = `${p.platform}:${p.pool ?? 'unknown'}`;
+                const open = expandedPools.has(poolKey);
+                const memberRows = (p.memberModelIds ?? [])
+                  .map(id => usageByModel.get(`${p.platform}\u0000${id}`))
+                  .filter((r): r is ModelUsageRow => r != null);
                 return (
-                  <TableRow key={`${p.platform}:${p.pool ?? 'unknown'}`}>
-                    <TableCell className="font-medium">{p.platform}</TableCell>
+                  <Fragment key={poolKey}>
+                  <TableRow>
+                    <TableCell className="font-medium">
+                      {/* The pool total answers "is there room"; the models
+                          answer "room for WHICH route", which is the question
+                          asked next and previously required another page. */}
+                      {memberRows.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => setExpandedPools(prev => {
+                            const next = new Set(prev);
+                            if (next.has(poolKey)) next.delete(poolKey); else next.add(poolKey);
+                            return next;
+                          })}
+                          aria-expanded={open}
+                          className="inline-flex items-center gap-1 hover:underline"
+                        >
+                          <ChevronDown className={`size-3 transition-transform ${open ? '' : '-rotate-90'}`} aria-hidden="true" />
+                          {p.platform}
+                        </button>
+                      ) : p.platform}
+                    </TableCell>
                     {/* The pool key drops its platform prefix: the Provider
                         column to the left already says `nvidia`, and repeating
                         it in `nvidia::rolling-60s` on every row costs width the
@@ -434,6 +667,9 @@ export default function QuotaPage() {
                         the names are what you ask for once. */}
                     <TableCell className="text-muted-foreground">
                       <div className="whitespace-nowrap">{poolLabel(p)}</div>
+                      {p.aggregated && (
+                        <div className="text-[10px] text-muted-foreground">{t('quota.poolSummed')}</div>
+                      )}
                       {p.members.length > 0 && (
                         <HoverTooltip text={p.members.join('\n')}>
                           <span className="text-xs opacity-75 underline decoration-dotted underline-offset-2">
@@ -464,13 +700,21 @@ export default function QuotaPage() {
                               {p.derivedAllowance.metric === 'credit_usd' ? '' : ` ${t(`quota.metric_${p.derivedAllowance.metric}`)}`}
                             </span>
                           : '—'
-                        : formatAmount(p.limit, p.unit)}
+                        : <>
+                            {formatAmount(p.limit, p.unit)}
+                            <span className="text-muted-foreground">{poolPeriodSuffix(p.pool)}</span>
+                          </>}
                     </TableCell>
                     {/* A predicted countdown is marked, because for these
                         pools the provider sends no reset at all: its 429
                         carries none and retry-after is empty. */}
                     <TableCell className="text-right tabular-nums whitespace-nowrap">
                       {formatCountdown(p.seconds_until_reset)}
+                      {p.pool?.includes('::rolling-') && (
+                        <span className="ml-1 text-[10px] text-muted-foreground" title={t('quota.windowKindHint')}>
+                          {t('quota.windowRolling')}
+                        </span>
+                      )}
                       {p.resetSource === 'inferred' && p.seconds_until_reset != null
                         ? <span className="ml-1 text-xs text-muted-foreground"
                             title={t('quota.resetInferredHint')}>{t('quota.resetInferredMark')}</span>
@@ -501,8 +745,14 @@ export default function QuotaPage() {
                     </TableCell>
                     <TableCell><Badge variant={status.variant}>{t(status.labelKey)}</Badge></TableCell>
                   </TableRow>
+                  {open && memberRows.map(r => (
+                    <ModelUsageRow key={`${poolKey}:${r.modelId}`} rowKey={`${poolKey}:${r.modelId}`} row={r} />
+                  ))}
+                  </Fragment>
                 );
               })}
+                </Fragment>
+              ))}
             </TableBody>
           </Table>
         </PanelState>

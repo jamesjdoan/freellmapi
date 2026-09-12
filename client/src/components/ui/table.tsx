@@ -4,11 +4,22 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+function Table({
+  className,
+  containerClassName,
+  ...props
+}: React.ComponentProps<"table"> & {
+  /** Scrolling behaviour of the wrapper. A pinned header needs the SCROLL to
+   *  happen here rather than on the page: `overflow-x-auto` already makes this
+   *  div a scroll container, so a sticky `thead` sticks to it, and a container
+   *  as tall as its content never scrolls and never appears to stick. Pass a
+   *  height (`max-h-[70vh] overflow-auto`) to opt a long table in. */
+  containerClassName?: string
+}) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      className={cn("relative w-full overflow-x-auto", containerClassName)}
     >
       <table
         data-slot="table"

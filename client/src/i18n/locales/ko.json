@@ -991,7 +991,12 @@
     "probeRunCount": "{count} runs",
     "probeDisagreeCount": "{count} disagree",
     "probeDelisted": "delisted",
-    "probeClaimedThen": "The catalogue claimed {claimed} when this ran, and has since been corrected."
+    "probeClaimedThen": "The catalogue claimed {claimed} when this ran, and has since been corrected.",
+    "modelPerMinute": "this minute {used}/{limit}",
+    "poolSummed": "sum of members",
+    "poolCount": "{count} pools",
+    "windowRolling": "rolling",
+    "windowKindHint": "A rolling window frees one call at a time as the oldest ages out. A calendar window returns the whole allowance at midnight in the named zone."
   },
   "logs": {
     "title": "로그",
