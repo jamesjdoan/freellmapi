@@ -121,6 +121,39 @@ describe('quota-forecast: daily balance aggregation (#1104)', () => {
 
 // The overview is where inference reaches an operator, so the row has to carry
 // it — and has to keep it separate from anything measured.
+describe('a provider that publishes nothing', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare('DELETE FROM provider_quota_state').run();
+    getDb().prepare('DELETE FROM requests').run();
+    getDb().prepare('DELETE FROM api_keys').run();
+    getDb().prepare('DELETE FROM quota_policy').run();
+    invalidateQuotaPolicyCache();
+    invalidateQuotaInference();
+  });
+
+  it('still reports what we spent, with no limit to divide it by', () => {
+    // OpenCode states no RPM/RPD anywhere and refuses with a bare "Rate limit
+    // exceeded". The row used to carry nothing at all, which said less about a
+    // provider in use than our own call count already knows.
+    const db = getDb();
+    db.prepare(`INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, status, enabled)
+                VALUES ('opencode', 'k', 'x', 'x', 'x', 'active', 1)`).run();
+    for (let i = 0; i < 3; i++) {
+      db.prepare(`INSERT INTO rate_limit_usage (platform, model_id, key_id, kind, tokens, created_at_ms)
+                  VALUES ('opencode', 'big-pickle', 1, 'request', 0, ?)`).run(Date.now() - i * 1000);
+    }
+
+    const row = getProviderQuotaOverview().find(r => r.platform === 'opencode');
+    expect(row?.used).toBe(3);
+    // A count is not a ceiling: subtracting from an unknown would invent one.
+    expect(row?.limit).toBeNull();
+    expect(row?.remaining).toBeNull();
+    expect(row?.usedSource).toBe('local');
+  });
+});
+
 describe('one counter, one row', () => {
   // Own reset: these blocks seed pool state, and without clearing it the rows
   // survive into the next block and answer for models it never created.

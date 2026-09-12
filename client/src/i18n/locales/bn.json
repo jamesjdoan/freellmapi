@@ -1009,7 +1009,9 @@
     "limitFromPoolHint": "No limit of its own: this model spends the provider allowance shown on the pool row above.",
     "modelPerMinuteNoLimit": "this minute {used}",
     "excludedMark": "not in chain",
-    "excludedShow": "Excluded models"
+    "excludedShow": "Excluded models",
+    "bucketNoReset": "never empties",
+    "bucketNoResetHint": "This allowance refills continuously rather than resetting: spend one and it returns after the interval shown, so there is no boundary to wait for."
   },
   "logs": {
     "title": "লগ",

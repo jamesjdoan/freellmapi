@@ -560,13 +560,15 @@ export default function QuotaPage() {
       if (list) list.push(p); else byPlatform.set(p.platform, [p]);
     }
     return [...byPlatform.entries()].map(([platform, pools]) => {
-      // A refilling bucket is a RATE. Three Groq models at 1,000 each are not
-      // 3,000 of anything you can spend before a deadline — there is no
-      // deadline — and the header totalled them into "3,000 remaining,
-      // resets —". Only balances add up.
+      // Capacity adds; a DEADLINE does not. Three Groq models at 1,000 each
+      // really do hold 3,000 requests between them — what they do not share is
+      // a midnight, so the total below carries the refill rate instead of a
+      // countdown. Every pool must refill at the same interval, or the rate
+      // named would not be the rate any of them keeps.
       const summable = pools.every(p =>
-        p.metered && p.metric === 'requests' && p.unit == null && p.limit != null && p.used != null
-        && p.refillSeconds == null);
+        p.metered && p.metric === 'requests' && p.unit == null && p.limit != null && p.used != null);
+      const refills = new Set(pools.map(p => p.refillSeconds ?? null));
+      const refillSeconds = refills.size === 1 ? [...refills][0] : null;
       const resets = pools.map(p => p.seconds_until_reset).filter((n): n is number => n != null);
       const perModelPools = pools.length > 1
         && pools.every(p => p.metric === 'requests' && p.memberModelIds.length === 1);
@@ -576,6 +578,11 @@ export default function QuotaPage() {
         // Union, in pool order: the fold is presentational and must not change
         // which models a provider is shown to have.
         foldedModelIds: perModelPools ? pools.flatMap(p => p.memberModelIds) : null,
+        // n models each refilling one unit per interval return n per interval
+        // between them, so the POOLED rate is the interval divided by count.
+        refillSeconds: refillSeconds != null && pools.length > 0
+          ? Math.round((refillSeconds / pools.length) * 10) / 10
+          : null,
         total: summable && pools.length > 1
           ? {
               used: pools.reduce((n, p) => n + (p.used ?? 0), 0),
@@ -720,12 +727,16 @@ export default function QuotaPage() {
                         {group.total ? <>
                           {group.total.limit}
                           <span className="text-muted-foreground">
-                            {group.foldedModelIds ? '/day' : poolPeriodSuffix(group.pools[0]?.pool)}
+                            {group.refillSeconds != null
+                              ? t('quota.refillRate', { seconds: group.refillSeconds })
+                              : group.foldedModelIds ? '/day' : poolPeriodSuffix(group.pools[0]?.pool)}
                           </span>
                         </> : '—'}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {group.total?.secondsUntilReset != null ? formatCountdown(group.total.secondsUntilReset) : '—'}
+                        {group.refillSeconds != null
+                          ? <span className="text-[10px] text-muted-foreground" title={t('quota.bucketNoResetHint')}>{t('quota.bucketNoReset')}</span>
+                          : group.total?.secondsUntilReset != null ? formatCountdown(group.total.secondsUntilReset) : '—'}
                       </TableCell>
                       <TableCell />
                     </TableRow>

@@ -378,15 +378,22 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
     if (!rows.some(r => r.platform === platform)) {
       const seen = states.filter(s => s.platform === platform);
       const best = seen.find(s => s.source === 'header') ?? seen.find(s => s.source === 'error_body') ?? seen[0];
+      // An unpublished allowance is still SPENT. OpenCode states no RPM/RPD
+      // anywhere and refuses with a bare "Rate limit exceeded", so the limit
+      // stays unknown — but our own call count over the last day is a fact, and
+      // without it the row said nothing at all about a provider we are using.
+      // Remaining stays null: a count is not a ceiling, and subtracting from an
+      // unknown would invent one.
+      const spent = countPlatformUsageInWindow(platform, 'request', DAY_MS, now);
       rows.push({
         platform,
         pool: best?.quotaPoolKey ?? null,
-        used: null, remaining: null, limit: null, remaining_pct: null,
+        used: spent > 0 ? spent : null, remaining: null, limit: null, remaining_pct: null,
         reset_at: null, seconds_until_reset: null, low_balance: false,
         source: best?.source ?? null,
         confidence: best?.confidence ?? null,
         metered: false,
-        usedSource: null,
+        usedSource: spent > 0 ? 'local' : null,
         inferred: [],
         members: [], memberModelIds: [], alsoBound: [], refillSeconds: null, unroutedModelIds: [],
         metric: null,
