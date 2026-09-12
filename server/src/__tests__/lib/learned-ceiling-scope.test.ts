@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initDb, getDb } from '../../db/index.js';
-import { observedRequestsForCeiling } from '../../lib/fallback-loop.js';
+import { observedRequestsForCeiling, isUsageDenominatedRefusal } from '../../lib/fallback-loop.js';
 
 // A ceiling learned from a 429 is only as good as the counter it counted. These
 // pin WHICH counter, because getting it wrong does not fail — it records a
@@ -48,5 +48,25 @@ describe('what a learned ceiling counts', () => {
     seedCalls('nvidia', 'nemotron-3-ultra', 7);
 
     expect(observedRequestsForCeiling('nvidia', 'nemotron-3-super', 'nvidia::credit-pool')).toBe(19);
+  });
+});
+
+describe('refusals a request ceiling must not be learned from', () => {
+  // This install carried a 201/day Ollama request cap for six days, learned by
+  // counting the calls that happened to precede a refusal about GPU SPEND. The
+  // guard that stops it had no test, and once the bad rows were deleted there
+  // was no data left to confirm it from either.
+  const refusal = (message: string) => Object.assign(new Error(message), { status: 429 });
+
+  it('ignores a refusal denominated in spend rather than calls', () => {
+    expect(isUsageDenominatedRefusal(refusal('you have reached your session usage limit'))).toBe(true);
+    expect(isUsageDenominatedRefusal(refusal('Insufficient balance for this request'))).toBe(true);
+    expect(isUsageDenominatedRefusal(refusal('out of funds'))).toBe(true);
+    expect(isUsageDenominatedRefusal(refusal('not enough credit remaining'))).toBe(true);
+  });
+
+  it('still learns from a refusal that is actually about requests', () => {
+    expect(isUsageDenominatedRefusal(refusal('Quota exceeded for metric: generate_content_free_tier_requests, limit: 20'))).toBe(false);
+    expect(isUsageDenominatedRefusal(refusal('Rate limit reached for requests'))).toBe(false);
   });
 });

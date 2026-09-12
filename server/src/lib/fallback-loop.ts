@@ -1449,7 +1449,7 @@ async function runFallbackLoopAttempts(hooks: FallbackHooks, trace: RequestTrace
  * counting the calls that happened to precede that produces a number with no
  * meaning, on a window (a day) that is not even the one that refused.
  */
-function isUsageDenominatedRefusal(err: unknown): boolean {
+export function isUsageDenominatedRefusal(err: unknown): boolean {
   const message = String((err as { message?: unknown } | null)?.message ?? '').toLowerCase();
   return message.includes('usage limit')
     || message.includes('credit')
