@@ -35,6 +35,59 @@ describe('OpenAICompatProvider', () => {
     return out;
   }
 
+  describe('OpenCode Zen session header', () => {
+    const zen = () => new OpenAICompatProvider({
+      platform: 'opencode', name: 'OpenCode Zen', baseUrl: 'https://opencode.ai/zen/v1',
+    });
+
+    function captureHeaders() {
+      const seen: Record<string, string>[] = [];
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url: any, init: any) => {
+        seen.push(init.headers);
+        return {
+          ok: true, status: 200, headers: new Headers(),
+          json: async () => ({ choices: [{ message: { role: 'assistant', content: 'hi' } }], usage: {} }),
+        } as any;
+      });
+      return seen;
+    }
+
+    it('sends x-opencode-session, because Zen rejects a request without one', async () => {
+      // Verified live 2026-09-12: the SAME call to mimo-v2.5-free, big-pickle and
+      // nemotron-3.5-lightning-free returns 400 MissingSessionID without this
+      // header and 200 with it. Dropping it silently kills every free Zen route.
+      const seen = captureHeaders();
+      await zen().chatCompletion('k', [{ role: 'user', content: 'hi' }], 'big-pickle', { sessionKey: 'conversation-1' });
+      expect(seen[0]['x-opencode-session']).toMatch(/^[0-9a-f]{32}$/);
+    });
+
+    it('keeps one conversation on one id, and separates two', async () => {
+      // The header exists so Zen can pin a conversation to a single upstream and
+      // reuse its cache. A per-request id would defeat the purpose entirely.
+      const seen = captureHeaders();
+      const p = zen();
+      await p.chatCompletion('k', [{ role: 'user', content: 'a' }], 'big-pickle', { sessionKey: 'conversation-1' });
+      await p.chatCompletion('k', [{ role: 'user', content: 'b' }], 'big-pickle', { sessionKey: 'conversation-1' });
+      await p.chatCompletion('k', [{ role: 'user', content: 'c' }], 'big-pickle', { sessionKey: 'conversation-2' });
+
+      expect(seen[1]['x-opencode-session']).toBe(seen[0]['x-opencode-session']);
+      expect(seen[2]['x-opencode-session']).not.toBe(seen[0]['x-opencode-session']);
+    });
+
+    it('never leaks the raw session key, which carries user message content', async () => {
+      // Our key can be `msg:<hash of the first user message>::<strategy>`.
+      const seen = captureHeaders();
+      await zen().chatCompletion('k', [{ role: 'user', content: 'hi' }], 'big-pickle', { sessionKey: 'msg:secret-content::smart' });
+      expect(Object.values(seen[0])).not.toContain('msg:secret-content::smart');
+    });
+
+    it('sends nothing for a provider that does not document the header', async () => {
+      const seen = captureHeaders();
+      await provider.chatCompletion('k', [{ role: 'user', content: 'hi' }], 'llama', { sessionKey: 'conversation-1' });
+      expect(seen[0]['x-opencode-session']).toBeUndefined();
+    });
+  });
+
   it('should set platform and name from config', () => {
     expect(provider.platform).toBe('groq');
     expect(provider.name).toBe('TestProvider');

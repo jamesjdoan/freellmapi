@@ -6,6 +6,7 @@ import type {
   Platform,
 } from '@freellmapi/shared/types.js';
 import { BaseProvider, providerHttpError, type CompletionOptions, type KeyValidationResult } from './base.js';
+import { createHash } from 'node:crypto';
 import { extendedBodyParams, resolveMaxTokens } from '../lib/sampling-params.js';
 import { rescueInlineToolCalls } from '../lib/tool-call-rescue.js';
 import { extractThinkFromMessage } from '../lib/think-tags.js';
@@ -278,6 +279,23 @@ export class OpenAICompatProvider extends BaseProvider {
     return sanitized;
   }
 
+  /**
+   * Per-request headers a provider documents but that are not part of the
+   * OpenAI wire format. Today only OpenCode Zen: `x-opencode-session` pins a
+   * conversation to one upstream so its prompt cache is reused, and Console
+   * rejects a request without one (400 MissingSessionID).
+   *
+   * The id is hashed rather than passed through: our session key can contain a
+   * raw first-user-message hash plus a strategy suffix, and neither belongs on
+   * the wire nor is guaranteed to be header-safe.
+   */
+  private sessionHeaders(options?: CompletionOptions): Record<string, string> {
+    if (this.platform !== 'opencode') return {};
+    const key = options?.sessionKey;
+    if (!key) return {};
+    return { 'x-opencode-session': createHash('sha256').update(key).digest('hex').slice(0, 32) };
+  }
+
   async chatCompletion(
     apiKey: string,
     messages: ChatMessage[],
@@ -292,6 +310,7 @@ export class OpenAICompatProvider extends BaseProvider {
         ...this.authHeader(apiKey),
         'Content-Type': 'application/json',
         ...this.extraHeaders,
+        ...this.sessionHeaders(options),
       },
       body: JSON.stringify({
         model: modelId,
@@ -411,6 +430,7 @@ export class OpenAICompatProvider extends BaseProvider {
         ...this.authHeader(apiKey),
         'Content-Type': 'application/json',
         ...this.extraHeaders,
+        ...this.sessionHeaders(options),
       },
       body: JSON.stringify({
         model: modelId,

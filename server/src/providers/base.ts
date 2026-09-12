@@ -174,6 +174,14 @@ export interface CompletionOptions extends ExtendedSamplingOptions {
    * finish. Composed with the per-attempt timeout in fetchWithTimeout; never
    * serialized into the request body. */
   signal?: AbortSignal;
+  /** Opaque per-conversation identifier. OpenCode Zen requires
+   * `x-opencode-session` so every turn of one conversation pins to a single
+   * upstream and reuses its prompt cache; without it Console answers
+   * 400 MissingSessionID and the route is unusable (opencode#47763, #47756,
+   * #47438, all 2026-09-07). Not part of the OpenAI wire format — never
+   * serialized into the request body, sent as a header by providers that
+   * document one. */
+  sessionKey?: string;
 }
 
 /** Per-call abort/timeout wiring for fetchWithTimeout. */
