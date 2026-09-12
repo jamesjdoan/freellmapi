@@ -586,6 +586,12 @@ function addMemberSumRows(rows: ProviderQuotaOverviewRow[], now: number): void {
     for (const member of members) {
       const quota = effectiveRouteWindows(platform, member.modelId, now).rpd;
       if (!quota) { complete = false; break; }
+      // A bucket has no day to total. Groq refills one request every 86.4s and
+      // never resets, so summing its three models into `groq::calendar_day`
+      // announced 2,250/day with a midnight that does not exist — the same
+      // fiction the bucket period kind was added to stop telling. A rate and a
+      // balance are different quantities; only the balance can be added up.
+      if (quota.period.kind === 'bucket') { complete = false; break; }
       limit += quota.limit;
       used += countRequestsInWindow(platform, member.modelId, DAY_MS, now);
       const reset = quota.window.resetAtMs;

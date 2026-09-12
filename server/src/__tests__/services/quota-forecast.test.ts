@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { initDb, getDb } from '../../db/index.js';
+import { upsertQuotaPolicy } from '../../services/quota-policy.js';
 import { upsertQuotaPolicy, invalidateQuotaPolicyCache } from '../../services/quota-policy.js';
 import { getQuotaForecast, getProviderQuotaOverview, invalidateQuotaInference } from '../../services/quota-forecast.js';
 
@@ -121,6 +122,31 @@ describe('quota-forecast: daily balance aggregation (#1104)', () => {
 
 // The overview is where inference reaches an operator, so the row has to carry
 // it — and has to keep it separate from anything measured.
+describe('what may be added together', () => {
+  it('refuses to total a refill rate into a daily allowance', () => {
+    // Groq measured 2026-09-12: 1,000 capacity refilling one request every
+    // 86.4s, no boundary. Three such models summed to "2,250/day, resets in
+    // 14h" — a balance invented out of three rates.
+    getDb().prepare(`
+      INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, status, enabled)
+      VALUES ('groq', 'k', 'x', 'x', 'x', 'active', 1)
+    `).run();
+    const db = getDb();
+    for (const id of ['bucket-a', 'bucket-b']) {
+      db.prepare(`INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, size_label, context_window, enabled)
+                  VALUES ('groq', ?, ?, 1, 1, 'Small', 128000, 1)`).run(id, id);
+      upsertQuotaPolicy({
+        platform: 'groq', modelId: id, endpointScope: null, scope: 'model',
+        metric: 'requests', limit: 1000, periodKind: 'bucket', periodMs: 86_400,
+        timezone: null, anchorDay: null, source: 'provider_api', confidence: 0.95,
+      });
+    }
+
+    const rows = getProviderQuotaOverview().filter(r => r.platform === 'groq' && r.aggregated);
+    expect(rows).toEqual([]);
+  });
+});
+
 describe('which models a pool lists', () => {
   function keyFor(platform: string): void {
     getDb().prepare(`
