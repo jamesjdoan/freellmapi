@@ -36,7 +36,7 @@ import {
 
 export type QuotaPolicyScope = 'provider_account' | 'provider_key' | 'model' | 'shared_pool';
 export type QuotaPolicyMetric = 'requests' | 'input_tokens' | 'output_tokens' | 'total_tokens' | 'credits';
-export type QuotaPolicyPeriodKind = 'rolling' | 'calendar_day' | 'calendar_week' | 'calendar_month' | 'billing_cycle';
+export type QuotaPolicyPeriodKind = 'rolling' | 'calendar_day' | 'calendar_week' | 'calendar_month' | 'billing_cycle' | 'bucket';
 export type QuotaPolicySource = 'operator' | 'catalog' | 'documentation' | 'provider_api';
 
 /** Where an effective limit came from, ordered by how much it should be
@@ -156,11 +156,14 @@ function toPolicy(row: PolicyRow): QuotaPolicy {
 /** The clock description a stored policy denotes. A calendar policy with no
  *  timezone means UTC — stated here rather than left to the clock's fallback,
  *  which exists for invalid input, not for absent input. */
-export function periodForPolicy(policy: Pick<QuotaPolicy, 'periodKind' | 'periodMs' | 'timezone' | 'anchorDay'>): QuotaPeriod {
+export function periodForPolicy(policy: Pick<QuotaPolicy, 'periodKind' | 'periodMs' | 'timezone' | 'anchorDay' | 'limit'>): QuotaPeriod {
   const timezone = policy.timezone ?? 'UTC';
   switch (policy.periodKind) {
     case 'rolling':
       return { kind: 'rolling', windowMs: policy.periodMs ?? DAY_MS };
+    case 'bucket':
+      // `period_ms` is the refill interval for ONE unit; the limit is capacity.
+      return { kind: 'bucket', refillMs: policy.periodMs ?? MINUTE_MS, capacity: policy.limit };
     case 'calendar_week':
       return { kind: 'calendar_week', timezone };
     case 'calendar_month':
@@ -574,6 +577,14 @@ export interface RouteWindows {
   tpd: EffectiveQuota | null;
 }
 
+/** A bucket bounds the span it takes to refill completely: 1,000 units at one
+ *  per 86.4s IS a daily ceiling, and omitting it here let the shipped catalogue
+ *  outrank a measured refill rate. Measured spans land near a round window
+ *  rather than on it, so demanding equality would file it under no window. */
+function withinSpan(spanMs: number, windowMs: number): boolean {
+  return Math.abs(spanMs - windowMs) <= windowMs * 0.1;
+}
+
 export function effectiveRouteLimits(
   platform: string,
   modelId: string,
@@ -587,6 +598,8 @@ export function effectiveRouteLimits(
   try {
     quotas = resolveEffectiveQuotas(platform, modelId, now).filter(q => q.scope === 'model');
   } catch {
+    // Not cached, deliberately: a resolver that threw should be retried on the
+    // next request rather than remembered for a second.
     // A database without the policy table (an older schema, a partial test
     // fixture) must still gate on what the row itself declares.
     return { rpm: fallback.rpm ?? null, rpd: fallback.rpd ?? null, tpm: fallback.tpm ?? null, tpd: fallback.tpd ?? null };
@@ -596,6 +609,7 @@ export function effectiveRouteLimits(
     const hit = quotas.filter(q => {
       if (q.metric !== metric) return false;
       if (q.period.kind === 'rolling') return q.period.windowMs === windowMs;
+      if (q.period.kind === 'bucket') return withinSpan(q.period.refillMs * q.period.capacity, windowMs);
       // A calendar day and a rolling 24h both bound a day. The distinction
       // matters for when it resets, not for what the ceiling is.
       return windowMs === DAY_MS && q.period.kind === 'calendar_day';
@@ -642,6 +656,7 @@ export function effectiveRouteWindows(
     const hit = quotas.filter(q => {
       if (q.metric !== metric) return false;
       if (q.period.kind === 'rolling') return q.period.windowMs === windowMs;
+      if (q.period.kind === 'bucket') return withinSpan(q.period.refillMs * q.period.capacity, windowMs);
       return windowMs === DAY_MS && q.period.kind === 'calendar_day';
     });
     if (hit.length === 0) return null;

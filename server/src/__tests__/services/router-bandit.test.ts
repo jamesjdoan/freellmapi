@@ -141,7 +141,11 @@ describe('bandit router', () => {
     expect(counts['y'] ?? 0).toBeGreaterThan(0);
   });
 
-  it('exploration draws are never wasted on a model that cannot serve the request', () => {
+  // Drawn repeatedly to make a probabilistic claim, so it is inherently the
+  // slowest case here and has been sitting just under the default 5s budget —
+  // it tipped over once the routing gate began resolving limits rather than
+  // reading a column. The work is real, not a hang.
+  it('exploration draws are never wasted on a model that cannot serve the request', { timeout: 15_000 }, () => {
     // vision-a is measured and wins every ordinary bandit draw. text-b and
     // vision-c are both unmeasured, but only vision-c can serve a vision
     // request. The pre-fix router put BOTH in the explore pool, so ~half the

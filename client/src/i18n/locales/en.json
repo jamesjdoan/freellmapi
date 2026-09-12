@@ -1123,7 +1123,8 @@
     "rowsDone": "Done",
     "rowsHiddenCount": "{count} hidden",
     "rowHide": "Hide",
-    "rowShow": "Show"
+    "rowShow": "Show",
+    "policyRefillSeconds": "Seconds per unit"
   },
   "logs": {
     "title": "Logs",

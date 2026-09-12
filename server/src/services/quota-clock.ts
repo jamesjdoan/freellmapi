@@ -48,6 +48,11 @@ export type QuotaPeriod =
   /** Fixed-width lookback: the window is always [now - windowMs, now]. This is
    *  what the per-model RPM/RPD/TPM/TPD gates enforce today. */
   | { kind: 'rolling'; windowMs: number; oldestEventMs?: number | null }
+  /** Continuously refilling allowance: `capacity` units, one returning every
+   *  `refillMs`. Measured on Groq (1,000 at one per 86.4s) and on Google, and
+   *  distinct from both other kinds — a bucket never locks you out until a
+   *  boundary, it hands back one unit at a time. */
+  | { kind: 'bucket'; refillMs: number; capacity: number }
   /** Local calendar day in `timezone`, resetting at local midnight. */
   | { kind: 'calendar_day'; timezone: string }
   /** ISO week (Monday start) in `timezone`. */
@@ -154,6 +159,18 @@ function billingAnchorMs(year: number, month: number, anchorDay: number, timeZon
  */
 export function resolveQuotaWindow(period: QuotaPeriod, now: number): QuotaWindow {
   switch (period.kind) {
+    case 'bucket': {
+      // Usage is counted over the time a full bucket takes to refill: spend
+      // everything and the oldest unit is back after one refill interval, the
+      // last after `capacity` of them.
+      const span = Math.max(1, period.refillMs * period.capacity);
+      return {
+        periodStartMs: now - span,
+        // The next unit, not the full bucket. A bucket's useful answer is "when
+        // can I send one more", and that is always one refill away.
+        resetAtMs: now + period.refillMs,
+      };
+    }
     case 'rolling': {
       const width = period.windowMs > 0 ? period.windowMs : 0;
       // A rolling window frees capacity when its OLDEST event ages out, which

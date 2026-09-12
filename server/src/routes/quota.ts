@@ -41,7 +41,7 @@ const PolicyBody = z.object({
   scope: z.enum(['provider_account', 'provider_key', 'model', 'shared_pool']).default('provider_account'),
   metric: z.enum(['requests', 'input_tokens', 'output_tokens', 'total_tokens', 'credits']).default('requests'),
   limit: z.number().int().positive(),
-  periodKind: z.enum(['rolling', 'calendar_day', 'calendar_week', 'calendar_month', 'billing_cycle']).default('calendar_day'),
+  periodKind: z.enum(['rolling', 'calendar_day', 'calendar_week', 'calendar_month', 'billing_cycle', 'bucket']).default('calendar_day'),
   periodMs: z.number().int().positive().nullable().default(null),
   timezone: z.string().min(1).nullable().default(null),
   anchorDay: z.number().int().min(1).max(31).nullable().default(null),
@@ -67,6 +67,10 @@ quotaRouter.put('/policies', (req: Request, res: Response) => {
   }
   // A rolling period without a width, or a billing cycle without an anchor,
   // would silently take a default that is not what the operator described.
+  if (parsed.data.periodKind === 'bucket' && parsed.data.periodMs == null) {
+    res.status(400).json({ error: { message: 'periodMs is required when periodKind is "bucket" — it is the refill interval for one unit' } });
+    return;
+  }
   if (parsed.data.periodKind === 'rolling' && parsed.data.periodMs == null) {
     res.status(400).json({ error: { message: 'periodMs is required when periodKind is "rolling"' } });
     return;

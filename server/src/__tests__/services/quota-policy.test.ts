@@ -15,7 +15,7 @@ import {
   periodForPolicy,
   type EffectiveQuota,
 } from '../../services/quota-policy.js';
-import { MINUTE_MS, DAY_MS } from '../../services/quota-clock.js';
+import { MINUTE_MS, DAY_MS, resolveQuotaWindow } from '../../services/quota-clock.js';
 import { recordLearnedCeiling, getLearnedCeiling } from '../../services/provider-quota.js';
 
 // The resolver's whole job is ranking four sources that disagree. These pin the
@@ -222,6 +222,29 @@ describe('quota-policy storage', () => {
     expect(policies[0]!.limit).toBe(1000);
   });
 
+  it('describes a refilling bucket: capacity, and one unit back every interval', () => {
+    // Groq measured 2026-09-12: `reset` grows 86.4s per request spent and
+    // `remaining` never climbs while idle — 86,400 ÷ 1,000. A rolling day would
+    // say "nothing back for 24h" after a burst; the bucket says 86 seconds, and
+    // the difference decides whether the route is usable this afternoon.
+    upsertQuotaPolicy({
+      platform: 'groq', modelId: 'openai/gpt-oss-20b', endpointScope: null, scope: 'model',
+      metric: 'requests', limit: 1000, periodKind: 'bucket', periodMs: 86_400,
+      timezone: null, anchorDay: null,
+    });
+    invalidateQuotaPolicyCache();
+
+    const policy = listQuotaPolicies('groq').find(p => p.periodKind === 'bucket')!;
+    const period = periodForPolicy(policy);
+    expect(period).toEqual({ kind: 'bucket', refillMs: 86_400, capacity: 1000 });
+
+    const now = Date.UTC(2026, 8, 12, 12, 0, 0);
+    const window = resolveQuotaWindow(period, now);
+    // One unit back in 86.4s, and usage counted over a full refill.
+    expect(window.resetAtMs).toBe(now + 86_400);
+    expect(window.periodStartMs).toBe(now - 86_400 * 1000);
+  });
+
   it('holds a per-minute and a per-day limit for one subject at once', () => {
     // Google states both in the same refusal, on the same metric, telling them
     // apart only by value: `limit: 5` per minute and `limit: 20` per day for
@@ -313,6 +336,37 @@ describe('the limits the router gates on', () => {
     invalidateQuotaPolicyCache();
 
     expect(effectiveRouteLimits('google', 'gemini-3.5-flash-lite').rpd).toBe(500);
+  });
+
+  it('lets a measured refill rate outrank the catalogue day column', () => {
+    // Groq, measured 2026-09-12: reset grows 86.4s per request spent, so its
+    // 1,000 is a bucket refilling continuously — not 1,000 before midnight.
+    // The catalogue ships 500/day for the same model; the measurement wins.
+    // The model ships in the seeded catalogue, so set its columns rather than
+    // inserting beside it — the point is a catalogue row losing to a measurement.
+    getDb().prepare(`UPDATE models SET rpm_limit = 30, rpd_limit = 500 WHERE platform = 'groq' AND model_id = 'openai/gpt-oss-20b'`).run();
+    upsertQuotaPolicy({
+      platform: 'groq', modelId: 'openai/gpt-oss-20b', endpointScope: null, scope: 'model',
+      metric: 'requests', limit: 1000, periodKind: 'bucket', periodMs: 86_400,
+      timezone: null, anchorDay: null, source: 'provider_api', confidence: 0.95,
+    });
+
+    expect(effectiveRouteLimits('groq', 'openai/gpt-oss-20b').rpd).toBe(1000);
+  });
+
+  it('does not read a bucket as a limit on some other window', () => {
+    // 1,000 at one per 86.4s is a day's worth. It says nothing about a minute,
+    // and reading it as one would hand a burst 1,000 slots it does not have.
+    // The model ships in the seeded catalogue, so set its columns rather than
+    // inserting beside it — the point is a catalogue row losing to a measurement.
+    getDb().prepare(`UPDATE models SET rpm_limit = 30, rpd_limit = 500 WHERE platform = 'groq' AND model_id = 'openai/gpt-oss-20b'`).run();
+    upsertQuotaPolicy({
+      platform: 'groq', modelId: 'openai/gpt-oss-20b', endpointScope: null, scope: 'model',
+      metric: 'requests', limit: 1000, periodKind: 'bucket', periodMs: 86_400,
+      timezone: null, anchorDay: null, source: 'provider_api', confidence: 0.95,
+    });
+
+    expect(effectiveRouteLimits('groq', 'openai/gpt-oss-20b').rpm).toBe(30);
   });
 
   it('keeps the catalogue limit when no policy speaks to it', () => {

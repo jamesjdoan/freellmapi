@@ -215,7 +215,7 @@ function ModelUsageRow({ row, rowKey }: { row: ModelUsageRow; rowKey: string }) 
           </span>
         )}
       </TableCell>
-      <TableCell className="py-1 text-[11px] text-muted-foreground" colSpan={3}>
+      <TableCell className="py-1 text-[11px] text-muted-foreground">
         {minute ? t('quota.modelPerMinute', { used: minute.used, limit: minute.limit }) : ''}
       </TableCell>
     </TableRow>
@@ -260,6 +260,12 @@ export function poolPeriodSuffix(pool: string | null | undefined): string {
 }
 
 export function policyPeriodLabel(p: { periodKind: string; periodMs: number | null }): string {
+  // A bucket has no period to be "per": it refills one unit at a time, so the
+  // honest label is the rate. Measured on Groq at one per 86.4s.
+  if (p.periodKind === 'bucket') {
+    const seconds = (p.periodMs ?? 0) / 1000;
+    return seconds > 0 ? `1 per ${Number(seconds.toFixed(1))}s` : 'refilling';
+  }
   if (p.periodKind !== 'rolling') return p.periodKind.replace('calendar_', 'per ').replace('_', ' ');
   if (p.periodMs == null) return 'rolling';
   const minutes = p.periodMs / 60_000;
@@ -319,7 +325,7 @@ function PanelState({ loading, error, empty, emptyKey, children }: {
 }
 
 /** Period kinds the API accepts, and what each additionally requires. */
-const PERIOD_KINDS = ['rolling', 'calendar_day', 'calendar_week', 'calendar_month', 'billing_cycle'] as const;
+const PERIOD_KINDS = ['rolling', 'calendar_day', 'calendar_week', 'calendar_month', 'billing_cycle', 'bucket'] as const;
 const METRICS = ['requests', 'input_tokens', 'output_tokens', 'total_tokens', 'credits'] as const;
 const SCOPES = ['provider_account', 'provider_key', 'model', 'shared_pool'] as const;
 
@@ -340,6 +346,7 @@ function PolicyEditor({ platforms, onSaved }: { platforms: string[]; onSaved: ()
   const [limit, setLimit] = useState('');
   const [periodKind, setPeriodKind] = useState<string>('calendar_day');
   const [periodHours, setPeriodHours] = useState('');
+  const [refillSeconds, setRefillSeconds] = useState('');
   const [timezone, setTimezone] = useState('');
   const [anchorDay, setAnchorDay] = useState('');
 
@@ -355,7 +362,9 @@ function PolicyEditor({ platforms, onSaved }: { platforms: string[]; onSaved: ()
         periodKind,
         // The API wants milliseconds; hours is the unit an operator thinks in,
         // and Ollama's measured session window is 5h.
-        periodMs: periodKind === 'rolling' ? Math.round(Number(periodHours) * 3_600_000) : null,
+        periodMs: periodKind === 'rolling' ? Math.round(Number(periodHours) * 3_600_000)
+          : periodKind === 'bucket' ? Math.round(Number(refillSeconds) * 1000)
+          : null,
         timezone: timezone.trim() || null,
         anchorDay: periodKind === 'billing_cycle' ? Number(anchorDay) : null,
       }),
@@ -366,6 +375,7 @@ function PolicyEditor({ platforms, onSaved }: { platforms: string[]; onSaved: ()
   const positive = (value: string): boolean => Number(value) > 0 && Number.isFinite(Number(value));
   const incomplete = !platform || !positive(limit)
     || (periodKind === 'rolling' && !positive(periodHours))
+    || (periodKind === 'bucket' && !positive(refillSeconds))
     || (periodKind === 'billing_cycle' && !(Number(anchorDay) >= 1 && Number(anchorDay) <= 31));
 
   const field = (label: string, control: ReactNode) => (
@@ -404,6 +414,10 @@ function PolicyEditor({ platforms, onSaved }: { platforms: string[]; onSaved: ()
         {periodKind === 'rolling' && field(t('quota.policyWindowHours'), (
           <Input value={periodHours} onChange={e => setPeriodHours(e.target.value)} inputMode="decimal"
             placeholder="5" className="h-8 text-sm" />
+        ))}
+        {periodKind === 'bucket' && field(t('quota.policyRefillSeconds'), (
+          <Input value={refillSeconds} onChange={e => setRefillSeconds(e.target.value)} inputMode="decimal"
+            placeholder="86.4" className="h-8 text-sm" />
         ))}
         {periodKind === 'billing_cycle' && field(t('quota.policyAnchorDay'), (
           <Input value={anchorDay} onChange={e => setAnchorDay(e.target.value)} inputMode="numeric"
@@ -602,8 +616,6 @@ export default function QuotaPage() {
                 <TableHead className="text-right">{t('quota.colRemaining')}</TableHead>
                 <TableHead className="text-right">{t('quota.colLimit')}</TableHead>
                 <TableHead className="text-right">{t('quota.colReset')}</TableHead>
-                <TableHead>{t('quota.colWindow')}</TableHead>
-                <TableHead>{t('quota.colSource')}</TableHead>
                 <TableHead>{t('quota.colStatus')}</TableHead>
               </TableRow>
             </TableHeader>
@@ -653,7 +665,7 @@ export default function QuotaPage() {
                       <TableCell className="text-right tabular-nums">
                         {group.total?.secondsUntilReset != null ? formatCountdown(group.total.secondsUntilReset) : '—'}
                       </TableCell>
-                      <TableCell colSpan={3} />
+                      <TableCell />
                     </TableRow>
                   )}
                   {group.foldedModelIds && expandedPlatforms.has(group.platform) && group.foldedModelIds
@@ -711,6 +723,22 @@ export default function QuotaPage() {
                       {p.aggregated && (
                         <div className="text-[10px] text-muted-foreground">{t('quota.poolSummed')}</div>
                       )}
+                      <div className="text-[10px] text-muted-foreground">
+                        {p.source ?? '—'}
+                        {p.usedSource === 'local' && (
+                          <HoverTooltip text={t('quota.locallyCountedHint')}>
+                            <span className="ml-1">{t('quota.locallyCountedMark')}</span>
+                          </HoverTooltip>
+                        )}
+                        {/* Estimates stay prefixed and keep their sample count:
+                            a reader must be able to tell one from a number the
+                            provider stated. */}
+                        {p.inferred.map(w => (
+                          <span key={`${w.method}:${w.period}`} className="ml-1" title={w.note}>
+                            {t('quota.inferredWindow', { period: t(`quota.period_${w.period}`), samples: w.samples })}
+                          </span>
+                        ))}
+                      </div>
                       {p.members.length > 0 && (
                         <HoverTooltip text={p.members.join('\n')}>
                           <span className="text-xs opacity-75 underline decoration-dotted underline-offset-2">
@@ -769,29 +797,6 @@ export default function QuotaPage() {
                       {p.resetSource === 'inferred' && p.seconds_until_reset != null
                         ? <span className="ml-1 text-xs text-muted-foreground"
                             title={t('quota.resetInferredHint')}>{t('quota.resetInferredMark')}</span>
-                        : null}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {p.inferred.length === 0 ? '—' : p.inferred.map(w => (
-                        // Always prefixed and always carrying its sample count:
-                        // a reader must be able to tell an estimate from a
-                        // number the provider stated.
-                        <div key={`${w.method}:${w.period}`} title={w.note}>
-                          {t('quota.inferredWindow', { period: t(`quota.period_${w.period}`), samples: w.samples })}
-                        </div>
-                      ))}
-                    </TableCell>
-                    {/* "(counted locally)" spelled out was the widest thing on
-                        the row after the member list — long enough to push the
-                        Status badge off the right edge entirely. Folded into a
-                        marker with the full wording on hover, matching what the
-                        Resets column already does for an inferred countdown. */}
-                    <TableCell className="text-muted-foreground whitespace-nowrap">
-                      {p.source ?? '—'}
-                      {p.usedSource === 'local'
-                        ? <HoverTooltip text={t('quota.locallyCountedHint')}>
-                            <span className="ml-1 text-xs">{t('quota.locallyCountedMark')}</span>
-                          </HoverTooltip>
                         : null}
                     </TableCell>
                     <TableCell><Badge variant={status.variant}>{t(status.labelKey)}</Badge></TableCell>
