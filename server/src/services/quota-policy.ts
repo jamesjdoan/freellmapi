@@ -565,6 +565,15 @@ export interface RouteLimits {
   tpd: number | null;
 }
 
+/** The winning quota per window, kept whole so a caller that needs the reset
+ *  instant does not have to re-derive which policy produced the number. */
+export interface RouteWindows {
+  rpm: EffectiveQuota | null;
+  rpd: EffectiveQuota | null;
+  tpm: EffectiveQuota | null;
+  tpd: EffectiveQuota | null;
+}
+
 export function effectiveRouteLimits(
   platform: string,
   modelId: string,
@@ -583,7 +592,7 @@ export function effectiveRouteLimits(
     return { rpm: fallback.rpm ?? null, rpd: fallback.rpd ?? null, tpm: fallback.tpm ?? null, tpd: fallback.tpd ?? null };
   }
 
-  const pick = (metric: QuotaPolicyMetric, windowMs: number): number | null => {
+  const pick = (metric: QuotaPolicyMetric, windowMs: number): EffectiveQuota | null => {
     const hit = quotas.filter(q => {
       if (q.metric !== metric) return false;
       if (q.period.kind === 'rolling') return q.period.windowMs === windowMs;
@@ -600,13 +609,53 @@ export function effectiveRouteLimits(
       const rb = SOURCE_RANK[b.source] ?? 0;
       if (ra !== rb) return ra > rb ? a : b;
       return a.limit <= b.limit ? a : b;
-    }).limit;
+    });
   };
 
   return {
-    rpm: pick('requests', MINUTE_MS) ?? fallback.rpm ?? null,
-    rpd: pick('requests', DAY_MS) ?? fallback.rpd ?? null,
-    tpm: pick('total_tokens', MINUTE_MS) ?? fallback.tpm ?? null,
-    tpd: pick('total_tokens', DAY_MS) ?? fallback.tpd ?? null,
+    rpm: pick('requests', MINUTE_MS)?.limit ?? fallback.rpm ?? null,
+    rpd: pick('requests', DAY_MS)?.limit ?? fallback.rpd ?? null,
+    tpm: pick('total_tokens', MINUTE_MS)?.limit ?? fallback.tpm ?? null,
+    tpd: pick('total_tokens', DAY_MS)?.limit ?? fallback.tpd ?? null,
+  };
+}
+
+/**
+ * The same resolution, keeping the winning quota rather than just its number.
+ *
+ * A reset instant cannot be derived from a limit alone: 20 per calendar day
+ * resets at local midnight and 20 per rolling day resets when the oldest call
+ * ages out, and only the policy that won knows which it is.
+ */
+export function effectiveRouteWindows(
+  platform: string,
+  modelId: string,
+  now: number = Date.now(),
+): RouteWindows {
+  let quotas: EffectiveQuota[] = [];
+  try {
+    quotas = resolveEffectiveQuotas(platform, modelId, now).filter(q => q.scope === 'model');
+  } catch {
+    return { rpm: null, rpd: null, tpm: null, tpd: null };
+  }
+  const best = (metric: QuotaPolicyMetric, windowMs: number): EffectiveQuota | null => {
+    const hit = quotas.filter(q => {
+      if (q.metric !== metric) return false;
+      if (q.period.kind === 'rolling') return q.period.windowMs === windowMs;
+      return windowMs === DAY_MS && q.period.kind === 'calendar_day';
+    });
+    if (hit.length === 0) return null;
+    return hit.reduce((a, b) => {
+      const ra = SOURCE_RANK[a.source] ?? 0;
+      const rb = SOURCE_RANK[b.source] ?? 0;
+      if (ra !== rb) return ra > rb ? a : b;
+      return a.limit <= b.limit ? a : b;
+    });
+  };
+  return {
+    rpm: best('requests', MINUTE_MS),
+    rpd: best('requests', DAY_MS),
+    tpm: best('total_tokens', MINUTE_MS),
+    tpd: best('total_tokens', DAY_MS),
   };
 }

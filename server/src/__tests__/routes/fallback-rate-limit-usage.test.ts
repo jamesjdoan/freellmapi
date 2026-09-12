@@ -92,7 +92,7 @@ describe('GET /api/fallback/rate-limit-usage', () => {
 
     const row = await probeRow(app);
     // The idle key can serve the next request, so the badge must stay low.
-    expect(row.rpm).toEqual({ used: 0, limit: RPM_LIMIT });
+    expect(row.rpm).toMatchObject({ used: 0, limit: RPM_LIMIT });
   });
 
   it('goes to the ceiling only when every routable key is exhausted', async () => {
@@ -102,7 +102,7 @@ describe('GET /api/fallback/rate-limit-usage', () => {
     burnRequests(b, RPM_LIMIT);
 
     const row = await probeRow(app);
-    expect(row.rpm).toEqual({ used: RPM_LIMIT, limit: RPM_LIMIT });
+    expect(row.rpm).toMatchObject({ used: RPM_LIMIT, limit: RPM_LIMIT });
   });
 
   it('ignores a key whose model scope excludes this model (#657)', async () => {
@@ -114,7 +114,7 @@ describe('GET /api/fallback/rate-limit-usage', () => {
     burnRequests(usable, RPM_LIMIT);
 
     const row = await probeRow(app);
-    expect(row.rpm).toEqual({ used: RPM_LIMIT, limit: RPM_LIMIT });
+    expect(row.rpm).toMatchObject({ used: RPM_LIMIT, limit: RPM_LIMIT });
   });
 
   it('counts a scoped key that DOES list this model', async () => {
@@ -124,7 +124,7 @@ describe('GET /api/fallback/rate-limit-usage', () => {
     burnRequests(scopedIn, 3);
 
     const row = await probeRow(app);
-    expect(row.rpm).toEqual({ used: 3, limit: RPM_LIMIT });
+    expect(row.rpm).toMatchObject({ used: 3, limit: RPM_LIMIT });
   });
 
   it('ignores disabled and unhealthy keys', async () => {
@@ -134,7 +134,7 @@ describe('GET /api/fallback/rate-limit-usage', () => {
     burnRequests(usable, 9);
 
     const row = await probeRow(app);
-    expect(row.rpm).toEqual({ used: 9, limit: RPM_LIMIT });
+    expect(row.rpm).toMatchObject({ used: 9, limit: RPM_LIMIT });
   });
 
   it('reports no windows when the platform has no routable key at all', async () => {

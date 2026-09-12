@@ -7,7 +7,8 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { getDb } from '../db/index.js';
-import { effectiveRouteLimits } from '../services/quota-policy.js';
+import { effectiveRouteLimits, effectiveRouteWindows } from '../services/quota-policy.js';
+import { resolveQuotaWindow, type QuotaPeriod } from '../services/quota-clock.js';
 import { getAdjustedScores } from '../services/analysis.js';
 import { getAllPenalties, getRoutingScores, getRoutingStrategy, setRoutingStrategy, setCustomWeights, getExploreEnabled, setExploreEnabled, getPeakHoursConfig, setPeakHoursConfig, getActiveRoutingWeights, getKeySelectionStrategy, setKeySelectionStrategy } from '../services/router.js';
 import { BANDIT_PRESETS, isValidTimezone, type RoutingStrategy } from '../services/scoring.js';
@@ -639,6 +640,31 @@ function keyPressure(usage: KeyUsage, limits: { rpm: number | null; rpd: number 
   return worst;
 }
 
+/** When this window next frees capacity. Null rather than a guess: a rolling
+ *  window with no recorded call has no reset instant, and `now + width` would
+ *  only be right when the window is already full. */
+function resetOf(quota: { period: QuotaPeriod } | null, now: number): number | null {
+  if (!quota) return null;
+  try {
+    return resolveQuotaWindow(quota.period, now).resetAtMs ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** How the window ends, which a countdown alone cannot say. A rolling window
+ *  frees one call at a time as the oldest ages out; a calendar window returns
+ *  the whole allowance at a fixed local hour. Same "15h" on screen, entirely
+ *  different things to plan around. */
+function periodShape(quota: { period: QuotaPeriod } | null): { kind: string; timezone: string | null } | null {
+  if (!quota) return null;
+  const period = quota.period;
+  return {
+    kind: period.kind,
+    timezone: 'timezone' in period ? period.timezone : null,
+  };
+}
+
 fallbackRouter.get('/rate-limit-usage', (_req: Request, res: Response) => {
   const db = getDb();
   const now = Date.now();
@@ -704,7 +730,16 @@ fallbackRouter.get('/rate-limit-usage', (_req: Request, res: Response) => {
   }
 
   const rows = models.map(m => {
-    const limits = { rpm: m.rpm_limit, rpd: m.rpd_limit, tpm: m.tpm_limit };
+    // The limits the ROUTER gates on, not the raw catalogue columns. A panel
+    // reporting a different allowance from the one being enforced is worse than
+    // no panel: it is read as the answer and it is not.
+    const limits = effectiveRouteLimits(m.platform, m.model_id, {
+      rpm: m.rpm_limit, rpd: m.rpd_limit, tpm: m.tpm_limit,
+    }, now);
+    // The winning policy kept whole, so a reset reflects the window that
+    // governs: a calendar day resets at its local midnight, a rolling day when
+    // the oldest call ages out.
+    const windows = effectiveRouteWindows(m.platform, m.model_id, now);
     const pool = routableByPlatform.get(m.platform) ?? [];
     // A custom model belongs to one endpoint; only that endpoint's credentials
     // can serve it. Legacy rows (key_id NULL) keep the any-key match.
@@ -736,9 +771,9 @@ fallbackRouter.get('/rate-limit-usage', (_req: Request, res: Response) => {
       modelDbId: m.model_db_id,
       platform: m.platform,
       modelId: m.model_id,
-      rpm: m.rpm_limit != null ? { used: best.rpm, limit: m.rpm_limit } : null,
-      rpd: m.rpd_limit != null ? { used: best.rpd, limit: m.rpd_limit } : null,
-      tpm: m.tpm_limit != null ? { used: best.tpm, limit: m.tpm_limit } : null,
+      rpm: limits.rpm != null ? { used: best.rpm, limit: limits.rpm, resetAtMs: resetOf(windows.rpm, now), period: periodShape(windows.rpm) } : null,
+      rpd: limits.rpd != null ? { used: best.rpd, limit: limits.rpd, resetAtMs: resetOf(windows.rpd, now), period: periodShape(windows.rpd) } : null,
+      tpm: limits.tpm != null ? { used: best.tpm, limit: limits.tpm, resetAtMs: resetOf(windows.tpm, now), period: periodShape(windows.tpm) } : null,
     };
   });
 
