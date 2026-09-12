@@ -1,12 +1,12 @@
 import type { QuotaObservationView } from './provider-quota.js';
 import { getQuotaStateForKeys } from './provider-quota.js';
-import { parseStoredUtc } from './quota-clock.js';
+import { parseStoredUtc, DAY_MS, MINUTE_MS } from './quota-clock.js';
 import { getDb } from '../db/index.js';
 import { inferQuotaShape, inferAllowanceFromFraction, inferWindowFromResets, type InferredWindow, type InferredAllowance } from './quota-inference.js';
-import { resolveEffectiveQuotas } from './quota-policy.js';
+import { resolveEffectiveQuotas, effectiveRouteWindows } from './quota-policy.js';
 import { resolveQuotaPolicy, consumesPaidBalance, legacyPoolKey } from './provider-quota.js';
 import type { Platform } from '@freellmapi/shared/types.js';
-import { countPlatformUsageInWindow } from './ratelimit.js';
+import { countRequestsInWindow, countPlatformUsageInWindow } from './ratelimit.js';
 
 // Daily free-tier balance forecast (#1104). Free tiers reset on a per-account
 // window (usually UTC midnight) and the only way to know how much headroom is
@@ -175,6 +175,14 @@ export interface ProviderQuotaOverviewRow {
    * cannot drain anything. Empty for a pool no routed model resolves to.
    */
   members: string[];
+  /** True when used/limit are the SUM of this pool's members rather than one
+   *  account-wide ceiling. Only correct where each member holds its own
+   *  allowance; summing a genuinely shared pool would multiply it. */
+  aggregated?: boolean;
+  /** The same models as `members`, by id. A label cannot be joined to usage
+   *  data, and the expansion under a pool row needs to find each model's
+   *  counters. Same order, so the two lists line up. */
+  memberModelIds: string[];
   /** Denomination of the numbers: 'cents', 'per_10k', or null for a count. */
   unit: string | null;
   /**
@@ -229,7 +237,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
     const seenMeasured = new Set<string>(reported.map(r => r.pool ?? ''));
     for (const pool of reported) {
       const state = states.find(s => s.platform === platform && s.quotaPoolKey === pool.pool);
-      rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true, usedSource: 'provider', inferred: [], members: [], metric: 'requests', unit: null, derivedAllowance: null, resetSource: pool.reset_at ? 'provider' : null });
+      rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true, usedSource: 'provider', inferred: [], members: [], memberModelIds: [], metric: 'requests', unit: null, derivedAllowance: null, resetSource: pool.reset_at ? 'provider' : null });
     }
 
     // 1b. Pools the provider measured in some OTHER unit — Ollama Cloud reports
@@ -265,7 +273,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         metered: true,
         usedSource: 'provider',
         inferred: [],
-        members: [],
+        members: [], memberModelIds: [],
         metric: state.metric,
         unit: state.unit ?? null,
         derivedAllowance: state.unit === 'per_10k' ? allowanceFor(platform, state.quotaPoolKey, now) : null,
@@ -300,7 +308,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
 
       rows.push({
         platform,
-        members: [],
+        members: [], memberModelIds: [],
         pool: poolLabel,
         used,
         remaining,
@@ -338,7 +346,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         metered: false,
         usedSource: null,
         inferred: [],
-        members: [],
+        members: [], memberModelIds: [],
         metric: null,
         unit: null,
         derivedAllowance: null,
@@ -398,10 +406,15 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
     // an env RPM cap or an operator's provider-wide daily limit — so every
     // routed model on the platform spends them, and platform-wide is the
     // truthful membership rather than the empty set string matching produces.
-    row.members = row.pool == null
+    const members = row.pool == null
       ? []
       : (byPool.get(row.pool) ?? platformMembersFor(row.pool, byPlatform.get(row.platform) ?? []));
+    row.members = members.map(m => m.displayName);
+    row.memberModelIds = members.map(m => m.modelId);
   }
+
+  aggregateMemberLimits(rows, now);
+  addMemberSumRows(rows, now);
 
   // Measured pools first, then unknowns — the rows a reader can act on lead.
   return rows.sort((a, b) => (Number(b.metered) - Number(a.metered)) || a.platform.localeCompare(b.platform));
@@ -423,11 +436,12 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
  * model spends it — so a broader rule would have emptied the very row that
  * motivated showing membership at all.
  */
-function platformMembersFor(pool: string, platformMembers: readonly PlatformMember[]): string[] {
-  const eligible = pool.endsWith('::credits')
+function platformMembersFor(pool: string, platformMembers: readonly PlatformMember[]): PlatformMember[] {
+  // Identity kept rather than flattened to a label: the caller needs both the
+  // name to show and the id to join usage against.
+  return pool.endsWith('::credits')
     ? platformMembers.filter(m => consumesPaidBalance(m.platform as Platform, m.modelId))
-    : platformMembers;
-  return eligible.map(m => m.displayName);
+    : [...platformMembers];
 }
 
 interface PlatformMember { platform: string; modelId: string; displayName: string }
@@ -441,8 +455,152 @@ interface PlatformMember { platform: string; modelId: string; displayName: strin
  * first time a provider's identity changes shape, which has already happened
  * once (Groq moved from `groq::account` to `groq::model::<id>`).
  */
-function routedMembers(): { byPool: Map<string, string[]>; byPlatform: Map<string, PlatformMember[]> } {
-  const byPool = new Map<string, string[]>();
+/**
+ * Replace an account-window row with the sum of its members, where the members
+ * are what actually hold the allowance.
+ *
+ * Google is the case that forces it. `google::calendar_day` reads 45/day from a
+ * learned 429, while its seven routed models each carry their OWN measured
+ * daily limit — 20 for Flash, 500 for Flash-Lite — totalling 2,580. The pool
+ * row understated the account by fiftyfold and no member of it was ever bound
+ * by 45.
+ *
+ * The guard is the whole design: this only applies when EVERY member resolves
+ * its own model-scoped limit for the same window. A genuinely shared pool —
+ * NVIDIA's account-wide 40 RPM, OpenRouter's credit balance, Ollama's weekly
+ * session — has no such per-member limits, so it is left exactly as it was.
+ * Summing one of those would multiply an allowance the provider grants once,
+ * which is the error this file warns about everywhere else.
+ */
+function aggregateMemberLimits(rows: ProviderQuotaOverviewRow[], now: number): void {
+  for (const row of rows) {
+    if (row.metric !== 'requests' || row.pool == null || row.memberModelIds.length === 0) continue;
+
+    const isDay = row.pool.endsWith('::calendar_day') || row.pool.endsWith('::rolling-86400s');
+    const isMinute = row.pool.endsWith('::rolling-60s');
+    if (!isDay && !isMinute) continue;
+
+    // Independence is the question, and the pool key already answers it. Two
+    // models that resolve to the SAME quota pool spend one counter, so their
+    // allowances are the same allowance counted twice. NVIDIA is the trap: each
+    // of its models carries a 40 RPM catalogue column, but all six resolve to
+    // `nvidia::credit-pool` and the account grants 40 once — summing produced
+    // 240 RPM that does not exist.
+    const poolKeys = new Set(row.memberModelIds.map(
+      modelId => resolveQuotaPolicy(row.platform as Platform, modelId).poolKey));
+    if (poolKeys.size !== row.memberModelIds.length) continue;
+
+    const windowMs = isDay ? DAY_MS : MINUTE_MS;
+    let limit = 0;
+    let used = 0;
+    let soonestReset: number | null = null;
+    let everyMemberHasOwn = true;
+
+    for (const modelId of row.memberModelIds) {
+      const windows = effectiveRouteWindows(row.platform, modelId, now);
+      const quota = isDay ? windows.rpd : windows.rpm;
+      // One member without its own allowance means the account ceiling is
+      // still the binding constraint for it, and the sum would be a fiction.
+      if (!quota) { everyMemberHasOwn = false; break; }
+      limit += quota.limit;
+      used += countRequestsInWindow(row.platform, modelId, windowMs, now);
+      const reset = quota.window.resetAtMs;
+      if (reset != null) soonestReset = soonestReset == null ? reset : Math.min(soonestReset, reset);
+    }
+    if (!everyMemberHasOwn) continue;
+
+    const remaining = Math.max(0, limit - used);
+    row.used = used;
+    row.limit = limit;
+    row.remaining = remaining;
+    row.remaining_pct = limit > 0 ? Math.max(0, Math.min(100, Math.round((remaining / limit) * 100))) : null;
+    row.low_balance = limit > 0 && remaining / limit < LOW_BALANCE_THRESHOLD;
+    row.aggregated = true;
+    row.usedSource = 'local';
+    if (soonestReset != null) {
+      row.reset_at = new Date(soonestReset).toISOString();
+      row.seconds_until_reset = Math.max(0, Math.floor((soonestReset - now) / 1000));
+    }
+  }
+}
+
+/**
+ * A provider row built FROM its models, where the account itself declares
+ * nothing.
+ *
+ * Google is the case. It publishes no account quota — no headers, no documented
+ * figure — so the only account-level row this panel ever had came from a single
+ * learned 429, and deleting that (it was wrong) removed the provider from the
+ * overview altogether. Meanwhile every routed Google model carries a measured
+ * daily limit on its own counter. Their sum IS the account allowance, and it is
+ * the number an operator is looking for.
+ *
+ * Same independence guard as everywhere else: distinct pool keys, each with its
+ * own limit. A shared pool synthesises nothing, because its account figure is
+ * already the truth and summing it would invent capacity.
+ */
+function addMemberSumRows(rows: ProviderQuotaOverviewRow[], now: number): void {
+  const { byPlatform } = routedMembers();
+
+  for (const [platform, members] of byPlatform) {
+    if (members.length === 0) continue;
+    // Something already speaks for this platform's day. Leave it: a provider
+    // that reports its own ceiling outranks anything derived here.
+    if (rows.some(r => r.platform === platform && r.metric === 'requests' && r.pool?.endsWith('::calendar_day'))) continue;
+    // Or the provider already reports each model as its own pool — Groq sends a
+    // header per `model::` pool. Those rows ARE these models; adding a total
+    // beside them lists the same allowance twice.
+    const covered = new Set(rows.filter(r => r.platform === platform).flatMap(r => r.memberModelIds));
+    if (members.every(m => covered.has(m.modelId))) continue;
+
+    const poolKeys = new Set(members.map(m => resolveQuotaPolicy(platform as Platform, m.modelId).poolKey));
+    if (poolKeys.size !== members.length) continue;
+
+    let limit = 0;
+    let used = 0;
+    let soonestReset: number | null = null;
+    let complete = true;
+    for (const member of members) {
+      const quota = effectiveRouteWindows(platform, member.modelId, now).rpd;
+      if (!quota) { complete = false; break; }
+      limit += quota.limit;
+      used += countRequestsInWindow(platform, member.modelId, DAY_MS, now);
+      const reset = quota.window.resetAtMs;
+      if (reset != null) soonestReset = soonestReset == null ? reset : Math.min(soonestReset, reset);
+    }
+    if (!complete || limit <= 0) continue;
+
+    const remaining = Math.max(0, limit - used);
+    rows.push({
+      platform,
+      pool: `${platform}::calendar_day`,
+      used,
+      remaining,
+      limit,
+      remaining_pct: Math.max(0, Math.min(100, Math.round((remaining / limit) * 100))),
+      reset_at: soonestReset == null ? null : new Date(soonestReset).toISOString(),
+      seconds_until_reset: soonestReset == null ? null : Math.max(0, Math.floor((soonestReset - now) / 1000)),
+      low_balance: remaining / limit < LOW_BALANCE_THRESHOLD,
+      // Every figure in it was measured per model; none was stated by the
+      // account, and the row says so rather than implying the provider agreed.
+      source: 'operator',
+      confidence: 0.8,
+      metered: true,
+      usedSource: 'local',
+      inferred: [],
+      members: members.map(m => m.displayName),
+      memberModelIds: members.map(m => m.modelId),
+      aggregated: true,
+      metric: 'requests',
+      unit: null,
+      derivedAllowance: null,
+      resetSource: soonestReset == null ? null : 'provider',
+    });
+  }
+}
+
+function routedMembers(): { byPool: Map<string, PlatformMember[]>; byPlatform: Map<string, PlatformMember[]> } {
+  const byPool = new Map<string, PlatformMember[]>();
   // Platform-wide members keep their identity, not just a label: narrowing a
   // credit pool needs the model id the predicate is written against.
   const byPlatform = new Map<string, PlatformMember[]>();
@@ -455,16 +613,16 @@ function routedMembers(): { byPool: Map<string, string[]>; byPlatform: Map<strin
     `).all() as { platform: string; model_id: string; display_name: string }[];
     for (const row of rows) {
       const poolKey = resolveQuotaPolicy(row.platform as Platform, row.model_id).poolKey;
-      const pooled = byPool.get(poolKey);
-      if (pooled) pooled.push(row.display_name);
-      else byPool.set(poolKey, [row.display_name]);
-
       const member: PlatformMember = { platform: row.platform, modelId: row.model_id, displayName: row.display_name };
+      const pooled = byPool.get(poolKey);
+      if (pooled) pooled.push(member);
+      else byPool.set(poolKey, [member]);
+
       const platformed = byPlatform.get(row.platform);
       if (platformed) platformed.push(member);
       else byPlatform.set(row.platform, [member]);
     }
-    for (const list of byPool.values()) list.sort((a, b) => a.localeCompare(b));
+    for (const list of byPool.values()) list.sort((a, b) => a.displayName.localeCompare(b.displayName));
     for (const list of byPlatform.values()) list.sort((a, b) => a.displayName.localeCompare(b.displayName));
   } catch {
     // A panel annotation is never a reason the panel fails to render.
