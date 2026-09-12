@@ -15,6 +15,7 @@ import { registerCustomModels, registerCustomChatModels } from '../services/cust
 import { registerCustomMediaModel } from '../services/custom-media-register.js';
 import { discoverEndpointModels, probeEndpointModel, classifyModelId, ModelDiscoveryError } from '../services/model-discovery.js';
 import { probeEmbeddingDimensions, registerCustomEmbeddingModel } from '../services/embeddings.js';
+import { listModelHealth, probeModel } from '../services/model-health.js';
 import { endpointScopeForBaseUrl, normalizeBaseUrl } from '../lib/endpoint-scope.js';
 import { recordCustomModelTombstone } from '../services/custom-model-tombstone.js';
 import type { Db } from '../db/types.js';
@@ -366,6 +367,43 @@ keysRouter.get('/', (_req: Request, res: Response) => {
 // account secrets and remains separate from configured limits and live usage.
 keysRouter.get('/quota-guidance', (_req: Request, res: Response) => {
   res.json(QUOTA_GUIDANCE_CATALOG);
+});
+
+// GET /model-health?platform=groq — has each of this provider's models ever
+// answered, and if it last refused, was the refusal permanent? Read from
+// attempt history, so a model in daily use needs no probe.
+keysRouter.get('/model-health', (req: Request, res: Response) => {
+  const platform = typeof req.query.platform === 'string' ? req.query.platform : '';
+  if (!platform) {
+    res.status(400).json({ error: { message: 'platform is required' } });
+    return;
+  }
+  res.json({ rows: listModelHealth(platform) });
+});
+
+// POST /model-health/probe — establish a verdict for models with no history.
+// One four-token call each, run in series: a burst would trip the very rate
+// limits it is trying to distinguish from dead routes, and report working
+// models as broken.
+keysRouter.post('/model-health/probe', async (req: Request, res: Response) => {
+  const platform = typeof req.body?.platform === 'string' ? req.body.platform : '';
+  const modelIds = Array.isArray(req.body?.modelIds) ? req.body.modelIds.filter((m: unknown) => typeof m === 'string') : [];
+  if (!platform || modelIds.length === 0) {
+    res.status(400).json({ error: { message: 'platform and modelIds are required' } });
+    return;
+  }
+  // Bounded: an operator pressing a button must not be able to start a
+  // thousand-call walk through the whole catalogue.
+  if (modelIds.length > 25) {
+    res.status(400).json({ error: { message: 'At most 25 models can be probed at once' } });
+    return;
+  }
+
+  const results = [];
+  for (const modelId of modelIds as string[]) {
+    results.push(await probeModel(platform, modelId));
+  }
+  res.json({ results });
 });
 
 // Clear every active cooldown for one key. An escalated cooldown can bench a key

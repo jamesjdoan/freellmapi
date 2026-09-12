@@ -15,6 +15,42 @@ import { ModelCombobox } from '@/components/model-combobox'
 // provider's menu, and answering it used to mean holding the Compare page and
 // the key's scope dialog in your head at once.
 
+/**
+ * What happened last time this route was called.
+ *
+ * Deliberately silent for 'ok' and 'untested'. A badge on every row is a badge
+ * nobody reads, and marking untested green would claim evidence we do not have
+ * — the same unknown-is-not-zero rule the quota ledger keeps. Only a failure
+ * earns ink, because only a failure changes the decision in front of you.
+ */
+function HealthMark({ health }: { health?: ModelHealthRow }) {
+  const { t } = useI18n()
+  if (!health || health.verdict === 'ok' || health.verdict === 'untested') return null
+  const dead = health.verdict === 'dead'
+  return (
+    <Tooltip text={health.detail ?? (dead ? t('keys.healthDeadHint') : t('keys.healthLimitedHint'))}>
+      <span
+        className={`mt-0.5 inline-block rounded-full px-1.5 py-0.5 text-[10px] ${
+          dead
+            ? 'bg-rose-500/10 text-rose-700 dark:text-rose-400'
+            : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+        }`}
+      >
+        {dead ? t('keys.healthDead') : t('keys.healthLimited')}
+      </span>
+    </Tooltip>
+  )
+}
+
+interface ModelHealthRow {
+  modelId: string
+  /** 'dead' is the one that matters: a refusal no waiting will fix. */
+  verdict: 'ok' | 'dead' | 'limited' | 'untested'
+  detail: string | null
+  successes: number
+  failures: number
+}
+
 interface Row {
   modelDbId: number
   platform: string
@@ -227,6 +263,25 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
     return byModel
   }, [probeData?.probes])
 
+  // Has each route ever answered? Read from attempt history, so a model in
+  // daily use needs no probe and a model that 403s is visible BEFORE someone
+  // switches it on. Dead routes were being enabled by hand because nothing here
+  // told them apart from working ones.
+  const { data: health } = useQuery<{ rows: ModelHealthRow[] }>({
+    queryKey: ['keys', 'model-health', platform],
+    queryFn: () => apiFetch(`/api/keys/model-health?platform=${encodeURIComponent(platform)}`),
+  })
+  const healthByModel = useMemo(
+    () => new Map((health?.rows ?? []).map(r => [r.modelId, r])),
+    [health?.rows],
+  )
+
+  const probe = useMutation({
+    mutationFn: (modelIds: string[]) =>
+      apiFetch('/api/keys/model-health/probe', { method: 'POST', body: JSON.stringify({ platform, modelIds }) }),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['keys', 'model-health', platform] }) },
+  })
+
   const { data: usage } = useQuery<{ rows: RateUsageRow[] }>({
     queryKey: ['fallback', 'rate-limit-usage'],
     queryFn: () => apiFetch('/api/fallback/rate-limit-usage'),
@@ -286,10 +341,22 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
       })
   }, [data?.rows, platform, sort, onlyScoped])
 
+  const routable = (r: Row) => r.enabled && (r.keyScope === 'in' || r.keyScope === 'unscoped')
+
+  // Only what this key can actually reach: probing a model outside the key's
+  // scope would report the credential's limits as the model's.
+  const untestedIds = useMemo(
+    () => rows.filter(r => routable(r) && !healthByModel.has(r.modelId)).map(r => r.modelId),
+    [rows, healthByModel],
+  )
+  const deadCount = useMemo(
+    () => rows.filter(r => healthByModel.get(r.modelId)?.verdict === 'dead').length,
+    [rows, healthByModel],
+  )
+
   if (isLoading) return <p className="px-3 py-2 text-xs text-muted-foreground">{t('common.loading')}</p>
   if (rows.length === 0) return <p className="px-3 py-2 text-xs text-muted-foreground">{t('keys.panelNoModels')}</p>
 
-  const routable = (r: Row) => r.enabled && (r.keyScope === 'in' || r.keyScope === 'unscoped')
   const scoped = rows.filter(routable).length
   // Only routable rows count: measuring a model this key cannot serve is not
   // coverage of anything.
@@ -308,7 +375,30 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
             {t('keys.panelProbedCount', { probed: probedScoped, scoped })}
           </span>
         )}
+        {deadCount > 0 && (
+          <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] text-rose-700 dark:text-rose-400"
+                title={t('keys.healthDeadHint')}>
+            {t('keys.healthDeadCount', { count: deadCount })}
+          </span>
+        )}
         <span className="flex-1" />
+        {/* Establish verdicts for the routes nothing has ever called. One
+            four-token request each, in series — a burst would trip the rate
+            limits it is trying to tell apart from dead routes. Capped so a
+            press cannot walk a whole catalogue. */}
+        {untestedIds.length > 0 && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-6 rounded-full px-2 text-[10px]"
+            disabled={probe.isPending}
+            onClick={() => probe.mutate(untestedIds.slice(0, 25))}
+          >
+            {probe.isPending
+              ? t('keys.healthTesting')
+              : t('keys.healthTest', { count: Math.min(untestedIds.length, 25) })}
+          </Button>
+        )}
         <button
           type="button"
           onClick={() => setOnlyScoped(v => !v)}
@@ -345,6 +435,11 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
                 <td className="py-1 pr-2">
                   <span className="block max-w-[260px] truncate font-medium" title={r.displayName}>{r.displayName}</span>
                   <code className="block max-w-[260px] truncate text-[10px] text-muted-foreground" title={r.modelId}>{r.modelId}</code>
+                  {/* The verdict sits ON the name, where the decision to enable
+                      is made — not in a column that can be scrolled past. Only
+                      failures are marked: a working route needs no badge, and
+                      untested is left blank because it is not evidence. */}
+                  <HealthMark health={healthByModel.get(r.modelId)} />
                 </td>
                 <Num v={r.analysis?.intelligenceIndex} row={r} metric="intelligence" onNudge={nudge.mutate} busy={busy} />
                 <Num v={r.analysis?.codingIndex} row={r} metric="coding" onNudge={nudge.mutate} busy={busy} />

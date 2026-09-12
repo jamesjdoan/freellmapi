@@ -671,7 +671,14 @@
     "panelColAllowance": "Left today",
     "allowanceLeft": "{left} of {limit}",
     "allowanceMeasuredAs": "Measured: {measured}",
-    "allowancePerMinute": "This minute: {used} of {limit}"
+    "allowancePerMinute": "This minute: {used} of {limit}",
+    "healthDead": "failing",
+    "healthDeadHint": "This route refused in a way waiting will not fix — blocked, not found, or failing every attempt. Enabling it spends a failover attempt on nothing.",
+    "healthLimited": "rate-limited",
+    "healthLimitedHint": "The route works; its allowance is spent right now.",
+    "healthDeadCount": "{count} failing",
+    "healthTest": "Test {count} untested",
+    "healthTesting": "Testing…"
   },
   "backups": {
     "title": "备份",
