@@ -115,8 +115,14 @@ interface UsageWindow {
   resetAtMs: number | null;
   /** How the window ends. A countdown alone cannot distinguish a rolling
    *  window, which frees one call at a time, from a calendar one that returns
-   *  the whole allowance at a fixed local hour. */
-  period: { kind: string; timezone: string | null } | null;
+   *  the whole allowance at a fixed local hour — or from a bucket, which never
+   *  returns anything all at once and has no boundary to count down to. */
+  period: {
+    kind: string;
+    timezone: string | null;
+    /** Set only for a refilling bucket: seconds for ONE unit to return. */
+    refillSeconds?: number;
+  } | null;
 }
 interface ModelUsageRow {
   modelDbId: number;
@@ -227,16 +233,26 @@ function ModelUsageRow({ row, rowKey, excluded }: { row: ModelUsageRow; rowKey: 
       </TableCell>
       <TableCell className="py-1 text-right tabular-nums">
         {day?.limit != null
-          ? <>{day.limit}<span className="text-muted-foreground">/day</span></>
+          ? <>{day.limit}<span className="text-muted-foreground">
+              {day.period?.refillSeconds != null
+                ? t('quota.refillRate', { seconds: day.period.refillSeconds })
+                : '/day'}
+            </span></>
           : <span className="text-muted-foreground" title={t('quota.limitFromPoolHint')}>{t('quota.limitFromPool')}</span>}
       </TableCell>
       {/* Seconds from the resolved window, not a guess: null when the limit
           came from a catalogue column, which states no period to reset. */}
       <TableCell className="py-1 text-right tabular-nums">
-        {day?.resetAtMs != null
-          ? formatCountdown(Math.max(0, Math.round((day.resetAtMs - Date.now()) / 1000)))
-          : '—'}
-        {day?.period && (
+        {/* A bucket never resets — its countdown is the next unit returning,
+            and labelling that with a timezone claimed a boundary that does not
+            exist. Groq's row read "1000/day, 1m 23s UTC" for an allowance that
+            has neither a day nor a midnight. */}
+        {day?.period?.refillSeconds != null
+          ? <span className="text-[10px] text-muted-foreground" title={t('quota.bucketNoResetHint')}>{t('quota.bucketNoReset')}</span>
+          : day?.resetAtMs != null
+            ? formatCountdown(Math.max(0, Math.round((day.resetAtMs - Date.now()) / 1000)))
+            : '—'}
+        {day?.period && day.period.refillSeconds == null && (
           <span
             className="ml-1 text-[10px] text-muted-foreground"
             title={`${t('quota.windowKindHint')}${day.period.timezone ? ` (${day.period.timezone})` : ''}`}
@@ -278,6 +294,22 @@ function shortZone(timeZone: string, locale: string): string {
   } catch {
     return timeZone;
   }
+}
+
+/** The window a pool row is measured over: the last segment of its key.
+ *  `ollama::weekly` -> "weekly", `openrouter::rolling-60s` -> "per minute". */
+export function poolWindowName(pool: string | null | undefined): string {
+  if (!pool) return '';
+  const tail = pool.slice(pool.lastIndexOf('::') + 2);
+  const rolling = /^rolling-(\d+)s$/.exec(tail);
+  if (rolling) {
+    const seconds = Number(rolling[1]);
+    if (seconds === 60) return 'per minute';
+    if (seconds === 3600) return 'hourly';
+    if (seconds === 86_400) return 'daily';
+    return `per ${seconds}s`;
+  }
+  return tail.replace('calendar_', '').replace('_', ' ');
 }
 
 export function poolPeriodSuffix(pool: string | null | undefined): string {
@@ -869,9 +901,20 @@ export default function QuotaPage() {
                           plain-count branch left its session window invisible —
                           a limit that still refuses requests, hidden by the
                           fold meant to clarify it. */}
+                      {/* Two windows on one pot: which of them refuses the
+                          next request is the whole question, and two bare
+                          figures side by side did not answer it. Ollama's
+                          weekly balance at 5% binds long before its session
+                          window at 100%, though the session is the shorter. */}
+                      {(p.alsoBound ?? []).length > 0 && (
+                        <span className="ml-1 text-[10px] text-muted-foreground" title={t('quota.bindsFirstHint')}>
+                          {t('quota.bindsFirst', { window: poolWindowName(p.pool) })}
+                        </span>
+                      )}
                       {(p.alsoBound ?? []).map(w => (
                         <span key={w.pool ?? 'w'} className="text-muted-foreground">
-                          {' · '}{formatAmount(w.limit, p.unit)}{poolPeriodSuffix(w.pool)}
+                          {' · '}{formatAmount(w.limit, p.unit)}
+                          <span className="text-[10px]">{' '}{poolWindowName(w.pool)}</span>
                         </span>
                       ))}
                     </TableCell>

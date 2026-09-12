@@ -656,12 +656,16 @@ function resetOf(quota: { period: QuotaPeriod } | null, now: number): number | n
  *  frees one call at a time as the oldest ages out; a calendar window returns
  *  the whole allowance at a fixed local hour. Same "15h" on screen, entirely
  *  different things to plan around. */
-function periodShape(quota: { period: QuotaPeriod } | null): { kind: string; timezone: string | null } | null {
+function periodShape(quota: { period: QuotaPeriod } | null): { kind: string; timezone: string | null; refillSeconds?: number } | null {
   if (!quota) return null;
   const period = quota.period;
   return {
     kind: period.kind,
     timezone: 'timezone' in period ? period.timezone : null,
+    // A bucket's countdown is time until the NEXT unit returns, not until a
+    // reset, and its ceiling is capacity rather than a per-day allowance. The
+    // panel cannot tell those apart from a kind alone.
+    ...(period.kind === 'bucket' ? { refillSeconds: Math.round(period.refillMs / 100) / 10 } : {}),
   };
 }
 
