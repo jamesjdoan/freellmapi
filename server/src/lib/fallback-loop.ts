@@ -55,7 +55,7 @@ import type { Platform } from '@freellmapi/shared/types.js';
 import { recordLearnedCeiling, resolveQuotaPolicy } from '../services/provider-quota.js';
 import { resolveEffectiveQuotas } from '../services/quota-policy.js';
 import { DAY_MS } from '../services/quota-clock.js';
-import { countPlatformUsageInWindow } from '../services/ratelimit.js';
+import { countRequestsInWindow, countPlatformUsageInWindow } from '../services/ratelimit.js';
 import { newBreaker, recordBreakerFailure } from './guardrails.js';
 import { getRequestTrace, newRequestTrace, noteSkippedCandidates, runWithRequestTrace, type AttemptOutcome, type AttemptTraceRecord, type RequestTrace } from './attempt-trace.js';
 import { logRequest, persistRequestAttempts } from './request-log.js';
@@ -1457,6 +1457,34 @@ function isUsageDenominatedRefusal(err: unknown): boolean {
     || message.includes('insufficient balance');
 }
 
+/**
+ * How many calls the REFUSED pool had taken when it refused.
+ *
+ * A per-model pool has to be counted per model. Counting the platform instead
+ * filed one model's refusal at 20 calls as an account ceiling of 45 — the
+ * platform's total that day — and nothing was ever bound by 45: the provider
+ * counts Google per model, and the overview then understated the account
+ * fiftyfold from a single bad inference.
+ *
+ * Account-scoped pools are the opposite case and genuinely want the platform
+ * total, because every model on the key spends the same allowance.
+ */
+export function observedRequestsForCeiling(
+  platform: string,
+  modelId: string,
+  poolKey: string,
+  now: number = Date.now(),
+): number {
+  // Last segment, not a substring: `nvidia::credit-pool` contains the model id
+  // `a` and every other single letter, which would read an account pool as
+  // per-model. A per-model key ends with the id — `google::project-model::
+  // gemini-3.8-flash`, `groq::model::openai/gpt-oss-120b`.
+  const tail = poolKey.slice(poolKey.lastIndexOf('::') + 2);
+  return tail === modelId
+    ? countRequestsInWindow(platform, modelId, DAY_MS, now)
+    : countPlatformUsageInWindow(platform, 'request', DAY_MS, now);
+}
+
 function noteLearnedCeiling(route: RouteResult, err: unknown): void {
   try {
     const cls = classifyAttemptError(err);
@@ -1470,12 +1498,13 @@ function noteLearnedCeiling(route: RouteResult, err: unknown): void {
     // exhausted for hours after the session itself had reset.
     if (isUsageDenominatedRefusal(err)) return;
 
+    const poolKey = resolveQuotaPolicy(route.platform as Platform, route.modelId).poolKey;
     recordLearnedCeiling({
       platform: route.platform as Platform,
       keyId: route.keyId,
       modelId: route.modelId,
-      quotaPoolKey: resolveQuotaPolicy(route.platform as Platform, route.modelId).poolKey,
-      observedRequests: countPlatformUsageInWindow(route.platform, 'request', DAY_MS),
+      quotaPoolKey: poolKey,
+      observedRequests: observedRequestsForCeiling(route.platform, route.modelId, poolKey),
     });
   } catch {
     // Best-effort inference; never a reason a request fails.
