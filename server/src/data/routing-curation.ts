@@ -163,7 +163,7 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // tried cheaply anywhere; see the NVIDIA note above.
   {
     platform: 'nvidia', modelId: 'nvidia/nemotron-3.5-lightning-30b-a3b', classification: 'CORE',
-    chains: { 'Fast-Lane': 3, Workhorse: 5, Default: 5 },
+    chains: { 'Fast-Lane': 4, Workhorse: 5, Default: 5 },
     why: '98% over 96 attempts with a 1M window at fast-lane cost — the one cheap route that can still take a large scouting payload.',
   },
   {
@@ -223,7 +223,9 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // changes; nothing else about it is wrong.
 
   // ── Google — small independent per-model pools, strongest vision ──────────
-  // 20 RPD per Flash model for most; 1000/day for Gemma-4-26b. Independent
+  // Daily allowance is NOT flat: 20/day for Flash and 500/day for Flash-Lite,
+  // both provider-named on 2026-09-11; Gemma unmeasured. Per model AND per key —
+  // three keys each ran their own 20 on 2026-08-27. Independent
   // pools mean several routes provide real depth. Per-minute truth (5/min for
   // Flash, 15/min for Flash-Lite, 30/min for Gemma, >40/min for robotics-er)
   // was measured 2026-09-11 via 429 bodies. Google exposes no quota headers,
@@ -240,23 +242,23 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
 {
    platform: 'google', modelId: 'gemini-3.6-flash', classification: 'CORE',
-   chains: { Vision: 3, Apex: 3 },
+    chains: { Vision: 4, Apex: 3 },
     why: '89% over 91 attempts — the highest-scoring Google route measured. Second in vision, third in apex, on an independent per-model allowance.',
   },
   {
     platform: 'google', modelId: 'gemini-3.8-flash', classification: 'CORE',
-    chains: { Apex: 2, Vision: 4 },
+    chains: { Apex: 2, Vision: 5 },
     why: 'Newest Frontier-tier Google route with tools and vision. No traffic yet, so it sits second in apex rather than first: unmeasured is not the same as good.',
   },
   {
     platform: 'google', modelId: 'gemini-3.1-flash-lite', classification: 'CORE',
-    chains: { 'Fast-Lane': 4, Workhorse: 3, Default: 3 },
-    why: '80% at 4.7s. The cheap Google route that is actually fast — which is what put it in fast-lane ahead of its newer sibling.',
+    chains: { 'Fast-Lane': 3, Workhorse: 3, Default: 3 },
+    why: '80% at 4.7s, and far deeper than it looked: Flash-Lite allows 500/day where Flash allows 20, measured 2026-09-11. It sat behind two NVIDIA routes on a 20/day assumption that came from our own throttle rather than from Google. Ahead of them now — they spend the shared NVIDIA pool apex and coding depend on, and this does not.',
   },
   {
     platform: 'google', modelId: 'gemini-3.5-flash-lite', classification: 'CORE',
-    chains: { Vision: 5 },
-    why: 'Cheap 1M-context multimodal, 75% at 26s. Kept for vision depth and kept OUT of fast-lane: a 26-second average is not a fast lane.',
+    chains: { Vision: 3 },
+    why: 'Cheap 1M-context multimodal at 500/day — twenty-five times what the Flash routes above it allow, provider-named on 2026-09-11 after ~480 served. Third rather than higher because it averages 26s; still ahead of two Flash models that run out after twenty images. Kept OUT of fast-lane for that same 26s.',
   },
   {
     platform: 'google', modelId: 'gemini-robotics-er-2-preview', classification: 'SPECIALIST',
