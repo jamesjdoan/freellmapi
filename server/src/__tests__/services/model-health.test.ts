@@ -62,6 +62,35 @@ describe('model health', () => {
     expect(find('gone')?.detail).toContain('is not supported');
   });
 
+  it('groups failures under a code an operator can scan', () => {
+    // Forty rows of prose cannot be scanned; eight codes can. Each of these is
+    // a refusal this install actually received.
+    attempt('org-blocked', 'error', 'Groq API error 403: The model `qwen/qwen3.8-27b` is blocked at the organization level.');
+    attempt('gone', 'error', 'OpenCode Zen API error 401: Model north-mini-code-free is not supported');
+    attempt('broken', 'error', 'OpenCode Zen API error 500: Internal server error');
+    attempt('slow', 'error', 'The operation was aborted (opencode, chat, 60s)');
+    attempt('busy', 'rate_limited', 'FreeUsageLimitError: Rate limit exceeded. Please try again later.');
+
+    expect(find('org-blocked')?.code).toBe('E403');
+    // Named the MODEL, so it is a missing model rather than a bad credential —
+    // which is the distinction that decides whether to touch the key at all.
+    expect(find('gone')?.code).toBe('E404');
+    expect(find('broken')?.code).toBe('E5XX');
+    // A 400 that names the model is a missing model, not a provider outage —
+    // "Upstream request failed: Model is unavailable" read as E5XX until the
+    // word "upstream" stopped outranking the rest of the sentence.
+    attempt('unavailable', 'error', 'OpenCode Zen API error 400: Error from provider (Console): Upstream request failed: Model is unavailable.');
+    expect(find('unavailable')?.code).toBe('E404');
+    expect(find('slow')?.code).toBe('ETIME');
+    expect(find('busy')?.code).toBe('E429');
+  });
+
+  it('marks a working route OK and leaves an uncalled one without a code', () => {
+    attempt('works', 'success', null);
+    expect(find('works')?.code).toBe('OK');
+    expect(find('never-called')).toBeUndefined();
+  });
+
   it('classifies a live error object the same way as stored history', () => {
     expect(verdictForError(Object.assign(new Error('blocked'), { status: 403 }))).toBe('dead');
     expect(verdictForError(Object.assign(new Error('nope'), { status: 404 }))).toBe('dead');

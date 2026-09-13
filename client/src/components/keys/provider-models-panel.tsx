@@ -23,20 +23,42 @@ import { ModelCombobox } from '@/components/model-combobox'
  * — the same unknown-is-not-zero rule the quota ledger keeps. Only a failure
  * earns ink, because only a failure changes the decision in front of you.
  */
+/** "3 days ago" beats a timestamp here: the question is whether the verdict is
+ *  current, not what hour it happened. */
+function agoLabel(ms: number | null, t: (k: string, v?: Record<string, string | number>) => string): string {
+  if (ms == null) return ''
+  const mins = Math.max(0, Math.round((Date.now() - ms) / 60_000))
+  if (mins < 60) return t('keys.healthAgoMinutes', { count: mins })
+  const hours = Math.round(mins / 60)
+  if (hours < 48) return t('keys.healthAgoHours', { count: hours })
+  return t('keys.healthAgoDays', { count: Math.round(hours / 24) })
+}
+
 function HealthMark({ health }: { health?: ModelHealthRow }) {
   const { t } = useI18n()
-  if (!health || health.verdict === 'ok' || health.verdict === 'untested') return null
+  if (!health || health.verdict === 'untested') return null
+
+  // A working route earns a quiet mark rather than none: "tested, and it
+  // answered" is different from "nobody has ever tried", and only one of them
+  // is a reason to leave a route switched on.
+  const ok = health.verdict === 'ok'
   const dead = health.verdict === 'dead'
+  const when = agoLabel(health.lastCheckedAtMs, t)
+  const tone = ok
+    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+    : dead
+      ? 'bg-rose-500/10 text-rose-700 dark:text-rose-400'
+      : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+
   return (
-    <Tooltip text={health.detail ?? (dead ? t('keys.healthDeadHint') : t('keys.healthLimitedHint'))}>
-      <span
-        className={`mt-0.5 inline-block rounded-full px-1.5 py-0.5 text-[10px] ${
-          dead
-            ? 'bg-rose-500/10 text-rose-700 dark:text-rose-400'
-            : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
-        }`}
-      >
-        {dead ? t('keys.healthDead') : t('keys.healthLimited')}
+    <Tooltip text={health.detail ?? (ok ? t('keys.healthOkHint') : dead ? t('keys.healthDeadHint') : t('keys.healthLimitedHint'))}>
+      <span className="mt-0.5 inline-flex items-center gap-1">
+        <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${tone}`}>
+          {ok ? t('keys.healthOk') : `${health.code ?? 'EOTHER'} ${dead ? t('keys.healthDead') : t('keys.healthLimited')}`}
+        </span>
+        {/* When the verdict was established: a two-week-old refusal and one
+            from a minute ago are not the same evidence. */}
+        {when && <span className="text-[10px] text-muted-foreground">{when}</span>}
       </span>
     </Tooltip>
   )
@@ -46,10 +68,17 @@ interface ModelHealthRow {
   modelId: string
   /** 'dead' is the one that matters: a refusal no waiting will fix. */
   verdict: 'ok' | 'dead' | 'limited' | 'untested'
+  /** Short reason, explained once in the legend below the table. */
+  code: 'OK' | 'E429' | 'E403' | 'E404' | 'E401' | 'E5XX' | 'ETIME' | 'EOTHER' | null
   detail: string | null
+  lastCheckedAtMs: number | null
   successes: number
   failures: number
 }
+
+/** Every code the panel can show, in the order an operator should act on them:
+ *  the ones no waiting will fix first. */
+const HEALTH_CODES = ['E403', 'E404', 'E401', 'E5XX', 'ETIME', 'E429', 'EOTHER'] as const
 
 interface Row {
   modelDbId: number
@@ -349,6 +378,13 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
     () => rows.filter(r => routable(r) && !healthByModel.has(r.modelId)).map(r => r.modelId),
     [rows, healthByModel],
   )
+  // Only the codes actually present. A glossary of eight lines under a table
+  // showing one of them is noise.
+  const shownCodes = useMemo(() => {
+    const present = new Set(rows.map(r => healthByModel.get(r.modelId)?.code).filter(Boolean))
+    return HEALTH_CODES.filter(c => present.has(c))
+  }, [rows, healthByModel])
+
   const deadCount = useMemo(
     () => rows.filter(r => healthByModel.get(r.modelId)?.verdict === 'dead').length,
     [rows, healthByModel],
@@ -512,6 +548,20 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
           })}
         </tbody>
       </table>
+      {/* The legend sits under the codes it explains, and only appears once a
+          code is on screen: a permanent glossary for a table that is usually
+          all green is clutter. Ordered as an operator should act — the
+          refusals no waiting will fix come first. */}
+      {shownCodes.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 border-t pt-2 text-[10px] text-muted-foreground">
+          {shownCodes.map(code => (
+            <span key={code}>
+              <code className="rounded bg-muted px-1">{code}</code>{' '}
+              {t(`keys.healthCode_${code}`)}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

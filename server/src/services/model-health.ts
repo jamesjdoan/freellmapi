@@ -53,10 +53,38 @@ export type ModelHealthVerdict =
    *  were, which is the same unknown-is-not-zero rule the quota ledger keeps. */
   | 'untested';
 
+/**
+ * A short, stable reason code.
+ *
+ * The verdict says whether to enable a route; the code says WHY in a form that
+ * fits beside a model name and can be looked up in one legend. Deliberately
+ * few: an operator scanning forty rows needs to group them, not to read forty
+ * different sentences. The provider's own words stay on hover for the one row
+ * that matters.
+ */
+export type ModelHealthCode =
+  /** Served. */
+  | 'OK'
+  /** Allowance spent — the route works, the quota does not. */
+  | 'E429'
+  /** The account may not use this model: 403 org-level block, 402. */
+  | 'E403'
+  /** The provider does not know this id: 404, or a 401 naming the model. */
+  | 'E404'
+  /** The credential was rejected, which is about the KEY, not the model. */
+  | 'E401'
+  /** The provider broke: 5xx. */
+  | 'E5XX'
+  /** We stopped waiting. Says nothing about the model. */
+  | 'ETIME'
+  /** Refused for a reason none of the above covers. */
+  | 'EOTHER';
+
 export interface ModelHealthRow {
   platform: string;
   modelId: string;
   verdict: ModelHealthVerdict;
+  code: ModelHealthCode | null;
   /** The provider's own words, truncated. An operator deciding whether to
    *  enable a route needs the reason, not a colour. */
   detail: string | null;
@@ -84,6 +112,28 @@ export function verdictForError(err: unknown): Exclude<ModelHealthVerdict, 'ok' 
   // A transport wobble is not a dead model. Everything else — a 400 the model
   // itself rejected, a 5xx that keeps coming — is.
   return isRetryableError(err) ? 'limited' : 'dead';
+}
+
+/**
+ * Read the code off a stored error string. Ordered by authority, not by status
+ * number: a rate limit is a statement about now and is read first, and a model
+ * named in a 401 ("Model hy3-free is not supported") is a missing model rather
+ * than a bad key.
+ */
+export function codeForErrorText(text: string | null): ModelHealthCode {
+  const t = (text ?? '').toLowerCase();
+  if (!t) return 'EOTHER';
+  if (/\b429\b|rate.?limit|usage limit|quota exceeded/.test(t)) return 'E429';
+  if (/abort|timed? ?out|econnreset|socket|network|fetch failed|terminated/.test(t)) return 'ETIME';
+  // "Upstream request failed: Model is unavailable" arrives as a 400 and names
+  // the MODEL, so it is read before the generic upstream/5xx rule — which
+  // otherwise claimed a provider outage for a route that simply is not served.
+  if (/\b404\b|not supported|unknown model|does not exist|no such model|model_not_found|model is unavailable|model unavailable/.test(t)) return 'E404';
+  if (/\b403\b|blocked at the organization|not authorized|forbidden/.test(t)) return 'E403';
+  if (/\b402\b|insufficient|payment required|balance/.test(t)) return 'E403';
+  if (/\b401\b|invalid api key|unauthorized/.test(t)) return 'E401';
+  if (/\b5\d\d\b|internal server error|bad gateway|upstream/.test(t)) return 'E5XX';
+  return 'EOTHER';
 }
 
 function verdictFromCounts(successes: number, failures: number, lastError: string | null): ModelHealthVerdict {
@@ -125,20 +175,25 @@ export function listModelHealth(platform: string, db: Db = getDb()): ModelHealth
     model_id: string; successes: number; failures: number; last_at: string | null; last_error: string | null;
   }[];
 
-  return rows.map(row => ({
+  return rows.map(row => {
+    const verdict = verdictFromCounts(row.successes, row.failures, row.last_error);
+    return {
     platform,
     modelId: row.model_id,
-    verdict: verdictFromCounts(row.successes, row.failures, row.last_error),
+    verdict,
+    code: verdict === 'ok' ? 'OK' as const : verdict === 'untested' ? null : codeForErrorText(row.last_error),
     detail: row.successes > 0 ? null : row.last_error?.slice(0, DETAIL_CHARS) ?? null,
     lastCheckedAtMs: row.last_at ? Date.parse(`${row.last_at.replace(' ', 'T')}Z`) : null,
     successes: row.successes,
     failures: row.failures,
-  }));
+    };
+  });
 }
 
 export interface ProbeResult {
   modelId: string;
   verdict: ModelHealthVerdict;
+  code: ModelHealthCode | null;
   detail: string | null;
   latencyMs: number | null;
 }
@@ -157,7 +212,7 @@ const PROBE_MAX_TOKENS = 4;
  */
 export async function probeModel(platform: string, modelId: string, db: Db = getDb()): Promise<ProbeResult> {
   const provider = getProvider(platform as Platform);
-  if (!provider) return { modelId, verdict: 'dead', detail: `No provider registered for ${platform}`, latencyMs: null };
+  if (!provider) return { modelId, verdict: 'dead', code: 'EOTHER', detail: `No provider registered for ${platform}`, latencyMs: null };
 
   const keys = db.prepare(`
     SELECT id, encrypted_key, iv, auth_tag, model_scope_json
@@ -168,7 +223,7 @@ export async function probeModel(platform: string, modelId: string, db: Db = get
   const usable = keys.find(k => scopeAllows(parseModelScope(k.model_scope_json), modelId));
   // No key is not a verdict about the MODEL. Saying "dead" here would blame the
   // route for a missing credential.
-  if (!usable) return { modelId, verdict: 'untested', detail: 'No enabled key is scoped to this model', latencyMs: null };
+  if (!usable) return { modelId, verdict: 'untested', code: null, detail: 'No enabled key is scoped to this model', latencyMs: null };
 
   const apiKey = decrypt(usable.encrypted_key, usable.iv, usable.auth_tag);
   const startedAt = Date.now();
@@ -184,12 +239,12 @@ export async function probeModel(platform: string, modelId: string, db: Db = get
     });
     const latencyMs = Date.now() - startedAt;
     record.run(platform, modelId, usable.id, 'success', latencyMs, null);
-    return { modelId, verdict: 'ok', detail: null, latencyMs };
+    return { modelId, verdict: 'ok', code: 'OK', detail: null, latencyMs };
   } catch (err) {
     const latencyMs = Date.now() - startedAt;
     const message = (err as Error)?.message ?? String(err);
     const verdict = verdictForError(err);
     record.run(platform, modelId, usable.id, verdict === 'limited' ? 'rate_limited' : 'error', latencyMs, message.slice(0, 500));
-    return { modelId, verdict, detail: message.slice(0, DETAIL_CHARS), latencyMs };
+    return { modelId, verdict, code: codeForErrorText(message), detail: message.slice(0, DETAIL_CHARS), latencyMs };
   }
 }

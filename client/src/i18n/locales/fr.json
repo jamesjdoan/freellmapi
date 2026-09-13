@@ -678,7 +678,19 @@
     "healthLimitedHint": "The route works; its allowance is spent right now.",
     "healthDeadCount": "{count} failing",
     "healthTest": "Test {count} untested",
-    "healthTesting": "Testing…"
+    "healthTesting": "Testing…",
+    "healthOk": "tested",
+    "healthOkHint": "This route answered a real request. The time beside it is when.",
+    "healthAgoMinutes": "{count}m ago",
+    "healthAgoHours": "{count}h ago",
+    "healthAgoDays": "{count}d ago",
+    "healthCode_E403": "blocked for this account — enable it with the provider, or drop the route",
+    "healthCode_E404": "the provider does not know this model id",
+    "healthCode_E401": "credential rejected — about the key, not the model",
+    "healthCode_E5XX": "provider error",
+    "healthCode_ETIME": "we stopped waiting — says nothing about the model",
+    "healthCode_E429": "allowance spent right now",
+    "healthCode_EOTHER": "refused for another reason — hover the badge"
   },
   "backups": {
     "title": "Sauvegardes",
