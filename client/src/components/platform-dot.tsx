@@ -36,17 +36,23 @@ export interface PlatformScope {
  *  hundred-line list is unreadable at any size. */
 const TOOLTIP_IDS = 8
 
-// The tooltip surface is inverted (bg-foreground / text-background), so these
-// are picked to read on a dark panel in light mode and a light one in dark:
+// The tooltip surface is INVERTED: `bg-foreground`, so the panel is dark while
+// the app is light and light while the app is dark. Accent colours therefore
+// have to flip the opposite way to everything else on screen — hardcoding the
+// light shades made every section near-white on a near-white panel in dark
+// mode, which is why the provider hover could not be read at all.
+//
+// Base = light app, dark panel -> light ink. `dark:` = dark app, light panel
+// -> dark ink.
 //   green      routable now
-//   dimmed     present and switched off — deliberately recessive, since the
-//              point is that it is NOT in play. True black would be invisible
-//              against this surface, so it is a dim neutral instead.
-//   light blue served here, no key at all
+//   muted      present and switched off — recessive, but still READ. It was
+//              the panel's own colour at half strength, which is invisible by
+//              construction; recessive now costs weight, not contrast.
+//   blue       served here, no key at all
 const SECTION_CLASS = {
-  in: 'text-emerald-400',
-  off: 'text-background/50',
-  none: 'text-sky-300',
+  in: 'text-emerald-300 dark:text-emerald-700',
+  off: 'text-background/80 font-light',
+  none: 'text-sky-300 dark:text-sky-700',
 } as const
 
 function Section({ tone, label, ids, t }: {
@@ -58,8 +64,11 @@ function Section({ tone, label, ids, t }: {
   if (ids.length === 0) return null
   const rest = ids.length > TOOLTIP_IDS ? ' ' + t('models.andMore', { count: ids.length - TOOLTIP_IDS }) : ''
   return (
-    <span className={`block ${SECTION_CLASS[tone]}`}>
-      {t(label, { count: ids.length })}: {ids.slice(0, TOOLTIP_IDS).join(', ')}{rest}
+    // The ids wrap rather than run off the panel, and the label leads in its
+    // own weight: a run-on line of eight model ids is why this read as a wall.
+    <span className={`block break-words ${SECTION_CLASS[tone]}`}>
+      <span className="font-medium">{t(label, { count: ids.length })}:</span>{' '}
+      {ids.slice(0, TOOLTIP_IDS).join(', ')}{rest}
     </span>
   )
 }

@@ -93,6 +93,9 @@ interface Row {
   /** Chains currently routing to this model. Empty means it can serve and
    *  nothing asks it to. */
   chains: string[]
+  /** Position within each chain above, same order — the server pairs them in
+   *  one concat so they cannot drift apart. */
+  chainRanks: number[]
   analysis: {
     slug: string
     name: string
@@ -310,6 +313,15 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
     [health?.rows],
   )
 
+  const position = useMutation({
+    mutationFn: (body: { chain: string; modelDbId: number; position: number }) =>
+      apiFetch('/api/fallback/position', { method: 'POST', body: JSON.stringify(body) }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['fallback'] })
+      void queryClient.invalidateQueries({ queryKey: ['analysis'] })
+    },
+  })
+
   const probe = useMutation({
     mutationFn: (modelIds: string[]) =>
       apiFetch('/api/keys/model-health/probe', { method: 'POST', body: JSON.stringify({ platform, modelIds }) }),
@@ -524,7 +536,14 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
                   <ChainPicker
                     chains={(profiles ?? []).map(p => p.name)}
                     member={r.chains}
-                    disabled={membership.isPending}
+                    // Same control as Compare, same data: deciding a provider's
+                    // menu and ordering it are one motion, and sending the
+                    // reader to another page to type a number was the gap.
+                    ranks={Object.fromEntries(r.chains.map((chain, i) => [
+                      chain, { rank: r.chainRanks[i], modelDbId: r.modelDbId },
+                    ]))}
+                    disabled={membership.isPending || position.isPending}
+                    onRank={(chain, modelDbId, next) => position.mutate({ chain, modelDbId, position: next })}
                     onApply={changes => changes.forEach(c => membership.mutate({
                       chain: c.chain,
                       modelDbIds: [r.modelDbId],

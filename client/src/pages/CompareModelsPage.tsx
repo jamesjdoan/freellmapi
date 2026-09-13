@@ -15,6 +15,7 @@ import { PageHeader } from '@/components/page-header'
 import { PlatformDot, PlatformLegend, type PlatformScope } from '@/components/platform-dot'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tooltip } from '@/components/tooltip'
+import { ConfirmButton } from '@/components/confirm-button'
 
 // Compare our routed models on measured capability instead of on the
 // hand-tuned ranks this project ships.
@@ -616,13 +617,18 @@ export default function CompareModelsPage() {
                       <TableCell>
                         {g.reference
                           ? (
+                            // Confirm-gated like every other destructive action
+                            // here: the × sits exactly where the selection
+                            // checkbox sits on every other row, so a misaimed
+                            // click silently dropped a baseline and the scores
+                            // it was there to compare against.
                             <Tooltip text={t('compare.referenceRemove')}>
-                              <Button
-                                variant="ghost"
+                              <ConfirmButton
                                 size="icon-xs"
+                                armedSize="xs"
                                 aria-label={t('compare.referenceRemove')}
-                                onClick={() => removeReference(g.analysis?.slug ?? '')}
-                              >×</Button>
+                                onConfirm={() => removeReference(g.analysis?.slug ?? '')}
+                              >×</ConfirmButton>
                             </Tooltip>
                           )
                           : (
