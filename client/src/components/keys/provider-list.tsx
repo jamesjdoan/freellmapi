@@ -50,6 +50,17 @@ type BulkAction = 'enable' | 'disable' | 'delete'
 // The Providers tab body: a filter toolbar over a list of collapsible provider
 // groups. Owns the keys/health/proxy queries and every per-key mutation so
 // KeysPage stays a thin shell. `onAddKey` opens the shared Add key dialog.
+/** Per-row values the map computes once; passed in so both call sites of
+ *  renderKeyDetails agree on what "this key's status" means. */
+interface KeyDetailCtx {
+  status: string
+  lastChecked: string | null | undefined
+  isEditing: boolean
+  hasCustomModels: boolean
+  isExpanded: boolean
+  isChecking: boolean
+}
+
 export function ProviderList({ onAddKey, initialSearch }: {
   onAddKey: () => void
   /** Arriving from elsewhere pointed at one provider (Compare links here when a
@@ -57,6 +68,200 @@ export function ProviderList({ onAddKey, initialSearch }: {
    *  auto-expands the groups it matches. */
   initialSearch?: string
 }) {
+  /**
+   * One definition of a key's own controls: status, masked key, editable
+   * label, badges, last check and the hover action cluster.
+   *
+   * Rendered in two places — inline on a single-key provider's header, and on
+   * each row of a multi-key list. Extracted rather than copied when the header
+   * absorbed the single-key row: two delete buttons for one key is how a
+   * 'remove' ends up wired to the wrong one.
+   */
+  function renderKeyDetails(k: ApiKey, ctx: KeyDetailCtx) {
+    const { status, lastChecked, isEditing, hasCustomModels, isExpanded, isChecking } = ctx
+    return (
+      <>
+            <span className={`size-1.5 rounded-full flex-shrink-0 ${statusDot[status] ?? statusDot.unknown}`} />
+            {/* The provider's name, scope count and churn chip
+                live in the group header above — once, for the
+                whole group. They used to be repeated here
+                because the header was hidden for single-key
+                groups; it no longer is, so repeating them put
+                the same four facts on screen twice. */}
+            {hasCustomModels && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                className="size-6 p-0 text-muted-foreground"
+                onClick={() => toggleExpandedKey(k.id)}
+                title={isExpanded ? t('common.hide') : t('common.show')}
+              >
+                <ChevronDown className={`size-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+              </Button>
+            )}
+            <code className={`text-xs font-mono flex-shrink-0 ${k.enabled ? '' : 'opacity-50'}`}>{k.maskedKey}</code>
+            {isEditing ? (
+              <Input
+                ref={editInputRef}
+                value={editingLabel}
+                onChange={e => setEditingLabel(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') saveEditing(k.id)
+                  if (e.key === 'Escape') cancelEditing()
+                }}
+                onBlur={() => saveEditing(k.id)}
+                className="h-6 w-[160px] text-xs"
+                disabled={updateKey.isPending}
+              />
+            ) : (
+              <>
+                {/* The label is the edit affordance itself (#705): the pencil
+                    only appears on hover, so clicking the name is the move
+                    everyone tries first. An unlabelled key still needs
+                    somewhere to click, hence the muted prompt. */}
+                <button
+                  type="button"
+                  onClick={() => startEditing(k)}
+                  title={t('keys.editLabel')}
+                  className={`rounded text-xs hover:text-foreground hover:underline underline-offset-2 ${k.label ? 'text-muted-foreground' : 'text-muted-foreground/50'} ${k.enabled ? '' : 'opacity-50'}`}
+                >
+                  {k.label || t('keys.editLabel')}
+                </button>
+                {k.baseUrl && (
+                  <code className={`text-[11px] text-muted-foreground font-mono truncate max-w-[260px] ${k.enabled ? '' : 'opacity-50'}`} title={k.baseUrl}>
+                    {k.baseUrl}
+                  </code>
+                )}
+              </>
+            )}
+            <span className={`text-xs text-muted-foreground ${k.enabled ? '' : 'opacity-50'}`}>{statusLabelKey[status] ? t(statusLabelKey[status]) : status}</span>
+            {/* Only a SCOPED key shows anything (#657); an unscoped one stays as it always was. */}
+            {(k.modelScope?.length ?? 0) > 0 && (
+              <Badge
+                variant="secondary"
+                className={`text-[10px] text-muted-foreground ${k.enabled ? '' : 'opacity-50'}`}
+                title={k.modelScope!.join(', ')}
+              >
+                {t(k.modelScope!.length === 1 ? 'keys.modelScopeBadgeOne' : 'keys.modelScopeBadgeOther', { count: k.modelScope!.length })}
+              </Badge>
+            )}
+            {(k.providerRpmLimit != null || k.providerRpdLimit != null || k.providerTpdLimit != null) && (
+              <Badge variant="secondary" className="text-[10px] text-muted-foreground">
+                {t('keys.accountLimits')}
+              </Badge>
+            )}
+            <div className="flex-1" />
+            {lastChecked && (
+              <span className="text-[11px] text-muted-foreground tabular-nums">
+                {formatSqliteUtcToLocalTime(lastChecked, { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+            <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/krow:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
+              {!isEditing && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => startEditing(k)}
+                  aria-label={t('keys.editLabel')}
+                  title={t('keys.editLabel')}
+                >
+                  <Pencil className="size-3" />
+                </Button>
+              )}
+              {!k.keyless && (
+                <Tooltip text={t('keys.copyFullKey')}>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => setCopyKey({ id: k.id, maskedKey: k.maskedKey })}
+                    aria-label={t('keys.copyFullKey')}
+                  >
+                    <Copy className="size-3" />
+                  </Button>
+                </Tooltip>
+              )}
+              {k.platform === 'custom' && k.baseUrl && (
+                <>
+                  <Tooltip text={t('keys.addKey')}>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => setAddKeyBaseUrl(k.baseUrl!)}
+                      aria-label={t('keys.addKey')}
+                    >
+                      <KeyRound className="size-3" />
+                    </Button>
+                  </Tooltip>
+                  <Tooltip text={t('keys.discoverModels')}>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => setDiscoverKeyId(k.id)}
+                      aria-label={t('keys.discoverModels')}
+                    >
+                      <ListPlus className="size-3" />
+                    </Button>
+                  </Tooltip>
+                  <Tooltip text={t('keys.probeNow')}>
+                    <ConfirmButton
+                      variant="ghost"
+                      size="icon-xs"
+                      armedSize="xs"
+                      confirmLabel={t('keys.probeConfirm')}
+                      onConfirm={() => probeKey.mutate(k.id)}
+                      disabled={probeKey.isPending}
+                      title={t('keys.probeNow')}
+                      aria-label={t('keys.probeNow')}
+                    >
+                      <Zap className={`size-3 ${probeKey.isPending ? 'animate-pulse' : ''}`} />
+                    </ConfirmButton>
+                  </Tooltip>
+                </>
+              )}
+              {/* Deliberately secondary (#657): a small hover-cluster affordance,
+                  not a first-fold control. */}
+              {!k.keyless && (
+                <Tooltip text={t('keys.modelsAndAccountLimits')}>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => setScopeKeyId(k.id)}
+                    aria-label={t('keys.modelsAndAccountLimits')}
+                  >
+                    <ListFilter className="size-3" />
+                  </Button>
+                </Tooltip>
+              )}
+              <Tooltip text={t('keys.checkNow')}>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => checkKey.mutate(k.id)}
+                  disabled={checkKey.isPending}
+                  aria-label={t('keys.checkNow')}
+                >
+                  <RefreshCw className={`size-3 ${isChecking ? 'animate-spin' : ''}`} />
+                </Button>
+              </Tooltip>
+              <ConfirmButton
+                variant="ghost"
+                size="icon-xs"
+                armedSize="xs"
+                className="text-muted-foreground hover:text-destructive"
+                confirmLabel={t('keys.confirmRemove')}
+                onConfirm={() => deleteKey.mutate(k.id)}
+                disabled={deleteKey.isPending}
+                title={t('common.remove')}
+                aria-label={t('common.remove')}
+              >
+                <Trash2 className="size-3" />
+              </ConfirmButton>
+            </div>
+      </>
+    )
+  }
+
   const { t } = useI18n()
   const queryClient = useQueryClient()
 
@@ -456,10 +661,9 @@ export function ProviderList({ onAddKey, initialSearch }: {
             // #787: once a selection exists in this group the checkboxes stay
             // visible, so the rest of the selection can be built without hunting.
             const groupHasSelection = group.keys.some(k => selectedKeyIds.has(k.id))
-            // One key means the group header and the key row carry the same
-            // provider: the header is pure duplication and the disclosure has
-            // nothing to disclose. Collapse to the key row and inline the
-            // provider's own name and menu on it.
+            // A single-key group still gets its header — it carries the only
+            // disclosure control. `single` now means just "this group's scope
+            // edits have one unambiguous target", not "hide the header".
             const single = group.keys.length === 1
             const models = enabledModelCount(fallback, group.value, scopeAccess.get(group.value))
             return (
@@ -467,7 +671,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                 {/* Shown for single-key groups too, unlike before: it carries
                     the only disclosure control, and a group that cannot be
                     closed would leave its model table open on arrival. */}
-                <div className="flex items-center gap-2 pb-2">
+                <div className="group/krow flex items-center gap-2 pb-2">
                   <Switch
                     checked={group.keys.some(k => k.enabled)}
                     onCheckedChange={(checked) =>
@@ -478,7 +682,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                   <button
                     type="button"
                     onClick={() => toggleGroup(group.value, expanded)}
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    className={`flex min-w-0 items-center gap-2 text-left ${single ? '' : 'flex-1'}`}
                     aria-expanded={expanded}
                   >
                     <h3 className="text-sm font-medium">{group.label}</h3>
@@ -502,11 +706,41 @@ export function ProviderList({ onAddKey, initialSearch }: {
                         {t('keys.modelsInScope', { enabled: models.enabled, total: models.total })}
                       </Badge>
                     )}
-                    {/* No onToggle: with several keys in the group, "this
-                        key's scope" has no single answer. The switches live on
-                        each key row below. */}
-                    <ProviderChurnChip churn={churn.get(group.value)} />
                   </button>
+                  {/* Outside the disclosure button, not inside it: a button
+                      nested in a button is invalid markup, and the chip's own
+                      click would have expanded the group instead of opening
+                      the churn panel.
+
+                      The panel edits ONE key's scope, so the chip only opens it
+                      where that key is unambiguous. With several keys in the
+                      group, "this key's scope" has no single answer and the
+                      chip stays the read-only count it has always been. */}
+                  <ProviderChurnChip
+                    churn={churn.get(group.value)}
+                    expanded={single ? churnOpenKeyIds.has(group.keys[0].id) : undefined}
+                    onToggle={single ? () => toggleChurnOpen(group.keys[0].id) : undefined}
+                  />
+                  {/* The single key, inline. It used to sit in its own bordered
+                      box below, which repeated the provider it belongs to and
+                      carried a second copy of the provider menu. One provider,
+                      one key, one row.
+
+                      The key's own enable switch is NOT repeated: the group
+                      switch beside the name writes every key of the platform,
+                      which for one key is the same act. */}
+                  {single && (() => {
+                    const k = group.keys[0]
+                    const health = healthKeyMap.get(k.id)
+                    return renderKeyDetails(k, {
+                      status: statusOf(k),
+                      lastChecked: health?.lastCheckedAt ?? k.lastCheckedAt,
+                      isEditing: editingKeyId === k.id,
+                      hasCustomModels: (k.models ?? []).length > 0,
+                      isExpanded: expandedKeyIds.has(k.id),
+                      isChecking: checkKey.isPending && checkKey.variables === k.id,
+                    })
+                  })()}
                   {(group.url || proxyEnabled) && (
                     <DropdownMenu>
                       <DropdownMenuTrigger
@@ -543,6 +777,42 @@ export function ProviderList({ onAddKey, initialSearch }: {
                     <ChevronDown className={`size-4 text-muted-foreground transition-transform ${expanded ? '' : '-rotate-90'}`} />
                   </button>
                 </div>
+
+                {/* Group level, not inside the key list: the chip that opens
+                    this sits in the header and stays clickable while the group
+                    is collapsed. Rendered here it follows the chip; rendered
+                    among the key rows it silently did nothing until the group
+                    happened to be open.
+
+                    Only single-key groups can reach it — the chip is read-only
+                    where "this key's scope" is ambiguous — so the one key is
+                    the unambiguous target of every scope edit below. */}
+                {single && churnOpenKeyIds.has(group.keys[0].id) && (() => {
+                  const k = group.keys[0]
+                  const catalogIds = catalogIdsByPlatform.get(group.value) ?? []
+                  // A NULL or empty scope serves the whole catalogue.
+                  const serveAll = k.modelScope == null || k.modelScope.length === 0
+                  const servedNow = new Set(serveAll ? catalogIds : k.modelScope!)
+                  return (
+                    <ProviderChurnPanel
+                      churn={churn.get(group.value)}
+                      pending={setKeyScope.isPending && setKeyScope.variables?.id === k.id}
+                      isServed={modelId => servedNow.has(modelId)}
+                      disabledReason={modelId => {
+                        // The one edit the column cannot express, said up front
+                        // rather than as a failed write.
+                        if (!servedNow.has(modelId)) return null
+                        const result = scopeAfterToggle(catalogIds, k.modelScope, modelId, false)
+                        return 'refuse' in result ? t('keys.churnLastModel') : null
+                      }}
+                      onSetServed={(modelId, served) => {
+                        const result = scopeAfterToggle(catalogIds, k.modelScope, modelId, served)
+                        if ('refuse' in result) return
+                        setKeyScope.mutate({ id: k.id, modelScope: result.modelScope })
+                      }}
+                    />
+                  )
+                })()}
 
                 {/* #787: batch bar — appears only while keys of THIS group are
                     selected. One mutation per key (the per-key endpoint), which
@@ -590,6 +860,12 @@ export function ProviderList({ onAddKey, initialSearch }: {
 
                 {expanded && (
                   <>
+                  {/* A single-key provider has its key inline on the header
+                      above, so this list would be a bordered box holding one
+                      row that says the same things again. Multi-key providers
+                      still need it: there the header cannot speak for any one
+                      key. */}
+                  {!single && (
                   <div className="rounded-2xl border divide-y bg-card overflow-hidden">
                     {group.keys.map(k => {
                       const status = statusOf(k)
@@ -639,225 +915,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                               disabled={setKeyEnabled.isPending && setKeyEnabled.variables?.id === k.id}
                               aria-label={t('keys.enable')}
                             />
-                            <span className={`size-1.5 rounded-full flex-shrink-0 ${statusDot[status] ?? statusDot.unknown}`} />
-                            {/* The collapsed single-key row carries the provider
-                                itself, since its header is hidden above. */}
-                            {single && (
-                              <>
-                                <h3 className="text-sm font-medium flex-shrink-0">{group.label}</h3>
-                                {models.total > 0 && (
-                                  <Badge variant="secondary" className="tabular-nums text-[10px] font-normal text-muted-foreground flex-shrink-0">
-                                    {t('keys.modelsInScope', { enabled: models.enabled, total: models.total })}
-                                  </Badge>
-                                )}
-                                <ProviderChurnChip
-                                  churn={churn.get(group.value)}
-                                  expanded={churnOpenKeyIds.has(k.id)}
-                                  onToggle={() => toggleChurnOpen(k.id)}
-                                />
-                              </>
-                            )}
-                            {hasCustomModels && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="xs"
-                                className="size-6 p-0 text-muted-foreground"
-                                onClick={() => toggleExpandedKey(k.id)}
-                                title={isExpanded ? t('common.hide') : t('common.show')}
-                              >
-                                <ChevronDown className={`size-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                              </Button>
-                            )}
-                            <code className={`text-xs font-mono flex-shrink-0 ${k.enabled ? '' : 'opacity-50'}`}>{k.maskedKey}</code>
-                            {isEditing ? (
-                              <Input
-                                ref={editInputRef}
-                                value={editingLabel}
-                                onChange={e => setEditingLabel(e.target.value)}
-                                onKeyDown={e => {
-                                  if (e.key === 'Enter') saveEditing(k.id)
-                                  if (e.key === 'Escape') cancelEditing()
-                                }}
-                                onBlur={() => saveEditing(k.id)}
-                                className="h-6 w-[160px] text-xs"
-                                disabled={updateKey.isPending}
-                              />
-                            ) : (
-                              <>
-                                {/* The label is the edit affordance itself (#705): the pencil
-                                    only appears on hover, so clicking the name is the move
-                                    everyone tries first. An unlabelled key still needs
-                                    somewhere to click, hence the muted prompt. */}
-                                <button
-                                  type="button"
-                                  onClick={() => startEditing(k)}
-                                  title={t('keys.editLabel')}
-                                  className={`rounded text-xs hover:text-foreground hover:underline underline-offset-2 ${k.label ? 'text-muted-foreground' : 'text-muted-foreground/50'} ${k.enabled ? '' : 'opacity-50'}`}
-                                >
-                                  {k.label || t('keys.editLabel')}
-                                </button>
-                                {k.baseUrl && (
-                                  <code className={`text-[11px] text-muted-foreground font-mono truncate max-w-[260px] ${k.enabled ? '' : 'opacity-50'}`} title={k.baseUrl}>
-                                    {k.baseUrl}
-                                  </code>
-                                )}
-                              </>
-                            )}
-                            <span className={`text-xs text-muted-foreground ${k.enabled ? '' : 'opacity-50'}`}>{statusLabelKey[status] ? t(statusLabelKey[status]) : status}</span>
-                            {/* Only a SCOPED key shows anything (#657); an unscoped one stays as it always was. */}
-                            {(k.modelScope?.length ?? 0) > 0 && (
-                              <Badge
-                                variant="secondary"
-                                className={`text-[10px] text-muted-foreground ${k.enabled ? '' : 'opacity-50'}`}
-                                title={k.modelScope!.join(', ')}
-                              >
-                                {t(k.modelScope!.length === 1 ? 'keys.modelScopeBadgeOne' : 'keys.modelScopeBadgeOther', { count: k.modelScope!.length })}
-                              </Badge>
-                            )}
-                            {(k.providerRpmLimit != null || k.providerRpdLimit != null || k.providerTpdLimit != null) && (
-                              <Badge variant="secondary" className="text-[10px] text-muted-foreground">
-                                {t('keys.accountLimits')}
-                              </Badge>
-                            )}
-                            <div className="flex-1" />
-                            {lastChecked && (
-                              <span className="text-[11px] text-muted-foreground tabular-nums">
-                                {formatSqliteUtcToLocalTime(lastChecked, { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            )}
-                            <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/krow:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
-                              {!isEditing && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon-xs"
-                                  onClick={() => startEditing(k)}
-                                  aria-label={t('keys.editLabel')}
-                                  title={t('keys.editLabel')}
-                                >
-                                  <Pencil className="size-3" />
-                                </Button>
-                              )}
-                              {!k.keyless && (
-                                <Tooltip text={t('keys.copyFullKey')}>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon-xs"
-                                    onClick={() => setCopyKey({ id: k.id, maskedKey: k.maskedKey })}
-                                    aria-label={t('keys.copyFullKey')}
-                                  >
-                                    <Copy className="size-3" />
-                                  </Button>
-                                </Tooltip>
-                              )}
-                              {k.platform === 'custom' && k.baseUrl && (
-                                <>
-                                  <Tooltip text={t('keys.addKey')}>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon-xs"
-                                      onClick={() => setAddKeyBaseUrl(k.baseUrl!)}
-                                      aria-label={t('keys.addKey')}
-                                    >
-                                      <KeyRound className="size-3" />
-                                    </Button>
-                                  </Tooltip>
-                                  <Tooltip text={t('keys.discoverModels')}>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon-xs"
-                                      onClick={() => setDiscoverKeyId(k.id)}
-                                      aria-label={t('keys.discoverModels')}
-                                    >
-                                      <ListPlus className="size-3" />
-                                    </Button>
-                                  </Tooltip>
-                                  <Tooltip text={t('keys.probeNow')}>
-                                    <ConfirmButton
-                                      variant="ghost"
-                                      size="icon-xs"
-                                      armedSize="xs"
-                                      confirmLabel={t('keys.probeConfirm')}
-                                      onConfirm={() => probeKey.mutate(k.id)}
-                                      disabled={probeKey.isPending}
-                                      title={t('keys.probeNow')}
-                                      aria-label={t('keys.probeNow')}
-                                    >
-                                      <Zap className={`size-3 ${probeKey.isPending ? 'animate-pulse' : ''}`} />
-                                    </ConfirmButton>
-                                  </Tooltip>
-                                </>
-                              )}
-                              {/* Deliberately secondary (#657): a small hover-cluster affordance,
-                                  not a first-fold control. */}
-                              {!k.keyless && (
-                                <Tooltip text={t('keys.modelsAndAccountLimits')}>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon-xs"
-                                    onClick={() => setScopeKeyId(k.id)}
-                                    aria-label={t('keys.modelsAndAccountLimits')}
-                                  >
-                                    <ListFilter className="size-3" />
-                                  </Button>
-                                </Tooltip>
-                              )}
-                              <Tooltip text={t('keys.checkNow')}>
-                                <Button
-                                  variant="ghost"
-                                  size="icon-xs"
-                                  onClick={() => checkKey.mutate(k.id)}
-                                  disabled={checkKey.isPending}
-                                  aria-label={t('keys.checkNow')}
-                                >
-                                  <RefreshCw className={`size-3 ${isChecking ? 'animate-spin' : ''}`} />
-                                </Button>
-                              </Tooltip>
-                              <ConfirmButton
-                                variant="ghost"
-                                size="icon-xs"
-                                armedSize="xs"
-                                className="text-muted-foreground hover:text-destructive"
-                                confirmLabel={t('keys.confirmRemove')}
-                                onConfirm={() => deleteKey.mutate(k.id)}
-                                disabled={deleteKey.isPending}
-                                title={t('common.remove')}
-                                aria-label={t('common.remove')}
-                              >
-                                <Trash2 className="size-3" />
-                              </ConfirmButton>
-                            </div>
-                            {/* Provider-level actions, which the hidden header
-                                would otherwise take with it. Outside the
-                                hover-reveal group: they belong to the provider,
-                                not the key. */}
-                            {single && (group.url || proxyEnabled) && (
-                              <DropdownMenu>
-                                <DropdownMenuTrigger
-                                  className={buttonVariants({ variant: 'ghost', size: 'icon-xs' })}
-                                  aria-label={t('keys.providerActions')}
-                                >
-                                  <MoreHorizontal />
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-52">
-                                  {group.url && (
-                                    <DropdownMenuItem onClick={() => window.open(group.url, '_blank', 'noopener,noreferrer')}>
-                                      {t('keys.getApiKey')}
-                                      <ExternalLink className="ml-auto size-3.5" />
-                                    </DropdownMenuItem>
-                                  )}
-                                  {proxyEnabled && (
-                                    <DropdownMenuCheckboxItem
-                                      checked={!bypassPlatforms.includes(group.value)}
-                                      onCheckedChange={() => toggleBypass.mutate(group.value)}
-                                      closeOnClick={false}
-                                    >
-                                      {t('keys.routeViaProxy')}
-                                    </DropdownMenuCheckboxItem>
-                                  )}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            )}
+                            {renderKeyDetails(k, { status, lastChecked, isEditing, hasCustomModels, isExpanded, isChecking })}
                           </div>
                           {lastHealthError && (
                             <div className="flex items-start gap-2 px-4 pb-3 pl-8 text-xs text-destructive" role="status">
@@ -896,35 +954,52 @@ export function ProviderList({ onAddKey, initialSearch }: {
                               })}
                             </div>
                           )}
-                          {churnOpenKeyIds.has(k.id) && (() => {
-                            const catalogIds = catalogIdsByPlatform.get(group.value) ?? []
-                            // A NULL or empty scope serves the whole catalogue.
-                            const serveAll = k.modelScope == null || k.modelScope.length === 0
-                            const servedNow = new Set(serveAll ? catalogIds : k.modelScope!)
-                            return (
-                              <ProviderChurnPanel
-                                churn={churn.get(group.value)}
-                                pending={setKeyScope.isPending && setKeyScope.variables?.id === k.id}
-                                isServed={modelId => servedNow.has(modelId)}
-                                disabledReason={modelId => {
-                                  // The one edit the column cannot express, said
-                                  // up front rather than as a failed write.
-                                  if (!servedNow.has(modelId)) return null
-                                  const result = scopeAfterToggle(catalogIds, k.modelScope, modelId, false)
-                                  return 'refuse' in result ? t('keys.churnLastModel') : null
-                                }}
-                                onSetServed={(modelId, served) => {
-                                  const result = scopeAfterToggle(catalogIds, k.modelScope, modelId, served)
-                                  if ('refuse' in result) return
-                                  setKeyScope.mutate({ id: k.id, modelScope: result.modelScope })
-                                }}
-                              />
-                            )
-                          })()}
                         </div>
                       )
                     })}
                   </div>
+                  )}
+                  {/* The single key's own extras, which live in the row body on
+                      a multi-key list: a health error always, the custom-model
+                      strip when opened. */}
+                  {single && (() => {
+                    const k = group.keys[0]
+                    const health = healthKeyMap.get(k.id)
+                    const lastHealthError = health?.lastHealthError ?? k.lastHealthError
+                    const customModels = k.models ?? []
+                    if (!lastHealthError && !(customModels.length > 0 && expandedKeyIds.has(k.id))) return null
+                    return (
+                      <div className="rounded-2xl border bg-card overflow-hidden mb-2">
+                        {lastHealthError && (
+                          <div className="flex items-start gap-2 px-4 py-3 text-xs text-destructive" role="status">
+                            <CircleAlert className="mt-0.5 size-3.5 flex-shrink-0" />
+                            <span className="break-words" title={lastHealthError}>{lastHealthError}</span>
+                          </div>
+                        )}
+                        {customModels.length > 0 && expandedKeyIds.has(k.id) && (
+                          <div className="flex flex-wrap gap-2 border-t bg-muted/20 px-4 py-3">
+                            {customModels.map(model => {
+                              const modelKey = customModelDeleteKey(model)
+                              return (
+                                <div key={modelKey} className="inline-flex min-w-0 items-center gap-2 rounded-md border bg-background px-2 py-1 text-[11px]">
+                                  <code className="truncate font-mono" title={model.modelId}>{model.modelId}</code>
+                                  <ConfirmButton
+                                    className="h-5 px-1 text-muted-foreground hover:text-destructive"
+                                    disabled={deleteCustomModel.isPending}
+                                    onConfirm={() => deleteCustomModel.mutate(model)}
+                                    title={t('common.remove')}
+                                    aria-label={t('common.remove')}
+                                  >
+                                    <Trash2 className="size-3" />
+                                  </ConfirmButton>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
                   {/* The provider's whole menu, scored, with the two switches
                       that decide routing. Comparing models within one provider
                       is the decision this screen exists for; it used to need
