@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink, RefreshCw, Scale } from 'lucide-react'
 import { useI18n } from '@/i18n'
@@ -77,6 +77,8 @@ interface CompareGroup {
   reference?: boolean
   conflicted: boolean
   chains: string[]
+  /** Per chain: where it sits, and which member row holds that slot. */
+  chainRanks: Record<string, { rank: number; modelDbId: number }>
   enabledMembers: number
 }
 
@@ -257,6 +259,19 @@ export default function CompareModelsPage() {
     queryFn: () => apiFetch('/api/profiles'),
   })
   const chainNames = (profiles ?? []).map(p => p.name)
+  // Position, not membership. Sending one number and letting the server
+  // renumber is the whole point: priorities on this install are neither dense
+  // nor unique (two models sat at 3 in Coding), and a tie makes "which runs
+  // first" a coin toss.
+  const position = useMutation({
+    mutationFn: (body: { chain: string; modelDbId: number; position: number }) =>
+      apiFetch('/api/fallback/position', { method: 'POST', body: JSON.stringify(body) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fallback'] })
+      queryClient.invalidateQueries({ queryKey: ['analysis'] })
+    },
+  })
+
   const membership = useMutation({
     mutationFn: (body: { chain: string; modelDbIds: number[]; member: boolean }) =>
       apiFetch('/api/fallback/membership', { method: 'POST', body: JSON.stringify(body) }),
@@ -706,16 +721,35 @@ export default function CompareModelsPage() {
                         {g.reference
                           ? <span className="text-[10px]">–</span>
                           : (
-                            <ChainPicker
-                              chains={chainNames}
-                              member={g.chains}
-                              disabled={membership.isPending}
-                              onApply={changes => changes.forEach(c => membership.mutate({
-                                chain: c.chain,
-                                modelDbIds: g.members.map(m => m.modelDbId),
-                                member: c.member,
-                              }))}
-                            />
+                            <div className="flex flex-col gap-1">
+                              <ChainPicker
+                                chains={chainNames}
+                                member={g.chains}
+                                disabled={membership.isPending}
+                                onApply={changes => changes.forEach(c => membership.mutate({
+                                  chain: c.chain,
+                                  modelDbIds: g.members.map(m => m.modelDbId),
+                                  member: c.member,
+                                }))}
+                              />
+                              {/* WHERE in each chain, editable. Membership says
+                                  whether a route is tried; position says when,
+                                  and placing a model used to mean rewriting the
+                                  whole active chain from another page. */}
+                              {g.chains.map(chain => {
+                                const slot = g.chainRanks[chain]
+                                if (!slot) return null
+                                return (
+                                  <RankField
+                                    key={chain}
+                                    chain={chain}
+                                    rank={slot.rank}
+                                    disabled={position.isPending}
+                                    onSet={next => position.mutate({ chain, modelDbId: slot.modelDbId, position: next })}
+                                  />
+                                )
+                              })}
+                            </div>
                           )}
                       </TableCell>
                       {/* An adjusted figure must never read as a measurement.
@@ -863,6 +897,51 @@ function proxyDeltaOf(g: CompareGroup, metric: 'intelligence' | 'coding' | 'agen
 }
 
 /** Signs, not a number, in the same colours the Keys panel uses. */
+/**
+ * One chain's position, editable in place.
+ *
+ * A bare number is the whole control: typing 1 means "try this first", and the
+ * server shifts everything else down. Nothing is written on keystroke — an
+ * intermediate value while typing "12" is 1, which would reorder the chain
+ * twice and land somewhere nobody asked for.
+ */
+export function RankField({ chain, rank, onSet, disabled }: {
+  chain: string
+  rank: number
+  onSet: (position: number) => void
+  disabled?: boolean
+}) {
+  const [draft, setDraft] = useState(String(rank))
+  // The row re-renders as other models move around it; a stale draft would
+  // write back the position this model held two edits ago.
+  useEffect(() => { setDraft(String(rank)) }, [rank])
+
+  const commit = () => {
+    const next = Number(draft)
+    if (!Number.isFinite(next) || next < 1 || next === rank) { setDraft(String(rank)); return }
+    onSet(Math.floor(next))
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px]">
+      <span className="text-muted-foreground">{chain}</span>
+      <input
+        value={draft}
+        disabled={disabled}
+        inputMode="numeric"
+        aria-label={`${chain} position`}
+        onChange={e => setDraft(e.target.value.replace(/[^0-9]/g, ''))}
+        onBlur={commit}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { e.currentTarget.blur() }
+          if (e.key === 'Escape') { setDraft(String(rank)); e.currentTarget.blur() }
+        }}
+        className="w-8 rounded border bg-background px-1 py-0.5 text-center tabular-nums disabled:opacity-50"
+      />
+    </span>
+  )
+}
+
 function DeltaMark({ delta }: { delta: number }) {
   if (!delta) return null
   return (

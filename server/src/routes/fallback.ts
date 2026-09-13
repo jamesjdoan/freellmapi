@@ -458,6 +458,69 @@ fallbackRouter.post('/membership', (req: Request, res: Response) => {
   res.json({ success: true, chain: parsed.data.chain, member: parsed.data.member, changed });
 });
 
+const positionSchema = z.object({
+  chain: z.string().min(1),
+  modelDbId: z.number().int().positive(),
+  /** 1-based. Anything beyond the end lands at the end rather than erroring:
+   *  "put it last" should not require knowing the length. */
+  position: z.number().int().positive(),
+});
+
+/**
+ * Move one model to a position in a chain, shifting the rest down.
+ *
+ * Priorities in this table are not guaranteed dense or unique — chains built by
+ * different paths have produced duplicates (two models at priority 3 in
+ * Coding), and a duplicate makes "which runs first" a coin toss. So this
+ * renumbers the whole chain 1..n on every move: the request names one
+ * position, and the result is a total order with no gaps and no ties.
+ *
+ * Disabled members keep their rows and their relative order, so re-enabling a
+ * model returns it to where it sat rather than to the end.
+ */
+fallbackRouter.post('/position', (req: Request, res: Response) => {
+  const parsed = positionSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
+    return;
+  }
+  const db = getDb();
+  const profile = db.prepare('SELECT id FROM profiles WHERE name = ?').get(parsed.data.chain) as { id: number } | undefined;
+  if (!profile) {
+    res.status(404).json({ error: { message: `Unknown chain ${parsed.data.chain}` } });
+    return;
+  }
+
+  const members = db.prepare(`
+    SELECT model_db_id, priority FROM profile_models
+     WHERE profile_id = ? AND enabled = 1
+     ORDER BY priority, model_db_id
+  `).all(profile.id) as { model_db_id: number; priority: number }[];
+
+  const from = members.findIndex(m => m.model_db_id === parsed.data.modelDbId);
+  if (from === -1) {
+    res.status(404).json({ error: { message: 'That model is not an enabled member of this chain' } });
+    return;
+  }
+
+  const target = Math.min(parsed.data.position, members.length);
+  const ordered = members.slice();
+  const [moved] = ordered.splice(from, 1);
+  ordered.splice(target - 1, 0, moved);
+
+  const write = db.prepare('UPDATE profile_models SET priority = ? WHERE profile_id = ? AND model_db_id = ?');
+  db.transaction(() => {
+    ordered.forEach((m, i) => write.run(i + 1, profile.id, m.model_db_id));
+  })();
+
+  res.json({
+    success: true,
+    chain: parsed.data.chain,
+    position: target,
+    order: ordered.map((m, i) => ({ modelDbId: m.model_db_id, priority: i + 1 })),
+  });
+});
+
 fallbackRouter.post('/sort/:preset', (req: Request, res: Response) => {
   const preset = String(req.params.preset);
   const db = getDb();

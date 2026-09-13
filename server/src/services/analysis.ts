@@ -368,6 +368,8 @@ export interface CompareRow {
   /** Chains this model currently serves, so a comparison can be read against
    *  what it is actually being used for. */
   chains: string[];
+  /** Priority within each chain named above, same order. Lower runs first. */
+  chainRanks: number[];
   /** Null when unlinked, or linked to a slug the last sync no longer returned. */
   analysis: {
     slug: string;
@@ -419,7 +421,11 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
            a.slug AS aa_present, a.name AS aa_name, a.creator, a.intelligence_index,
            a.coding_index, a.agentic_index, a.price_1m_input, a.price_1m_output,
            a.median_output_tokens_per_second, a.median_time_to_first_token_seconds,
-           (SELECT GROUP_CONCAT(p.name, '|')
+           -- Name AND position in one concat. Two separate GROUP_CONCATs would
+           -- not be guaranteed to agree on row order, so the ranks could line
+           -- up against the wrong chains — "in Coding" and "FIRST in Coding"
+           -- are different facts, and only the second says what gets tried.
+           (SELECT GROUP_CONCAT(p.name || ':' || pm.priority, '|')
               FROM profile_models pm JOIN profiles p ON p.id = pm.profile_id
              WHERE pm.model_db_id = m.id AND pm.enabled = 1) AS chains
       FROM models m
@@ -490,7 +496,9 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
       supportsVision: r.supports_vision === 1,
       intelligenceRank: Number(r.intelligence_rank ?? 0),
       speedRank: Number(r.speed_rank ?? 0),
-      chains: r.chains ? String(r.chains).split('|') : [],
+      chains: r.chains ? String(r.chains).split('|').map(pair => pair.slice(0, pair.lastIndexOf(':'))) : [],
+      // lastIndexOf, because a chain name may itself contain a colon.
+      chainRanks: r.chains ? String(r.chains).split('|').map(pair => Number(pair.slice(pair.lastIndexOf(':') + 1))) : [],
       analysis: r.aa_present
         ? {
           slug: String(r.aa_slug),
@@ -568,6 +576,8 @@ export interface CompareGroup {
   conflicted: boolean;
   /** Union across members, since a group serves wherever any member does. */
   chains: string[];
+  /** Per chain: the position, and the member row that occupies it. */
+  chainRanks: Record<string, { rank: number; modelDbId: number }>;
   enabledMembers: number;
 }
 
@@ -639,6 +649,7 @@ export function getReferenceGroups(db: Db = getDb()): CompareGroup[] {
       analysisSource: 'own' as const,
       conflicted: false,
       chains: [],
+      chainRanks: {},
       enabledMembers: 0,
       keyedMembers: 0,
       reference: true,
@@ -676,6 +687,23 @@ export function getGroupedCompare(db: Db = getDb()): CompareGroup[] {
       analysisSource: inherited ? (solo ? 'own' as const : 'inherited' as const) : null,
       conflicted: linkedSlugs.length > 1,
       chains: [...new Set(members.flatMap(m => m.chains))],
+      // Position per chain, and WHICH member holds it. A group can span several
+      // platform rows (the same model on Groq and on OVH), and only one of them
+      // occupies a given slot — so a rank without its model id cannot be edited
+      // without guessing which row to move. Lowest wins where two members share
+      // a chain: that is the one the router reaches first.
+      chainRanks: (() => {
+        const best = new Map<string, { rank: number; modelDbId: number }>();
+        for (const m of members) {
+          m.chains.forEach((chain, i) => {
+            const rank = m.chainRanks[i];
+            if (!Number.isFinite(rank)) return;
+            const seen = best.get(chain);
+            if (!seen || rank < seen.rank) best.set(chain, { rank, modelDbId: m.modelDbId });
+          });
+        }
+        return Object.fromEntries(best);
+      })(),
       enabledMembers: members.filter(m => m.enabled).length,
       /** Routes on a platform we hold a key for: how much of this entry is
        *  reachable at all, as opposed to merely switched on. */
