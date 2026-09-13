@@ -486,9 +486,9 @@
     "matchUnresolved": "{slug} is no longer published",
     "attribution": "Benchmark data from",
     "chartAll": "All three",
-    "chartCost": "Cost / task",
+    "chartCost": "Blended price",
     "costFree": "free",
-    "costBasis": "One task priced as {input} input + {output} output tokens, at each model’s published per-million rates."
+    "costBasis": "USD per 1M tokens, blended {input}:{output} input:output — the ratio Artificial Analysis uses to compare models across price ranges. Their headline 7:2:1 blend needs a cache-hit price we do not store."
   },
   "keys": {
     "pageTitle": "Keys",

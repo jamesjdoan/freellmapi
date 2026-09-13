@@ -106,17 +106,20 @@ type Metric = 'intelligenceIndex' | 'codingIndex' | 'agenticIndex'
 type ChartView = Metric | 'all' | 'costPerTask'
 
 /**
- * One "task", for costing: 15k tokens in, 3k out.
+ * Blended price per 1M tokens, on Artificial Analysis's 3:1 input:output ratio.
  *
- * A price per million says nothing about what a job costs, and the two halves
- * are priced differently — output runs 3-5x input on most models here, so a
- * ranking by input price alone reorders the moment real work is done. These are
- * the rough proportions of one coding turn with a file or two in context.
- * Stated here rather than buried in the maths because the number only means
- * anything if you can see the assumption behind it.
+ * Every other number in this table comes from AA, so the price should use their
+ * convention rather than a task size invented here — a made-up mix reorders the
+ * ranking and cannot be checked against their published figures.
+ *
+ * AA runs two blends. Their headline is 7:2:1 cache-hit : input : output, which
+ * we cannot compute: no cache-hit price is stored, and substituting the input
+ * price for it would silently flatter models with cheap caching. The 3:1
+ * input:output blend is the one they use to compare models across price ranges,
+ * and it needs only the two figures we hold.
  */
-const TASK_INPUT_TOKENS = 15_000
-const TASK_OUTPUT_TOKENS = 3_000
+const AA_INPUT_SHARE = 3
+const AA_OUTPUT_SHARE = 1
 
 function costPerTask(a: CompareGroup['analysis']): number | null {
   if (!a) return null
@@ -124,7 +127,8 @@ function costPerTask(a: CompareGroup['analysis']): number | null {
   // A model priced on neither half is unpriced, not free. A FREE model is
   // priced at zero on both, which is a real answer and must not be skipped.
   if (inp == null && out == null) return null
-  return ((inp ?? 0) * TASK_INPUT_TOKENS + (out ?? 0) * TASK_OUTPUT_TOKENS) / 1_000_000
+  const total = AA_INPUT_SHARE + AA_OUTPUT_SHARE
+  return ((inp ?? 0) * AA_INPUT_SHARE + (out ?? 0) * AA_OUTPUT_SHARE) / total
 }
 
 interface ProxyUpgrade {
@@ -663,8 +667,8 @@ export default function CompareModelsPage() {
                     <span className="w-16 flex-shrink-0 text-right tabular-nums">
                       {metric === 'costPerTask'
                         // Free is a result, not a blank: most of this catalogue
-                        // costs nothing per task and that is the finding.
-                        ? (value === 0 ? t('compare.costFree') : `$${value < 0.01 ? value.toFixed(4) : value.toFixed(3)}`)
+                        // costs nothing and that is the finding.
+                        ? (value === 0 ? t('compare.costFree') : `$${value < 1 ? value.toFixed(2) : value.toFixed(2)}`)
                         : value.toFixed(1)}
                     </span>
                   </li>
@@ -683,7 +687,7 @@ export default function CompareModelsPage() {
             )}
             {metric === 'costPerTask' && (
               <p className="mt-2 text-[10px] text-muted-foreground">
-                {t('compare.costBasis', { input: TASK_INPUT_TOKENS.toLocaleString(), output: TASK_OUTPUT_TOKENS.toLocaleString() })}
+                {t('compare.costBasis', { input: AA_INPUT_SHARE, output: AA_OUTPUT_SHARE })}
               </p>
             )}
             {unscored.length > 0 && (
