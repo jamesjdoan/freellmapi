@@ -1396,7 +1396,11 @@
       "removed": "removed",
       "relisted": "relisted"
     },
-    "logRecent": "Latest changes"
+    "logRecent": "Latest changes",
+    "logShowUnkeyed": "+{count} without a key",
+    "logOnlyActivated": "Only my providers",
+    "changesShowUnkeyed": "Show {count} more on providers with no key",
+    "changesOnlyActivated": "Only my providers"
   },
   "log": {
     "current": "now",

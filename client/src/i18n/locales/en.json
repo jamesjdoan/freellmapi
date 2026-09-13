@@ -978,6 +978,10 @@
     "logTitle": "Catalogue log",
     "logRecent": "Latest changes",
     "logAllProviders": "All",
+    "logShowUnkeyed": "+{count} without a key",
+    "logOnlyActivated": "Only my providers",
+    "changesShowUnkeyed": "Show {count} more on providers with no key",
+    "changesOnlyActivated": "Only my providers",
     "kind": {
       "arrived": "arrived",
       "retired": "retired",

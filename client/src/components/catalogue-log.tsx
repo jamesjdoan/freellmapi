@@ -5,6 +5,7 @@ import { useI18n } from '@/i18n'
 import { apiFetch } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { PlatformDot } from '@/components/platform-dot'
+import { partitionByActivated, useActivatedPlatforms } from '@/lib/activated-platforms'
 import { TimeTreeLog } from '@/components/time-tree-log'
 import { parseSqliteUtc } from '@/lib/time-tree'
 
@@ -42,11 +43,25 @@ const GAINED = new Set(['arrived', 'relisted'])
 export function CatalogueLogPanel() {
   const { t } = useI18n()
   const [platform, setPlatform] = useState<string | null>(null)
+  // Default to the providers this install turned on. The log covers the whole
+  // catalogue, so on a fresh sync most of its entries are churn on providers
+  // there is no key for and no way to call — which buried the arrivals that
+  // needed reading. Opt back in with the chip; never silently.
+  const [onlyActivated, setOnlyActivated] = useState(true)
+  const { activated, ready } = useActivatedPlatforms()
 
   const { data } = useQuery<CatalogueLogPage>({
     queryKey: ['catalogue-log', platform],
     queryFn: () => apiFetch(`/api/models/changes/log?limit=500${platform ? `&platform=${encodeURIComponent(platform)}` : ''}`),
   })
+
+  // Filtered here rather than in the request: the provider chips are built from
+  // the same payload, and narrowing server-side would empty them too.
+  const filtering = onlyActivated && ready
+  const events = filtering ? partitionByActivated(data?.events ?? [], activated).shown : (data?.events ?? [])
+  const providers = filtering
+    ? partitionByActivated(data?.byPlatform ?? [], activated)
+    : { shown: data?.byPlatform ?? [], hidden: [] }
 
   // Nothing has happened since the log started. Rendering an empty shell would
   // read as a broken panel rather than as a quiet catalogue.
@@ -57,7 +72,9 @@ export function CatalogueLogPanel() {
       <div className="flex flex-wrap items-center gap-2">
         <History className="size-4 text-muted-foreground" />
         <h2 className="text-sm font-medium">{t('catalogue.logTitle')}</h2>
-        <Badge variant="secondary" className="tabular-nums">{data.total}</Badge>
+        {/* `total` counts the whole log, which can exceed the page; once we are
+            hiding rows the honest number is the one on screen. */}
+        <Badge variant="secondary" className="tabular-nums">{filtering ? events.length : data.total}</Badge>
         <div className="ml-auto flex flex-wrap items-center gap-1">
           <button
             type="button"
@@ -66,9 +83,9 @@ export function CatalogueLogPanel() {
           >
             {t('catalogue.logAllProviders')}
           </button>
-          {/* Built from `byPlatform`, which the API returns unfiltered — so
-              narrowing to one provider never removes the others from here. */}
-          {data.byPlatform.map(p => (
+          {/* Built from `byPlatform`, so narrowing to one provider never
+              removes the others from here. */}
+          {providers.shown.map(p => (
             <button
               key={p.platform}
               type="button"
@@ -80,6 +97,19 @@ export function CatalogueLogPanel() {
               <span className="tabular-nums text-muted-foreground">{`+${p.arrived}/−${p.departed}`}</span>
             </button>
           ))}
+          {/* The count of what is hidden is the disclosure — a panel showing a
+              third of its rows with no sign of it is the defect being fixed. */}
+          {(providers.hidden.length > 0 || !onlyActivated) && (
+            <button
+              type="button"
+              onClick={() => { setOnlyActivated(v => !v); setPlatform(null) }}
+              className={`rounded-full border px-2 py-0.5 text-[11px] ${onlyActivated ? 'hover:bg-muted/50' : 'bg-muted'}`}
+            >
+              {onlyActivated
+                ? t('catalogue.logShowUnkeyed', { count: providers.hidden.length })
+                : t('catalogue.logOnlyActivated')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -87,7 +117,7 @@ export function CatalogueLogPanel() {
         <TimeTreeLog
           recentLabel={t('catalogue.logRecent')}
           unit="month"
-          items={data.events}
+          items={events}
           at={e => parseSqliteUtc(e.at)}
           itemKey={e => String(e.id)}
           summary={items => {

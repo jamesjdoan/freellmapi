@@ -1,10 +1,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { PackagePlus, PackageMinus } from 'lucide-react'
 import { useI18n } from '@/i18n'
 import { apiFetch } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { shortDate, useCatalogueChanges } from '@/lib/catalogue-changes'
+import { partitionByActivated, useActivatedPlatforms } from '@/lib/activated-platforms'
 
 // What the catalogue gained and lost since the last time anyone looked.
 //
@@ -20,6 +22,10 @@ import { shortDate, useCatalogueChanges } from '@/lib/catalogue-changes'
 export function CatalogueChangesPanel() {
   const { t } = useI18n()
   const queryClient = useQueryClient()
+  // Same default as the log: this is a worklist, and a row for a provider with
+  // no key is not work. Opt back in with the footer control.
+  const [onlyActivated, setOnlyActivated] = useState(true)
+  const { activated, ready } = useActivatedPlatforms()
 
   const { data } = useCatalogueChanges()
 
@@ -31,9 +37,18 @@ export function CatalogueChangesPanel() {
 
   // Acknowledged departures stay in the payload — the record is permanent — but
   // drop out of the panel, which is a worklist rather than a history.
-  const departed = (data?.departed ?? []).filter(d => !d.acknowledgedAt)
-  const arrived = data?.arrived ?? []
-  if (arrived.length === 0 && departed.length === 0) return null
+  const filtering = onlyActivated && ready
+  const allDeparted = (data?.departed ?? []).filter(d => !d.acknowledgedAt)
+  const allArrived = data?.arrived ?? []
+  const arrivedSplit = partitionByActivated(allArrived, activated)
+  const departedSplit = partitionByActivated(allDeparted, activated)
+  const arrived = filtering ? arrivedSplit.shown : allArrived
+  const departed = filtering ? departedSplit.shown : allDeparted
+  const hidden = arrivedSplit.hidden.length + departedSplit.hidden.length
+
+  // Every row is on a deactivated provider: the panel still has something to
+  // say, so it says how much and offers the way in rather than vanishing.
+  if (allArrived.length === 0 && allDeparted.length === 0) return null
 
   return (
     <section className="rounded-xl border p-4">
@@ -107,6 +122,16 @@ export function CatalogueChangesPanel() {
             ))}
           </ul>
         </div>
+      )}
+
+      {(hidden > 0 || !onlyActivated) && (
+        <button
+          type="button"
+          onClick={() => setOnlyActivated(v => !v)}
+          className="mt-3 text-[11px] text-muted-foreground underline decoration-dotted hover:text-foreground"
+        >
+          {onlyActivated ? t('catalogue.changesShowUnkeyed', { count: hidden }) : t('catalogue.changesOnlyActivated')}
+        </button>
       )}
     </section>
   )
