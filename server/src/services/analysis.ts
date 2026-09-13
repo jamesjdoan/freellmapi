@@ -109,6 +109,11 @@ interface FreeModel {
     artificial_analysis_agentic_index?: number | null;
   } | null;
   pricing?: { price_1m_input_tokens?: number | null; price_1m_output_tokens?: number | null } | null;
+  /** AA's own measured cost of running one task of their intelligence-index
+   *  evaluation on this model. A real spend over a fixed workload — which is
+   *  why it is used in preference to blending the per-million prices here, a
+   *  blend being a choice of token mix that reorders their published ranking. */
+  artificial_analysis_intelligence_index_cost?: { cost_per_task?: { total_cost?: number | null } | null } | null;
   performance?: {
     median_output_tokens_per_second?: number | null;
     median_time_to_first_token_seconds?: number | null;
@@ -183,16 +188,16 @@ export async function syncAnalysis(db: Db = getDb()): Promise<SyncResult> {
 
   const upsert = db.prepare(`
     INSERT INTO aa_model (slug, name, creator, release_date, intelligence_index, coding_index,
-                          agentic_index, price_1m_input, price_1m_output,
+                          agentic_index, price_1m_input, price_1m_output, index_cost_per_task,
                           median_output_tokens_per_second, median_time_to_first_token_seconds,
                           index_version, fetched_at)
     VALUES (@slug, @name, @creator, @releaseDate, @intelligence, @coding, @agentic,
-            @priceIn, @priceOut, @tps, @ttft, @version, datetime('now'))
+            @priceIn, @priceOut, @indexCostPerTask, @tps, @ttft, @version, datetime('now'))
     ON CONFLICT(slug) DO UPDATE SET
       name = excluded.name, creator = excluded.creator, release_date = excluded.release_date,
       intelligence_index = excluded.intelligence_index, coding_index = excluded.coding_index,
       agentic_index = excluded.agentic_index, price_1m_input = excluded.price_1m_input,
-      price_1m_output = excluded.price_1m_output,
+      price_1m_output = excluded.price_1m_output, index_cost_per_task = excluded.index_cost_per_task,
       median_output_tokens_per_second = excluded.median_output_tokens_per_second,
       median_time_to_first_token_seconds = excluded.median_time_to_first_token_seconds,
       index_version = excluded.index_version, fetched_at = excluded.fetched_at
@@ -211,6 +216,7 @@ export async function syncAnalysis(db: Db = getDb()): Promise<SyncResult> {
         agentic: m.evaluations?.artificial_analysis_agentic_index ?? null,
         priceIn: m.pricing?.price_1m_input_tokens ?? null,
         priceOut: m.pricing?.price_1m_output_tokens ?? null,
+        indexCostPerTask: m.artificial_analysis_intelligence_index_cost?.cost_per_task?.total_cost ?? null,
         tps: m.performance?.median_output_tokens_per_second ?? null,
         ttft: m.performance?.median_time_to_first_token_seconds ?? null,
         version,
@@ -380,6 +386,9 @@ export interface CompareRow {
     agenticIndex: number | null;
     price1mInput: number | null;
     price1mOutput: number | null;
+    /** AA's measured USD cost of one task of their index evaluation. Null where
+     *  they publish none — which is not the same as free. */
+    indexCostPerTask: number | null;
     medianOutputTokensPerSecond: number | null;
     medianTimeToFirstTokenSeconds: number | null;
   } | null;
@@ -419,7 +428,7 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
            l.aa_slug, l.source AS link_source, l.match_reason,
            l.proxy_delta_intelligence, l.proxy_delta_coding, l.proxy_delta_agentic, l.proxy_delta_speed,
            a.slug AS aa_present, a.name AS aa_name, a.creator, a.intelligence_index,
-           a.coding_index, a.agentic_index, a.price_1m_input, a.price_1m_output,
+           a.coding_index, a.agentic_index, a.price_1m_input, a.price_1m_output, a.index_cost_per_task,
            a.median_output_tokens_per_second, a.median_time_to_first_token_seconds,
            -- Name AND position in one concat. Two separate GROUP_CONCATs would
            -- not be guaranteed to agree on row order, so the ranks could line
@@ -512,6 +521,7 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
           agenticIndex: nudge(numberOrNull(r.agentic_index), r, 'agentic'),
           price1mInput: numberOrNull(r.price_1m_input),
           price1mOutput: numberOrNull(r.price_1m_output),
+          indexCostPerTask: numberOrNull(r.index_cost_per_task),
           medianOutputTokensPerSecond: nudge(numberOrNull(r.median_output_tokens_per_second), r, 'speed'),
           medianTimeToFirstTokenSeconds: numberOrNull(r.median_time_to_first_token_seconds),
         }
@@ -741,7 +751,7 @@ const SPEED_STEP = 0.15;
 function lookupAa(db: Db, slug: string): CompareRow['analysis'] {
   const r = db.prepare(`
     SELECT slug, name, creator, intelligence_index, coding_index, agentic_index,
-           price_1m_input, price_1m_output, median_output_tokens_per_second,
+           price_1m_input, price_1m_output, index_cost_per_task, median_output_tokens_per_second,
            median_time_to_first_token_seconds
       FROM aa_model WHERE slug = ?
   `).get(slug) as Record<string, unknown> | undefined;
@@ -755,6 +765,7 @@ function lookupAa(db: Db, slug: string): CompareRow['analysis'] {
     agenticIndex: numberOrNull(r.agentic_index),
     price1mInput: numberOrNull(r.price_1m_input),
     price1mOutput: numberOrNull(r.price_1m_output),
+    indexCostPerTask: numberOrNull(r.index_cost_per_task),
     medianOutputTokensPerSecond: numberOrNull(r.median_output_tokens_per_second),
     medianTimeToFirstTokenSeconds: numberOrNull(r.median_time_to_first_token_seconds),
   };

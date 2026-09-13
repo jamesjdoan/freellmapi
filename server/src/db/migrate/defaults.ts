@@ -51,6 +51,7 @@ import * as proxyDeltaSpeed from '../migrations/20260911_000006_proxy_delta_spee
 import * as quotaProbeRun from '../migrations/20260911_000007_quota_probe_run.js';
 import * as quotaPolicyPeriodKey from '../migrations/20260911_000008_quota_policy_period_key.js';
 import * as quotaPolicyBucket from '../migrations/20260912_000001_quota_policy_bucket.js';
+import * as aaCostPerTask from '../migrations/20260913_000001_aa_cost_per_task.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -114,6 +115,7 @@ export const PROXY_DELTA_SPEED_FILENAME = '20260911_000006_proxy_delta_speed.ts'
 export const QUOTA_PROBE_RUN_FILENAME = '20260911_000007_quota_probe_run.ts';
 export const QUOTA_POLICY_PERIOD_KEY_FILENAME = '20260911_000008_quota_policy_period_key.ts';
 export const QUOTA_POLICY_BUCKET_FILENAME = '20260912_000001_quota_policy_bucket.ts';
+export const AA_COST_PER_TASK_FILENAME = '20260913_000001_aa_cost_per_task.ts';
 
 export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: LEGACY_BASELINE_FILENAME, module: legacyBaseline },
@@ -168,4 +170,5 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
 { filename: QUOTA_PROBE_RUN_FILENAME, module: quotaProbeRun },
   { filename: QUOTA_POLICY_PERIOD_KEY_FILENAME, module: quotaPolicyPeriodKey },
   { filename: QUOTA_POLICY_BUCKET_FILENAME, module: quotaPolicyBucket },
+  { filename: AA_COST_PER_TASK_FILENAME, module: aaCostPerTask },
 ];

@@ -56,6 +56,7 @@ const PROXY_DELTA_SPEED_FILENAME = '20260911_000006_proxy_delta_speed.ts';
 const QUOTA_PROBE_RUN_FILENAME = '20260911_000007_quota_probe_run.ts';
 const QUOTA_POLICY_PERIOD_KEY_FILENAME = '20260911_000008_quota_policy_period_key.ts';
 const QUOTA_POLICY_BUCKET_FILENAME = '20260912_000001_quota_policy_bucket.ts';
+const AA_COST_PER_TASK_FILENAME = '20260913_000001_aa_cost_per_task.ts';
 
 interface SchemaRow {
   type: string;
@@ -158,6 +159,7 @@ describe('migration round trip', () => {
         QUOTA_PROBE_RUN_FILENAME,
         QUOTA_POLICY_PERIOD_KEY_FILENAME,
         QUOTA_POLICY_BUCKET_FILENAME,
+        AA_COST_PER_TASK_FILENAME,
       ]);
     } finally {
       db.close();

@@ -57,6 +57,7 @@ interface CompareRow {
     agenticIndex: number | null
     price1mInput: number | null
     price1mOutput: number | null
+    indexCostPerTask: number | null
     medianOutputTokensPerSecond: number | null
     medianTimeToFirstTokenSeconds: number | null
   } | null
@@ -106,29 +107,24 @@ type Metric = 'intelligenceIndex' | 'codingIndex' | 'agenticIndex'
 type ChartView = Metric | 'all' | 'costPerTask'
 
 /**
- * Blended price per 1M tokens, on Artificial Analysis's 3:1 input:output ratio.
+ * What one task costs, as Artificial Analysis measured it.
  *
- * Every other number in this table comes from AA, so the price should use their
- * convention rather than a task size invented here — a made-up mix reorders the
- * ranking and cannot be checked against their published figures.
+ * `artificial_analysis_intelligence_index_cost.cost_per_task.total_cost`: the
+ * USD they spent running one task of their intelligence-index evaluation on the
+ * model. A real spend over a fixed workload, so it is comparable across models
+ * without anyone choosing a token mix.
  *
- * AA runs two blends. Their headline is 7:2:1 cache-hit : input : output, which
- * we cannot compute: no cache-hit price is stored, and substituting the input
- * price for it would silently flatter models with cheap caching. The 3:1
- * input:output blend is the one they use to compare models across price ranges,
- * and it needs only the two figures we hold.
+ * Two blends were tried here first and both were wrong. A task size invented in
+ * this file reordered the ranking against AA's published figures; their 3:1
+ * input:output ratio is a real convention but still a ratio WE applied, and it
+ * is not the number they print. Every other column on this page is theirs, and
+ * now this one is too.
+ *
+ * Null where AA publishes no cost — most of the free catalogue. Null is not
+ * free, and the two must not collapse.
  */
-const AA_INPUT_SHARE = 3
-const AA_OUTPUT_SHARE = 1
-
 function costPerTask(a: CompareGroup['analysis']): number | null {
-  if (!a) return null
-  const { price1mInput: inp, price1mOutput: out } = a
-  // A model priced on neither half is unpriced, not free. A FREE model is
-  // priced at zero on both, which is a real answer and must not be skipped.
-  if (inp == null && out == null) return null
-  const total = AA_INPUT_SHARE + AA_OUTPUT_SHARE
-  return ((inp ?? 0) * AA_INPUT_SHARE + (out ?? 0) * AA_OUTPUT_SHARE) / total
+  return a?.indexCostPerTask ?? null
 }
 
 interface ProxyUpgrade {
@@ -668,7 +664,7 @@ export default function CompareModelsPage() {
                       {metric === 'costPerTask'
                         // Free is a result, not a blank: most of this catalogue
                         // costs nothing and that is the finding.
-                        ? (value === 0 ? t('compare.costFree') : `$${value < 1 ? value.toFixed(2) : value.toFixed(2)}`)
+                        ? (value === 0 ? t('compare.costFree') : `$${value.toFixed(2)}`)
                         : value.toFixed(1)}
                     </span>
                   </li>
@@ -687,7 +683,7 @@ export default function CompareModelsPage() {
             )}
             {metric === 'costPerTask' && (
               <p className="mt-2 text-[10px] text-muted-foreground">
-                {t('compare.costBasis', { input: AA_INPUT_SHARE, output: AA_OUTPUT_SHARE })}
+                {t('compare.costBasis')}
               </p>
             )}
             {unscored.length > 0 && (
