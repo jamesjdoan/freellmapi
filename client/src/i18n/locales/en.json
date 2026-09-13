@@ -486,9 +486,11 @@
     "matchUnresolved": "{slug} is no longer published",
     "attribution": "Benchmark data from",
     "chartAll": "All three",
-    "chartCost": "Cost / task",
+    "chartCost": "Price",
     "costFree": "free",
-    "costBasis": "Artificial Analysis's own figure: the USD they spent running one task of their intelligence-index evaluation on each model. Blank where they publish none, which is not the same as free."
+    "costBasis": "USD per 1M tokens exactly as Artificial Analysis publishes them — unblended, sorted by input price.",
+    "priceInput": "Input / 1M",
+    "priceOutput": "Output / 1M"
   },
   "keys": {
     "pageTitle": "Keys",

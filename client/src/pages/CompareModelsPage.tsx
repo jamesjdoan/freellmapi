@@ -107,24 +107,30 @@ type Metric = 'intelligenceIndex' | 'codingIndex' | 'agenticIndex'
 type ChartView = Metric | 'all' | 'costPerTask'
 
 /**
- * What one task costs, as Artificial Analysis measured it.
+ * Price, exactly as Artificial Analysis publishes it: USD per 1M input tokens
+ * and per 1M output tokens, shown side by side.
  *
- * `artificial_analysis_intelligence_index_cost.cost_per_task.total_cost`: the
- * USD they spent running one task of their intelligence-index evaluation on the
- * model. A real spend over a fixed workload, so it is comparable across models
- * without anyone choosing a token mix.
+ * Three things were tried here before this and every one of them was arithmetic
+ * of ours laid over their data — a task size invented in this file, their 3:1
+ * blend applied by us, then their measured cost-per-task (their number, but
+ * answering a different question). The page shows what they give: two prices,
+ * unblended, in the units they state.
  *
- * Two blends were tried here first and both were wrong. A task size invented in
- * this file reordered the ranking against AA's published figures; their 3:1
- * input:output ratio is a real convention but still a ratio WE applied, and it
- * is not the number they print. Every other column on this page is theirs, and
- * now this one is too.
+ * Ranked on input price with output as the tie-break. That is an ordering
+ * choice, not a derived figure: no number on screen is computed.
  *
- * Null where AA publishes no cost — most of the free catalogue. Null is not
- * free, and the two must not collapse.
+ * Null on BOTH halves means unpriced, which is not free. Zero on both is free,
+ * and that is a real answer.
  */
+function priceOf(a: CompareGroup['analysis']): { input: number; output: number } | null {
+  if (!a) return null
+  if (a.price1mInput == null && a.price1mOutput == null) return null
+  return { input: a.price1mInput ?? 0, output: a.price1mOutput ?? 0 }
+}
+
 function costPerTask(a: CompareGroup['analysis']): number | null {
-  return a?.indexCostPerTask ?? null
+  const p = priceOf(a)
+  return p ? p.input : null
 }
 
 interface ProxyUpgrade {
@@ -392,9 +398,17 @@ export default function CompareModelsPage() {
   // that is the most expensive model, so the free ones read as the flat floor
   // they are.
   const peak = scored.length > 0
-    ? Math.max(...scored.map(g => (metric === 'all'
-      ? Math.max(...OVERLAY.map(o => g.analysis?.[o.key] ?? 0))
-      : (valueOf(g) as number))))
+    ? Math.max(...scored.map(g => {
+      if (metric === 'all') return Math.max(...OVERLAY.map(o => g.analysis?.[o.key] ?? 0))
+      // Both halves share one axis, so the dearer output price sets the scale —
+      // otherwise every output bar clips at full width and the comparison the
+      // two bars exist for disappears.
+      if (metric === 'costPerTask') {
+        const p = priceOf(g.analysis)
+        return p ? Math.max(p.input, p.output) : 0
+      }
+      return valueOf(g) as number
+    }))
     : 0
   const unscored = comparing.filter(g => valueOf(g) == null)
 
@@ -630,7 +644,26 @@ export default function CompareModelsPage() {
                     {/* Scaled to the largest value on screen, not to 100: the
                         indices are not percentages and the gap between the top
                         few is what a reader is looking for. */}
-                    {metric === 'all' ? (
+                    {metric === 'costPerTask' ? (
+                      // Input and output as published, never combined: output
+                      // runs several times input on most models, and any single
+                      // figure hides which half a given workload actually pays.
+                      <div className="flex min-w-0 flex-1 flex-col gap-px">
+                        {([
+                          { key: 'input', label: t('compare.priceInput'), bar: 'bg-sky-500/70', v: priceOf(g.analysis)?.input },
+                          { key: 'output', label: t('compare.priceOutput'), bar: 'bg-rose-500/70', v: priceOf(g.analysis)?.output },
+                        ] as const).map(row => (
+                          <div key={row.key} className="h-1.5 rounded-sm bg-muted" title={`${row.label}: $${row.v?.toFixed(2) ?? '—'}`}>
+                            {row.v != null && (
+                              <div
+                                className={`h-1.5 rounded-sm ${row.bar}`}
+                                style={{ width: peak > 0 ? `${Math.max((row.v / peak) * 100, row.v === 0 ? 0 : 2)}%` : '0%' }}
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : metric === 'all' ? (
                       // Three bars stacked in the height of one row: the SHAPE
                       // is the point — strong reasoning with weak agentic reads
                       // instantly here and cannot be seen at all when the three
@@ -664,7 +697,12 @@ export default function CompareModelsPage() {
                       {metric === 'costPerTask'
                         // Free is a result, not a blank: most of this catalogue
                         // costs nothing and that is the finding.
-                        ? (value === 0 ? t('compare.costFree') : `$${value.toFixed(2)}`)
+                        ? (() => {
+                          const p = priceOf(g.analysis)!
+                          return p.input === 0 && p.output === 0
+                            ? t('compare.costFree')
+                            : `$${p.input.toFixed(2)}/$${p.output.toFixed(2)}`
+                        })()
                         : value.toFixed(1)}
                     </span>
                   </li>
@@ -682,8 +720,14 @@ export default function CompareModelsPage() {
               </p>
             )}
             {metric === 'costPerTask' && (
-              <p className="mt-2 text-[10px] text-muted-foreground">
-                {t('compare.costBasis')}
+              <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-muted-foreground">
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block h-2 w-3 rounded-sm bg-sky-500/70" />{t('compare.priceInput')}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block h-2 w-3 rounded-sm bg-rose-500/70" />{t('compare.priceOutput')}
+                </span>
+                <span>{t('compare.costBasis')}</span>
               </p>
             )}
             {unscored.length > 0 && (
