@@ -706,15 +706,25 @@ const DEFAULT_PROVIDER_DAILY_TOKEN_CAPS: Record<string, number> = {
   navy: 150_000,
 };
 
-// Per-minute caps that apply to the whole provider account rather than one model.
-// The per-model rpm_limit cannot express these: NVIDIA NIM meters ~40 requests a
-// minute across the entire account, so glm-4.7, minimax-m3 and deepseek all draw
-// from one bucket. Without an account-level gate the router sees each model's own
-// rpm as unspent — and a model row whose rpm_limit is NULL escapes pre-throttling
-// entirely — so it keeps dispatching and eats real 429s.
-const DEFAULT_PROVIDER_MINUTE_REQUEST_CAPS: Record<string, number> = {
-  nvidia: 40,
-};
+// Per-minute caps that apply to the whole provider ACCOUNT rather than one
+// model. The per-model rpm_limit cannot express those, so a provider that meters
+// across its whole account needs a gate here or the router sees each model's own
+// rpm as unspent and eats real 429s.
+//
+// Empty on purpose. NVIDIA was the only entry, at 40, on the belief that NIM
+// meters ~40 req/min across the account. Measured 2026-09-12 and that is wrong:
+// 70 concurrent calls to nemotron-3.5-lightning served 38 and refused 32, and in
+// the SAME second a second model served while the first still returned 429. The
+// counter is PER MODEL, so one account-wide 40 was throttling eighteen
+// independent windows to a single model's worth — roughly a eighteenth of the
+// real throughput — and it is now expressed where it belongs, as a measured
+// per-model policy on all 18 enabled models.
+//
+// A genuine account-wide cap still belongs here; NVIDIA simply does not have
+// one that anyone has observed. `PROVIDER_MINUTE_REQUEST_CAP_<PLATFORM>` and the
+// key's own `provider_rpm_limit` column both still override, so an operator who
+// learns otherwise needs no code change.
+const DEFAULT_PROVIDER_MINUTE_REQUEST_CAPS: Record<string, number> = {};
 
 function getKeyProviderLimit(keyId: number | undefined, column: 'provider_rpm_limit' | 'provider_rpd_limit' | 'provider_tpd_limit'): number | undefined {
   if (keyId === undefined) return undefined;

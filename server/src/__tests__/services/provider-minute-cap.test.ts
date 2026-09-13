@@ -33,8 +33,12 @@ describe('provider-wide per-minute request cap', () => {
     delete process.env.PROVIDER_MINUTE_REQUEST_CAP_GROQ;
   });
 
-  it('ships a default cap for nvidia and none for a provider without one', () => {
-    expect(getProviderMinuteRequestCap('nvidia')).toBe(40);
+  it('ships no account-wide default, because none has been measured', () => {
+    // NVIDIA shipped 40 here on the belief that NIM meters across the account.
+    // Measured 2026-09-12: 70 concurrent calls refused 32 while a SECOND model
+    // served in the same second, so the counter is per-model and one shared 40
+    // was throttling eighteen independent windows to one model's worth.
+    expect(getProviderMinuteRequestCap('nvidia')).toBeNull();
     expect(getProviderMinuteRequestCap('groq')).toBeNull();
   });
 

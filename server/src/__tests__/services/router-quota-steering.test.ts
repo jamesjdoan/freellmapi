@@ -87,6 +87,17 @@ function dailyPolicy(platform: string, limit: number): void {
   });
 }
 
+/** A pool with no boundary: a rolling window frees one call at a time and has
+ *  nothing that expires, so there is nothing to harvest. */
+function rollingDayPolicy(platform: string, limit: number): void {
+  upsertQuotaPolicy({
+    platform, modelId: null, endpointScope: null,
+    scope: 'provider_account', metric: 'requests', limit,
+    periodKind: 'rolling', periodMs: 86_400_000, timezone: null, anchorDay: null,
+    source: 'operator',
+  });
+}
+
 describe('reset urgency reaches the chosen route', () => {
   beforeEach(reset);
 
@@ -120,7 +131,14 @@ describe('reset urgency reaches the chosen route', () => {
       spend('groq', 'twin', groqKey, 200);
       // NVIDIA: a generous pool with no reset instant. Nothing expires, so
       // there is nothing to harvest — the correct answer for a rolling window.
-      dailyPolicy('nvidia', 10_000);
+      //
+      // Stated as ROLLING, which is what the comment always claimed. It used to
+      // be a calendar day that happened to score 1.0 because NVIDIA shipped an
+      // account-wide 40/min default, and THAT rolling minute was the binding
+      // axis. The default is gone — measured 2026-09-12, NVIDIA counts per
+      // model — so the premise has to be written down rather than inherited
+      // from an unrelated cap.
+      rollingDayPolicy('nvidia', 10_000);
 
       const groq = quotaPressure('groq', 'twin', '');
       const nvidia = quotaPressure('nvidia', 'twin', '');

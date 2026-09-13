@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { Switch } from '@/components/ui/switch'
@@ -62,6 +62,29 @@ function HealthMark({ health }: { health?: ModelHealthRow }) {
       </span>
     </Tooltip>
   )
+}
+
+/**
+ * Per-provider "hide disabled" preference.
+ *
+ * One key per platform, so the choice made on a 122-row provider does not
+ * follow you to a four-row one. Guarded because localStorage throws in private
+ * modes and on a blocked origin, and a view preference must never be the reason
+ * a panel fails to render.
+ */
+const HIDE_DISABLED_PREFIX = 'freellmapi.keys.hideDisabled.'
+
+export function readHideDisabled(platform: string): boolean {
+  try { return localStorage.getItem(HIDE_DISABLED_PREFIX + platform) === '1' } catch { return false }
+}
+
+export function writeHideDisabled(platform: string, hidden: boolean): void {
+  try {
+    if (hidden) localStorage.setItem(HIDE_DISABLED_PREFIX + platform, '1')
+    // Removed rather than set to '0': the default is "show everything", and an
+    // explicit false would outlive a change to that default.
+    else localStorage.removeItem(HIDE_DISABLED_PREFIX + platform)
+  } catch { /* view state only */ }
 }
 
 interface ModelHealthRow {
@@ -217,7 +240,21 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
   // model. A provider with 122 catalogue rows and 4 switched on is unreadable
   // either way, but the two questions are different: "what am I routing" and
   // "what could this key reach".
-  const [hideDisabled, setHideDisabled] = useState(false)
+  //
+  // Remembered PER PROVIDER: HuggingFace with 122 rows wants hiding and Groq
+  // with 4 does not, and re-hiding on every expand made the control feel
+  // broken. Kept in localStorage rather than server settings because it is view
+  // state — hiding a row here changes nothing about what routes, unlike the
+  // Quota panel's hidden pools, which are a property of the install.
+  const [hideDisabled, setHideDisabled] = useState(() => readHideDisabled(platform))
+  useEffect(() => { setHideDisabled(readHideDisabled(platform)) }, [platform])
+  const toggleHideDisabled = () => {
+    setHideDisabled(prev => {
+      const next = !prev
+      writeHideDisabled(platform, next)
+      return next
+    })
+  }
 
   // Shared cache with the Compare page: the scores, the scope state and the
   // enabled flag all come from one payload, so the two views cannot disagree.
@@ -467,7 +504,7 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
             counts its hidden pools. */}
         <button
           type="button"
-          onClick={() => setHideDisabled(v => !v)}
+          onClick={toggleHideDisabled}
           aria-pressed={hideDisabled}
           className={`rounded-full border px-2 py-0.5 text-[10px] ${hideDisabled ? 'bg-muted' : 'hover:bg-muted/50'}`}
         >
