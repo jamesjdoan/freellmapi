@@ -522,14 +522,23 @@ export default function CompareModelsPage() {
               {scored.map(g => {
                 const value = g.analysis![metric] as number
                 return (
-                  <li key={entryKey(g)} className={`flex items-center gap-2 text-xs ${g.reference ? 'text-sky-700 dark:text-sky-300' : ''}`}>
+                  // One vocabulary for "this is a baseline", not two. The
+                  // table says it with a badge; this list said it by recolouring
+                  // the whole row and its bar, so the same fact looked like two
+                  // different states depending which half of the page you read.
+                  <li key={entryKey(g)} className="flex items-center gap-2 text-xs">
                     {/* Name first, dots after it. Leading with a variable
                         number of swatches started every name at a different
                         offset, so the column could not be read down. */}
-                    <span className="w-[200px] flex-shrink-0 truncate" title={g.members.map(m => m.modelId).join('\n')}>
-                      {g.name}
+                    <span className="flex w-[200px] flex-shrink-0 items-center gap-1 truncate" title={g.members.map(m => m.modelId).join('\n')}>
+                      <span className="truncate">{g.name}</span>
                       {g.members.length > 1 && (
-                        <span className="ml-1 text-muted-foreground tabular-nums">{`×${g.members.length}`}</span>
+                        <span className="text-muted-foreground tabular-nums">{`×${g.members.length}`}</span>
+                      )}
+                      {g.reference && (
+                        <Badge variant="secondary" className="bg-sky-500/15 text-[10px] text-sky-700 dark:text-sky-300">
+                          {t('compare.referenceBadge')}
+                        </Badge>
                       )}
                     </span>
                     <span className="flex w-[70px] flex-shrink-0 items-center gap-0.5">
@@ -541,6 +550,8 @@ export default function CompareModelsPage() {
                       {/* Scaled to the best model on screen, not to 100: the
                           indices are not percentages and the gap between the
                           top few is what a reader is looking for. */}
+                      {/* The bar keeps the badge's hue so the two halves of the
+                          page agree on which colour means "yardstick". */}
                       <div
                         className={`h-3 rounded ${g.reference ? 'bg-sky-500/70' : 'bg-emerald-500/70'}`}
                         style={{ width: peak > 0 ? `${Math.max((value / peak) * 100, 2)}%` : '2%' }}
