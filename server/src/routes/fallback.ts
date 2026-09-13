@@ -436,8 +436,16 @@ fallbackRouter.post('/membership', (req: Request, res: Response) => {
     return;
   }
   const known = knownModelIds(db);
-  const tail = db.prepare('SELECT COALESCE(MAX(priority), 0) AS p FROM profile_models WHERE profile_id = ?')
-    .get(profile.id) as { p: number };
+  // Last among the ENABLED members, or first when the chain is empty.
+  //
+  // Counting disabled rows too put new members far past the end: Apex held a
+  // priority 9 with nothing at 6, 7 or 8, because rows switched off years of
+  // edits ago still held their numbers. The position that matters is the one
+  // the router walks, and it walks enabled rows only.
+  const tail = db.prepare(`
+    SELECT COALESCE(MAX(priority), 0) AS p FROM profile_models
+     WHERE profile_id = ? AND enabled = 1
+  `).get(profile.id) as { p: number };
   const upsert = db.prepare(`
     INSERT INTO profile_models (profile_id, model_db_id, priority, enabled)
     VALUES (?, ?, ?, ?)

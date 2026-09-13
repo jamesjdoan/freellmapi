@@ -8,7 +8,7 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { RankField } from './CompareModelsPage'
+import { RankInput } from './chain-picker'
 
 beforeAll(() => {
   ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -40,10 +40,10 @@ function type(input: HTMLInputElement, value: string) {
   })
 }
 
-describe('RankField', () => {
+describe('RankInput', () => {
   it('writes the typed position on blur', () => {
     const seen: number[] = []
-    const input = render(<RankField chain="Apex" rank={5} onSet={n => seen.push(n)} />)
+    const input = render(<RankInput chain="Apex" rank={5} onSet={n => seen.push(n)} />)
 
     type(input, '1')
     act(() => { input.dispatchEvent(new FocusEvent('focusout', { bubbles: true })) })
@@ -55,7 +55,7 @@ describe('RankField', () => {
     // Committing on keystroke would read "12" as 1 first, reorder the chain,
     // then reorder it again — landing somewhere nobody asked for.
     const seen: number[] = []
-    const input = render(<RankField chain="Apex" rank={5} onSet={n => seen.push(n)} />)
+    const input = render(<RankInput chain="Apex" rank={5} onSet={n => seen.push(n)} />)
 
     type(input, '1')
     type(input, '12')
@@ -66,7 +66,7 @@ describe('RankField', () => {
   it('writes nothing when the value is unchanged', () => {
     // Every write renumbers the whole chain, so a no-op edit must stay a no-op.
     const seen: number[] = []
-    const input = render(<RankField chain="Apex" rank={5} onSet={n => seen.push(n)} />)
+    const input = render(<RankInput chain="Apex" rank={5} onSet={n => seen.push(n)} />)
 
     type(input, '5')
     act(() => { input.dispatchEvent(new FocusEvent('focusout', { bubbles: true })) })
@@ -76,7 +76,7 @@ describe('RankField', () => {
 
   it('abandons the edit on Escape and shows the real position again', () => {
     const seen: number[] = []
-    const input = render(<RankField chain="Apex" rank={5} onSet={n => seen.push(n)} />)
+    const input = render(<RankInput chain="Apex" rank={5} onSet={n => seen.push(n)} />)
 
     type(input, '2')
     act(() => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
@@ -87,7 +87,7 @@ describe('RankField', () => {
 
   it('refuses a position below 1 rather than sending it', () => {
     const seen: number[] = []
-    const input = render(<RankField chain="Apex" rank={5} onSet={n => seen.push(n)} />)
+    const input = render(<RankInput chain="Apex" rank={5} onSet={n => seen.push(n)} />)
 
     type(input, '0')
     act(() => { input.dispatchEvent(new FocusEvent('focusout', { bubbles: true })) })
@@ -99,10 +99,10 @@ describe('RankField', () => {
   it('follows the position when other models move around it', () => {
     // The row re-renders as the chain changes underneath; a stale draft would
     // write back the slot this model held two edits ago.
-    const input = render(<RankField chain="Apex" rank={5} onSet={() => {}} />)
+    const input = render(<RankInput chain="Apex" rank={5} onSet={() => {}} />)
     type(input, '3')
 
-    act(() => { root!.render(<RankField chain="Apex" rank={2} onSet={() => {}} />) })
+    act(() => { root!.render(<RankInput chain="Apex" rank={2} onSet={() => {}} />) })
 
     expect((host!.querySelector('input') as HTMLInputElement).value).toBe('2')
   })

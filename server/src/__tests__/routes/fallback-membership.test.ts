@@ -67,6 +67,34 @@ describe('POST /api/fallback/membership', () => {
     expect(rowIn('Coding')).toEqual({ priority: 5, enabled: 1 });
   });
 
+  it('lands last among ENABLED members, not past the disabled ones', async () => {
+    // Apex held a priority 9 with nothing at 6, 7 or 8: rows switched off long
+    // ago still held their numbers, and counting them pushed every new member
+    // further past the end. The router walks enabled rows only.
+    const db = getDb();
+    db.prepare(`
+      INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, size_label, monthly_token_budget, enabled)
+      VALUES ('groq', 'probe/retired', 'Retired', 50, 50, 'Large', '', 1)
+    `).run();
+    const retired = (db.prepare("SELECT id FROM models WHERE model_id = 'probe/retired'").get() as { id: number }).id;
+    db.prepare('INSERT INTO profile_models (profile_id, model_db_id, priority, enabled) VALUES (?, ?, 40, 0)')
+      .run(otherChainId, retired);
+
+    await call(app, '/api/fallback/membership', token, { chain: 'Coding', modelDbIds: [modelId], member: true });
+
+    // Behind the enabled member at 4, not behind the disabled one at 40.
+    expect(rowIn('Coding')).toEqual({ priority: 5, enabled: 1 });
+  });
+
+  it('lands first when nothing is enabled in the chain yet', async () => {
+    const db = getDb();
+    db.prepare('UPDATE profile_models SET enabled = 0 WHERE profile_id = ?').run(otherChainId);
+
+    await call(app, '/api/fallback/membership', token, { chain: 'Coding', modelDbIds: [modelId], member: true });
+
+    expect(rowIn('Coding')).toEqual({ priority: 1, enabled: 1 });
+  });
+
   it('removes by clearing the flag, so putting it back keeps its place', async () => {
     await call(app, '/api/fallback/membership', token, { chain: 'Coding', modelDbIds: [modelId], member: true });
 
