@@ -210,6 +210,11 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
   const queryClient = useQueryClient()
   const [sort, setSort] = useState<SortKey>('intelligence')
   const [onlyScoped, setOnlyScoped] = useState(false)
+  // Separate from `onlyScoped`, which also demands the key's scope allows the
+  // model. A provider with 122 catalogue rows and 4 switched on is unreadable
+  // either way, but the two questions are different: "what am I routing" and
+  // "what could this key reach".
+  const [hideDisabled, setHideDisabled] = useState(false)
 
   // Shared cache with the Compare page: the scores, the scope state and the
   // enabled flag all come from one payload, so the two views cannot disagree.
@@ -359,6 +364,7 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
       : r.analysis?.intelligenceIndex ?? null
     return [...mine]
       .filter(r => !onlyScoped || (r.enabled && (r.keyScope === 'in' || r.keyScope === 'unscoped')))
+      .filter(r => !hideDisabled || r.enabled)
       // Unmeasured last in every ordering: a model with no score is not a zero.
       .sort((a, b) => {
         if (sort === 'name') return a.displayName.localeCompare(b.displayName)
@@ -368,7 +374,7 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
         if (y == null) return -1
         return y - x || a.displayName.localeCompare(b.displayName)
       })
-  }, [data?.rows, platform, sort, onlyScoped])
+  }, [data?.rows, platform, sort, onlyScoped, hideDisabled])
 
   const routable = (r: Row) => r.enabled && (r.keyScope === 'in' || r.keyScope === 'unscoped')
 
@@ -384,6 +390,15 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
     const present = new Set(rows.map(r => healthByModel.get(r.modelId)?.code).filter(Boolean))
     return HEALTH_CODES.filter(c => present.has(c))
   }, [rows, healthByModel])
+
+  // Counted from the UNFILTERED catalogue, so the number does not vanish the
+  // moment the filter it describes is switched on.
+  const disabledCount = useMemo(
+    // THIS provider's rows. The payload carries every platform, so counting it
+    // whole reported 42 hidden on a panel that had four.
+    () => (data?.rows ?? []).filter(r => r.platform === platform && !r.enabled).length,
+    [data?.rows, platform],
+  )
 
   const deadCount = useMemo(
     () => rows.filter(r => healthByModel.get(r.modelId)?.verdict === 'dead').length,
@@ -435,6 +450,20 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
               : t('keys.healthTest', { count: Math.min(untestedIds.length, 25) })}
           </Button>
         )}
+        {/* Hidden rows are counted in the label, so a filter can never make a
+            model quietly cease to exist — the same reason the Quota panel
+            counts its hidden pools. */}
+        <button
+          type="button"
+          onClick={() => setHideDisabled(v => !v)}
+          aria-pressed={hideDisabled}
+          className={`rounded-full border px-2 py-0.5 text-[10px] ${hideDisabled ? 'bg-muted' : 'hover:bg-muted/50'}`}
+        >
+          {t('keys.panelHideDisabled')}
+          {disabledCount > 0 && (
+            <span className="ml-1 text-muted-foreground tabular-nums">{disabledCount}</span>
+          )}
+        </button>
         <button
           type="button"
           onClick={() => setOnlyScoped(v => !v)}

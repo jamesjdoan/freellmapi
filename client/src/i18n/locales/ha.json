@@ -690,7 +690,9 @@
     "healthCode_E5XX": "provider error",
     "healthCode_ETIME": "we stopped waiting — says nothing about the model",
     "healthCode_E429": "allowance spent right now",
-    "healthCode_EOTHER": "refused for another reason — hover the badge"
+    "healthCode_EOTHER": "refused for another reason — hover the badge",
+    "panelHideDisabled": "Hide disabled",
+    "modelsInScope": "{enabled}/{total} in key scope"
   },
   "backups": {
     "title": "Backups",

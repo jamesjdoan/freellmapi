@@ -108,7 +108,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
     queryFn: () => apiFetch('/api/settings/proxy'),
   })
 
-  // The catalogue, for the "N/M models enabled" summary on each provider row.
+  // The catalogue, for the "N/M models in key scope" summary on each row.
   // Same query the model-scope dialog runs, deduped by react-query.
   const { data: fallback = [] } = useQuery<FallbackEntry[]>({
     queryKey: ['fallback'],
@@ -264,7 +264,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
   })
 
   // The inline churn switches write the key's model scope - the same field the
-  // model-scope dialog saves, and the same one the row's `n/m models enabled`
+  // model-scope dialog saves, and the same one the row's scope summary
   // badge counts, so the number moves as they are flipped.
   const setKeyScope = useMutation({
     mutationFn: ({ id, modelScope }: { id: number; modelScope: string[] | null }) =>
@@ -499,7 +499,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                     </span>
                     {models.total > 0 && (
                       <Badge variant="secondary" className="tabular-nums text-[10px] font-normal text-muted-foreground">
-                        {`${models.enabled}/${models.total} models enabled`}
+                        {t('keys.modelsInScope', { enabled: models.enabled, total: models.total })}
                       </Badge>
                     )}
                     {/* No onToggle: with several keys in the group, "this
@@ -647,7 +647,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                                 <h3 className="text-sm font-medium flex-shrink-0">{group.label}</h3>
                                 {models.total > 0 && (
                                   <Badge variant="secondary" className="tabular-nums text-[10px] font-normal text-muted-foreground flex-shrink-0">
-                                    {`${models.enabled}/${models.total} models enabled`}
+                                    {t('keys.modelsInScope', { enabled: models.enabled, total: models.total })}
                                   </Badge>
                                 )}
                                 <ProviderChurnChip
