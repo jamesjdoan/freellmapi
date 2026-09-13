@@ -207,7 +207,22 @@ export function resolveQuotaPolicy(
   if (platform === 'radeon') return policy('radeon::daily-free', 'shared_pool', 'metered', ['requests', 'credits'], 'provider_reported');
   if (platform === 'sambanova') return policy('sambanova::shared', 'shared_pool', 'metered', ['requests', 'tokens'], 'provider_reported');
   if (platform === 'nvidia') return policy('nvidia::credit-pool', 'shared_pool', 'metered', ['requests'], 'provider_reported');
-  if (platform === 'mistral') return policy('mistral::experiment-pool', 'shared_pool', 'metered', ['requests', 'tokens'], 'provider_reported');
+  // Measured 2026-09-14: Mistral meters per model, not per account. Three
+  // models called back to back reported three different allowances and three
+  // independent counters — ministral-8b 188/min, voxtral-small 60/min (on a
+  // 50k token minute, not 625k), codestral 125/min. One 'experiment-pool' for
+  // the platform collapsed all of that into a single bucket.
+  //
+  // The one exception is measured too: codestral-latest and mistral-code-latest
+  // share ONE counter (123 -> 122 on codestral, then 121 on mistral-code), so
+  // Codestral serving under a second name must not be read as a second
+  // allowance. Everything else gets its own pool.
+  if (platform === 'mistral') {
+    const code = /^(codestral|mistral-code)/.test(normalizedModelId);
+    return code
+      ? policy('mistral::codestral', 'shared_pool', 'metered', ['requests', 'tokens'], 'provider_reported')
+      : policy(modelPool(platform, modelId), 'model', 'metered', ['requests', 'tokens'], 'provider_reported');
+  }
   if (platform === 'github') return policy('github::account', 'account', 'metered', ['requests'], 'provider_reported');
   if (platform === 'cohere') return policy('cohere::trial-pool', 'shared_pool', 'metered', ['requests', 'tokens'], 'provider_reported');
   if (platform === 'cloudflare') return policy('cloudflare::account', 'account', 'metered', ['neurons'], 'provider_reported');
@@ -344,6 +359,15 @@ const HEADER_SPECS: Partial<Record<Platform, HeaderSpec[]>> = {
   // correct these names.
   modelscope: [
     { metric: 'requests', limit: 'modelscope-ratelimit-requests-limit', remaining: 'modelscope-ratelimit-requests-remaining', reset: 'modelscope-ratelimit-requests-reset', strategy: 'provider_reported' },
+  ],
+  // Measured 2026-09-14 against a live free key. Mistral reports a per-minute
+  // allowance on every response, including the refusals: a model this tier
+  // cannot call answers 429 with `limit-req-minute: 0`, which is the provider
+  // stating there is no allowance rather than asking us to retry later.
+  // No reset header is sent, so the minute is a token bucket by shape.
+  mistral: [
+    { metric: 'requests', limit: 'x-ratelimit-limit-req-minute', remaining: 'x-ratelimit-remaining-req-minute', strategy: 'token_bucket' },
+    { metric: 'tokens', limit: 'x-ratelimit-limit-tokens-minute', remaining: 'x-ratelimit-remaining-tokens-minute', strategy: 'token_bucket' },
   ],
 };
 

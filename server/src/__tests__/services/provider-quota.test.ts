@@ -65,6 +65,59 @@ describe('provider-quota: pool inference', () => {
     expect(inferQuotaPoolKey('acme' as any)).toBe('acme::account');
   });
 
+  it('gives each Mistral model its own pool, except the two names Codestral answers to', () => {
+    // Measured 2026-09-14 on a live free key: three models called back to back
+    // reported three different allowances and three counters that moved
+    // independently — ministral-8b 188/min, voxtral-small 60/min on a 50k token
+    // minute, codestral 125/min on a 625k one. One platform-wide pool read all
+    // of that as a single bucket.
+    expect(inferQuotaPoolKey('mistral', 'ministral-8b-latest')).toBe('mistral::model::ministral-8b-latest');
+    expect(inferQuotaPoolKey('mistral', 'voxtral-small-latest')).toBe('mistral::model::voxtral-small-latest');
+    expect(resolveQuotaPolicy('mistral', 'ministral-8b-latest')).toMatchObject({ scope: 'model' });
+
+    // And the exception, which is measured too: codestral-latest went 123 -> 122
+    // and mistral-code-latest then reported 121 — the same counter under a
+    // second name. Splitting these would invent a second 125/min allowance.
+    expect(inferQuotaPoolKey('mistral', 'codestral-latest')).toBe('mistral::codestral');
+    expect(inferQuotaPoolKey('mistral', 'codestral-2508')).toBe('mistral::codestral');
+    expect(inferQuotaPoolKey('mistral', 'mistral-code-latest')).toBe('mistral::codestral');
+    expect(inferQuotaPoolKey('mistral', 'mistral-code-fim-latest')).toBe('mistral::codestral');
+    // The prefix must not swallow the rest of the platform: mistral-medium is
+    // a different model with a different (here, zero) allowance.
+    expect(inferQuotaPoolKey('mistral', 'mistral-medium-latest')).toBe('mistral::model::mistral-medium-latest');
+  });
+
+  it('reads a Mistral zero allowance as zero rather than as absent', () => {
+    // Mistral answers a model this tier cannot call with 429 and
+    // `limit-req-minute: 0`. That is the provider stating there is no
+    // allowance, not asking us to retry — and 0 must survive parsing, because
+    // a falsy limit dropped on the floor is indistinguishable from a provider
+    // that sent no headers at all.
+    const refused = new Response(null, {
+      status: 429,
+      headers: { 'x-ratelimit-limit-req-minute': '0', 'x-ratelimit-remaining-req-minute': '0' },
+    });
+    const obs = parseQuotaObservationsFromResponse(refused, { platform: 'mistral', keyId: 1 });
+    const requests = obs.find(o => o.metric === 'requests');
+    expect(requests).toBeDefined();
+    expect(requests!.limit).toBe(0);
+    expect(requests!.remaining).toBe(0);
+
+    // A serving model on the same key reports its real minute.
+    const served = new Response(null, {
+      status: 200,
+      headers: {
+        'x-ratelimit-limit-req-minute': '125',
+        'x-ratelimit-remaining-req-minute': '123',
+        'x-ratelimit-limit-tokens-minute': '625000',
+        'x-ratelimit-remaining-tokens-minute': '624984',
+      },
+    });
+    const ok = parseQuotaObservationsFromResponse(served, { platform: 'mistral', keyId: 1 });
+    expect(ok.find(o => o.metric === 'requests')).toMatchObject({ limit: 125, remaining: 123 });
+    expect(ok.find(o => o.metric === 'tokens')).toMatchObject({ limit: 625_000, remaining: 624_984 });
+  });
+
   it('describes quota economics without conflating scope and accounting', () => {
     expect(resolveQuotaPolicy('openrouter', 'qwen/qwen3:free')).toMatchObject({
       scope: 'shared_pool', accounting: 'metered', metrics: ['requests'],
