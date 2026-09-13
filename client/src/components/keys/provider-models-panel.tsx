@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
+import { readHideDisabled, writeHideDisabled } from '@/lib/hide-disabled-pref'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip } from '@/components/tooltip'
 import { ChainPicker } from '@/components/compare/chain-picker'
@@ -64,28 +65,8 @@ function HealthMark({ health }: { health?: ModelHealthRow }) {
   )
 }
 
-/**
- * Per-provider "hide disabled" preference.
- *
- * One key per platform, so the choice made on a 122-row provider does not
- * follow you to a four-row one. Guarded because localStorage throws in private
- * modes and on a blocked origin, and a view preference must never be the reason
- * a panel fails to render.
- */
-const HIDE_DISABLED_PREFIX = 'freellmapi.keys.hideDisabled.'
-
-export function readHideDisabled(platform: string): boolean {
-  try { return localStorage.getItem(HIDE_DISABLED_PREFIX + platform) === '1' } catch { return false }
-}
-
-export function writeHideDisabled(platform: string, hidden: boolean): void {
-  try {
-    if (hidden) localStorage.setItem(HIDE_DISABLED_PREFIX + platform, '1')
-    // Removed rather than set to '0': the default is "show everything", and an
-    // explicit false would outlive a change to that default.
-    else localStorage.removeItem(HIDE_DISABLED_PREFIX + platform)
-  } catch { /* view state only */ }
-}
+// The hide-can't-route preference lives in lib/hide-disabled-pref.ts: this file
+// exports components only, so a non-component export here breaks fast refresh.
 
 interface ModelHealthRow {
   modelId: string
@@ -246,7 +227,15 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
   // state — hiding a row here changes nothing about what routes, unlike the
   // Quota panel's hidden pools, which are a property of the install.
   const [hideDisabled, setHideDisabled] = useState(() => readHideDisabled(platform))
-  useEffect(() => { setHideDisabled(readHideDisabled(platform)) }, [platform])
+  // Re-read during render when the panel is pointed at another provider,
+  // rather than in an effect. An effect would render once with the previous
+  // provider's preference and then again with the right one — a visible flash
+  // of the wrong table, and the cascading-render the hooks lint rejects.
+  const [prevPlatform, setPrevPlatform] = useState(platform)
+  if (platform !== prevPlatform) {
+    setPrevPlatform(platform)
+    setHideDisabled(readHideDisabled(platform))
+  }
   const toggleHideDisabled = () => {
     setHideDisabled(prev => {
       const next = !prev
@@ -464,7 +453,13 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
   )
 
   if (isLoading) return <p className="px-3 py-2 text-xs text-muted-foreground">{t('common.loading')}</p>
-  if (rows.length === 0) return <p className="px-3 py-2 text-xs text-muted-foreground">{t('keys.panelNoModels')}</p>
+  // Only when the provider genuinely has no catalogue rows. Testing the
+  // FILTERED list here told HuggingFace "no models discovered" while 121 sat in
+  // the catalogue, and took the filter chip with it — the one control that
+  // could undo the filter, gone, with the preference persisted. The filtered
+  // case falls through and is handled under the table, chip intact.
+  const provider = (data?.rows ?? []).filter(r => r.platform === platform)
+  if (provider.length === 0) return <p className="px-3 py-2 text-xs text-muted-foreground">{t('keys.panelNoModels')}</p>
 
   const scoped = rows.filter(routable).length
   // Only routable rows count: measuring a model this key cannot serve is not
@@ -642,6 +637,15 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
           })}
         </tbody>
       </table>
+      {/* Every row filtered out. Said here rather than in place of the panel,
+          so the chip that hid them stays on screen and the state is one click
+          from reversible — and phrased as what it is, not as "nothing
+          discovered", which is what a provider with 121 hidden rows was told. */}
+      {rows.length === 0 && (
+        <p className="px-1 py-2 text-xs text-muted-foreground">
+          {t('keys.panelAllFiltered', { count: provider.length })}
+        </p>
+      )}
       {/* The legend sits under the codes it explains, and only appears once a
           code is on screen: a permanent glossary for a table that is usually
           all green is clutter. Ordered as an operator should act — the

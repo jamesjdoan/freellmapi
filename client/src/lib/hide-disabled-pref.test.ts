@@ -4,7 +4,7 @@
 // So the rules worth pinning are about MEMORY, not rendering: per provider,
 // survives a reload, and never throws where localStorage is unavailable.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { readHideDisabled, writeHideDisabled } from './provider-models-panel'
+import { readHideDisabled, writeHideDisabled } from '@/lib/hide-disabled-pref'
 
 describe('hide-disabled preference', () => {
   beforeEach(() => { localStorage.clear() })

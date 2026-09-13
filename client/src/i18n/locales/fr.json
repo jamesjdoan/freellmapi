@@ -689,7 +689,8 @@
     "healthCode_E429": "allowance spent right now",
     "healthCode_EOTHER": "refused for another reason — hover the badge",
     "modelsInScope": "{enabled}/{total} in key scope",
-    "panelHideUnroutable": "Hide can't route"
+    "panelHideUnroutable": "Hide can't route",
+    "panelAllFiltered": "All {count} models on this provider are hidden — none can route right now."
   },
   "backups": {
     "title": "Sauvegardes",
