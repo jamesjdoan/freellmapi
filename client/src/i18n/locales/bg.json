@@ -1498,6 +1498,10 @@
     "chainPick": "Chains that may route to this model",
     "chainServing": "serving",
     "chainApply": "Apply {count}",
-    "chainConfirm": "Change routing"
+    "chainConfirm": "Change routing",
+    "chartAll": "All three",
+    "chartCost": "Cost / task",
+    "costFree": "free",
+    "costBasis": "One task priced as {input} input + {output} output tokens, at each model’s published per-million rates."
   }
 }

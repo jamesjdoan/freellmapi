@@ -100,6 +100,32 @@ interface ComparePayload {
 }
 
 type Metric = 'intelligenceIndex' | 'codingIndex' | 'agenticIndex'
+/** What the chart plots. The three indices are one scale and can share an axis;
+ *  cost is a different quantity in different units, so it gets its own view
+ *  rather than a fourth bar nobody could compare against the others. */
+type ChartView = Metric | 'all' | 'costPerTask'
+
+/**
+ * One "task", for costing: 15k tokens in, 3k out.
+ *
+ * A price per million says nothing about what a job costs, and the two halves
+ * are priced differently — output runs 3-5x input on most models here, so a
+ * ranking by input price alone reorders the moment real work is done. These are
+ * the rough proportions of one coding turn with a file or two in context.
+ * Stated here rather than buried in the maths because the number only means
+ * anything if you can see the assumption behind it.
+ */
+const TASK_INPUT_TOKENS = 15_000
+const TASK_OUTPUT_TOKENS = 3_000
+
+function costPerTask(a: CompareGroup['analysis']): number | null {
+  if (!a) return null
+  const { price1mInput: inp, price1mOutput: out } = a
+  // A model priced on neither half is unpriced, not free. A FREE model is
+  // priced at zero on both, which is a real answer and must not be skipped.
+  if (inp == null && out == null) return null
+  return ((inp ?? 0) * TASK_INPUT_TOKENS + (out ?? 0) * TASK_OUTPUT_TOKENS) / 1_000_000
+}
 
 interface ProxyUpgrade {
   platform: string
@@ -140,12 +166,28 @@ const METRICS: { key: Metric; labelKey: string }[] = [
   { key: 'agenticIndex', labelKey: 'compare.agentic' },
 ]
 
+/** The three indices share one 0-100ish scale, so they can be read against each
+ *  other on a common axis — which is the whole point of the overlay: a model
+ *  strong on intelligence and weak on agentic is the shape you are looking for,
+ *  and three separate screens cannot show it. */
+const OVERLAY: { key: Metric; labelKey: string; bar: string }[] = [
+  { key: 'intelligenceIndex', labelKey: 'compare.intelligence', bar: 'bg-emerald-500/70' },
+  { key: 'codingIndex', labelKey: 'compare.coding', bar: 'bg-violet-500/70' },
+  { key: 'agenticIndex', labelKey: 'compare.agentic', bar: 'bg-amber-500/70' },
+]
+
+const CHART_VIEWS: { key: ChartView; labelKey: string }[] = [
+  ...METRICS,
+  { key: 'all', labelKey: 'compare.chartAll' },
+  { key: 'costPerTask', labelKey: 'compare.chartCost' },
+]
+
 export default function CompareModelsPage() {
   const { t } = useI18n()
   const queryClient = useQueryClient()
   const [keyDraft, setKeyDraft] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [metric, setMetric] = useState<Metric>('intelligenceIndex')
+  const [metric, setMetric] = useState<ChartView>('intelligenceIndex')
   // What "available" means, said out loud. The page used to offer one toggle
   // between "in a chain" and "switched on", and neither answers the question
   // that decides whether a model can serve at all: do we hold a key for its
@@ -322,14 +364,39 @@ export default function CompareModelsPage() {
   // than an empty chart.
   const comparing = chosen.length > 0 ? chosen : entries
 
+  /**
+   * What each row plots, per view.
+   *
+   * Overlay ranks by the mean of the three so a row's ORDER reflects the shape
+   * being compared rather than one arbitrary axis; cost ranks cheapest first,
+   * since the question there is "what can I afford", not "what is biggest".
+   */
+  const valueOf = useMemo(() => (g: CompareGroup): number | null => {
+    if (metric === 'costPerTask') return costPerTask(g.analysis)
+    if (metric === 'all') {
+      const parts = OVERLAY.map(o => g.analysis?.[o.key]).filter((v): v is number => v != null)
+      return parts.length > 0 ? parts.reduce((a, b) => a + b, 0) / parts.length : null
+    }
+    return (g.analysis?.[metric] as number | null) ?? null
+  }, [metric])
+
   const scored = useMemo(
     () => comparing
-      .filter(g => g.analysis?.[metric] != null)
-      .sort((a, b) => (b.analysis![metric] as number) - (a.analysis![metric] as number)),
-    [comparing, metric],
+      .filter(g => valueOf(g) != null)
+      .sort((a, b) => metric === 'costPerTask'
+        ? (valueOf(a) as number) - (valueOf(b) as number)
+        : (valueOf(b) as number) - (valueOf(a) as number)),
+    [comparing, metric, valueOf],
   )
-  const peak = scored.length > 0 ? (scored[0].analysis![metric] as number) : 0
-  const unscored = comparing.filter(g => g.analysis?.[metric] == null)
+  // The bar is scaled to the largest value on screen in every view — for cost
+  // that is the most expensive model, so the free ones read as the flat floor
+  // they are.
+  const peak = scored.length > 0
+    ? Math.max(...scored.map(g => (metric === 'all'
+      ? Math.max(...OVERLAY.map(o => g.analysis?.[o.key] ?? 0))
+      : (valueOf(g) as number))))
+    : 0
+  const unscored = comparing.filter(g => valueOf(g) == null)
 
   // Collapsed only when the key is both present and usable: an unreadable one
   // needs the form, since replacing it is the fix.
@@ -469,7 +536,7 @@ export default function CompareModelsPage() {
               <Scale className="size-4 text-muted-foreground" />
               <h2 className="text-sm font-medium">{t('compare.chartTitle')}</h2>
               <div className="ml-auto flex flex-wrap items-center gap-1">
-                {METRICS.map(m => (
+                {CHART_VIEWS.map(m => (
                   <button
                     key={m.key}
                     type="button"
@@ -520,7 +587,7 @@ export default function CompareModelsPage() {
 
             <ul className="mt-3 space-y-1">
               {scored.map(g => {
-                const value = g.analysis![metric] as number
+                const value = valueOf(g) as number
                 return (
                   // One vocabulary for "this is a baseline", not two. The
                   // table says it with a badge; this list said it by recolouring
@@ -560,22 +627,65 @@ export default function CompareModelsPage() {
                         />
                       ))}
                     </span>
-                    <div className="h-3 min-w-0 flex-1 rounded bg-muted">
-                      {/* Scaled to the best model on screen, not to 100: the
-                          indices are not percentages and the gap between the
-                          top few is what a reader is looking for. */}
-                      {/* The bar keeps the badge's hue so the two halves of the
-                          page agree on which colour means "yardstick". */}
-                      <div
-                        className={`h-3 rounded ${g.reference ? 'bg-sky-500/70' : 'bg-emerald-500/70'}`}
-                        style={{ width: peak > 0 ? `${Math.max((value / peak) * 100, 2)}%` : '2%' }}
-                      />
-                    </div>
-                    <span className="w-12 flex-shrink-0 text-right tabular-nums">{value.toFixed(1)}</span>
+                    {/* Scaled to the largest value on screen, not to 100: the
+                        indices are not percentages and the gap between the top
+                        few is what a reader is looking for. */}
+                    {metric === 'all' ? (
+                      // Three bars stacked in the height of one row: the SHAPE
+                      // is the point — strong reasoning with weak agentic reads
+                      // instantly here and cannot be seen at all when the three
+                      // live on separate screens.
+                      <div className="flex min-w-0 flex-1 flex-col gap-px">
+                        {OVERLAY.map(o => {
+                          const v = g.analysis?.[o.key]
+                          return (
+                            <div key={o.key} className="h-1 rounded-sm bg-muted" title={`${t(o.labelKey)}: ${v?.toFixed(1) ?? '—'}`}>
+                              {v != null && (
+                                <div
+                                  className={`h-1 rounded-sm ${o.bar}`}
+                                  style={{ width: peak > 0 ? `${Math.max((v / peak) * 100, 2)}%` : '2%' }}
+                                />
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <div className="h-3 min-w-0 flex-1 rounded bg-muted">
+                        {/* The bar keeps the badge's hue so the two halves of
+                            the page agree on which colour means "yardstick". */}
+                        <div
+                          className={`h-3 rounded ${g.reference ? 'bg-sky-500/70' : 'bg-emerald-500/70'}`}
+                          style={{ width: peak > 0 ? `${Math.max((value / peak) * 100, 2)}%` : '2%' }}
+                        />
+                      </div>
+                    )}
+                    <span className="w-16 flex-shrink-0 text-right tabular-nums">
+                      {metric === 'costPerTask'
+                        // Free is a result, not a blank: most of this catalogue
+                        // costs nothing per task and that is the finding.
+                        ? (value === 0 ? t('compare.costFree') : `$${value < 0.01 ? value.toFixed(4) : value.toFixed(3)}`)
+                        : value.toFixed(1)}
+                    </span>
                   </li>
                 )
               })}
             </ul>
+            {metric === 'all' && (
+              <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-muted-foreground">
+                {OVERLAY.map(o => (
+                  <span key={o.key} className="inline-flex items-center gap-1">
+                    <span className={`inline-block h-2 w-3 rounded-sm ${o.bar}`} />
+                    {t(o.labelKey)}
+                  </span>
+                ))}
+              </p>
+            )}
+            {metric === 'costPerTask' && (
+              <p className="mt-2 text-[10px] text-muted-foreground">
+                {t('compare.costBasis', { input: TASK_INPUT_TOKENS.toLocaleString(), output: TASK_OUTPUT_TOKENS.toLocaleString() })}
+              </p>
+            )}
             {unscored.length > 0 && (
               <p className="mt-2 text-[11px] text-muted-foreground">
                 {t('compare.notMeasured', { count: unscored.length })}

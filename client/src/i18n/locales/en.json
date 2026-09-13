@@ -484,7 +484,11 @@
     "referenceSource": "benchmark itself",
     "matchNoneOption": "— no counterpart —",
     "matchUnresolved": "{slug} is no longer published",
-    "attribution": "Benchmark data from"
+    "attribution": "Benchmark data from",
+    "chartAll": "All three",
+    "chartCost": "Cost / task",
+    "costFree": "free",
+    "costBasis": "One task priced as {input} input + {output} output tokens, at each model’s published per-million rates."
   },
   "keys": {
     "pageTitle": "Keys",
