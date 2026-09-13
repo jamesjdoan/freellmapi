@@ -600,8 +600,6 @@
     "modelScopeAdd": "Tinye ID model wee pịa Enter",
     "modelScopeEmpty": "Enweghị oke edobere — igodo a na-arụ ọrụ maka model niile nke onye na-eweta ya.",
     "modelScopeClear": "Hichapụ oke",
-    "modelScopeBadgeOne": "oke · model 1",
-    "modelScopeBadgeOther": "oke · model {count}",
     "catalogLoadFailed": "Could not load the curated model catalog.",
     "liveModelsFallback": "No curated rows are available for this provider, so these models come from its live API.",
     "providerAccountLimits": "Provider account limits",
@@ -646,7 +644,6 @@
     "churnNotScopedHint": "Retirement deleted this model from the catalogue and this key never listed it, so there is nothing to switch.",
     "panelTitle": "{count} models on this provider",
     "panelScopedCount": "{scoped} of {total} in key scope",
-    "panelOnlyScoped": "Only in scope",
     "panelColModel": "Model",
     "panelColScope": "In key scope",
     "panelColEnabled": "Enabled",
@@ -691,8 +688,8 @@
     "healthCode_ETIME": "we stopped waiting — says nothing about the model",
     "healthCode_E429": "allowance spent right now",
     "healthCode_EOTHER": "refused for another reason — hover the badge",
-    "panelHideDisabled": "Hide disabled",
-    "modelsInScope": "{enabled}/{total} in key scope"
+    "modelsInScope": "{enabled}/{total} in key scope",
+    "panelHideUnroutable": "Hide can't route"
   },
   "backups": {
     "title": "Backups",

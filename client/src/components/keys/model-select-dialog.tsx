@@ -49,8 +49,8 @@ export function ModelSelectDialog({
       apiFetch(`/api/keys/${keyId}`, { method: 'PATCH', body: JSON.stringify({ modelScope }) }),
     onSuccess: (_data, modelScope) => {
       queryClient.invalidateQueries({ queryKey: ['keys'] })
-      // Singular/plural as separate keys, the way keys.modelScopeBadgeOne/Other
-      // already do it — this i18n layer has no plural rules of its own.
+      // Singular/plural as separate keys, the way the other picker strings
+      // already are — this i18n layer has no plural rules of its own.
       toast.success(t(
         modelScope.length === 1 ? 'keys.modelPicker.scopedOne' : 'keys.modelPicker.scopedOther',
         { count: modelScope.length },

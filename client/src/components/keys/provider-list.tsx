@@ -136,16 +136,9 @@ export function ProviderList({ onAddKey, initialSearch }: {
               </>
             )}
             <span className={`text-xs text-muted-foreground ${k.enabled ? '' : 'opacity-50'}`}>{statusLabelKey[status] ? t(statusLabelKey[status]) : status}</span>
-            {/* Only a SCOPED key shows anything (#657); an unscoped one stays as it always was. */}
-            {(k.modelScope?.length ?? 0) > 0 && (
-              <Badge
-                variant="secondary"
-                className={`text-[10px] text-muted-foreground ${k.enabled ? '' : 'opacity-50'}`}
-                title={k.modelScope!.join(', ')}
-              >
-                {t(k.modelScope!.length === 1 ? 'keys.modelScopeBadgeOne' : 'keys.modelScopeBadgeOther', { count: k.modelScope!.length })}
-              </Badge>
-            )}
+            {/* No per-key scope badge: the header beside it already reads
+                "N/M in key scope", which is the same count against the
+                provider's catalogue rather than on its own. */}
             {(k.providerRpmLimit != null || k.providerRpdLimit != null || k.providerTpdLimit != null) && (
               <Badge variant="secondary" className="text-[10px] text-muted-foreground">
                 {t('keys.accountLimits')}

@@ -235,13 +235,12 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
   const { t } = useI18n()
   const queryClient = useQueryClient()
   const [sort, setSort] = useState<SortKey>('intelligence')
-  const [onlyScoped, setOnlyScoped] = useState(false)
-  // Separate from `onlyScoped`, which also demands the key's scope allows the
-  // model. A provider with 122 catalogue rows and 4 switched on is unreadable
-  // either way, but the two questions are different: "what am I routing" and
-  // "what could this key reach".
+  // One filter, asking whether a row can serve at all: switched on in the
+  // catalogue AND reachable by a key we hold. It replaced a pair — "Hide
+  // disabled" tested only the catalogue flag, so on HuggingFace (121 rows, none
+  // switched off) it hid nothing while every row was grey and unreachable.
   //
-  // Remembered PER PROVIDER: HuggingFace with 122 rows wants hiding and Groq
+  // Remembered PER PROVIDER: HuggingFace with 121 rows wants hiding and Groq
   // with 4 does not, and re-hiding on every expand made the control feel
   // broken. Kept in localStorage rather than server settings because it is view
   // state — hiding a row here changes nothing about what routes, unlike the
@@ -403,6 +402,13 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
     onSuccess: invalidate,
   })
 
+  // Declared before the memo that uses it: `const` here would be in its
+  // temporal dead zone during render, which is exactly the TDZ crash this
+  // panel shipped once already.
+  function routable(r: Row) {
+    return r.enabled && (r.keyScope === 'in' || r.keyScope === 'unscoped')
+  }
+
   const rows = useMemo(() => {
     const mine = (data?.rows ?? []).filter(r => r.platform === platform)
     const value = (r: Row) =>
@@ -412,8 +418,10 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
       : sort === 'agentic' ? r.analysis?.agenticIndex ?? null
       : r.analysis?.intelligenceIndex ?? null
     return [...mine]
-      .filter(r => !onlyScoped || (r.enabled && (r.keyScope === 'in' || r.keyScope === 'unscoped')))
-      .filter(r => !hideDisabled || r.enabled)
+      // The filter now asks whether the row can serve a request at all, which
+      // is the union of the two old tests: switched on in the catalogue AND
+      // reachable by a key we hold.
+      .filter(r => !hideDisabled || routable(r))
       // Unmeasured last in every ordering: a model with no score is not a zero.
       .sort((a, b) => {
         if (sort === 'name') return a.displayName.localeCompare(b.displayName)
@@ -423,9 +431,8 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
         if (y == null) return -1
         return y - x || a.displayName.localeCompare(b.displayName)
       })
-  }, [data?.rows, platform, sort, onlyScoped, hideDisabled])
+  }, [data?.rows, platform, sort, hideDisabled])
 
-  const routable = (r: Row) => r.enabled && (r.keyScope === 'in' || r.keyScope === 'unscoped')
 
   // Only what this key can actually reach: probing a model outside the key's
   // scope would report the credential's limits as the model's.
@@ -441,11 +448,13 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
   }, [rows, healthByModel])
 
   // Counted from the UNFILTERED catalogue, so the number does not vanish the
-  // moment the filter it describes is switched on.
-  const disabledCount = useMemo(
+  // moment the filter it describes is switched on. Counts what the filter now
+  // hides — everything that cannot serve — so a provider with nothing switched
+  // off but a table of unreachable rows finally reports a number.
+  const unroutableCount = useMemo(
     // THIS provider's rows. The payload carries every platform, so counting it
     // whole reported 42 hidden on a panel that had four.
-    () => (data?.rows ?? []).filter(r => r.platform === platform && !r.enabled).length,
+    () => (data?.rows ?? []).filter(r => r.platform === platform && !routable(r)).length,
     [data?.rows, platform],
   )
 
@@ -499,27 +508,27 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
               : t('keys.healthTest', { count: Math.min(untestedIds.length, 25) })}
           </Button>
         )}
-        {/* Hidden rows are counted in the label, so a filter can never make a
-            model quietly cease to exist — the same reason the Quota panel
-            counts its hidden pools. */}
+        {/* One filter, because the old pair measured overlapping things and the
+            weaker one wore the obvious name. "Hide disabled" tested only the
+            catalogue flag, so on a provider where nothing is switched off it
+            hid nothing while the table was full of grey rows — 121 on
+            HuggingFace, 27 on Cloudflare — unreachable because the key's scope
+            excludes them or there is no key at all. "Only in scope" was the one
+            that hid those, and its test was a strict superset.
+
+            Now the question is the one worth asking: can this row serve a
+            request? Hidden rows are counted in the label, so a filter can never
+            make a model quietly cease to exist. */}
         <button
           type="button"
           onClick={toggleHideDisabled}
           aria-pressed={hideDisabled}
           className={`rounded-full border px-2 py-0.5 text-[10px] ${hideDisabled ? 'bg-muted' : 'hover:bg-muted/50'}`}
         >
-          {t('keys.panelHideDisabled')}
-          {disabledCount > 0 && (
-            <span className="ml-1 text-muted-foreground tabular-nums">{disabledCount}</span>
+          {t('keys.panelHideUnroutable')}
+          {unroutableCount > 0 && (
+            <span className="ml-1 text-muted-foreground tabular-nums">{unroutableCount}</span>
           )}
-        </button>
-        <button
-          type="button"
-          onClick={() => setOnlyScoped(v => !v)}
-          aria-pressed={onlyScoped}
-          className={`rounded-full border px-2 py-0.5 text-[10px] ${onlyScoped ? 'bg-muted' : 'hover:bg-muted/50'}`}
-        >
-          {t('keys.panelOnlyScoped')}
         </button>
       </div>
 

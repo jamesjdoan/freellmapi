@@ -600,8 +600,6 @@
     "modelScopeAdd": "輸入模型 ID 並按 Enter 新增",
     "modelScopeEmpty": "未設定範圍——此金鑰可服務該供應商的所有模型。",
     "modelScopeClear": "清除範圍",
-    "modelScopeBadgeOne": "限定 · 1 個模型",
-    "modelScopeBadgeOther": "限定 · {count} 個模型",
     "catalogLoadFailed": "Could not load the curated model catalog.",
     "liveModelsFallback": "No curated rows are available for this provider, so these models come from its live API.",
     "providerAccountLimits": "Provider account limits",
@@ -646,7 +644,6 @@
     "churnNotScopedHint": "撤下已將該模型從目錄中刪除，且此金鑰從未包含它，沒有可切換的內容。",
     "panelTitle": "{count} models on this provider",
     "panelScopedCount": "{scoped} of {total} in key scope",
-    "panelOnlyScoped": "Only in scope",
     "panelColModel": "Model",
     "panelColScope": "In key scope",
     "panelColEnabled": "Enabled",
@@ -691,8 +688,8 @@
     "healthCode_ETIME": "we stopped waiting — says nothing about the model",
     "healthCode_E429": "allowance spent right now",
     "healthCode_EOTHER": "refused for another reason — hover the badge",
-    "panelHideDisabled": "Hide disabled",
-    "modelsInScope": "{enabled}/{total} in key scope"
+    "modelsInScope": "{enabled}/{total} in key scope",
+    "panelHideUnroutable": "Hide can't route"
   },
   "backups": {
     "title": "Backups",

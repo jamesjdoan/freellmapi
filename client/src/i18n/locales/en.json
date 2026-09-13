@@ -665,7 +665,6 @@
     "proxyNudgeDown": "Lower the estimate",
     "panelTitle": "{count} models on this provider",
     "panelScopedCount": "{scoped} of {total} in key scope",
-    "panelOnlyScoped": "Only in scope",
     "panelColChains": "Chains",
     "panelUpgrade": "real data available",
     "panelUpgradeHint": "Artificial Analysis now publishes this model. Replace the borrowed scores and your adjustments with measurements from {name}, matched by {reason}.",
@@ -733,8 +732,6 @@
     "modelScopeAdd": "Add a model ID and press Enter",
     "modelScopeEmpty": "No scope set — this key serves every model of its provider.",
     "modelScopeClear": "Clear scope",
-    "modelScopeBadgeOne": "scoped · 1 model",
-    "modelScopeBadgeOther": "scoped · {count} models",
     "catalogLoadFailed": "Could not load the curated model catalog.",
     "liveModelsFallback": "No curated rows are available for this provider, so these models come from its live API.",
     "providerAccountLimits": "Provider account limits",
@@ -799,8 +796,8 @@
     "healthCode_ETIME": "we stopped waiting — says nothing about the model",
     "healthCode_E429": "allowance spent right now",
     "healthCode_EOTHER": "refused for another reason — hover the badge",
-    "panelHideDisabled": "Hide disabled",
-    "modelsInScope": "{enabled}/{total} in key scope"
+    "modelsInScope": "{enabled}/{total} in key scope",
+    "panelHideUnroutable": "Hide can't route"
   },
   "backups": {
     "title": "Backups",
