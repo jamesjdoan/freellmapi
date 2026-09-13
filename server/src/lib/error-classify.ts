@@ -387,6 +387,33 @@ export function isDailyQuotaExhaustedError(err: any): boolean {
   return /allocation|quota|limit|exhaust|used up/.test(msg);
 }
 
+/**
+ * A 429 refusing THIS REQUEST for its own size, not because the allowance is
+ * spent. Observed live on Groq 2026-09-13:
+ *
+ *   "Request too large for model `qwen/qwen3.8-27b` … on output tokens per
+ *    minute (OTPM): Limit 1000, Requested 1024."
+ *
+ * Requested exceeds the whole ceiling, so no wait can ever satisfy it — and the
+ * route was serving normally-sized requests the entire time it stood benched.
+ * Groq nonetheless stated a retry time (its formula extrapolates one for an
+ * unsatisfiable request), which the cooldown path honoured as authoritative and
+ * turned into a 14-hour bench on a healthy model.
+ *
+ * Deliberately narrow: it must carry the "request too large" wording AND state
+ * a Requested above its own Limit. An ordinary "Limit 1000, Used 1000,
+ * Requested 10" IS exhaustion and must keep benching.
+ */
+export function isUnsatisfiableRequestSizeError(err: any): boolean {
+  const msg = (err?.message ?? '').toLowerCase();
+  if (!msg.includes('request too large')) return false;
+  const limit = /limit (\d[\d,_]*)/.exec(msg);
+  const requested = /requested (\d[\d,_]*)/.exec(msg);
+  if (!limit || !requested) return false;
+  const num = (raw: string) => Number(raw.replace(/[,_]/g, ''));
+  return num(requested[1]) > num(limit[1]);
+}
+
 // A provider-side "this hosted model is temporarily degraded" condition dressed
 // up as a 400. Observed live on NVIDIA NIM (issue #522): a degraded function
 // returns `400 {"detail":"Function id '...': DEGRADED function cannot be

@@ -51,6 +51,64 @@ beforeAll(() => {
 let route: RouteResult;
 beforeEach(() => { route = nullLimitRoute(); });
 
+describe('a request refused for its own size does not bench the route', () => {
+  // Observed live on Groq 2026-09-13. `qwen/qwen3.8-27b` asked for 1024 output
+  // tokens against a 1000/minute ceiling, and the route was benched until UTC
+  // midnight — 14.5 hours — while it went on serving ordinary requests the
+  // whole time (verified by calling it directly at max_tokens=16).
+  //
+  // The bench came out 'authoritative' because Groq STATED a retry time; its
+  // formula extrapolates one even when the request can never fit. Honouring a
+  // provider's retry is right in general and wrong here, which is why this is
+  // classified ahead of the retry-time path rather than inside it.
+  const groqRoute = (): RouteResult => ({
+    provider: {} as any, modelId: 'qwen/qwen3.8-27b', modelDbId: 931_001,
+    apiKey: 'k', keyId: 931_001, platform: 'groq', displayName: 'Qwen3.8 27B',
+    rpdLimit: 1000, tpdLimit: null,
+  });
+
+  const tooLarge = () => Object.assign(
+    new Error('Groq API error 429: Request too large for model `qwen/qwen3.8-27b` in organization '
+      + '`org_01k` service tier `on_demand` on output tokens per minute (OTPM): Limit 1000, '
+      + "Requested 1024. The request's expected output tokens exceed the limit."),
+    { status: 429, retryAfterMs: 51_866_000 },
+  );
+
+  it('lays down no cooldown even though the provider stated a retry time', () => {
+    const decision = cooldownDecisionForError(groqRoute(), tooLarge());
+    expect(decision.durationMs).toBe(0);
+  });
+
+  it('holds whichever producer would have benched it', () => {
+    // The live row expired at exactly UTC midnight, and two paths can produce
+    // an 'authoritative' bench: the daily-quota branch (which falls back to
+    // msUntilNextUtcMidnight) and the stated-retry branch in
+    // getCooldownDecisionForLimit. Rather than assume which one fired on the
+    // day — the stored error was truncated at 200 chars — the size check is
+    // positioned ahead of BOTH, and this asserts that with no retry time on the
+    // error at all, which is the input the daily branch would see.
+    const noStatedRetry = Object.assign(
+      new Error('Groq API error 429: Request too large for model `qwen/qwen3.8-27b` on output '
+        + 'tokens per minute (OTPM): Limit 1000, Requested 1024.'),
+      { status: 429 },
+    );
+    expect(cooldownDecisionForError(groqRoute(), noStatedRetry).durationMs).toBe(0);
+  });
+
+  it('still benches an ordinary exhaustion 429 on the same wording', () => {
+    // The distinction is Requested vs Limit, not the phrase. Here the request
+    // fits the ceiling and the allowance is simply spent, so the provider's
+    // retry time is honoured as before.
+    const spent = Object.assign(
+      new Error('Groq API error 429: Request too large for model `qwen/qwen3.8-27b` on output '
+        + 'tokens per minute (OTPM): Limit 1000, Used 995, Requested 10.'),
+      { status: 429, retryAfterMs: 30_000 },
+    );
+    const decision = cooldownDecisionForError(groqRoute(), spent);
+    expect(decision.durationMs).toBeGreaterThan(0);
+  });
+});
+
 describe('null-limits heuristic only fires on quota signals (#592)', () => {
   it('repeated timeouts stay on the short transient bench — no ladder', () => {
     for (let i = 0; i < 4; i++) {

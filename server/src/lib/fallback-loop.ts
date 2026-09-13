@@ -46,6 +46,7 @@ import {
   isProviderLevelError,
   isContextTooLargeError,
   isTimeoutErrorText,
+  isUnsatisfiableRequestSizeError,
 } from './error-classify.js';
 import { sanitizeProviderErrorMessage, summarizeAttemptError } from './error-redaction.js';
 import { checkKeyHealth, markKeyHealthyFromRequest } from '../services/health.js';
@@ -209,6 +210,12 @@ export function cooldownForError(route: RouteResult, err: any): number {
 export function cooldownDecisionForError(route: RouteResult, err: any): CooldownDecision {
   if (isPaymentRequiredError(err)) return { durationMs: PAYMENT_REQUIRED_COOLDOWN_MS, source: 'credit' };
   if (isModelAccessForbiddenError(err)) return { durationMs: MODEL_FORBIDDEN_COOLDOWN_MS, source: 'tier' };
+  // The request was refused for its own size against a ceiling it can never
+  // fit under. Benching the route punishes it for one oversized caller, and
+  // the provider's own stated retry is extrapolated nonsense in this case, so
+  // no cooldown is laid down at all: this attempt fails over laterally and the
+  // next normally-sized request routes here as usual.
+  if (isUnsatisfiableRequestSizeError(err)) return { durationMs: 0, source: 'heuristic' };
   if (isDailyQuotaExhaustedError(err)) {
     return { durationMs: err?.retryAfterMs ?? msUntilNextUtcMidnight(), source: 'authoritative' };
   }
@@ -359,7 +366,12 @@ export function recordRetryableFailure(route: RouteResult, err: any, state: Fall
   }
   if (consumeSkipBenchExemption(route, err)) return true;
   const decision = cooldownDecisionForError(route, err);
-  setCooldown(route.platform, route.modelId, route.keyId, decision.durationMs, decision.source);
+  // A zero duration means "do not bench this route at all" — writing an
+  // already-expired row would still show up in the panel's cooldown history as
+  // if the model had been punished.
+  if (decision.durationMs > 0) {
+    setCooldown(route.platform, route.modelId, route.keyId, decision.durationMs, decision.source);
+  }
   // Model-level failure benching: a model failing across keys (or repeatedly on
   // one key) must sink out of routing instead of being re-picked every request.
   noteModelFailure(route, now);
