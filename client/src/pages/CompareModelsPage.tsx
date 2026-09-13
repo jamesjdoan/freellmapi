@@ -543,7 +543,21 @@ export default function CompareModelsPage() {
                     </span>
                     <span className="flex w-[70px] flex-shrink-0 items-center gap-0.5">
                       {[...new Map(g.members.map(m => [m.platform, m])).values()].slice(0, 7).map(m => (
-                        <PlatformDot key={m.platform} platform={m.platform} hasKey={m.hasKey} scope={platformScopes.get(m.platform)} />
+                        // Same swatch vocabulary as the table: shape carries
+                        // the key state (filled = usable, hollow circle =
+                        // switched off, hollow square = no key), and the dot
+                        // links to Keys when there is something to fix. Without
+                        // `keyState` this list could only ever draw two of the
+                        // three shapes, so a provider read as "switched off"
+                        // here and "no key at all" ten rows below.
+                        <PlatformDot
+                          key={m.platform}
+                          platform={m.platform}
+                          hasKey={m.hasKey}
+                          scope={platformScopes.get(m.platform)}
+                          keyState={platformKeyStates.get(m.platform)}
+                          linkToKeys
+                        />
                       ))}
                     </span>
                     <div className="h-3 min-w-0 flex-1 rounded bg-muted">
