@@ -233,6 +233,19 @@ export function serializeChainMembership(db: Db, modelDbId: number): string | nu
  * Lift an upstream retirement: a catalog that still lists the model — and lists
  * it enabled — is newer and better evidence than one provider's 404. Returns
  * true when a retirement was actually lifted.
+ *
+ * An operator's explicit `enabled: 0` override is NOT lifted. Observed on this
+ * install 2026-09-14: nvidia/deepseek-ai/deepseek-v4-pro-0813 answers every
+ * inference call with 410 "reached its end of life" while still appearing in
+ * the catalog, so it retired and was reinstated three times in one day, each
+ * reinstatement putting it back into Apex, Coding and Frontier. It had been
+ * disabled by hand precisely so a sync could not restore it, and the sync
+ * restored it anyway.
+ *
+ * A live 410 from the provider is stronger evidence than a catalog listing, and
+ * an operator who switched a route off is stronger still. Returning early also
+ * leaves the tombstone in place, so no 'relisted' event is fabricated and no
+ * chain membership is restored.
  */
 export function reinstateUpstreamRetiredCatalogModel(
   db: Db,
@@ -240,15 +253,70 @@ export function reinstateUpstreamRetiredCatalogModel(
   modelId: string,
 ): boolean {
   if (getCatalogModelTombstone(db, 'chat', platform, modelId)?.source !== 'upstream_eol') return false;
+  // The overrides column is free-form JSON, and a disable has been written both
+  // as `false` and as `0` over this table's life (the API sends a boolean; the
+  // operator scripts that disabled the EOL routes wrote 0). Both mean the same
+  // thing and both must win against a catalog listing.
+  const overridden = getModelOverrides(db, platform, modelId).enabled as boolean | number | undefined;
+  if (overridden === false || overridden === 0) return false;
   clearCatalogModelTombstone(db, 'chat', platform, modelId);
   const row = db
     .prepare('SELECT id FROM models WHERE platform = ? AND model_id = ?')
     .get(platform, modelId) as { id: number } | undefined;
+  // Chain membership is restored by clearCatalogModelTombstone above, from the
+  // `chains_json` the retirement recorded — precisely the rows it switched off.
+  // A blanket `UPDATE profile_models SET enabled = 1` used to live here, and it
+  // also resurrected rows an operator had deliberately turned off beforehand.
+  //
+  // fallback_config is the single legacy list rather than eight ordered chains,
+  // so there is no per-chain intent to preserve and a blanket restore is right.
   if (row) {
     db.prepare('UPDATE fallback_config SET enabled = 1 WHERE model_db_id = ?').run(row.id);
-    db.prepare('UPDATE profile_models SET enabled = 1 WHERE model_db_id = ?').run(row.id);
   }
   return true;
+}
+
+/**
+ * Restore the chain rows a retirement switched off, at the positions they held.
+ *
+ * `chains_json` records `{chain, priority}` for every chain the model was
+ * SERVING when it left (serializeChainMembership). Restoring exactly those is
+ * the point: a blanket `enabled = 1` would also resurrect rows an operator had
+ * deliberately switched off before the retirement, silently re-adding a model
+ * to a chain someone removed it from.
+ *
+ * The recorded priority is reapplied too. Chain rows keep their numbers while
+ * disabled, but the chain may have been renumbered in the meantime, so the
+ * position is written rather than assumed.
+ */
+function restoreChainMembership(db: Db, platform: string, modelId: string, chainsJson: string | null): void {
+  if (!chainsJson) return;
+  const row = db.prepare('SELECT id FROM models WHERE platform = ? AND model_id = ?')
+    .get(platform, modelId) as { id: number } | undefined;
+  if (!row) return;
+  let recorded: RetiredChainMembership[];
+  try {
+    const parsed: unknown = JSON.parse(chainsJson);
+    if (!Array.isArray(parsed)) return;
+    recorded = parsed as RetiredChainMembership[];
+  } catch {
+    // A relist must still happen when its annotation cannot be read.
+    return;
+  }
+  const upsert = db.prepare(`
+    INSERT INTO profile_models (profile_id, model_db_id, priority, enabled)
+    VALUES (?, ?, ?, 1)
+    ON CONFLICT(profile_id, model_db_id) DO UPDATE SET enabled = 1, priority = excluded.priority
+  `);
+  for (const entry of recorded) {
+    if (!entry?.chain) continue;
+    const profile = db.prepare('SELECT id FROM profiles WHERE name = ?')
+      .get(entry.chain) as { id: number } | undefined;
+    // A chain deleted since the retirement is not recreated: the model simply
+    // comes back to the chains that still exist.
+    if (!profile) continue;
+    upsert.run(profile.id, row.id, entry.priority ?? 0);
+  }
 }
 
 export function clearCatalogModelTombstone(
@@ -257,12 +325,20 @@ export function clearCatalogModelTombstone(
   platform: string,
   modelId: string,
 ): void {
+  // Read before deleting: the tombstone carries the membership to restore.
+  const before = db.prepare(
+    'SELECT chains_json FROM catalog_model_tombstones WHERE kind = ? AND platform = ? AND model_id = ?',
+  ).get(kind, platform, modelId) as { chains_json: string | null } | undefined;
   const removed = db.prepare('DELETE FROM catalog_model_tombstones WHERE kind = ? AND platform = ? AND model_id = ?')
     .run(kind, platform, modelId);
   // Only when a retirement was actually lifted. This is called defensively on
   // paths where no tombstone exists, and "relisted" on a model that was never
   // retired would be a fabricated event.
   if (kind === 'chat' && removed.changes > 0) {
+    // A model that comes back should come back to the chains it was serving.
+    // Without this the route returns to the catalogue and to nothing else: it
+    // is enabled, invisible to every chain, and has to be re-curated by hand.
+    restoreChainMembership(db, platform, modelId, before?.chains_json ?? null);
     recordCatalogueEvent(db, {
       kind: 'relisted',
       platform,
