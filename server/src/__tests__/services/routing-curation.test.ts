@@ -3,6 +3,7 @@ import { initDb, getDb } from '../../db/index.js';
 import { encrypt } from '../../lib/crypto.js';
 import {
   CURATED_ROUTES,
+  SINGLE_COUNTER_PLATFORMS,
   CHAIN_CONTRACTS,
   QUOTA_DOMAINS,
   chainMembers,
@@ -77,6 +78,34 @@ describe('chain contracts hold for every curated member', () => {
     expect(vision.admits).toContain('SPECIALIST');
     expect(vision.requiresTools).toBe(false);
     expect(vision.requiresVision).toBe(true);
+  });
+
+  it('spends a single shared counter on the best route it can buy', () => {
+    // OpenRouter's :free routes draw ONE account allowance — 1000/day and
+    // 20/min across all of them. A weaker member costs the same unit for less
+    // and adds no depth, because they exhaust together. So each chain lists at
+    // most one, and it must be the strongest that chain admits.
+    //
+    // Live before this rule: fast-lane and workhorse both carried
+    // ling-3.0-flash at 24.9 while nex-n2.5 at 28.2 drew the same counter.
+    for (const platform of SINGLE_COUNTER_PLATFORMS) {
+      for (const contract of CHAIN_CONTRACTS) {
+        const fromPool = chainMembers(contract.name).filter(m => m.platform === platform);
+        expect(fromPool.length, `${contract.name} lists ${fromPool.length} ${platform} routes`)
+          .toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it('still takes several routes from a provider that meters PER MODEL', () => {
+    // The rule above must not be over-applied: Google meters 20/day per model
+    // and NVIDIA 40/min per model, so a second route there is a second
+    // allowance and real depth. Collapsing those to one would throw capacity
+    // away, which is the opposite mistake.
+    const perModel = ['google', 'nvidia'];
+    const counts = perModel.map(p =>
+      Math.max(...CHAIN_CONTRACTS.map(c => chainMembers(c.name).filter(m => m.platform === p).length)));
+    expect(Math.max(...counts)).toBeGreaterThan(1);
   });
 
   it('heads every chain with a CORE route', () => {

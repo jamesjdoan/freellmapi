@@ -148,7 +148,7 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // ── bai ───────────────────────────────────────────────────────
   {
     platform: 'bai', modelId: 'qwen3.8-flash', classification: 'OVERFLOW',
-    chains: { 'Extra-Tier': 1, Apex: 2, Frontier: 2, Coding: 2, Vision: 2, 'Fast-Lane': 6 },
+    chains: { 'Extra-Tier': 1, Apex: 2, Frontier: 2, Coding: 2, Vision: 2, 'Fast-Lane': 5 },
     why: '100% over 15 attempts. 5064ms measured. intelligence 39.9. coding 73.1. 1000/min. provider barely exercised here.',
   },
   {
@@ -184,13 +184,13 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'google', modelId: 'gemini-3.5-flash-lite', classification: 'CORE',
-    chains: { Workhorse: 6, Default: 6, Vision: 9 },
+    chains: { Workhorse: 5, Default: 5, Vision: 8 },
     why: '77% over 22 attempts. 16256ms measured. intelligence 22.7. coding 49.3. 15/min. 500/day.',
   },
   // ── groq ──────────────────────────────────────────────────────
   {
     platform: 'groq', modelId: 'qwen/qwen3.8-27b', classification: 'OVERFLOW',
-    chains: { Workhorse: 2, Default: 2, Apex: 5, Coding: 5, 'Fast-Lane': 5, Vision: 5 },
+    chains: { Workhorse: 2, Default: 2, 'Fast-Lane': 4, Apex: 5, Coding: 5, Vision: 5 },
     why: '62% over 16 attempts. 190ms measured. intelligence 33.9. coding 68.1.',
   },
   {
@@ -211,12 +211,12 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'nvidia', modelId: 'nvidia/nemotron-3-ultra-550b-a55b', classification: 'CORE',
-    chains: { Workhorse: 1, Default: 1, Apex: 8 },
+    chains: { Workhorse: 1, Default: 1, Apex: 7 },
     why: '78% over 917 attempts. 21192ms measured. intelligence 23.4. coding 49.3. 40/min.',
   },
   {
     platform: 'nvidia', modelId: 'nvidia/nemotron-3-super-120b-a12b', classification: 'CORE',
-    chains: { Workhorse: 7, Default: 7 },
+    chains: { Workhorse: 6, Default: 6 },
     why: '97% over 6883 attempts. 12729ms measured. intelligence 13.6. coding 37.7. 40/min.',
   },
   // ── ollama ────────────────────────────────────────────────────
@@ -260,27 +260,17 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   {
     platform: 'openrouter', modelId: 'nex-agi/nex-n2.5-mini:free', classification: 'OVERFLOW',
     chains: { Workhorse: 3, Default: 3, Apex: 6, Coding: 7 },
-    why: '1 attempt(s) — too thin to rate. intelligence 28.2. coding 59.1.',
+    why: '1 attempt(s) — too thin to rate. intelligence 28.2. coding 59.1. OpenRouter spends ONE account counter (1000/day, 20/min) whichever :free model answers, so only its strongest qualifying route is listed: a weaker sibling costs the same unit for less, and adds no depth because they exhaust together.',
   },
   {
     platform: 'openrouter', modelId: 'nex-agi/nex-n2.5-pro:free', classification: 'OVERFLOW',
-    chains: { Workhorse: 5, Default: 5, Vision: 6, Apex: 7, Coding: 8 },
-    why: '2 attempt(s) — too thin to rate. intelligence 28.2. coding 59.1.',
+    chains: { Vision: 6 },
+    why: '2 attempt(s) — too thin to rate. intelligence 28.2. coding 59.1. OpenRouter spends ONE account counter (1000/day, 20/min) whichever :free model answers, so only its strongest qualifying route is listed: a weaker sibling costs the same unit for less, and adds no depth because they exhaust together.',
   },
   {
     platform: 'openrouter', modelId: 'inclusionai/ling-3.0-flash-sante:free', classification: 'OVERFLOW',
     chains: { 'Fast-Lane': 3 },
-    why: '3 attempt(s) — too thin to rate. 1394ms measured. intelligence 24.9. coding 50.6.',
-  },
-  {
-    platform: 'openrouter', modelId: 'inclusionai/ling-3.0-flash-fin:free', classification: 'OVERFLOW',
-    chains: { 'Fast-Lane': 4 },
-    why: '5 attempt(s) — too thin to rate. 1410ms measured. intelligence 24.9. coding 50.6.',
-  },
-  {
-    platform: 'openrouter', modelId: 'inclusionai/ling-3.0-flash-vl:free', classification: 'OVERFLOW',
-    chains: { Vision: 8 },
-    why: '1 attempt(s) — too thin to rate. intelligence 24.8. coding 57.',
+    why: '3 attempt(s) — too thin to rate. 1394ms measured. intelligence 24.9. coding 50.6. OpenRouter spends ONE account counter (1000/day, 20/min) whichever :free model answers, so only its strongest qualifying route is listed: a weaker sibling costs the same unit for less, and adds no depth because they exhaust together.',
   },
 ];
 
@@ -362,3 +352,31 @@ export function chainMembers(chain: ChainName): { platform: string; modelId: str
     }))
     .sort((a, b) => a.priority - b.priority);
 }
+
+/**
+ * Spending a shared allowance on the best thing it can buy.
+ *
+ * A source whose counter is ONE pool across every model — OpenRouter's :free
+ * routes share 1000/day and 20/min on the account, verified against
+ * /api/v1/key — charges the same unit whichever model answers. A weaker member
+ * of that pool is therefore strictly worse than its strongest: identical cost,
+ * less returned, and no failover depth either, because they exhaust together.
+ *
+ * So a single-counter source contributes exactly ONE route per chain, and it is
+ * the best that chain's own metric can name: strongest by intelligence for
+ * apex, by coding index for coding, FASTEST for fast-lane, vision-capable for
+ * vision. Before this rule the fast lane and workhorse both carried
+ * ling-3.0-flash (28.2 -> 24.9 intelligence) while nex-n2.5 drew the very same
+ * counter.
+ *
+ * It does NOT apply to a provider with per-model windows. Google meters 20/day
+ * PER MODEL and NVIDIA 40/min per model, so a second route there is a second
+ * allowance and genuine depth — which is why those providers contribute
+ * several members and OpenRouter contributes one.
+ *
+ * b.ai and OpenCode are recorded as shared pools conservatively, but both
+ * refuse per model when measured (hy3 refused while qwen3.8-flash served 60
+ * concurrent calls; mimo refused while ling served), so they are not treated as
+ * single-counter here.
+ */
+export const SINGLE_COUNTER_PLATFORMS = ['openrouter'] as const;
