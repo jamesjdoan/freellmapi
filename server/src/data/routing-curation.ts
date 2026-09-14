@@ -187,6 +187,16 @@ export const CURATED_ROUTES: CuratedRoute[] = [
     chains: { Workhorse: 5, Default: 5, Vision: 8 },
     why: '77% over 22 attempts. 16256ms measured. intelligence 22.7. coding 49.3. 15/min. 500/day.',
   },
+  {
+    platform: 'google', modelId: 'gemini-3.1-flash-lite', classification: 'CORE',
+    chains: { Vision: 9 },
+    why: '84% over 192 attempts. intelligence 16. coding 34.7. 15/min, 500/day — twenty-five times the allowance the Gemini Flash routes carry, which is the depth this chain needed: five of its first eight members are Google 20/day.',
+  },
+  {
+    platform: 'google', modelId: 'gemma-4-26b-a4b-it', classification: 'SPECIALIST',
+    chains: { Vision: 10 },
+    why: 'Vision WITHOUT tools, which is why no agentic chain will take it and why Vision admits SPECIALIST at all. intelligence 16.7, 30/min, 4 attempts — a tail, not a fallback.',
+  },
   // ── groq ──────────────────────────────────────────────────────
   {
     platform: 'groq', modelId: 'qwen/qwen3.8-27b', classification: 'OVERFLOW',
@@ -203,6 +213,11 @@ export const CURATED_ROUTES: CuratedRoute[] = [
     chains: { 'Fast-Lane': 1 },
     why: '98% over 330 attempts. 586ms measured. intelligence 9. coding 20.7.',
   },
+  {
+    platform: 'groq', modelId: 'openai/gpt-oss-120b', classification: 'CORE',
+    chains: { Workhorse: 8, Default: 8 },
+    why: '94% over 88 attempts. intelligence 12.3. One of the two most-proven routes here that was in NO chain at all — found by auditing enabled models against chain membership, not by noticing it was missing.',
+  },
   // ── nvidia ────────────────────────────────────────────────────
   {
     platform: 'nvidia', modelId: 'moonshotai/kimi-k3', classification: 'OVERFLOW',
@@ -218,6 +233,11 @@ export const CURATED_ROUTES: CuratedRoute[] = [
     platform: 'nvidia', modelId: 'nvidia/nemotron-3-super-120b-a12b', classification: 'CORE',
     chains: { Workhorse: 6, Default: 6 },
     why: '97% over 6883 attempts. 12729ms measured. intelligence 13.6. coding 37.7. 40/min.',
+  },
+  {
+    platform: 'nvidia', modelId: 'nvidia/nemotron-3.5-lightning-30b-a3b', classification: 'CORE',
+    chains: { Workhorse: 7, Default: 7 },
+    why: '97% over 761 attempts, the best reliability figure on this install, and it was in no chain. Kept OUT of Fast-Lane deliberately: it averages 22,032ms despite publishing 288 tok/s. The middle tier does not rank on latency, so its reliability is what counts here. 40/min.',
   },
   // ── ollama ────────────────────────────────────────────────────
   {
