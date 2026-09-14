@@ -148,6 +148,13 @@ function verdictFromCounts(successes: number, failures: number, lastError: strin
   // stopped waiting for, and the same model served a direct probe seconds
   // later. Transport failures say something about the minute, not the model.
   if (/abort|timed? ?out|econnreset|socket|network|fetch failed|terminated/.test(text)) return 'limited';
+  // Same reasoning one step further out: a 5xx is the PROVIDER failing, not a
+  // statement that the route does not exist. gemma-4-31b-it was marked dead on
+  // "500 Internal error encountered" and, measured 2026-09-14 at an identical
+  // budget, served 3 of 5 consecutive calls. 'dead' means never enable this;
+  // an upstream that fails 40% of the time is a bad route, not a missing one,
+  // and one success flips it to ok on the next call either way.
+  if (/\b5\d\d\b|internal server error|internal error|bad gateway|service unavailable/.test(text)) return 'limited';
   return 'dead';
 }
 
@@ -198,9 +205,21 @@ export interface ProbeResult {
   latencyMs: number | null;
 }
 
-/** Four, not one: several relays enforce a floor above 1 and 400 the request
- *  outright, which would report a working model as broken (#903). */
-const PROBE_MAX_TOKENS = 4;
+/**
+ * Enough budget for a REASONING model to finish thinking and still say
+ * something. Four was chosen only to clear the relays that 400 a max_tokens of
+ * 1 (#903), and it silently guaranteed a false verdict for any model that
+ * thinks first: Gemma 4 31B spends 13-29 tokens on thoughts before its first
+ * answer token, so a 4-token probe returns a 200 with no text, the adapter
+ * raises "empty completion", and a healthy route is recorded dead. Measured
+ * 2026-09-14: at 4 it looks broken, at 2048 it answers with finishReason STOP
+ * and 2 answer tokens.
+ *
+ * 64 is still tiny — models stop at STOP long before reaching it, so the real
+ * cost is a few tokens on the ones that think, and nothing on the ones that
+ * don't.
+ */
+export const PROBE_MAX_TOKENS = 64;
 
 /**
  * Ask one model, once, whether it answers.

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initDb, getDb } from '../../db/index.js';
-import { listModelHealth, verdictForError } from '../../services/model-health.js';
+import { listModelHealth, verdictForError, PROBE_MAX_TOKENS } from '../../services/model-health.js';
 
 // Dead routes were being enabled by hand because nothing on the Keys pane told
 // them apart from working ones. Every case below is one this install actually
@@ -20,6 +20,36 @@ describe('model health', () => {
   }
 
   const find = (modelId: string) => listModelHealth('groq').find(r => r.modelId === modelId);
+
+  it('does not call a route dead because the provider had a bad minute', () => {
+    // gemma-4-31b-it was marked dead off "500 Internal error encountered".
+    // Measured 2026-09-14 at an identical token budget it served 3 of 5
+    // consecutive calls — an upstream failing ~40% of the time is a bad route,
+    // not a missing one, and 'dead' is the verdict that means never enable it.
+    attempt('flaky', 'error', 'Google API error 500: Internal error encountered.');
+    expect(find('flaky')?.verdict).toBe('limited');
+    // The code still says which kind of trouble it is.
+    expect(find('flaky')?.code).toBe('E5XX');
+  });
+
+  it('still calls a route dead when the provider says the model is not there', () => {
+    // The contrast that keeps 'limited' meaningful: an id the provider does
+    // not serve never becomes healthy by waiting.
+    attempt('gone', 'error', 'OpenCode Zen API error 401: Model hy3-free is not supported');
+    expect(find('gone')?.verdict).toBe('dead');
+  });
+
+  it('gives a probe enough budget to outlast a model thinking', () => {
+    // Gemma 4 31B was recorded dead off "empty completion". It is a reasoning
+    // model: measured 2026-09-14 it spends 13-29 tokens on thoughts before its
+    // first answer token, so the old 4-token probe could only ever come back
+    // empty — a verdict about our own cap, not the route. At 2048 the same
+    // model answers with finishReason STOP.
+    //
+    // The floor is what matters, not the exact number: below the thinking cost
+    // every reasoning model on the install reports dead.
+    expect(PROBE_MAX_TOKENS).toBeGreaterThanOrEqual(32);
+  });
 
   it('separates a permanent refusal from a rate limit', () => {
     // The distinction the whole feature turns on: one is a reason never to
