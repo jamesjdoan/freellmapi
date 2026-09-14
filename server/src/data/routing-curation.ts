@@ -114,235 +114,174 @@ export const QUOTA_DOMAINS: Record<string, { pool: string; independent: boolean;
 };
 
 /**
- * The routed set.
+ * The routed set, as applied to the database on 2026-09-14.
  *
- * Every provider here has a working key on this install. Providers without one
- * — navy, cloudflare, mistral, cohere, ovh, requesty, kilo, sail, xkiro,
- * pollinations and the rest of the catalogue — are not "disabled", they were
- * never routable, and adding them to a chain would only buy an attempt that
- * fails at key selection.
+ * ORDER IS GROUNDED IN MEASUREMENT, not in catalogue tier, and four axes decide
+ * it — each of which changed the answer when it was added:
  *
- * Hugging Face is the one provider with a key and no routes: it is in
- * DEFAULT_AUTOROUTE_DISABLED_PLATFORMS, so a chain row for it would be filtered
- * out of every auto chain anyway. Entering CORE needs the platform re-enabled
- * first, which is a separate decision with its own evidence.
+ *  1. Capability for the chain's purpose: intelligence, coding index, or
+ *     measured latency.
+ *  2. Reliability, over the trailing 14 days. Capability describes what a model
+ *     does when it answers; position has to describe how often it answers at
+ *     all. kimi-k3 scores 43.8 — the highest here — and succeeds 21% of 148
+ *     attempts with 8 hangs, so it heads nothing and sits at Frontier 5.
+ *  3. Scarcity. Google's Flash routes are 20/day and Ollama Cloud is one
+ *     monthly balance; both are demoted a tier rather than excluded.
+ *  4. Provenance. An unproven provider and an unmeasured route both take a
+ *     penalty: unknown is not a qualification.
  *
- * ORDER IS GROUNDED IN MEASURED SUCCESS RATE, not in catalogue tier. The first
- * draft of this file ordered apex by capability rank and put Kimi K3 at its
- * head; seven days of live traffic says Kimi K3 succeeds on 25% of 65 attempts
- * and currently hangs for the full 180s timeout. A capability tier describes
- * what a model can do when it answers. Chain position has to describe how often
- * it answers at all, because every position above a working route is a timeout
- * the caller pays for first.
+ * Then two structural rules: at most two members drawing on one quota pool, and
+ * distinct pools across the head, so a chain has depth at the moment its first
+ * choice refuses.
  *
- * Success rates below are over the trailing 7 days on this install and are
- * expected to age. They are recorded because the ORDER is only defensible
- * against the evidence that produced it — re-measure before reordering.
+ * Fast-Lane is ordered on MEASURED latency, not published tokens/sec, because
+ * the two disagree: nemotron-3.5-lightning publishes 288 tok/s and averages
+ * 22,032ms over 735 successful calls, while qwen3.8-27b publishes the lowest
+ * tok/s in the set and answers in 190ms. Ordered on the published figure, the
+ * fast lane led with its slowest route and took 31.8s; it now answers in 291ms.
+ *
+ * Numbers below are from this install and are expected to age. They are
+ * recorded because the ORDER is only defensible against the evidence that
+ * produced it — re-measure before reordering.
  */
 export const CURATED_ROUTES: CuratedRoute[] = [
-  // ── NVIDIA — one shared pool, the highest-volume provider here ────────────
-  // Capability breadth is why it appears in six chains; the shared
-  // `nvidia::credit-pool` is why it never takes two consecutive head positions
-  // in one of them.
+  // ── bai ───────────────────────────────────────────────────────
   {
-    platform: 'nvidia', modelId: 'nvidia/nemotron-3-ultra-550b-a55b', classification: 'CORE',
-    chains: { Coding: 1, Frontier: 1 },
-    why: '82% over 313 attempts, Frontier tier, 1M context, tools. The strongest route here that is also reliable, which is exactly what frontier and coding both need at position 1.',
+    platform: 'bai', modelId: 'qwen3.8-flash', classification: 'OVERFLOW',
+    chains: { 'Extra-Tier': 1, Apex: 2, Frontier: 2, Coding: 2, Vision: 2, 'Fast-Lane': 6 },
+    why: '100% over 15 attempts. 5064ms measured. intelligence 39.9. coding 73.1. 1000/min. provider barely exercised here.',
   },
   {
-    platform: 'nvidia', modelId: 'nvidia/nemotron-3-super-120b-a12b', classification: 'CORE',
-    chains: { Workhorse: 2, Coding: 4, Default: 2 },
-    why: '97% over 5421 attempts — the most-proven route on this install. The middle tier is what it is for, and it is the safety net under coding.',
-  },
-  // nvidia/minimaxai/minimax-m3 headed the escalation chain on 93% over 1302
-  // attempts and is gone: NVIDIA stopped listing it upstream and the catalogue
-  // sync recorded it removed. Nothing replaces it at that combination of tier
-  // and evidence, so apex is now the Google Flash stack — which is the honest
-  // shape of this install's peak once the two routes that HANG (kimi-k3,
-  // deepseek-v4-pro) are excluded. They out-score every Gemini and cannot be
-  // tried cheaply anywhere; see the NVIDIA note above.
-  {
-    platform: 'nvidia', modelId: 'nvidia/nemotron-3.5-lightning-30b-a3b', classification: 'CORE',
-    chains: { 'Fast-Lane': 4, Workhorse: 5, Default: 5 },
-    why: '98% over 96 attempts with a 1M window at fast-lane cost — the one cheap route that can still take a large scouting payload.',
+    platform: 'bai', modelId: 'hy3', classification: 'EXPERIMENTAL',
+    chains: { 'Extra-Tier': 2 },
+    why: '5 attempt(s) — too thin to rate. 1891ms measured. intelligence 25.8. coding 58.8. 1000/min. provider barely exercised here.',
   },
   {
-    platform: 'nvidia', modelId: 'openai/gpt-oss-20b', classification: 'OVERFLOW',
-    chains: { 'Fast-Lane': 5 },
-    why: '88% over 24 attempts. Same model as the Groq fast-lane head on a different pool, but behind it: this one spends the shared NVIDIA balance frontier and coding depend on.',
+    platform: 'bai', modelId: 'mimo-v2.5', classification: 'EXPERIMENTAL',
+    chains: { 'Extra-Tier': 5 },
+    why: '5 attempt(s) — too thin to rate. 9937ms measured. intelligence 22.3. coding 56.8. 1000/min. provider barely exercised here.',
   },
+  // ── google ────────────────────────────────────────────────────
   {
-    platform: 'nvidia', modelId: 'meta/llama-3.2-90b-vision-instruct', classification: 'OVERFLOW',
-    chains: { Vision: 6 },
-    why: 'The only non-Google vision route with tools, so it is kept — but at 20% over 10 attempts and currently benched, it is a tail, not the fallback it was first drafted as.',
-  },
-  {
-    platform: 'nvidia', modelId: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', classification: 'SPECIALIST',
-    chains: { Vision: 7 },
-    why: 'tools=false, so barred from every agentic chain — but image analysis does not need tool calls, and rejecting vision models for lacking them would throw away most of the free multimodal capacity.',
-  },
-  // nvidia/moonshotai/kimi-k3 and nvidia/deepseek-ai/deepseek-v4-pro-0813 are
-  // routed nowhere, and the reason is latency rather than reliability.
-  //
-  // Both were demoted to extra-tier on their success rates (24% of 67 and 10%
-  // of 31). The post-deploy probe showed why that was not enough: they do not
-  // fail, they HANG — 3 of 67 and 2 of 31 attempts held the socket for the full
-  // 180s timeout, which is the entire retry budget for the request. A route
-  // like that cannot be tried cheaply anywhere. Placed last it still destroys
-  // every attempt behind it the moment it is reached, which is exactly what
-  // happened: `auto:extra-tier` went from serving in 10s to a hard failure,
-  // with kimi-k3 as attempt two of two.
-  //
-  // A low success rate earns a demotion. A route that costs three minutes to
-  // skip earns removal, because there is no position at which it is affordable.
-  // Both stay in the catalogue and stay pinnable by name.
-
-  // ── Groq — independent per-model pools, the parallel-work provider ────────
-  // Deep daily allowances (1000 RPD on the gpt-oss routes) and the fastest
-  // observed latencies here. Three concurrent workers on three Groq models
-  // genuinely do not contend.
-  {
-    platform: 'groq', modelId: 'openai/gpt-oss-120b', classification: 'CORE',
-    chains: { Workhorse: 1, Frontier: 3, Coding: 2, Default: 1 },
-    why: '86% at 1000 RPD on its own pool. Heads workhorse and default as the most sustainable capacity here; third in frontier and second in coding, so no two head routes can exhaust together.',
-  },
-  {
-    platform: 'groq', modelId: 'openai/gpt-oss-20b', classification: 'CORE',
-    chains: { 'Fast-Lane': 1, Default: 4 },
-    why: 'Heads fast-lane: 98% over 219 attempts at 598ms — by a wide margin the fastest and most reliable route on this install, and the lowest opportunity cost of anything routed.',
-  },
-  {
-    platform: 'groq', modelId: 'qwen/qwen3.6-27b', classification: 'CORE',
-    chains: { 'Fast-Lane': 2, Workhorse: 4 },
-    why: '60 RPM / 1000 RPD / 500K TPD is the deepest per-minute allowance routed. Bounded subagents burst; this is what absorbs it.',
-  },
-  // qwen/qwen3.8-27b is deliberately absent. It is the strongest Groq model in
-  // the catalogue and it returns `403: blocked at the org level` on this key —
-  // 0 successes in 3 attempts, with a 'tier' cooldown recorded. A route the
-  // credential cannot reach is not capacity. Re-add it if the account tier
-  // changes; nothing else about it is wrong.
-
-  // ── Google — small independent per-model pools, strongest vision ──────────
-  // Daily allowance is NOT flat: 20/day for Flash and 500/day for Flash-Lite,
-  // both provider-named on 2026-09-11; Gemma unmeasured. Per model AND per key —
-  // three keys each ran their own 20 on 2026-08-27. Independent
-  // pools mean several routes provide real depth. Per-minute truth (5/min for
-  // Flash, 15/min for Flash-Lite, 30/min for Gemma, >40/min for robotics-er)
-  // was measured 2026-09-11 via 429 bodies. Google exposes no quota headers,
-  // so the body is the ONLY channel.
-  {
-    platform: 'google', modelId: 'gemma-4-26b-a4b-it', classification: 'SPECIALIST',
-    chains: { Vision: 8 },
-    why: 'Measured 30/min and 1000/day; 33K context is the reason it is the vision chain tail.',
+    platform: 'google', modelId: 'gemini-3.8-flash', classification: 'OVERFLOW',
+    chains: { Frontier: 3, Apex: 4, Coding: 4, Vision: 4 },
+    why: '68% over 74 attempts. 18670ms measured. intelligence 41.2. coding 76.3. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
     platform: 'google', modelId: 'gemini-3.7-flash', classification: 'CORE',
-    chains: { Vision: 1, Apex: 1, Frontier: 2, Coding: 3 },
-    why: 'Heads vision and apex, second in frontier: 85% over 100 attempts at 4.4s, 1M context, tools and vision, on a pool NVIDIA cannot exhaust. The best-evidenced strong route left after minimax-m3 was retired.',
-  },
-{
-   platform: 'google', modelId: 'gemini-3.6-flash', classification: 'CORE',
-    chains: { Vision: 4, Apex: 3 },
-    why: '89% over 91 attempts — the highest-scoring Google route measured. Second in vision, third in apex, on an independent per-model allowance.',
+    chains: { Frontier: 1, Coding: 1, Vision: 1, Apex: 3 },
+    why: '77% over 194 attempts. 7356ms measured. intelligence 39.4. coding 76.1. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
-    platform: 'google', modelId: 'gemini-3.8-flash', classification: 'CORE',
-    chains: { Apex: 2, Vision: 5 },
-    why: 'Newest Frontier-tier Google route with tools and vision. No traffic yet, so it sits second in apex rather than first: unmeasured is not the same as good.',
+    platform: 'google', modelId: 'gemini-3.6-flash', classification: 'CORE',
+    chains: { Apex: 1, Coding: 3, Vision: 3, Frontier: 4 },
+    why: '87% over 159 attempts. 15225ms measured. intelligence 34.3. coding 69.2. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
-    platform: 'google', modelId: 'gemini-3.1-flash-lite', classification: 'CORE',
-    chains: { 'Fast-Lane': 3, Workhorse: 3, Default: 3 },
-    why: '80% at 4.7s, and far deeper than it looked: Flash-Lite allows 500/day where Flash allows 20, measured 2026-09-11. It sat behind two NVIDIA routes on a 20/day assumption that came from our own throttle rather than from Google. Ahead of them now — they spend the shared NVIDIA pool apex and coding depend on, and this does not.',
+    platform: 'google', modelId: 'gemini-3.5-flash', classification: 'CORE',
+    chains: { Frontier: 6, Coding: 6, Vision: 7 },
+    why: '70% over 132 attempts. 8723ms measured. intelligence 33. coding 70.1. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
     platform: 'google', modelId: 'gemini-3.5-flash-lite', classification: 'CORE',
-    chains: { Vision: 3 },
-    why: 'Cheap 1M-context multimodal at 500/day — twenty-five times what the Flash routes above it allow, provider-named on 2026-09-11 after ~480 served. Third rather than higher because it averages 26s; still ahead of two Flash models that run out after twenty images. Kept OUT of fast-lane for that same 26s.',
+    chains: { Workhorse: 6, Default: 6, Vision: 9 },
+    why: '77% over 22 attempts. 16256ms measured. intelligence 22.7. coding 49.3. 15/min. 500/day.',
+  },
+  // ── groq ──────────────────────────────────────────────────────
+  {
+    platform: 'groq', modelId: 'qwen/qwen3.8-27b', classification: 'OVERFLOW',
+    chains: { Workhorse: 2, Default: 2, Apex: 5, Coding: 5, 'Fast-Lane': 5, Vision: 5 },
+    why: '62% over 16 attempts. 190ms measured. intelligence 33.9. coding 68.1.',
   },
   {
-    platform: 'google', modelId: 'gemini-robotics-er-2-preview', classification: 'SPECIALIST',
-    chains: { Vision: 2 },
-    why: '40/40 served with no refusal on probe. High-headroom specialized capacity for image analysis, placed ahead of the scarce Flash routes.',
-  },
-
-  // ── OpenRouter — free routes only, one shared pool ────────────────────────
-  // Every entry ends in ':free' and that is enforced, not a convention: the
-  // router bars any OpenRouter model without the suffix from auto chains
-  // (consumesPaidBalance), because the paid twin runs on the same key and would
-  // bill the balance. One shared pool, so these are tails, never heads.
-  {
-    platform: 'openrouter', modelId: 'nvidia/nemotron-3-ultra-550b-a55b:free', classification: 'OVERFLOW',
-    chains: { Frontier: 4 },
-    why: '85% over 235 attempts — the frontier head model on a completely independent pool. Exactly what frontier should fall through to when NVIDIA credit is spent.',
+    platform: 'groq', modelId: 'qwen/qwen3.6-27b', classification: 'CORE',
+    chains: { 'Fast-Lane': 2, Workhorse: 4, Default: 4 },
+    why: '82% over 11 attempts. 220ms measured. intelligence 21.9. coding 53.7.',
   },
   {
-    platform: 'openrouter', modelId: 'nvidia/nemotron-3-super-120b-a12b:free', classification: 'OVERFLOW',
-    chains: { Workhorse: 6, Apex: 4 },
-    why: 'Free twin of the most-proven workhorse route, on an independent pool. Overflow rather than core: one shared free pool with a 200 RPD ceiling. Last real route in apex not because it is strong but because escalation still has to answer when all four 20-a-day Gemini allowances are spent.',
+    platform: 'groq', modelId: 'openai/gpt-oss-20b', classification: 'CORE',
+    chains: { 'Fast-Lane': 1 },
+    why: '98% over 330 attempts. 586ms measured. intelligence 9. coding 20.7.',
   },
+  // ── nvidia ────────────────────────────────────────────────────
   {
-    platform: 'openrouter', modelId: 'poolside/laguna-s-2.1:free', classification: 'OVERFLOW',
-    chains: { Coding: 5 },
-    why: 'Purpose-built coding model, 262K, tools. Overflow because the shared free pool caps at 200 RPD across every :free route together.',
-  },
-  {
-    platform: 'openrouter', modelId: 'cohere/north-mini-code:free', classification: 'OVERFLOW',
-    chains: { Coding: 6 },
-    why: 'Second coding-specific free route. 50 RPD is the tightest allowance routed, so it sits last in the chain.',
-  },
-  {
-    platform: 'openrouter', modelId: 'nvidia/nemotron-3.5-lightning:free', classification: 'OVERFLOW',
-    chains: { 'Fast-Lane': 6 },
-    why: 'Fast-lane tail on an independent pool, behind the Groq and Google routes because they have far deeper daily allowances.',
-  },
-  {
-    platform: 'openrouter', modelId: 'inclusionai/ling-3.0-flash-sante:free', classification: 'EXPERIMENTAL',
-    chains: { 'Extra-Tier': 4 },
-    why: 'Unproven on this install. Extra-tier is where a route earns telemetry before it is trusted anywhere else.',
-  },
-
-  // ── Ollama Cloud — scarce, overflow only ──────────────────────────────────
-  // ollama::weekly observed at 540/10000. The quota-pressure guardrail demotes
-  // these on its own, but chain placement should not have depended on that: a
-  // 5% weekly balance has no business in fast-lane at any score. Local Ollama is
-  // a separate unmetered pool and is unaffected by any of this.
-  {
-    platform: 'ollama', modelId: 'nemotron-3-ultra', classification: 'OVERFLOW',
+    platform: 'nvidia', modelId: 'moonshotai/kimi-k3', classification: 'OVERFLOW',
     chains: { Frontier: 5 },
-    why: '80% over 188 attempts — genuinely usable, and last in frontier because its weekly balance is at 5.4% and must be reserved for the highest-value requests.',
+    why: '21% over 148 attempts. 65835ms measured. intelligence 43.8. coding 76.2. 40/min.',
   },
   {
-    platform: 'ollama', modelId: 'nemotron-3-super', classification: 'OVERFLOW',
+    platform: 'nvidia', modelId: 'nvidia/nemotron-3-ultra-550b-a55b', classification: 'CORE',
+    chains: { Workhorse: 1, Default: 1, Apex: 8 },
+    why: '78% over 917 attempts. 21192ms measured. intelligence 23.4. coding 49.3. 40/min.',
+  },
+  {
+    platform: 'nvidia', modelId: 'nvidia/nemotron-3-super-120b-a12b', classification: 'CORE',
+    chains: { Workhorse: 7, Default: 7 },
+    why: '97% over 6883 attempts. 12729ms measured. intelligence 13.6. coding 37.7. 40/min.',
+  },
+  // ── ollama ────────────────────────────────────────────────────
+  {
+    platform: 'ollama', modelId: 'nemotron-3-ultra', classification: 'EXPERIMENTAL',
+    chains: { 'Extra-Tier': 4 },
+    why: '89% over 504 attempts. 30339ms measured. intelligence 23.4. coding 49.3. SCARCE — demoted a tier.',
+  },
+  {
+    platform: 'ollama', modelId: 'gemma4:31b', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 8 },
+    why: '5 attempt(s) — too thin to rate. 6378ms measured. intelligence 15.4. coding 43.4. SCARCE — demoted a tier.',
+  },
+  {
+    platform: 'ollama', modelId: 'nemotron-3-super', classification: 'EXPERIMENTAL',
+    chains: { 'Extra-Tier': 9 },
+    why: '62% over 395 attempts. 11896ms measured. intelligence 13.6. coding 37.7. SCARCE — demoted a tier.',
+  },
+  // ── opencode ──────────────────────────────────────────────────
+  {
+    platform: 'opencode', modelId: 'ling-3.0-flash-fin-free', classification: 'EXPERIMENTAL',
     chains: { 'Extra-Tier': 3 },
-    why: '62% over 390 attempts, and it answers in about 3s. Too unreliable and too scarce for a critical path, but it is the most dependable thing in extra-tier and belongs ahead of the routes that hang.',
-  },
-
-  // ── OpenCode — promo, quota unknown ───────────────────────────────────────
-  // Quota is genuinely unknown (probe confidence 0.1), and unknown is not
-  // unlimited: the scorer ranks it at UNKNOWN_POOL_PRESSURE, between exhausted
-  // and fresh, so it is used enough to be learned and not enough to be depended
-  // on. Live probes returned `400 Error from provider` on three of its routes,
-  // which is the second reason nothing here is near a critical path.
-  {
-    platform: 'opencode', modelId: 'muse-spark-1.3-contributor-free', classification: 'EXPERIMENTAL',
-    chains: { 'Extra-Tier': 1, Apex: 5 },
-    why: 'Frontier tier, 1M context, tools and vision. Genuinely strong, entirely unmeasured — last in apex, first in extra-tier.',
+    why: '3 attempt(s) — too thin to rate. intelligence 24.9. coding 50.6. provider barely exercised here.',
   },
   {
     platform: 'opencode', modelId: 'nemotron-3-ultra-free', classification: 'EXPERIMENTAL',
-    chains: { 'Extra-Tier': 2 },
-    why: '78% over 134 attempts, the best OpenCode route measured. Promo capacity for a model already routed on two metered pools, so overflow value only.',
+    chains: { 'Extra-Tier': 7 },
+    why: '72% over 145 attempts. 27385ms measured. intelligence 23.4. coding 49.3. provider barely exercised here.',
   },
   {
-    platform: 'opencode', modelId: 'nemotron-3.5-lightning-free', classification: 'EXPERIMENTAL',
-    chains: { 'Extra-Tier': 5 },
-    why: 'Promo fast route. Kept out of fast-lane proper: unknown quota plus a live 400 is not what bounded subagents should meet.',
+    platform: 'opencode', modelId: 'mimo-v2.5-free', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 6 },
+    why: '4 attempt(s) — too thin to rate. 3387ms measured. intelligence 22.3. coding 56.8. 5/min. SCARCE — demoted a tier. provider barely exercised here.',
   },
-  // opencode/deepseek-v4-flash-free is deliberately absent: 0 successes in 103
-  // attempts. A route that has never once served is not overflow capacity.
-  // nvidia/deepseek-ai/deepseek-v4-flash-0731 is absent from CORE for the same
-  // reason at a lower dose — 20% over 237 attempts with a 98s average.
+  {
+    platform: 'opencode', modelId: 'big-pickle', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 10 },
+    why: '4 attempt(s) — too thin to rate. 4473ms measured. 3/min. SCARCE — demoted a tier. provider barely exercised here.',
+  },
+  // ── openrouter ────────────────────────────────────────────────
+  {
+    platform: 'openrouter', modelId: 'nex-agi/nex-n2.5-mini:free', classification: 'OVERFLOW',
+    chains: { Workhorse: 3, Default: 3, Apex: 6, Coding: 7 },
+    why: '1 attempt(s) — too thin to rate. intelligence 28.2. coding 59.1.',
+  },
+  {
+    platform: 'openrouter', modelId: 'nex-agi/nex-n2.5-pro:free', classification: 'OVERFLOW',
+    chains: { Workhorse: 5, Default: 5, Vision: 6, Apex: 7, Coding: 8 },
+    why: '2 attempt(s) — too thin to rate. intelligence 28.2. coding 59.1.',
+  },
+  {
+    platform: 'openrouter', modelId: 'inclusionai/ling-3.0-flash-sante:free', classification: 'OVERFLOW',
+    chains: { 'Fast-Lane': 3 },
+    why: '3 attempt(s) — too thin to rate. 1394ms measured. intelligence 24.9. coding 50.6.',
+  },
+  {
+    platform: 'openrouter', modelId: 'inclusionai/ling-3.0-flash-fin:free', classification: 'OVERFLOW',
+    chains: { 'Fast-Lane': 4 },
+    why: '5 attempt(s) — too thin to rate. 1410ms measured. intelligence 24.9. coding 50.6.',
+  },
+  {
+    platform: 'openrouter', modelId: 'inclusionai/ling-3.0-flash-vl:free', classification: 'OVERFLOW',
+    chains: { Vision: 8 },
+    why: '1 attempt(s) — too thin to rate. intelligence 24.8. coding 57.',
+  },
 ];
 
 /** Chain contracts. Documentation for operators and the assertion the tests
