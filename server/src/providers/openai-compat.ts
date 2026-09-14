@@ -283,16 +283,28 @@ export class OpenAICompatProvider extends BaseProvider {
    * Per-request headers a provider documents but that are not part of the
    * OpenAI wire format. Today only OpenCode Zen: `x-opencode-session` pins a
    * conversation to one upstream so its prompt cache is reused, and Console
-   * rejects a request without one (400 MissingSessionID).
+   * REJECTS a request without one.
+   *
+   * Sent for every OpenCode call, with or without a conversation. It used to
+   * depend on the caller supplying a sessionKey, so anything with no
+   * conversation — a health probe, a chain walk, a bare auto: request — was
+   * refused with 400 MissingSessionID, whose message reads "OpenCode's free
+   * tier can only be used in OpenCode". That is account gating in every word
+   * and a missing header in fact, which is how healthy routes came to be
+   * recorded as dead. Verified 2026-09-14 on ling-3.0-flash-fin-free: bare
+   * 400, session-only 200, and an `opencode/1.0.0` User-Agent changes nothing
+   * either way — the header is the whole gate.
+   *
+   * The fallback id is per credential, so session-less calls still land on one
+   * upstream and keep the cache benefit instead of scattering per request.
    *
    * The id is hashed rather than passed through: our session key can contain a
    * raw first-user-message hash plus a strategy suffix, and neither belongs on
    * the wire nor is guaranteed to be header-safe.
    */
-  private sessionHeaders(options?: CompletionOptions): Record<string, string> {
+  private sessionHeaders(apiKey: string, options?: CompletionOptions): Record<string, string> {
     if (this.platform !== 'opencode') return {};
-    const key = options?.sessionKey;
-    if (!key) return {};
+    const key = options?.sessionKey ?? `key:${apiKey}`;
     return { 'x-opencode-session': createHash('sha256').update(key).digest('hex').slice(0, 32) };
   }
 
@@ -310,7 +322,7 @@ export class OpenAICompatProvider extends BaseProvider {
         ...this.authHeader(apiKey),
         'Content-Type': 'application/json',
         ...this.extraHeaders,
-        ...this.sessionHeaders(options),
+        ...this.sessionHeaders(apiKey, options),
       },
       body: JSON.stringify({
         model: modelId,
@@ -430,7 +442,7 @@ export class OpenAICompatProvider extends BaseProvider {
         ...this.authHeader(apiKey),
         'Content-Type': 'application/json',
         ...this.extraHeaders,
-        ...this.sessionHeaders(options),
+        ...this.sessionHeaders(apiKey, options),
       },
       body: JSON.stringify({
         model: modelId,

@@ -61,6 +61,47 @@ describe('OpenAICompatProvider', () => {
       expect(seen[0]['x-opencode-session']).toMatch(/^[0-9a-f]{32}$/);
     });
 
+    it('still sends one when the caller has no conversation to name', async () => {
+      // The gap that made healthy routes look dead. Health probes, chain walks
+      // and bare `auto:` requests carry no sessionKey, and the header used to
+      // be skipped entirely for them — so Zen answered 400 MissingSessionID,
+      // whose message reads "OpenCode's free tier can only be used in
+      // OpenCode". Account gating in every word, a missing header in fact.
+      //
+      // Measured 2026-09-14 on ling-3.0-flash-fin-free: bare 400, session-only
+      // 200, and an `opencode/1.0.0` User-Agent changes neither. The header is
+      // the whole gate, so it can never be conditional.
+      const seen = captureHeaders();
+      await zen().chatCompletion('k', [{ role: 'user', content: 'hi' }], 'big-pickle');
+      expect(seen[0]['x-opencode-session']).toMatch(/^[0-9a-f]{32}$/);
+    });
+
+    it('pins session-less calls for one credential to one id, and separates two keys', async () => {
+      // The fallback is per credential rather than per request: Zen uses the id
+      // to pin an upstream and reuse its prompt cache, and a fresh id on every
+      // probe would scatter them for nothing. Two different keys must still be
+      // two different conversations.
+      const seen = captureHeaders();
+      const p = zen();
+      await p.chatCompletion('key-a', [{ role: 'user', content: 'a' }], 'big-pickle');
+      await p.chatCompletion('key-a', [{ role: 'user', content: 'b' }], 'big-pickle');
+      await p.chatCompletion('key-b', [{ role: 'user', content: 'c' }], 'big-pickle');
+
+      expect(seen[1]['x-opencode-session']).toBe(seen[0]['x-opencode-session']);
+      expect(seen[2]['x-opencode-session']).not.toBe(seen[0]['x-opencode-session']);
+    });
+
+    it('never sends the raw api key as the session id', async () => {
+      // The fallback is derived FROM the credential, so it must be hashed with
+      // the same care as a session key: a header echoing the key would leak it
+      // to any upstream that logs request headers.
+      const seen = captureHeaders();
+      await zen().chatCompletion('sk-secret-credential', [{ role: 'user', content: 'hi' }], 'big-pickle');
+      // Authorization carries it by definition; the session id must not.
+      expect(seen[0]['x-opencode-session']).not.toContain('sk-secret-credential');
+      expect(seen[0]['x-opencode-session']).toMatch(/^[0-9a-f]{32}$/);
+    });
+
     it('keeps one conversation on one id, and separates two', async () => {
       // The header exists so Zen can pin a conversation to a single upstream and
       // reuse its cache. A per-request id would defeat the purpose entirely.
@@ -79,6 +120,18 @@ describe('OpenAICompatProvider', () => {
       const seen = captureHeaders();
       await zen().chatCompletion('k', [{ role: 'user', content: 'hi' }], 'big-pickle', { sessionKey: 'msg:secret-content::smart' });
       expect(Object.values(seen[0])).not.toContain('msg:secret-content::smart');
+    });
+
+    it('sends it on the STREAMING path too, with no conversation named', async () => {
+      // Both inference paths or neither: a streamed request refused with 400
+      // MissingSessionID fails exactly like a non-streamed one, and most real
+      // traffic through this gateway streams. The catalogue GET is deliberately
+      // excluded — /v1/models answers 200 without the header (measured
+      // 2026-09-14), so requiring it there would be cargo cult.
+      const seen = captureHeaders();
+      const stream = zen().streamChatCompletion('k', [{ role: 'user', content: 'hi' }], 'big-pickle');
+      await stream.next().catch(() => undefined);
+      expect(seen[0]?.['x-opencode-session']).toMatch(/^[0-9a-f]{32}$/);
     });
 
     it('sends nothing for a provider that does not document the header', async () => {
