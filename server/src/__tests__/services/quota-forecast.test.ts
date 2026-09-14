@@ -543,40 +543,45 @@ describe('provider overview: a pool total that is the sum of its members', () =>
   });
 
   it('refuses to sum models that share one counter, even when each carries a limit', () => {
-    // The trap this guard exists for. Every NVIDIA model ships a 40 RPM
-    // catalogue column, so "each member has its own limit" is satisfied — and
-    // they all resolve to one account pool that grants 40 once. Summing them
-    // reported 240 RPM that does not exist.
+    // The trap this guard exists for: "each member has its own limit" is
+    // satisfied while every member resolves to ONE pool the provider grants
+    // once, so summing reports capacity that does not exist.
+    //
+    // OpenRouter, not NVIDIA. NVIDIA was the original example and was measured
+    // in 2026-09 to meter per model after all (see QUOTA_DOMAINS.nvidia), so it
+    // no longer demonstrates the trap — while OpenRouter's :free routes really
+    // do share one counter, whatever limits their rows carry.
     getDb().prepare(`
       INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, status, enabled)
-      VALUES ('nvidia', 'k', 'x', 'x', 'x', 'healthy', 1)
+      VALUES ('openrouter', 'k', 'x', 'x', 'x', 'healthy', 1)
     `).run();
-    routedModel('nvidia', 'x', 40);
-    routedModel('nvidia', 'y', 40);
+    routedModel('openrouter', 'x:free', 40);
+    routedModel('openrouter', 'y:free', 40);
     invalidateQuotaPolicyCache();
 
-    const row = getProviderQuotaOverview().find(r => r.pool === 'nvidia::calendar_day');
+    const row = getProviderQuotaOverview().find(r => r.pool === 'openrouter::calendar_day');
     expect(row?.aggregated).toBeUndefined();
     expect(row?.limit).not.toBe(80);
   });
 
   it('leaves a genuinely shared pool alone, because summing it would invent capacity', () => {
-    // NVIDIA grants one account-wide allowance that every model spends. Its
-    // members hold no limits of their own, so the account figure is the
-    // binding one and adding it up per model would multiply it.
+    // An account-wide allowance every model spends, with no per-member limits:
+    // the account figure is the binding one and adding it up per model would
+    // multiply it. Ollama Cloud is the standing example — one balance, billed
+    // at per-model token rates.
     getDb().prepare(`
       INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, status, enabled)
-      VALUES ('nvidia', 'k', 'x', 'x', 'x', 'healthy', 1)
+      VALUES ('ollama', 'k', 'x', 'x', 'x', 'healthy', 1)
     `).run();
-    routedModel('nvidia', 'a', null);
-    routedModel('nvidia', 'b', null);
+    routedModel('ollama', 'a', null);
+    routedModel('ollama', 'b', null);
     upsertQuotaPolicy({
-      platform: 'nvidia', modelId: null, endpointScope: null, scope: 'provider_account',
+      platform: 'ollama', modelId: null, endpointScope: null, scope: 'provider_account',
       metric: 'requests', limit: 40, periodKind: 'calendar_day', periodMs: null, timezone: 'UTC', anchorDay: null,
     });
     invalidateQuotaPolicyCache();
 
-    const row = getProviderQuotaOverview().find(r => r.pool === 'nvidia::calendar_day');
+    const row = getProviderQuotaOverview().find(r => r.pool === 'ollama::calendar_day');
     expect(row!.limit).toBe(40);
     expect(row!.aggregated).toBeUndefined();
   });

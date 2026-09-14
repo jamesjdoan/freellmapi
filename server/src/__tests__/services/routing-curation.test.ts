@@ -111,17 +111,29 @@ describe('shared quota domains are not mistaken for depth', () => {
     }
   });
 
-  it('records NVIDIA as one pool and Groq as several, because that is what they are', () => {
-    expect(QUOTA_DOMAINS.nvidia!.independent).toBe(false);
+  it('records per-model providers as several pools and shared ones as one', () => {
+    // NVIDIA was recorded here as ONE pool until it was measured: a 70-call
+    // burst served 38 and refused 32 while a second model served in the same
+    // second the first was refusing, and each model hits its own 429 after
+    // 10-14 calls rather than all stopping together at 40. The table's own rule
+    // is "one pool until telemetry says otherwise"; telemetry said otherwise.
+    expect(QUOTA_DOMAINS.nvidia!.independent).toBe(true);
     expect(QUOTA_DOMAINS.groq!.independent).toBe(true);
 
     const nvidia = ['moonshotai/kimi-k3', 'deepseek-ai/deepseek-v4-pro-0813', 'nvidia/nemotron-3-ultra-550b-a55b']
       .map(m => resolveQuotaPolicy('nvidia', m).poolKey);
-    expect(new Set(nvidia).size).toBe(1);
+    expect(new Set(nvidia).size).toBe(3);
 
     const groq = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b']
       .map(m => resolveQuotaPolicy('groq', m).poolKey);
     expect(new Set(groq).size).toBe(3);
+
+    // The contrast still has to hold somewhere, or "independent" means nothing.
+    // OpenRouter's :free routes genuinely share one counter, so they collapse.
+    expect(QUOTA_DOMAINS.openrouter!.independent).toBe(false);
+    const openrouter = ['qwen/qwen3-coder:free', 'meta-llama/llama-3.3-70b-instruct:free', 'nvidia/nemotron-3-ultra:free']
+      .map(m => resolveQuotaPolicy('openrouter', m).poolKey);
+    expect(new Set(openrouter).size).toBe(1);
   });
 });
 

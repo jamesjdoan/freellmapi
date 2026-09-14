@@ -156,6 +156,10 @@ function modelPool(platform: Platform, modelId?: string | null, prefix = 'model'
 export function legacyPoolKey(platform: Platform, poolKey: string): string | null {
   if (platform === 'groq' && poolKey.startsWith('groq::model::')) return 'groq::account';
   if (platform === 'google' && poolKey.startsWith('google::project-model::')) return 'google::project';
+  // Pool identities corrected 2026-09-14, once each provider was measured to
+  // meter per model. Observations recorded before that carry the old account
+  // name; without a read fallback every one of them goes dark.
+  if (platform === 'nvidia' && poolKey.startsWith('nvidia::model::')) return 'nvidia::credit-pool';
   return null;
 }
 
@@ -194,9 +198,20 @@ export function resolveQuotaPolicy(
   // model's independently published project allowance.
   if (platform === 'google') return policy(modelPool(platform, modelId, 'project-model'), 'project', 'metered', ['requests', 'tokens'], 'provider_reported');
   if (platform === 'huggingface') return policy('huggingface::router', 'shared_pool', 'metered', ['credits'], 'provider_reported', 'month');
+  // OpenCode's routes appear to refuse independently — mimo-v2.5-free returns
+  // FreeUsageLimitError while ling-3.0-flash-fin-free serves, and big-pickle's
+  // measured allowance (~3/day) differs from mimo's (~5). NOT split per model
+  // on that: the evidence is a handful of calls, the provider publishes nothing
+  // and sends no headers, and this pool is what the behavioural inference keys
+  // on. Over-splitting invents capacity; over-merging costs some throughput.
   if (platform === 'opencode') return policy('opencode::promo', 'shared_pool', 'unknown', [], 'unknown');
   if (platform === 'cerebras') return policy('cerebras::shared', 'shared_pool', 'metered', ['requests', 'tokens'], 'provider_reported');
   if (platform === 'sail') return policy('sail::monthly-credit', 'shared_pool', 'metered', ['credits'], 'fixed_calendar', 'month');
+  // b.ai states the axis itself — "the request rate exceeds the current MODEL
+  // RPM limit 1000" — and hy3 refused while qwen3.8-flash served 60 concurrent
+  // calls on the same key. Left as one pool anyway: 11 lifetime calls is not
+  // enough to split on, b.ai exposes no usage endpoint (403 on every
+  // non-inference path), and this pool is what behavioural inference keys on.
   if (platform === 'bai') return policy('bai::promo', 'shared_pool', 'unknown', [], 'unknown');
   // AMD Radeon Cloud TokenFactory (upstream v0.9.6): one recurring daily
   // allowance, reported in USD, plus a user-level RPM ceiling. Both numbers
@@ -206,7 +221,18 @@ export function resolveQuotaPolicy(
   // 'radeon::daily-free' key was never account-scoped.
   if (platform === 'radeon') return policy('radeon::daily-free', 'shared_pool', 'metered', ['requests', 'credits'], 'provider_reported');
   if (platform === 'sambanova') return policy('sambanova::shared', 'shared_pool', 'metered', ['requests', 'tokens'], 'provider_reported');
-  if (platform === 'nvidia') return policy('nvidia::credit-pool', 'shared_pool', 'metered', ['requests'], 'provider_reported');
+  // Measured 2026-09-12/14: NVIDIA NIM meters PER MODEL, not per account. A
+  // 70-call burst served 38 and refused 32, and in the same second a second
+  // model served while the first was still returning 429; a later burst across
+  // three models saw each hit its own 429 after 10-14 calls rather than all
+  // stopping together at 40. All 18 enabled models now carry a measured 40/min
+  // policy of their own.
+  //
+  // 'nvidia::credit-pool' asserted one shared counter, which understated the
+  // account by ~18x and — because the overview only sums members that resolve
+  // to DISTINCT pools — left every NVIDIA balance reading Unknown while the
+  // numbers sat in quota_policy.
+  if (platform === 'nvidia') return policy(modelPool(platform, modelId), 'model', 'metered', ['requests'], 'provider_reported');
   // Measured 2026-09-14: Mistral meters per model, not per account. Three
   // models called back to back reported three different allowances and three
   // independent counters — ministral-8b 188/min, voxtral-small 60/min (on a

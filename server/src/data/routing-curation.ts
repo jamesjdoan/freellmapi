@@ -82,9 +82,9 @@ export interface CuratedRoute {
  */
 export const QUOTA_DOMAINS: Record<string, { pool: string; independent: boolean; note: string }> = {
   nvidia: {
-    pool: 'nvidia::credit-pool',
-    independent: false,
-    note: 'ONE shared balance behind every NVIDIA model. Kimi, DeepSeek and every Nemotron draw the same allowance — capability diversity, not capacity diversity.',
+    pool: 'nvidia::model::<model>',
+    independent: true,
+    note: 'Per-model windows, measured 2026-09-12/14 — 40 req/min each, recorded as a policy on all 18 enabled models. A 70-call burst served 38 and refused 32 while a SECOND model served in the same second the first was refusing; a later three-model burst saw each hit its own 429 after 10-14 calls rather than all stopping together at 40. Previously recorded as one shared credit-pool, which understated the account by roughly 18x and hid every NVIDIA balance from the Quota overview.',
   },
   groq: {
     pool: 'groq::model::<model>',

@@ -682,7 +682,10 @@ describe('the decision is recorded when it is made, not reconstructed later', ()
     routed.release?.();
 
     expect(routed.platform).toBe('nvidia');
-    expect(routed.routingTrace!.poolKey).toBe('nvidia::credit-pool');
+    // Per model since NVIDIA was measured to meter that way (QUOTA_DOMAINS).
+    // The point of the assertion is unchanged: the trace names the pool of the
+    // route that SERVED, not of the one that ranked first and was refused.
+    expect(routed.routingTrace!.poolKey).toBe('nvidia::model::twin');
   });
 });
 

@@ -261,13 +261,25 @@ describe('provider diversity', () => {
   });
 
   it('counts contention per quota domain, not per model name', () => {
-    // Three different NVIDIA models are one allowance, so spreading across them
-    // must buy nothing: a fourth NVIDIA route sees the pool fully contended.
+    // Models sharing ONE allowance must buy nothing by spreading across them: a
+    // fourth route on the same pool sees it fully contended. OpenRouter's :free
+    // routes are the standing example — different model names, one counter.
+    //
+    // NVIDIA used to play this part and no longer can: it was measured in
+    // 2026-09 to meter per model, so its routes are genuinely independent and
+    // spreading across them buys real capacity.
+    acquireLease('openrouter', 'qwen/qwen3-coder:free', 1, 100);
+    acquireLease('openrouter', 'meta-llama/llama-3.3-70b-instruct:free', 1, 100);
+    acquireLease('openrouter', 'google/gemma-4-26b:free', 1, 100);
+    expect(inFlightPoolShare('openrouter', 'nvidia/nemotron-3-ultra:free')).toBe(1);
+    expect(poolDiversityFactor('openrouter', 'nvidia/nemotron-3-ultra:free')).toBe(1 - DIVERSITY_MAX_DAMP);
+
+    // And the per-model side of the same mechanism: three NVIDIA models in
+    // flight leave a fourth on its own untouched counter.
     acquireLease('nvidia', 'moonshotai/kimi-k3', 1, 100);
     acquireLease('nvidia', 'deepseek-ai/deepseek-v4-pro-0813', 1, 100);
     acquireLease('nvidia', 'nvidia/nemotron-3-ultra-550b-a55b', 1, 100);
-    expect(inFlightPoolShare('nvidia', 'minimaxai/minimax-m3')).toBe(1);
-    expect(poolDiversityFactor('nvidia', 'minimaxai/minimax-m3')).toBe(1 - DIVERSITY_MAX_DAMP);
+    expect(inFlightPoolShare('nvidia', 'minimaxai/minimax-m3')).toBe(0);
   });
 
   it('releases its opinion when the concurrent work finishes', () => {

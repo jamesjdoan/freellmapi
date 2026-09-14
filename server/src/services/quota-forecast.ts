@@ -4,6 +4,7 @@ import { parseStoredUtc, DAY_MS, MINUTE_MS } from './quota-clock.js';
 import { getDb } from '../db/index.js';
 import { inferQuotaShape, inferAllowanceFromFraction, inferWindowFromResets, type InferredWindow, type InferredAllowance } from './quota-inference.js';
 import { resolveEffectiveQuotas, effectiveRouteWindows } from './quota-policy.js';
+import type { EffectiveQuota } from './quota-policy.js';
 import { resolveQuotaPolicy, consumesPaidBalance, legacyPoolKey } from './provider-quota.js';
 import type { Platform } from '@freellmapi/shared/types.js';
 import { countRequestsInWindow, countPlatformUsageInWindow } from './ratelimit.js';
@@ -392,6 +393,40 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
     if (!rows.some(r => r.platform === platform)) {
       const seen = states.filter(s => s.platform === platform);
       const best = seen.find(s => s.source === 'header') ?? seen.find(s => s.source === 'error_body') ?? seen[0];
+      // A provider whose allowance lives ENTIRELY on its models reaches here
+      // with nothing to show, because tier 2 only asks the platform axis. The
+      // pool total is still knowable — it is the sum of the members — but
+      // aggregateMemberLimits only considers rows whose pool names a window,
+      // and the strongest observation here names an account ('nvidia::credit-
+      // pool'). So when every enabled model carries its own window, label the
+      // row with that window and let the aggregator do its normal work,
+      // including its independence guard. NVIDIA is the case: 18 measured
+      // 40/min policies that the overview reported as Unknown.
+      const perModelWindow = (() => {
+        const models = (db.prepare(
+          'SELECT model_id FROM models WHERE platform = ? AND enabled = 1',
+        ).all(platform) as { model_id: string }[]).map(m => m.model_id);
+        if (models.length === 0) return null;
+        const windows = models.map(m => effectiveRouteWindows(platform, m, now));
+        // Only genuine windows. A 'bucket' is a REFILL RATE — Groq's 1,000
+        // capacity refilling one request every 86.4s — and three rates are not
+        // a daily balance, which is the fiction the aggregator's own guard
+        // exists to prevent. Match the window labels the aggregator accepts.
+        // The union says it outright: a 'bucket' carries refillMs/capacity and
+        // has no windowMs at all, because it is a rate rather than a span.
+        const isMinute = (q: EffectiveQuota | null | undefined) =>
+          q != null && q.period.kind === 'rolling' && q.period.windowMs === MINUTE_MS;
+        const isDaily = (q: EffectiveQuota | null | undefined) =>
+          q != null && (q.period.kind === 'calendar_day'
+            || (q.period.kind === 'rolling' && q.period.windowMs === DAY_MS));
+        // Daily first where a provider has both. Google's models carry a 20/day
+        // AND a 5/min; the day is the ceiling an operator plans against, and
+        // labelling it by the minute replaced "1034/1100 today" with "55/55
+        // this minute" — a true number answering a question nobody asked.
+        if (windows.every(w => isDaily(w.rpd))) return 'calendar_day';
+        if (windows.every(w => isMinute(w.rpm))) return 'rolling-60s';
+        return null;
+      })();
       // An unpublished allowance is still SPENT. OpenCode states no RPM/RPD
       // anywhere and refuses with a bare "Rate limit exceeded", so the limit
       // stays unknown — but our own call count over the last day is a fact, and
@@ -401,7 +436,7 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
       const spent = countPlatformUsageInWindow(platform, 'request', DAY_MS, now);
       rows.push({
         platform,
-        pool: best?.quotaPoolKey ?? null,
+        pool: perModelWindow ? `${platform}::${perModelWindow}` : (best?.quotaPoolKey ?? null),
         used: spent > 0 ? spent : null, remaining: null, limit: null, remaining_pct: null,
         reset_at: null, seconds_until_reset: null, low_balance: false,
         source: best?.source ?? null,
@@ -410,7 +445,9 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
         usedSource: spent > 0 ? 'local' : null,
         inferred: [],
         members: [], memberModelIds: [], alsoBound: [], refillSeconds: null, unroutedModelIds: [],
-        metric: null,
+        // 'requests' when the aggregator is meant to look at this row: it
+        // skips any other metric. Null keeps the old "learned nothing" shape.
+        metric: perModelWindow ? 'requests' : null,
         unit: null,
         derivedAllowance: null,
         resetSource: null,
