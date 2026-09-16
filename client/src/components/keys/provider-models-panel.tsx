@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { readHideDisabled, writeHideDisabled } from '@/lib/hide-disabled-pref'
+import { formatCountdown } from '@/lib/countdown'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip } from '@/components/tooltip'
 import { ChainPicker } from '@/components/compare/chain-picker'
@@ -67,6 +68,14 @@ function HealthMark({ health }: { health?: ModelHealthRow }) {
 
 // The hide-can't-route preference lives in lib/hide-disabled-pref.ts: this file
 // exports components only, so a non-component export here breaks fast refresh.
+
+/** Only what this panel reads from the quota payload: when the allowance
+ *  returns, including a window folded behind a binding one. */
+interface ProviderQuotaRow {
+  platform: string
+  seconds_until_reset: number | null
+  alsoBound?: Array<{ seconds_until_reset: number | null }>
+}
 
 interface ModelHealthRow {
   modelId: string
@@ -447,6 +456,23 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
     [data?.rows, platform],
   )
 
+  // The soonest reset among this platform's quota pools, from the same payload
+  // the Quota page reads — including a window folded behind a binding one,
+  // which is where OpenRouter's daily reset lives. Null when every window is
+  // rolling: there is no instant to name, and inventing one is the failure this
+  // codebase keeps correcting.
+  const { data: quotaData } = useQuery<{ providers: ProviderQuotaRow[] }>({
+    queryKey: ['quota', 'providers'],
+    queryFn: () => apiFetch('/api/quota/providers'),
+  })
+  const nextReset = useMemo(() => {
+    const seconds = (quotaData?.providers ?? [])
+      .filter(p => p.platform === platform)
+      .flatMap(p => [p.seconds_until_reset, ...(p.alsoBound ?? []).map(w => w.seconds_until_reset)])
+      .filter((n): n is number => typeof n === 'number' && n > 0)
+    return seconds.length > 0 ? Math.min(...seconds) : null
+  }, [quotaData?.providers, platform])
+
   const deadCount = useMemo(
     () => rows.filter(r => healthByModel.get(r.modelId)?.verdict === 'dead').length,
     [rows, healthByModel],
@@ -477,6 +503,23 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
         {probedScoped > 0 && (
           <span className="text-[11px] text-muted-foreground tabular-nums" title={t('keys.panelProbedHint')}>
             {t('keys.panelProbedCount', { probed: probedScoped, scoped })}
+          </span>
+        )}
+        {/* When this provider's allowance next returns.
+
+            The table already says how much is left today, per model, and said
+            nothing about when that becomes untrue — so a row reading "0 of 20"
+            was indistinguishable from a dead route. The figure is the Quota
+            page's own: the soonest reset across this platform's pools, which
+            for Google is one anchor (midnight Pacific) shared by every Flash
+            route.
+
+            Absent for a provider whose windows are all rolling: there is no
+            instant to name, and inventing one is the failure this codebase
+            keeps correcting. */}
+        {nextReset != null && (
+          <span className="text-[11px] text-muted-foreground tabular-nums" title={t('keys.panelResetHint')}>
+            {t('keys.panelResetIn', { countdown: formatCountdown(nextReset) })}
           </span>
         )}
         {deadCount > 0 && (

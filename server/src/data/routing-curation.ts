@@ -146,40 +146,36 @@ export const QUOTA_DOMAINS: Record<string, { pool: string; independent: boolean;
  */
 export const CURATED_ROUTES: CuratedRoute[] = [
   // ── bai ───────────────────────────────────────────────────────
+  // ── unorouter ─────────────────────────────────────────────────
   {
-    platform: 'bai', modelId: 'qwen3.8-flash', classification: 'OVERFLOW',
-    chains: { 'Extra-Tier': 1, Apex: 2, Frontier: 2, Coding: 2, Vision: 2, 'Fast-Lane': 5 },
-    why: '100% over 15 attempts. 5064ms measured. intelligence 39.9. coding 73.1. 1000/min. provider barely exercised here.',
+    platform: 'unorouter', modelId: 'glm-5.3:free', classification: 'OVERFLOW',
+    chains: { Frontier: 3, Apex: 4, Coding: 4, Workhorse: 4, Default: 4 },
+    why: 'intelligence 44.9 — the highest in this pool, above kimi-k3 at 43.8 — with coding 74.8 and a 977K window. Two probes only, so it heads nothing: 1328ms on 2026-09-17, and a 35s answer on the 16th while the daily token quota was already spent. One route per chain because unorouter free is a single daily token quota.',
   },
   {
-    platform: 'bai', modelId: 'hy3', classification: 'EXPERIMENTAL',
-    chains: { 'Extra-Tier': 2 },
-    why: '5 attempt(s) — too thin to rate. 1891ms measured. intelligence 25.8. coding 58.8. 1000/min. provider barely exercised here.',
-  },
-  {
-    platform: 'bai', modelId: 'mimo-v2.5', classification: 'EXPERIMENTAL',
-    chains: { 'Extra-Tier': 5 },
-    why: '5 attempt(s) — too thin to rate. 9937ms measured. intelligence 22.3. coding 56.8. 1000/min. provider barely exercised here.',
+    platform: 'unorouter', modelId: 'glm-5.3-flash:free', classification: 'OVERFLOW',
+    chains: { Vision: 4 },
+    why: 'intelligence 41.9 with tools AND vision on a 977K window, 2198ms measured. Vision only: it is the unorouter route that chain\'s metric names, and a second route from the same counter would buy nothing. Timed out at 40s on 2026-09-16 against a spent quota; answered in 2.2s once it reset.',
   },
   // ── google ────────────────────────────────────────────────────
   {
     platform: 'google', modelId: 'gemini-3.8-flash', classification: 'OVERFLOW',
-    chains: { Frontier: 3, Apex: 4, Coding: 4, Vision: 4 },
+    chains: { Frontier: 2, Coding: 3, Vision: 3, Apex: 3 },
     why: '68% over 74 attempts. 18670ms measured. intelligence 41.2. coding 76.3. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
     platform: 'google', modelId: 'gemini-3.7-flash', classification: 'CORE',
-    chains: { Frontier: 1, Coding: 1, Vision: 1, Apex: 3 },
+    chains: { Coding: 1, Frontier: 1, Vision: 1, Apex: 2 },
     why: '77% over 194 attempts. 7356ms measured. intelligence 39.4. coding 76.1. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
     platform: 'google', modelId: 'gemini-3.6-flash', classification: 'CORE',
-    chains: { Apex: 1, Coding: 3, Vision: 3, Frontier: 4 },
+    chains: { Apex: 1, Vision: 2, Coding: 2, Frontier: 4 },
     why: '87% over 159 attempts. 15225ms measured. intelligence 34.3. coding 69.2. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
     platform: 'google', modelId: 'gemini-3.5-flash', classification: 'CORE',
-    chains: { Frontier: 6, Coding: 6, Vision: 7 },
+    chains: { Coding: 6, Frontier: 6, Vision: 7 },
     why: '70% over 132 attempts. 8723ms measured. intelligence 33. coding 70.1. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
@@ -200,13 +196,8 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // ── groq ──────────────────────────────────────────────────────
   {
     platform: 'groq', modelId: 'qwen/qwen3.8-27b', classification: 'OVERFLOW',
-    chains: { Workhorse: 2, Default: 2, 'Fast-Lane': 4, Apex: 5, Coding: 5, Vision: 5 },
+    chains: { Default: 2, Workhorse: 2, 'Fast-Lane': 3, Apex: 5, Coding: 5, Vision: 5 },
     why: '62% over 16 attempts. 190ms measured. intelligence 33.9. coding 68.1.',
-  },
-  {
-    platform: 'groq', modelId: 'qwen/qwen3.6-27b', classification: 'CORE',
-    chains: { 'Fast-Lane': 2, Workhorse: 4, Default: 4 },
-    why: '82% over 11 attempts. 220ms measured. intelligence 21.9. coding 53.7.',
   },
   {
     platform: 'groq', modelId: 'openai/gpt-oss-20b', classification: 'CORE',
@@ -215,7 +206,7 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'groq', modelId: 'openai/gpt-oss-120b', classification: 'CORE',
-    chains: { Workhorse: 8, Default: 8 },
+    chains: { Default: 8, Workhorse: 8 },
     why: '94% over 88 attempts. intelligence 12.3. One of the two most-proven routes here that was in NO chain at all — found by auditing enabled models against chain membership, not by noticing it was missing.',
   },
   // ── nvidia ────────────────────────────────────────────────────
@@ -231,49 +222,49 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'nvidia', modelId: 'nvidia/nemotron-3-super-120b-a12b', classification: 'CORE',
-    chains: { Workhorse: 6, Default: 6 },
+    chains: { Default: 6, Workhorse: 6 },
     why: '97% over 6883 attempts. 12729ms measured. intelligence 13.6. coding 37.7. 40/min.',
   },
   {
     platform: 'nvidia', modelId: 'nvidia/nemotron-3.5-lightning-30b-a3b', classification: 'CORE',
-    chains: { Workhorse: 7, Default: 7 },
+    chains: { Default: 7, Workhorse: 7 },
     why: '97% over 761 attempts, the best reliability figure on this install, and it was in no chain. Kept OUT of Fast-Lane deliberately: it averages 22,032ms despite publishing 288 tok/s. The middle tier does not rank on latency, so its reliability is what counts here. 40/min.',
   },
   // ── ollama ────────────────────────────────────────────────────
   {
     platform: 'ollama', modelId: 'nemotron-3-ultra', classification: 'EXPERIMENTAL',
-    chains: { 'Extra-Tier': 4 },
+    chains: { 'Extra-Tier': 2 },
     why: '89% over 504 attempts. 30339ms measured. intelligence 23.4. coding 49.3. SCARCE — demoted a tier.',
   },
   {
     platform: 'ollama', modelId: 'gemma4:31b', classification: 'SPECIALIST',
-    chains: { 'Extra-Tier': 8 },
+    chains: { 'Extra-Tier': 5 },
     why: '5 attempt(s) — too thin to rate. 6378ms measured. intelligence 15.4. coding 43.4. SCARCE — demoted a tier.',
   },
   {
     platform: 'ollama', modelId: 'nemotron-3-super', classification: 'EXPERIMENTAL',
-    chains: { 'Extra-Tier': 9 },
+    chains: { 'Extra-Tier': 6 },
     why: '62% over 395 attempts. 11896ms measured. intelligence 13.6. coding 37.7. SCARCE — demoted a tier.',
   },
   // ── opencode ──────────────────────────────────────────────────
   {
     platform: 'opencode', modelId: 'ling-3.0-flash-fin-free', classification: 'EXPERIMENTAL',
-    chains: { 'Extra-Tier': 3 },
+    chains: { 'Extra-Tier': 1 },
     why: '3 attempt(s) — too thin to rate. intelligence 24.9. coding 50.6. provider barely exercised here.',
   },
   {
     platform: 'opencode', modelId: 'nemotron-3-ultra-free', classification: 'EXPERIMENTAL',
-    chains: { 'Extra-Tier': 7 },
+    chains: { 'Extra-Tier': 4 },
     why: '72% over 145 attempts. 27385ms measured. intelligence 23.4. coding 49.3. provider barely exercised here.',
   },
   {
     platform: 'opencode', modelId: 'mimo-v2.5-free', classification: 'SPECIALIST',
-    chains: { 'Extra-Tier': 6 },
+    chains: { 'Extra-Tier': 3 },
     why: '4 attempt(s) — too thin to rate. 3387ms measured. intelligence 22.3. coding 56.8. 5/min. SCARCE — demoted a tier. provider barely exercised here.',
   },
   {
     platform: 'opencode', modelId: 'big-pickle', classification: 'SPECIALIST',
-    chains: { 'Extra-Tier': 10 },
+    chains: { 'Extra-Tier': 7 },
     why: '4 attempt(s) — too thin to rate. 4473ms measured. 3/min. SCARCE — demoted a tier. provider barely exercised here.',
   },
   // ── openrouter ────────────────────────────────────────────────
@@ -289,7 +280,7 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'openrouter', modelId: 'inclusionai/ling-3.0-flash-sante:free', classification: 'OVERFLOW',
-    chains: { 'Fast-Lane': 3 },
+    chains: { 'Fast-Lane': 2 },
     why: '3 attempt(s) — too thin to rate. 1394ms measured. intelligence 24.9. coding 50.6. OpenRouter spends ONE account counter (1000/day, 20/min) whichever :free model answers, so only its strongest qualifying route is listed: a weaker sibling costs the same unit for less, and adds no depth because they exhaust together.',
   },
 ];
@@ -394,9 +385,14 @@ export function chainMembers(chain: ChainName): { platform: string; modelId: str
  * allowance and genuine depth — which is why those providers contribute
  * several members and OpenRouter contributes one.
  *
+ * unorouter joined on 2026-09-17. Its free tier is one daily TOKEN quota
+ * across every :free model, stated in its own refusal: "You've reached today's
+ * free-model token quota." So the same rule applies — one route per chain, the
+ * best that chain's metric names.
+ *
  * b.ai and OpenCode are recorded as shared pools conservatively, but both
  * refuse per model when measured (hy3 refused while qwen3.8-flash served 60
  * concurrent calls; mimo refused while ling served), so they are not treated as
  * single-counter here.
  */
-export const SINGLE_COUNTER_PLATFORMS = ['openrouter'] as const;
+export const SINGLE_COUNTER_PLATFORMS = ['openrouter', 'unorouter'] as const;

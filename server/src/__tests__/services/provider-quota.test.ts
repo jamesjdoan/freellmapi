@@ -5,6 +5,7 @@ import {
   getQuotaStateForKeys,
   parseQuotaObservationsFromResponse,
   inferQuotaPoolKey,
+  consumesPaidBalance,
   resolveQuotaPolicy,
   isQuotaPoolAvailable,
   getKeyQuotaHeadroom,
@@ -85,6 +86,48 @@ describe('provider-quota: pool inference', () => {
     // The prefix must not swallow the rest of the platform: mistral-medium is
     // a different model with a different (here, zero) allowance.
     expect(inferQuotaPoolKey('mistral', 'mistral-medium-latest')).toBe('mistral::model::mistral-medium-latest');
+  });
+
+  it('bars AnyAPI paid routes from free chains, the same as OpenRouter', () => {
+    // Measured 2026-09-15: openai/gpt-4o-mini, anthropic/claude-sonnet-4.6 and
+    // google/gemini-2.5-flash all returned 200 on the free-tier AnyAPI key.
+    // That account can pay — 278 of its 288 ids bill, and only the ten carrying
+    // `:free` do not. The guard covered OpenRouter alone, so a seeded AnyAPI
+    // route would have been eligible for auto chains and billed silently.
+    expect(consumesPaidBalance('anyapi', 'openai/gpt-4o-mini')).toBe(true);
+    expect(consumesPaidBalance('anyapi', 'anthropic/claude-sonnet-4.6')).toBe(true);
+    expect(consumesPaidBalance('anyapi', 'dots-studio/dots-3-note-preview:free')).toBe(false);
+    // Unchanged for OpenRouter, and still false for providers with no paid tier
+    // reachable on the same credential.
+    expect(consumesPaidBalance('openrouter', 'openai/gpt-4o')).toBe(true);
+    expect(consumesPaidBalance('openrouter', 'qwen/qwen3:free')).toBe(false);
+    expect(consumesPaidBalance('groq', 'openai/gpt-oss-120b')).toBe(false);
+
+    // unorouter, 2026-09-16. It states the hazard in its own refusal: "Your
+    // plan's paid allowance is separate — switch to a paid model to keep
+    // going." 124 of its 261 ids carry no :free suffix and it exposes no
+    // pricing field at all, so the suffix is the only signal there is.
+    expect(consumesPaidBalance('unorouter', 'claude-fable-5')).toBe(true);
+    expect(consumesPaidBalance('unorouter', 'claude-haiku-4-5-20251001')).toBe(true);
+    expect(consumesPaidBalance('unorouter', 'glm-5.3:free')).toBe(false);
+  });
+
+  it('reads AnyAPI team token budget from the headers it sends', () => {
+    // Measured 2026-09-15 on a live free key: every response carries the team
+    // budget and what is left of it. One shared pool across models, in TOKENS
+    // — so a per-model request window would be the wrong shape entirely.
+    const res = new Response(null, {
+      status: 200,
+      headers: {
+        'x-ratelimit-team-limit-tokens': '100000',
+        'x-ratelimit-team-remaining-tokens': '99982',
+      },
+    });
+    const obs = parseQuotaObservationsFromResponse(res, { platform: 'anyapi', keyId: 1 });
+    expect(obs.find(o => o.metric === 'tokens')).toMatchObject({ limit: 100_000, remaining: 99_982 });
+    // Shared, not per model: two models spend one budget.
+    expect(inferQuotaPoolKey('anyapi', 'dots-studio/dots-3-note-preview:free')).toBe('anyapi::free');
+    expect(inferQuotaPoolKey('anyapi', 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free')).toBe('anyapi::free');
   });
 
   it('reads a Mistral zero allowance as zero rather than as absent', () => {

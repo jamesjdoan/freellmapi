@@ -798,7 +798,9 @@
     "healthCode_EOTHER": "refused for another reason — hover the badge",
     "modelsInScope": "{enabled}/{total} in key scope",
     "panelHideUnroutable": "Hide can't route",
-    "panelAllFiltered": "All {count} models on this provider are hidden — none can route right now."
+    "panelAllFiltered": "All {count} models on this provider are hidden — none can route right now.",
+    "panelResetIn": "resets in {countdown}",
+    "panelResetHint": "When this provider's allowance next returns. The soonest of its quota windows, including one folded behind a shorter window on the Quota page."
   },
   "backups": {
     "title": "Backups",

@@ -313,8 +313,29 @@ export function resolveQuotaPolicy(
  * guessing at other providers' billing would either block free routes or, far
  * worse, wave paid ones through on a wrong guess.
  */
+/**
+ * Gateways where a `:free` suffix is the ONLY thing separating a free route
+ * from one that bills real money, and every other id on the same key spends.
+ *
+ * AnyAPI joined OpenRouter here on 2026-09-15, measured: openai/gpt-4o-mini,
+ * anthropic/claude-sonnet-4.6 and google/gemini-2.5-flash all returned 200 on
+ * the free-tier key. It lists 288 models and only ten carry `:free`, so 278 of
+ * them charge — and unlike b.ai, whose zero balance makes a paid call refuse
+ * itself, that account can actually pay.
+ *
+ * unorouter joined on 2026-09-16 and states the hazard in its own refusal:
+ * "You've reached today's free-model token quota. Your plan's paid allowance
+ * is separate — switch to a paid model to keep going." 124 of its 261 ids
+ * carry no `:free` suffix, and it exposes no pricing field, so the suffix is
+ * the only signal available.
+ *
+ * The pattern to watch for when adding a gateway: one credential, a free tier
+ * and a paid tier, and nothing but a naming convention between them.
+ */
+const PAID_UNLESS_FREE_SUFFIX: ReadonlySet<string> = new Set(['openrouter', 'anyapi', 'unorouter']);
+
 export function consumesPaidBalance(platform: Platform, modelId?: string | null): boolean {
-  return platform === 'openrouter' && !(modelId?.trim() ?? '').endsWith(':free');
+  return PAID_UNLESS_FREE_SUFFIX.has(platform) && !(modelId?.trim() ?? '').endsWith(':free');
 }
 
 /**
@@ -394,6 +415,18 @@ const HEADER_SPECS: Partial<Record<Platform, HeaderSpec[]>> = {
   mistral: [
     { metric: 'requests', limit: 'x-ratelimit-limit-req-minute', remaining: 'x-ratelimit-remaining-req-minute', strategy: 'token_bucket' },
     { metric: 'tokens', limit: 'x-ratelimit-limit-tokens-minute', remaining: 'x-ratelimit-remaining-tokens-minute', strategy: 'token_bucket' },
+  ],
+  // Measured 2026-09-15 against a live free key: every AnyAPI response carries
+  // `x-ratelimit-team-limit-tokens: 100000` and a remaining counter. That is a
+  // TEAM-wide daily token budget shared across models, not a per-model request
+  // window — which is why the pool stays account-scoped and the metric is
+  // tokens. It confirms live the 100K/day figure the provider registration
+  // recorded from a pricing page.
+  //
+  // No reset header is sent, so the window shape stays unasserted rather than
+  // guessed at midnight in some timezone nobody has observed.
+  anyapi: [
+    { metric: 'tokens', limit: 'x-ratelimit-team-limit-tokens', remaining: 'x-ratelimit-team-remaining-tokens', strategy: 'unknown' },
   ],
 };
 

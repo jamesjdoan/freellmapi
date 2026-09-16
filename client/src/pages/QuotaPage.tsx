@@ -948,6 +948,18 @@ export default function QuotaPage() {
                         <span key={w.pool ?? 'w'} className="text-muted-foreground">
                           {'\u00a0· '}{formatAmount(w.limit, p.unit)}
                           <span className="text-[10px]">{' '}{poolWindowName(w.pool)}</span>
+                          {/* Its countdown too. The row's own countdown column
+                              describes the BINDING window, which is often a
+                              rolling one with no reset instant at all — so the
+                              folded window's reset was known, carried in the
+                              payload, and shown nowhere. OpenRouter reads
+                              "20/min binds first · 1000 daily" with a bare dash,
+                              while the daily allowance resets in 2.4h. */}
+                          {w.seconds_until_reset != null && (
+                            <span className="text-[10px]">
+                              {' '}{formatCountdown(w.seconds_until_reset)}
+                            </span>
+                          )}
                         </span>
                       ))}
                     </TableCell>
