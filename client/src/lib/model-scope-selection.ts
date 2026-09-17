@@ -56,7 +56,13 @@ export const MODEL_PICKER_MIN_MODELS = 6
  * be ticked apart.
  */
 export function scopeCandidates(
-  entries: readonly FallbackEntry[],
+  // Upstream narrowed this to the five fields it reads, and its own callers
+  // pass exactly those. The fork's ScopeCandidate also carries a capability
+  // rank, so it is accepted when present and OPTIONAL: a caller without one
+  // gets the same treatment as an unmeasured model, which sorts last rather
+  // than ahead of measured ones (see the MAX_SAFE_INTEGER rule below).
+  entries: readonly (Pick<FallbackEntry, 'platform' | 'modelId' | 'displayName' | 'sizeLabel' | 'contextWindow'>
+    & { intelligenceRank?: number })[],
   platform: string,
 ): ScopeCandidate[] {
   // 'custom' rows are per-endpoint, not per-platform — one custom key must
@@ -73,7 +79,7 @@ export function scopeCandidates(
       displayName: entry.displayName || entry.modelId,
       sizeLabel: entry.sizeLabel || null,
       contextWindow: entry.contextWindow ?? null,
-      intelligenceRank: entry.intelligenceRank,
+      intelligenceRank: entry.intelligenceRank ?? Number.MAX_SAFE_INTEGER,
     })
   }
   return candidates

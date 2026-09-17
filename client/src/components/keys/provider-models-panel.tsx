@@ -9,6 +9,7 @@ import { ChainPicker } from '@/components/compare/chain-picker'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import { ModelCombobox } from '@/components/model-combobox'
+import { useExtensionEnabled } from '@/lib/use-extension'
 
 // Every model this provider serves, with the measured scores beside the two
 // switches that decide whether it can route. Lives inside the expanded provider
@@ -222,6 +223,8 @@ function AllowanceCell({ probe, usage }: { probe?: QuotaProbe; usage?: RateUsage
 }
 
 export function ProviderModelsPanel({ platform }: { platform: string }) {
+  // `provider-models-panel` off: the panel is hidden and upstream's provider view is used; saved scope is untouched.
+  if (!useExtensionEnabled('provider-models-panel')) return null
   const { t } = useI18n()
   const queryClient = useQueryClient()
   const [sort, setSort] = useState<SortKey>('intelligence')

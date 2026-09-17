@@ -15,6 +15,7 @@
  */
 import { z } from 'zod';
 import { getDb, getSetting, setSetting } from '../db/index.js';
+import { isExtensionEnabled } from './extension-state.js';
 import {
   ENDPOINT_ID_SEPARATOR,
   endpointRefMatches,
@@ -127,6 +128,9 @@ export function setUnifyOverrides(input: unknown): UnifyOverrides {
 }
 
 export function getProviderPreferences(): ProviderPreferences {
+  // `provider-preference` off: candidates fall back to score order. The saved
+  // preferences are left in place and apply again the moment it is re-enabled.
+  if (!isExtensionEnabled('provider-preference')) return EMPTY_PROVIDER_PREFERENCES;
   const raw = getSetting(PROVIDER_PREFERENCES_KEY);
   if (!raw) return EMPTY_PROVIDER_PREFERENCES;
   try {

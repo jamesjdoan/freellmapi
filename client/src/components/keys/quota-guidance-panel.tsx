@@ -8,6 +8,7 @@ import type {
   QuotaGuidanceStatus,
 } from '../../../../shared/types'
 import { Button } from '@/components/ui/button'
+import { useExtensionEnabled } from '@/lib/use-extension'
 
 const SCOPE_LABELS: Record<QuotaGuidanceScope, string> = {
   model: 'Per model',
@@ -117,6 +118,8 @@ export function QuotaGuidancePanel({
   onUseModelLimits?: (limits: QuotaGuidanceLimits) => void
   onUseMeasured?: (limits: QuotaGuidanceLimits) => void
 }) {
+  // `provider-quota-guidance` off: guidance is hidden; enforcement of real limits is unaffected.
+  if (!useExtensionEnabled('provider-quota-guidance')) return null
   const stale = isStale(guidance.reviewAfter)
   const canApply = guidance.status === 'verified' && !stale
   const modelCanApply = modelGuidance?.status === 'verified' && !stale

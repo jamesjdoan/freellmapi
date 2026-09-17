@@ -1,7 +1,9 @@
+import fs from 'node:fs';
 import Database from 'better-sqlite3';
 import { describe, expect, it } from 'vitest';
 import { connectDb } from '../../../db/index.js';
 import { getMigrationStatuses, runMigrations } from '../../../db/migrate/runner.js';
+import { DEFAULT_MIGRATIONS } from '../../../db/migrate/defaults.js';
 import { up as runLegacyBaseline } from '../../../db/migrations/20260101_000000_legacy_baseline.js';
 
 const LEGACY_BASELINE_FILENAME = '20260101_000000_legacy_baseline.ts';
@@ -26,25 +28,27 @@ const CUSTOM_ENDPOINT_HOST_LABELS_FILENAME = '20260802_000001_custom_endpoint_ho
 const KEY_MODEL_SCOPE_FILENAME = '20260805_000001_key_model_scope.ts';
 const CLIENT_PROFILES_FILENAME = '20260805_000002_client_profiles.ts';
 const API_KEY_PROXY_FILENAME = '20260810_000001_api_key_proxy.ts';
-const PLAYGROUND_CONVERSATIONS_FILENAME = '20260820_000001_playground_conversations.ts';
 const CUSTOM_MODEL_TOMBSTONES_FILENAME = '20260819_000001_custom_model_tombstones.ts';
+const PLAYGROUND_CONVERSATIONS_FILENAME = '20260820_000001_playground_conversations.ts';
 const SERVER_LOGS_FILENAME = '20260823_000001_server_logs.ts';
 const BACKUPS_TABLE_FILENAME = '20260823_000002_backups_table.ts';
 const ATTEMPT_KEY_LABEL_FILENAME = '20260823_000003_attempt_key_label.ts';
 const PROFILE_AUTO_INCLUDE_FILENAME = '20260823_000004_profile_auto_include.ts';
 const IDEMPOTENCY_CLAIMS_FILENAME = '20260901_000001_idempotency_claims.ts';
 const QUOTA_OBSERVATION_LOOKUP_FILENAME = '20260901_000002_quota_observation_lookup.ts';
+const REQUEST_CALLER_FILENAME = '20260901_000003_request_caller.ts';
 const ANALYTICS_LATENCY_PERCENTILE_INDEX_FILENAME = '20260902_000001_analytics_latency_percentile_index.ts';
 const PROVIDER_ACCOUNT_LIMITS_FILENAME = '20260902_000002_provider_account_limits.ts';
 const MCP_ENABLED_DEFAULT_FILENAME = '20260903_000001_mcp_enabled_default.ts';
 const RESPONSE_CACHE_FILENAME = '20260903_000002_response_cache.ts';
+const KEY_MONTHLY_BUDGET_FILENAME = '20260904_000001_key_monthly_budget.ts';
 const QUOTA_POLICY_FILENAME = '20260905_000001_quota_policy.ts';
 const ROUTING_DECISION_FILENAME = '20260905_000002_routing_decision.ts';
 const ROUTING_DECISION_ENDPOINT_FILENAME = '20260905_000003_routing_decision_endpoint.ts';
 const QUOTA_POLICY_ENDPOINT_FILENAME = '20260905_000004_quota_policy_endpoint.ts';
 const QUOTA_BURN_RUN_FILENAME = '20260906_000001_quota_burn_run.ts';
 const QUOTA_UNIT_FILENAME = '20260906_000002_quota_unit.ts';
-const ATTEMPT_ROUTING_TRACE_FILENAME = '20260909_000001_request_attempt_routing_trace.ts';
+const REQUEST_ATTEMPT_ROUTING_TRACE_FILENAME = '20260909_000001_request_attempt_routing_trace.ts';
 const CATALOGUE_CHANGE_TRACKING_FILENAME = '20260910_000001_catalogue_change_tracking.ts';
 const CATALOGUE_EVENT_LOG_FILENAME = '20260910_000002_catalogue_event_log.ts';
 const ANALYSIS_BENCHMARKS_FILENAME = '20260911_000001_analysis_benchmarks.ts';
@@ -57,6 +61,9 @@ const QUOTA_PROBE_RUN_FILENAME = '20260911_000007_quota_probe_run.ts';
 const QUOTA_POLICY_PERIOD_KEY_FILENAME = '20260911_000008_quota_policy_period_key.ts';
 const QUOTA_POLICY_BUCKET_FILENAME = '20260912_000001_quota_policy_bucket.ts';
 const AA_COST_PER_TASK_FILENAME = '20260913_000001_aa_cost_per_task.ts';
+const KEY_MONTHLY_USAGE_FILENAME = '20260914_000001_key_monthly_usage.ts';
+const PRESERVE_QUOTA_STATE_FILENAME = '20260914_999999_preserve_quota_state.ts';
+const QUOTA_SNAPSHOT_FRESHNESS_FILENAME = '20260915_000001_quota_snapshot_freshness.ts';
 
 interface SchemaRow {
   type: string;
@@ -71,6 +78,21 @@ interface DatabaseSnapshot {
 }
 
 describe('migration round trip', () => {
+
+  // The manifest is the production order (the runner maps DEFAULT_MIGRATIONS
+  // for the default set and only localeCompare-sorts a scanned directory), so
+  // an entry missing from it is a migration that silently never runs. That is
+  // exactly how a schema change gets lost in a rebase, and nothing else here
+  // would notice.
+  it('references every migration on disk, in filename order', () => {
+    const onDisk = fs.readdirSync(new URL('../../../db/migrations/', import.meta.url))
+      .filter(name => name.endsWith('.ts') && !name.endsWith('.d.ts'))
+      .sort((a, b) => a.localeCompare(b));
+    const manifest = DEFAULT_MIGRATIONS.map(m => m.filename);
+    expect(manifest).toEqual(onDisk);
+    // Sorted, so the explicit array and a scanned directory cannot disagree.
+    expect(manifest).toEqual([...manifest].sort((a, b) => a.localeCompare(b)));
+  });
   it('connectDb opens a connection without applying migrations', () => {
     const originalNodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = 'test';
@@ -106,61 +128,10 @@ describe('migration round trip', () => {
       await runMigrations(db, 'up');
 
       expect(getEnabledZenDeadPromoCount(db)).toBe(0);
-      expect(getAppliedMigrationNames(db)).toEqual([
-        LEGACY_BASELINE_FILENAME,
-        CUSTOM_PROVIDER_MODALITIES_FILENAME,
-        CATALOG_MODEL_STATE_FILENAME,
-        REQUEST_AGGREGATES_FILENAME,
-        GITHUB_GPT41_CONTEXT_FILENAME,
-        REQUEST_CLIENT_INFO_FILENAME,
-        CUSTOM_MODEL_TOOL_SUPPORT_FILENAME,
-        PROFILE_CHAIN_BACKFILL_FILENAME,
-        KEY_HEALTH_ERROR_FILENAME,
-        COOLDOWN_PROBE_PROVENANCE_FILENAME,
-        REQUEST_ATTEMPTS_FILENAME,
-        MODEL_SOURCE_PROVENANCE_FILENAME,
-        MEDIA_MODEL_META_FILENAME,
-        REQUEST_SERVED_MODEL_FILENAME,
-        ATTEMPT_ERROR_SUMMARY_FILENAME,
-        AGENT_COMPATIBILITY_FILENAME,
-        TOMBSTONE_PROVENANCE_FILENAME,
-        CUSTOM_MODEL_ENDPOINT_IDENTITY_FILENAME,
-        CUSTOM_ENDPOINT_HOST_LABELS_FILENAME,
-        KEY_MODEL_SCOPE_FILENAME,
-        CLIENT_PROFILES_FILENAME,
-        API_KEY_PROXY_FILENAME,
-        CUSTOM_MODEL_TOMBSTONES_FILENAME,
-        PLAYGROUND_CONVERSATIONS_FILENAME,
-        SERVER_LOGS_FILENAME,
-        BACKUPS_TABLE_FILENAME,
-        ATTEMPT_KEY_LABEL_FILENAME,
-        PROFILE_AUTO_INCLUDE_FILENAME,
-        IDEMPOTENCY_CLAIMS_FILENAME,
-        QUOTA_OBSERVATION_LOOKUP_FILENAME,
-        ANALYTICS_LATENCY_PERCENTILE_INDEX_FILENAME,
-        PROVIDER_ACCOUNT_LIMITS_FILENAME,
-        MCP_ENABLED_DEFAULT_FILENAME,
-        RESPONSE_CACHE_FILENAME,
-        QUOTA_POLICY_FILENAME,
-        ROUTING_DECISION_FILENAME,
-        ROUTING_DECISION_ENDPOINT_FILENAME,
-        QUOTA_POLICY_ENDPOINT_FILENAME,
-        QUOTA_BURN_RUN_FILENAME,
-        QUOTA_UNIT_FILENAME,
-        ATTEMPT_ROUTING_TRACE_FILENAME,
-        CATALOGUE_CHANGE_TRACKING_FILENAME,
-        CATALOGUE_EVENT_LOG_FILENAME,
-        ANALYSIS_BENCHMARKS_FILENAME,
-        MODEL_GROUPS_FILENAME,
-        DROP_MODEL_GROUPS_FILENAME,
-        PROXY_DELTA_FILENAME,
-        PROXY_DELTA_PER_METRIC_FILENAME,
-        PROXY_DELTA_SPEED_FILENAME,
-        QUOTA_PROBE_RUN_FILENAME,
-        QUOTA_POLICY_PERIOD_KEY_FILENAME,
-        QUOTA_POLICY_BUCKET_FILENAME,
-        AA_COST_PER_TASK_FILENAME,
-      ]);
+      // The runner must apply EVERY manifest entry, in manifest order. A
+      // hardcoded copy of the list here only ever drifts; what matters is
+      // that nothing in DEFAULT_MIGRATIONS is silently skipped.
+      expect(getAppliedMigrationNames(db)).toEqual(DEFAULT_MIGRATIONS.map(m => m.filename));
     } finally {
       db.close();
     }
@@ -208,6 +179,56 @@ describe('migration round trip', () => {
       await runMigrations(db, 'up');
       expect(getPendingMigrationNames(db)).toEqual([]);
       expect(snapshotAppState(db)).toEqual(fullState);
+    } finally {
+      db.close();
+    }
+  });
+  it('preserves original provider_quota_state rows in archive through freshness migration', async () => {
+    const db = new Database(':memory:');
+    try {
+      // Apply baseline so tables exist
+      runLegacyBaseline(db);
+      // Seed a provider_quota_state row with confidence and reset_at
+      db.prepare(`
+        INSERT INTO provider_quota_state
+          (platform, key_id, quota_pool_key, metric, limit_value, remaining_value, reset_at, reset_strategy, source, confidence, notes, observed_at, updated_at)
+        VALUES ('groq', 1, 'groq::account', 'requests', 1000, 900, '2026-09-15T00:00:00Z', 'provider_reported', 'header', 0.9, 'seed', datetime('now'), datetime('now'))
+      `).run();
+
+      // Run all remaining migrations (archive then freshness)
+      await runMigrations(db, 'up');
+
+      // Verify archive table exists and holds the original values
+      const archived = db.prepare(`
+        SELECT platform, key_id, quota_pool_key, metric, limit_value, remaining_value, reset_at, reset_strategy, source, confidence, notes, unit
+        FROM provider_quota_state_pre_v0_11_0
+      `).all();
+
+      expect(archived.length).toBe(1);
+      expect(archived[0]).toMatchObject({
+        platform: 'groq',
+        key_id: 1,
+        quota_pool_key: 'groq::account',
+        metric: 'requests',
+        limit_value: 1000,
+        remaining_value: 900,
+        reset_at: '2026-09-15T00:00:00Z',
+        reset_strategy: 'provider_reported',
+        source: 'header',
+        confidence: 0.9,
+        notes: 'seed',
+        // The seed predates the migration that adds `unit`, so this row has
+        // none. The archive still carries the column; the live-DB rehearsal
+        // covered rows that do have one.
+        unit: null,
+      });
+
+      // Live state may have been altered by freshness; ensure archive unchanged
+      const live = db.prepare(`
+        SELECT confidence FROM provider_quota_state WHERE platform='groq' AND key_id=1 AND quota_pool_key='groq::account' AND metric='requests'
+      `).get();
+      // Freshness sets confidence to 0 when no observation, so confidence becomes 0
+      expect(live?.confidence).toBe(0);
     } finally {
       db.close();
     }

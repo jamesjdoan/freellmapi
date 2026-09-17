@@ -3,6 +3,7 @@ import { initDb, getDb } from '../../db/index.js';
 import { encrypt } from '../../lib/crypto.js';
 import { routeRequest, setRoutingStrategy } from '../../services/router.js';
 import { upsertQuotaPolicy } from '../../services/quota-policy.js';
+import { setExtensionEnabled, resetExtensionStateCache } from '../../services/extension-state.js';
 import {
   invalidateShadowCounts,
   acquireLease,
@@ -247,6 +248,34 @@ describe('provider diversity reaches the chosen route', () => {
     const contended = routeRequest(100);
     contended.release?.();
     expect(contended.platform).toBe('nvidia');
+  });
+
+  it('does not spread at all once quota-aware-scoring is switched off', () => {
+    addKey('groq');
+    addKey('nvidia');
+    addRoute('groq', 'twin', 1);
+    addRoute('nvidia', 'twin', 2);
+    dailyPolicy('groq', 10_000);
+    dailyPolicy('nvidia', 10_000);
+    setRoutingStrategy('priority');
+
+    // Same contention as the test above: two workers already on Groq's pool.
+    resetLeases();
+    acquireLease('groq', 'twin', 1, 100);
+    acquireLease('groq', 'twin', 1, 100);
+    invalidateQuotaPressure();
+
+    // With the extension off, the quota-economy terms go neutral and the
+    // operator's manual order stands even though the pool is contended.
+    setExtensionEnabled('quota-aware-scoring', false);
+    const contended = routeRequest(100);
+    contended.release?.();
+    expect(contended.platform).toBe('groq');
+
+    // Leave no leases or gate state behind for the next case.
+    resetLeases();
+    setExtensionEnabled('quota-aware-scoring', true);
+    resetExtensionStateCache();
   });
 
   it('spreads under a bandit strategy too', () => {

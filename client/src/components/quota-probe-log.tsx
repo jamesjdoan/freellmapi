@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { PlatformDot } from '@/components/platform-dot'
 import { TimeTreeLog } from '@/components/time-tree-log'
 import { parseSqliteUtc } from '@/lib/time-tree'
+import { useExtensionEnabled } from '@/lib/use-extension'
 
 // The record of what a provider's limits were actually MEASURED to be.
 //
@@ -206,6 +207,8 @@ function ModelRow({ probes }: { probes: QuotaProbe[] }) {
 }
 
 export function QuotaProbeLogPanel({ modelIds }: { modelIds?: string[] } = {}) {
+  // `quota-probe-log` off: the panel is hidden; probes keep being recorded, so the history has no gap.
+  if (!useExtensionEnabled('quota-probe-log')) return null
   const { t } = useI18n()
   const [platform, setPlatform] = useState<string | null>(null)
 

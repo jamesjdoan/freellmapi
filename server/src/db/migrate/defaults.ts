@@ -29,10 +29,12 @@ import * as attemptKeyLabel from '../migrations/20260823_000003_attempt_key_labe
 import * as profileAutoInclude from '../migrations/20260823_000004_profile_auto_include.js';
 import * as idempotencyClaims from '../migrations/20260901_000001_idempotency_claims.js';
 import * as quotaObservationLookup from '../migrations/20260901_000002_quota_observation_lookup.js';
+import * as requestCaller from '../migrations/20260901_000003_request_caller.js';
 import * as analyticsLatencyPercentileIndex from '../migrations/20260902_000001_analytics_latency_percentile_index.js';
 import * as providerAccountLimits from '../migrations/20260902_000002_provider_account_limits.js';
 import * as mcpEnabledDefault from '../migrations/20260903_000001_mcp_enabled_default.js';
 import * as responseCache from '../migrations/20260903_000002_response_cache.js';
+import * as keyMonthlyBudget from '../migrations/20260904_000001_key_monthly_budget.js';
 import * as quotaPolicy from '../migrations/20260905_000001_quota_policy.js';
 import * as routingDecision from '../migrations/20260905_000002_routing_decision.js';
 import * as routingDecisionEndpoint from '../migrations/20260905_000003_routing_decision_endpoint.js';
@@ -52,6 +54,9 @@ import * as quotaProbeRun from '../migrations/20260911_000007_quota_probe_run.js
 import * as quotaPolicyPeriodKey from '../migrations/20260911_000008_quota_policy_period_key.js';
 import * as quotaPolicyBucket from '../migrations/20260912_000001_quota_policy_bucket.js';
 import * as aaCostPerTask from '../migrations/20260913_000001_aa_cost_per_task.js';
+import * as keyMonthlyUsage from '../migrations/20260914_000001_key_monthly_usage.js';
+import * as preserveQuotaState from '../migrations/20260914_999999_preserve_quota_state.js';
+import * as quotaSnapshotFreshness from '../migrations/20260915_000001_quota_snapshot_freshness.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -148,10 +153,12 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: PROFILE_AUTO_INCLUDE_FILENAME, module: profileAutoInclude },
   { filename: IDEMPOTENCY_CLAIMS_FILENAME, module: idempotencyClaims },
   { filename: QUOTA_OBSERVATION_LOOKUP_FILENAME, module: quotaObservationLookup },
+  { filename: '20260901_000003_request_caller.ts', module: requestCaller },
   { filename: ANALYTICS_LATENCY_PERCENTILE_INDEX_FILENAME, module: analyticsLatencyPercentileIndex },
   { filename: PROVIDER_ACCOUNT_LIMITS_FILENAME, module: providerAccountLimits },
   { filename: MCP_ENABLED_DEFAULT_FILENAME, module: mcpEnabledDefault },
   { filename: RESPONSE_CACHE_FILENAME, module: responseCache },
+  { filename: '20260904_000001_key_monthly_budget.ts', module: keyMonthlyBudget },
   { filename: QUOTA_POLICY_FILENAME, module: quotaPolicy },
   { filename: ROUTING_DECISION_FILENAME, module: routingDecision },
   { filename: ROUTING_DECISION_ENDPOINT_FILENAME, module: routingDecisionEndpoint },
@@ -167,8 +174,11 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: PROXY_DELTA_FILENAME, module: proxyDelta },
   { filename: PROXY_DELTA_PER_METRIC_FILENAME, module: proxyDeltaPerMetric },
   { filename: PROXY_DELTA_SPEED_FILENAME, module: proxyDeltaSpeed },
-{ filename: QUOTA_PROBE_RUN_FILENAME, module: quotaProbeRun },
+  { filename: QUOTA_PROBE_RUN_FILENAME, module: quotaProbeRun },
   { filename: QUOTA_POLICY_PERIOD_KEY_FILENAME, module: quotaPolicyPeriodKey },
   { filename: QUOTA_POLICY_BUCKET_FILENAME, module: quotaPolicyBucket },
   { filename: AA_COST_PER_TASK_FILENAME, module: aaCostPerTask },
+  { filename: '20260914_000001_key_monthly_usage.ts', module: keyMonthlyUsage },
+  { filename: '20260914_999999_preserve_quota_state.ts', module: preserveQuotaState },
+  { filename: '20260915_000001_quota_snapshot_freshness.ts', module: quotaSnapshotFreshness },
 ];

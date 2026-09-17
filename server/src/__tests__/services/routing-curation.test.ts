@@ -12,6 +12,8 @@ import {
 import { resolveRoutingChain, setRoutingStrategy } from '../../services/router.js';
 import { consumesPaidBalance, resolveQuotaPolicy } from '../../services/provider-quota.js';
 import { invalidateQuotaPressure } from '../../services/quota-pressure.js';
+import { setExtensionEnabled, resetExtensionStateCache } from '../../services/extension-state.js';
+import { PAID_BALANCE_GUARD_ID, PAID_SPEND_CONFIRMATION } from '@freellmapi/shared/extension-registry.js';
 import { setSetting } from '../../db/index.js';
 
 function reset(): void {
@@ -219,16 +221,29 @@ describe('credit safety', () => {
     expect(ids).not.toContain('poolside/laguna-s-2.1');
   });
 
-  it('routes the paid twin only when the operator opts in', () => {
+  it('routes the paid twin only once paid spend has been authorised', () => {
     addKey('openrouter');
     const free = addModel('openrouter', 'poolside/laguna-s-2.1:free');
     const paid = addModel('openrouter', 'poolside/laguna-s-2.1');
     addChain('Coding', [free, paid]);
     setRoutingStrategy('priority');
-    setSetting('routing_allow_paid_balance', 'true');
 
-    const { chain } = resolveRoutingChain('auto:coding');
-    expect(chain.map(e => e.model_id)).toContain('poolside/laguna-s-2.1');
+    // Guarded by default: the paid twin is not a candidate at all.
+    resetExtensionStateCache();
+    expect(resolveRoutingChain('auto:coding').chain.map(e => e.model_id))
+      .not.toContain('poolside/laguna-s-2.1');
+
+    // The old `routing_allow_paid_balance` row is retired and must NOT work:
+    // it authorised real spending with nothing recorded about who chose it.
+    setSetting('routing_allow_paid_balance', 'true');
+    resetExtensionStateCache();
+    expect(resolveRoutingChain('auto:coding').chain.map(e => e.model_id))
+      .not.toContain('poolside/laguna-s-2.1');
+
+    // Only the acknowledged extension toggle opens it.
+    setExtensionEnabled(PAID_BALANCE_GUARD_ID, false, { confirmation: PAID_SPEND_CONFIRMATION });
+    expect(resolveRoutingChain('auto:coding').chain.map(e => e.model_id))
+      .toContain('poolside/laguna-s-2.1');
   });
 });
 

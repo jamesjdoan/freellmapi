@@ -17,7 +17,7 @@ import {
   DropdownMenuItem,
   DropdownMenuCheckboxItem,
 } from '@/components/ui/dropdown-menu'
-import { ChevronDown, CircleAlert, Copy, ExternalLink, KeyRound, ListFilter, ListPlus, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Trash2, Zap } from 'lucide-react'
+import { ChevronDown, CircleAlert, Copy, ExternalLink, FlaskConical, KeyRound, Layers, ListFilter, ListPlus, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, Zap } from 'lucide-react'
 import type { ApiKey, ApiKeyModel } from '../../../../shared/types'
 import { formatSqliteUtcToLocalTime } from '@/lib/utils'
 import type { FallbackEntry } from '@/lib/routing'
@@ -40,7 +40,11 @@ import { ProviderModelsPanel } from '@/components/keys/provider-models-panel'
 import { DiscoverModelsDialog } from './discover-models-dialog'
 import { AddEndpointKeyDialog } from './add-endpoint-key-dialog'
 import { CopyKeyDialog } from './copy-key-dialog'
+import { EditKeyDialog } from './edit-key-dialog'
+import { EditModelsDialog } from './edit-models-dialog'
 import { ModelScopeDialog } from './model-scope-dialog'
+import { TestModelsDialog } from './test-models-dialog'
+import { AddModelDialog } from './add-model-dialog'
 
 type StatusFilter = 'all' | 'healthy' | 'issues' | 'disabled'
 
@@ -286,10 +290,16 @@ export function ProviderList({ onAddKey, initialSearch }: {
   const [copyKey, setCopyKey] = useState<{ id: number; maskedKey: string } | null>(null)
   // Key whose model scope is being edited (#657).
   const [scopeKeyId, setScopeKeyId] = useState<number | null>(null)
+  // Re-open the post-add model picker against the current catalog (#657).
+  const [modelEditorKeyId, setModelEditorKeyId] = useState<number | null>(null)
   // #787: keys selected for bulk enable/disable/delete within a group.
   const [selectedKeyIds, setSelectedKeyIds] = useState<Set<number>>(new Set())
   const editInputRef = useRef<HTMLInputElement>(null)
-
+  // Provider (or, for a custom endpoint, key) whose models are being test-fired,
+  // and the target a hand-typed model is being added to. Both came over from
+  // the retired Providers page; everything else that page did already lived here.
+  const [testTarget, setTestTarget] = useState<{ platform: string; keyId?: number; label: string } | null>(null)
+  const [addModelTarget, setAddModelTarget] = useState<{ platform: string; keyId?: number } | null>(null)
   const { data: keys = [], isLoading } = useQuery<ApiKey[]>({
     queryKey: ['keys'],
     queryFn: () => apiFetch('/api/keys'),
@@ -475,7 +485,6 @@ export function ProviderList({ onAddKey, initialSearch }: {
       toast.error(error instanceof Error ? error.message : String(error))
     },
   })
-
   const toggleBypass = useMutation({
     mutationFn: (platform: string) => {
       const next = bypassPlatforms.includes(platform)
@@ -734,8 +743,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                       isChecking: checkKey.isPending && checkKey.variables === k.id,
                     })
                   })()}
-                  {(group.url || proxyEnabled) && (
-                    <DropdownMenu>
+                  <DropdownMenu>
                       <DropdownMenuTrigger
                         className={buttonVariants({ variant: 'ghost', size: 'icon-xs' })}
                         aria-label={t('keys.providerActions')}
@@ -743,6 +751,18 @@ export function ProviderList({ onAddKey, initialSearch }: {
                         <MoreHorizontal />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-52">
+                        {/* Test every model this provider serves, one real ping each
+                            (custom endpoints test per key from the row instead). */}
+                        {group.value !== 'custom' && (
+                          <DropdownMenuItem onClick={() => setTestTarget({ platform: group.value, label: group.label })}>
+                            {t('keys.testModels')}
+                            <FlaskConical className="ml-auto size-3.5" />
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem onClick={() => setAddModelTarget({ platform: group.value })}>
+                          {t('keys.addCustomModel')}
+                          <Sparkles className="ml-auto size-3.5" />
+                        </DropdownMenuItem>
                         {group.url && (
                           <DropdownMenuItem onClick={() => window.open(group.url, '_blank', 'noopener,noreferrer')}>
                             {t('keys.getApiKey')}
@@ -760,7 +780,6 @@ export function ProviderList({ onAddKey, initialSearch }: {
                         )}
                       </DropdownMenuContent>
                     </DropdownMenu>
-                  )}
                   <button
                     type="button"
                     onClick={() => toggleGroup(group.value, expanded)}
@@ -865,7 +884,6 @@ export function ProviderList({ onAddKey, initialSearch }: {
                       const health = healthKeyMap.get(k.id)
                       const lastChecked = health?.lastCheckedAt ?? k.lastCheckedAt
                       const lastHealthError = health?.lastHealthError ?? k.lastHealthError
-                      const isEditing = editingKeyId === k.id
                       const customModels = k.models ?? []
                       const hasCustomModels = customModels.length > 0
                       const isExpanded = expandedKeyIds.has(k.id)
@@ -908,7 +926,190 @@ export function ProviderList({ onAddKey, initialSearch }: {
                               disabled={setKeyEnabled.isPending && setKeyEnabled.variables?.id === k.id}
                               aria-label={t('keys.enable')}
                             />
-                            {renderKeyDetails(k, { status, lastChecked, isEditing, hasCustomModels, isExpanded, isChecking })}
+                            <span className={`size-1.5 rounded-full flex-shrink-0 ${statusDot[status] ?? statusDot.unknown}`} />
+                            {hasCustomModels && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="xs"
+                                className="size-6 p-0 text-muted-foreground"
+                                onClick={() => toggleExpandedKey(k.id)}
+                                title={isExpanded ? t('common.hide') : t('common.show')}
+                              >
+                                <ChevronDown className={`size-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                              </Button>
+                            )}
+                            <code className={`text-xs font-mono flex-shrink-0 ${k.enabled ? '' : 'opacity-50'}`}>{k.maskedKey}</code>
+                            {/* Clicking the label is still the edit affordance (#705),
+                                but the dialog also lets a credential be replaced in place. */}
+                            <button
+                              type="button"
+                              onClick={() => startEditing(k)}
+                              title={t('keys.editKey')}
+                              className={`max-w-[220px] truncate rounded text-xs hover:text-foreground hover:underline underline-offset-2 ${k.label ? 'text-muted-foreground' : 'text-muted-foreground/50'} ${k.enabled ? '' : 'opacity-50'}`}
+                            >
+                              {k.label || t('keys.editKey')}
+                            </button>
+                            {k.baseUrl && (
+                              <code className={`text-[11px] text-muted-foreground font-mono truncate max-w-[260px] ${k.enabled ? '' : 'opacity-50'}`} title={k.baseUrl}>
+                                {k.baseUrl}
+                              </code>
+                            )}
+                            <span className={`text-xs text-muted-foreground ${k.enabled ? '' : 'opacity-50'}`}>{statusLabelKey[status] ? t(statusLabelKey[status]) : status}</span>
+                            {/* Only a SCOPED key shows anything (#657); an unscoped one stays as it always was. */}
+                            {(k.modelScope?.length ?? 0) > 0 && (
+                              <Badge
+                                variant="secondary"
+                                className={`text-[10px] text-muted-foreground ${k.enabled ? '' : 'opacity-50'}`}
+                                title={k.modelScope!.join(', ')}
+                              >
+                                {t(k.modelScope!.length === 1 ? 'keys.modelScopeBadgeOne' : 'keys.modelScopeBadgeOther', { count: k.modelScope!.length })}
+                              </Badge>
+                            )}
+                            {/* Provider account limits badge (fork) */}
+                            {(k.providerRpmLimit != null || k.providerRpdLimit != null || k.providerTpdLimit != null) && (
+                              <Badge variant="secondary" className="text-[10px] text-muted-foreground">
+                                {t('keys.accountLimits')}
+                              </Badge>
+                            )}
+                            <div className="flex-1" />
+                            {lastChecked && (
+                              <span className="text-[11px] text-muted-foreground tabular-nums">
+                                {formatSqliteUtcToLocalTime(lastChecked, { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            )}
+                            <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/krow:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
+                              <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                onClick={() => startEditing(k)}
+                                aria-label={t('keys.editKey')}
+                                title={t('keys.editKey')}
+                              >
+                                <Pencil className="size-3" />
+                              </Button>
+                              {!k.keyless && (
+                                <Tooltip text={t('keys.editModels')}>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon-xs"
+                                    onClick={() => setModelEditorKeyId(k.id)}
+                                    aria-label={t('keys.editModels')}
+                                    title={t('keys.editModels')}
+                                  >
+                                    <Layers className="size-3" />
+                                  </Button>
+                                </Tooltip>
+                              )}
+                              {!k.keyless && (
+                                <Tooltip text={t('keys.copyFullKey')}>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon-xs"
+                                    onClick={() => setCopyKey({ id: k.id, maskedKey: k.maskedKey })}
+                                    aria-label={t('keys.copyFullKey')}
+                                  >
+                                    <Copy className="size-3" />
+                                  </Button>
+                                </Tooltip>
+                              )}
+                              {k.platform === 'custom' && k.baseUrl && (
+                                <>
+                                  <Tooltip text={t('keys.addKey')}>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-xs"
+                                      onClick={() => setAddKeyBaseUrl(k.baseUrl!)}
+                                      aria-label={t('keys.addKey')}
+                                    >
+                                      <KeyRound className="size-3" />
+                                    </Button>
+                                  </Tooltip>
+                                  <Tooltip text={t('keys.discoverModels')}>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-xs"
+                                      onClick={() => setDiscoverKeyId(k.id)}
+                                      aria-label={t('keys.discoverModels')}
+                                    >
+                                      <ListPlus className="size-3" />
+                                    </Button>
+                                  </Tooltip>
+                                  <Tooltip text={t('keys.addCustomModel')}>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-xs"
+                                      onClick={() => setAddModelTarget({ platform: 'custom', keyId: k.id })}
+                                      aria-label={t('keys.addCustomModel')}
+                                    >
+                                      <Sparkles className="size-3" />
+                                    </Button>
+                                  </Tooltip>
+                                  <Tooltip text={t('keys.testModels')}>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-xs"
+                                      onClick={() => setTestTarget({ platform: 'custom', keyId: k.id, label: k.label || k.baseUrl! })}
+                                      aria-label={t('keys.testModels')}
+                                    >
+                                      <FlaskConical className="size-3" />
+                                    </Button>
+                                  </Tooltip>
+                                  <Tooltip text={t('keys.probeNow')}>
+                                    <ConfirmButton
+                                      variant="ghost"
+                                      size="icon-xs"
+                                      armedSize="xs"
+                                      confirmLabel={t('keys.probeConfirm')}
+                                      onConfirm={() => probeKey.mutate(k.id)}
+                                      disabled={probeKey.isPending}
+                                      title={t('keys.probeNow')}
+                                      aria-label={t('keys.probeNow')}
+                                    >
+                                      <Zap className={`size-3 ${probeKey.isPending ? 'animate-pulse' : ''}`} />
+                                    </ConfirmButton>
+                                  </Tooltip>
+                                </>
+                              )}
+                              {/* Deliberately secondary (#657): a small hover-cluster affordance,
+                                  not a first-fold control. */}
+                              {!k.keyless && (
+                                <Tooltip text={t('keys.modelScope')}>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon-xs"
+                                    onClick={() => setScopeKeyId(k.id)}
+                                    aria-label={t('keys.modelScope')}
+                                  >
+                                    <ListFilter className="size-3" />
+                                  </Button>
+                                </Tooltip>
+                              )}
+                              <Tooltip text={t('keys.checkNow')}>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  onClick={() => checkKey.mutate(k.id)}
+                                  disabled={checkKey.isPending}
+                                  aria-label={t('keys.checkNow')}
+                                >
+                                  <RefreshCw className={`size-3 ${isChecking ? 'animate-spin' : ''}`} />
+                                </Button>
+                              </Tooltip>
+                              <ConfirmButton
+                                variant="ghost"
+                                size="icon-xs"
+                                armedSize="xs"
+                                className="text-muted-foreground hover:text-destructive"
+                                confirmLabel={t('keys.confirmRemove')}
+                                onConfirm={() => deleteKey.mutate(k.id)}
+                                disabled={deleteKey.isPending}
+                                title={t('common.remove')}
+                                aria-label={t('common.remove')}
+                              >
+                                <Trash2 className="size-3" />
+                              </ConfirmButton>
+                            </div>
                           </div>
                           {lastHealthError && (
                             <div className="flex items-start gap-2 px-4 pb-3 pl-8 text-xs text-destructive" role="status">
@@ -1022,6 +1223,24 @@ export function ProviderList({ onAddKey, initialSearch }: {
         />
       )}
 
+      {testTarget !== null && (
+        <TestModelsDialog
+          platform={testTarget.platform}
+          keyId={testTarget.keyId}
+          label={testTarget.label}
+          onOpenChange={(open) => { if (!open) setTestTarget(null) }}
+        />
+      )}
+
+      {addModelTarget !== null && (
+        <AddModelDialog
+          open
+          initialPlatform={addModelTarget.platform}
+          initialKeyId={addModelTarget.keyId}
+          onOpenChange={(open) => { if (!open) setAddModelTarget(null) }}
+        />
+      )}
+
       {copyKey !== null && (
         <CopyKeyDialog
           keyId={copyKey.id}
@@ -1037,6 +1256,25 @@ export function ProviderList({ onAddKey, initialSearch }: {
           <ModelScopeDialog
             apiKey={scopeKey}
             onOpenChange={(open) => { if (!open) setScopeKeyId(null) }}
+          />
+        ) : null
+      })()}
+      {(() => {
+        const modelKey = modelEditorKeyId !== null ? keys.find(k => k.id === modelEditorKeyId) : undefined
+        return modelKey ? (
+          <EditModelsDialog
+            apiKey={modelKey}
+            onOpenChange={(open) => { if (!open) setModelEditorKeyId(null) }}
+          />
+        ) : null
+      })()}
+      {(() => {
+        // Resolved from the live query so a successful save closes on fresh data.
+        const editKey = editingKeyId !== null ? keys.find(k => k.id === editingKeyId) : undefined
+        return editKey ? (
+          <EditKeyDialog
+            apiKey={editKey}
+            onOpenChange={(open) => { if (!open) setEditingKeyId(null) }}
           />
         ) : null
       })()}

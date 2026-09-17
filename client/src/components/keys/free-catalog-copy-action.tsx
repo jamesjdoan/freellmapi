@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { copyText } from '@/lib/clipboard'
 import type { FreeCatalogScope } from '@/lib/provider-model-details-export'
+import { useExtensionEnabled } from '@/lib/use-extension'
 
 // One trigger, two choices, on the Keys page toolbar rather than inside a
 // provider's dialog: what it copies spans every provider, so scoping it to one
@@ -28,6 +29,8 @@ export function FreeCatalogCopyAction({
   buildText: (scope: FreeCatalogScope) => string
   disabled?: boolean
 }) {
+  // `free-catalogue-copy` off: the action is removed. It only ever read the catalogue.
+  if (!useExtensionEnabled('free-catalogue-copy')) return null
   const [status, setStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
 
   const copy = async (scope: FreeCatalogScope) => {

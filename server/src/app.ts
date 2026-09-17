@@ -18,6 +18,7 @@ import { embeddingsRouter } from './routes/embeddings.js';
 import { mediaRouter } from './routes/media.js';
 import { analyticsRouter } from './routes/analytics.js';
 import { quotaRouter } from './routes/quota.js';
+import { extensionsRouter } from './routes/extensions.js';
 import { analysisRouter } from './routes/analysis.js';
 import { healthRouter } from './routes/health.js';
 import { freeTierRouter } from './routes/free-tier.js';
@@ -256,6 +257,7 @@ export function createApp(config?: Config) {
   app.use('/api/health', requireAuth, healthRouter);
   app.use('/api/free-tier', requireAuth, freeTierRouter);
   app.use('/api/quota', requireAuth, quotaRouter);
+  app.use('/api/extensions', requireAuth, extensionsRouter);
   app.use('/api/analysis', requireAuth, analysisRouter);
   app.use('/api/settings', requireAuth, settingsRouter);
   app.use('/api/premium', requireAuth, premiumRouter);

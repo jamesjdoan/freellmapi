@@ -1,3 +1,4 @@
+import { nextMonthResetAt } from '../services/key-budget.js';
 // One shared provider retry/fallback loop for every OpenAI-, Responses- and
 // Anthropic-shaped chat surface (routes/proxy.ts legacy /completions and
 // /chat/completions, routes/responses.ts, routes/anthropic.ts). Each surface
@@ -25,10 +26,11 @@ import {
   getActiveCooldownsForKeys,
   getCooldownDecisionForLimit,
   getSoonestCooldownExpiry,
-  PAYMENT_REQUIRED_COOLDOWN_MS,
-  MODEL_FORBIDDEN_COOLDOWN_MS,
+  getPaymentRequiredCooldownMs,
+  getModelForbiddenCooldownMs,
   learnLimitFromError,
   type CooldownDecision,
+  type CooldownSource,
 } from '../services/ratelimit.js';
 import {
   isRetryableError,
@@ -41,6 +43,7 @@ import {
   isModelNotFoundError,
   isModelAccessForbiddenError,
   isModelScopedAuthError,
+  isAccountSuspendedError,
   isProviderBadRequestError,
   isProviderDegradedError,
   isProviderLevelError,
@@ -49,9 +52,10 @@ import {
   isUnsatisfiableRequestSizeError,
 } from './error-classify.js';
 import { sanitizeProviderErrorMessage, summarizeAttemptError } from './error-redaction.js';
+import { parseProviderReportedSize } from './provider-size-parser.js';
 import { checkKeyHealth, markKeyHealthyFromRequest } from '../services/health.js';
 import { noteModelRetirementSignal } from '../services/model-retirement.js';
-import { getSetting } from '../db/index.js';
+import { getDb, getSetting } from '../db/index.js';
 import type { Platform } from '@freellmapi/shared/types.js';
 import { recordLearnedCeiling, resolveQuotaPolicy } from '../services/provider-quota.js';
 import { resolveEffectiveQuotas } from '../services/quota-policy.js';
@@ -119,6 +123,40 @@ function clearModelFailure(route: RouteResult): void {
   modelFailureTimestamps.delete(route.modelDbId);
 }
 
+/** Bench one key on every enabled model of its platform it can route to (the
+ *  route's own model is benched by the caller). For KEY-level verdicts only —
+ *  an account suspension, an empty balance — never for a model-level one.
+ *  Also rules the key out on those models for the rest of THIS request via
+ *  state.skipKeys, so the loop's next hop cannot land on the same account.
+ *  Never throws: an unreadable catalog leaves the narrower per-route bench in
+ *  place.
+ */
+function benchKeyAcrossPlatform(
+  route: RouteResult,
+  durationMs: number,
+  source: CooldownSource,
+  state: FallbackState,
+  reason: string,
+): void {
+  let modelIds: string[] = [];
+  try {
+    modelIds = (getDb().prepare(
+      'SELECT model_id FROM models WHERE platform = ? AND enabled = 1 AND (key_id IS NULL OR key_id = ?)',
+    ).all(route.platform, route.keyId) as { model_id: string }[]).map(r => r.model_id);
+  } catch (dbErr: any) {
+    console.warn(`[FallbackLoop] could not list ${route.platform} models to bench key ${route.keyId}: ${dbErr?.message ?? dbErr}`);
+    return;
+  }
+  let benched = 0;
+  for (const modelId of modelIds) {
+    if (modelId === route.modelId) continue;
+    setCooldown(route.platform, modelId, route.keyId, durationMs, source);
+    state.skipKeys.add(`${route.platform}:${modelId}:${route.keyId}`);
+    benched++;
+  }
+  console.warn(`[FallbackLoop] ${route.platform} key ${route.keyId} ${reason}; benched it on ${benched + 1} model(s) for ${Math.round(durationMs / 60_000)}min`);
+}
+
 // ── Wall-clock retry budget ──────────────────────────────────────────────────
 // Serial failover has no time bound of its own: the observed worst case was a
 // 38.8s TTFB over 11 attempts, and the theoretical worst is maxRetries x the
@@ -134,6 +172,14 @@ function clearModelFailure(route: RouteResult): void {
 // TODO(fallback-v2): AbortController hedging so a stalled attempt can be
 // abandoned mid-flight instead of only refusing to start the next one.
 export const DEFAULT_FALLBACK_TIME_BUDGET_MS = 45_000;
+// Share of the wall-clock budget an aborted attempt must have been silent for
+// before the hedge abort counts as provider health rather than bad luck. An
+// attempt late in a ladder inherits only the scraps of the budget its
+// predecessors left, and killing it proves nothing about that route; one that
+// owned most of the window and still sent no first byte is stalled. Kept a
+// fraction rather than a constant because the budget IS the declared patience
+// — raising FALLBACK_TIME_BUDGET_MS should raise the evidence bar with it.
+export const HEDGE_BENCH_MIN_SILENT_FRACTION = 0.75;
 export const FALLBACK_TIME_BUDGET_SETTING = 'fallback_time_budget_ms';
 
 export function getFallbackTimeBudgetMs(): number {
@@ -157,12 +203,30 @@ export function getFallbackTimeBudgetMs(): number {
 // "platform:modelId:keyId"; skipModels holds model_db_ids ruled out for the
 // rest of this request; skipPlatforms holds platforms ruled out wholesale
 // (#788) — every model and every key of them — for the rest of this request.
-// All three are request-scoped only: nothing here outlives the response, so a
-// provider that blipped once is a fresh candidate on the very next request.
+// observedTotalTokens is the provider-reported REQUESTED size parsed from the
+// first 413 / context-length body of this request, used to inflate the
+// routing estimate on the next attempt so models whose tpm_limit /
+// context_window can't fit it are skipped before they fire (#507). All four
+// are request-scoped only: nothing here outlives the response, so a provider
+// that blipped once is a fresh candidate on the very next request.
 export interface FallbackState {
   skipKeys: Set<string>;
   skipModels: Set<number>;
   skipPlatforms: Set<string>;
+  // Highest REQUESTED token count seen so far this request across all 413 /
+  // context-length rejections. Max wins (never decreases): a smaller later
+  // reading is the same request, not a smaller one.
+  observedTotalTokens?: number;
+  observedInputTokens?: number;
+}
+
+/** Total for the next dispatch. Input-only observations still need output space. */
+export function fallbackRoutingTokens(state: FallbackState, estimatedTotal: number, outputReserve: number): number {
+  return Math.max(
+    estimatedTotal,
+    state.observedTotalTokens ?? 0,
+    state.observedInputTokens == null ? 0 : state.observedInputTokens + Math.max(0, outputReserve),
+  );
 }
 
 export function newFallbackState(): FallbackState {
@@ -182,7 +246,9 @@ export function msUntilNextUtcMidnight(now = Date.now()): number {
  * The one true cooldown-duration selection after a retryable upstream failure:
  *   - 402 out-of-credits  → a full day (PAYMENT_REQUIRED_COOLDOWN_MS)
  *   - 403 model-not-on-tier → a full day (MODEL_FORBIDDEN_COOLDOWN_MS), because a
- *     tier/subscription gate won't clear on the next minute window (issue #256)
+ *     tier/subscription gate won't clear on the next minute window (issue #256).
+ *     Both honour the operator's cooldown ceiling (#952): relay endpoints emit
+ *     these for transient reasons, and a day is then far too long.
  *   - a 429 that says the DAILY free allocation is spent (Cloudflare "used up
  *     your daily free allocation of 10,000 neurons") → benched until the next
  *     UTC midnight, like the 402 path. The old transient 90s cooldown made the
@@ -208,8 +274,12 @@ export function cooldownForError(route: RouteResult, err: any): number {
  * Retry-After actually determined the expiry.
  */
 export function cooldownDecisionForError(route: RouteResult, err: any): CooldownDecision {
-  if (isPaymentRequiredError(err)) return { durationMs: PAYMENT_REQUIRED_COOLDOWN_MS, source: 'credit' };
-  if (isModelAccessForbiddenError(err)) return { durationMs: MODEL_FORBIDDEN_COOLDOWN_MS, source: 'tier' };
+  if (isPaymentRequiredError(err)) return { durationMs: getPaymentRequiredCooldownMs(), source: 'credit' };
+  // Before the model-forbidden check: a suspended account is a 403 too, but
+  // it is the KEY that is out, for as long as an empty balance would be — and
+  // under the same operator ceiling (#952).
+  if (isAccountSuspendedError(err)) return { durationMs: getPaymentRequiredCooldownMs(), source: 'credit' };
+  if (isModelAccessForbiddenError(err)) return { durationMs: getModelForbiddenCooldownMs(), source: 'tier' };
   // The request was refused for its own size against a ceiling it can never
   // fit under. Benching the route punishes it for one oversized caller, and
   // the provider's own stated retry is extrapolated nonsense in this case, so
@@ -272,6 +342,15 @@ export function resetEmptyCompletionStreaks(): void {
  *  reach it. */
 export function resetModelFailureWindows(): void {
   modelFailureTimestamps.clear();
+}
+
+/** Operator clear (#952): drop every model's failure window and report how many
+ *  models were mid-streak. The benches those streaks produced are ordinary
+ *  cooldown rows and go with clearAllCooldowns. */
+export function clearModelFailureWindows(): number {
+  const count = modelFailureTimestamps.size;
+  modelFailureTimestamps.clear();
+  return count;
 }
 
 // Advance (or break) the streak for this failure and report whether the
@@ -353,6 +432,24 @@ export function recordRetryableFailure(route: RouteResult, err: any, state: Fall
   // The trace object identifies the request, so one request's failover across
   // sibling keys counts as the single observation it is.
   noteModelRetirementSignal(route, err, getRequestTrace());
+  // Provider-reported request size (#507): if the just-failed attempt was a
+  // size-related rejection that names the request's real token count, latch it
+  // onto the request state. The route() closure on the next attempt picks it
+  // up and feeds it as the routing estimate, so the existing tpm_limit /
+  // context_window gates in router.ts skip low-ceiling models on retry
+  // instead of letting them fire and 413 again. Only fires on a size-class
+  // error — the parser is conservative and returns null for opaque bodies
+  // (every non-supported platform, the bare "Request Entity Too Large"
+  // Groq shape, and the github limit-only case), so behavior is unchanged
+  // when there's nothing to latch. Max wins so a smaller later reading of
+  // the same request can't drop the estimate.
+  if (isContextTooLargeError(err) || isProviderBadRequestError(err)) {
+    const reported = parseProviderReportedSize(route.platform, err?.message);
+    if (reported != null) {
+      const field = reported.kind === 'input' ? 'observedInputTokens' : 'observedTotalTokens';
+      state[field] = Math.max(state[field] ?? 0, reported.tokens);
+    }
+  }
   state.skipKeys.add(`${route.platform}:${route.modelId}:${route.keyId}`);
   // #788: provider-level failures (5xx / timeout / transport / degraded) mean
   // the PROVIDER is sick, not this key — every key AND every model of that
@@ -371,6 +468,27 @@ export function recordRetryableFailure(route: RouteResult, err: any, state: Fall
   // if the model had been punished.
   if (decision.durationMs > 0) {
     setCooldown(route.platform, route.modelId, route.keyId, decision.durationMs, decision.source);
+  }
+  // A suspended ACCOUNT fails every model behind the key identically. The
+  // per-route cooldown above benches only the model that happened to be
+  // tried, so the next request picks the platform's next model and pays the
+  // same round trip again — on a platform with a large catalog that is the
+  // whole failover budget, every request, until each model has tripped
+  // separately. Bench the key across the platform's catalog in one go, and
+  // rule the platform out for the rest of this request: a sibling key would
+  // be a different account, but with the budget already spent on this one
+  // the next PROVIDER is the better hop.
+  if (isAccountSuspendedError(err)) {
+    state.skipPlatforms.add(route.platform);
+    benchKeyAcrossPlatform(route, decision.durationMs, decision.source, state, 'reports the account suspended');
+  } else if (isPaymentRequiredError(err)) {
+    // A 402 is the ACCOUNT's balance, not one model's (#1239: one broke
+    // HuggingFace key answered three different models with 402 in a single
+    // request, three hops spent rediscovering the same empty wallet). Bench
+    // the key on every model of the platform for the credit window. Unlike a
+    // suspension the platform itself stays in play: a sibling key is a
+    // different wallet and may well have credits, so only THIS key is out.
+    benchKeyAcrossPlatform(route, decision.durationMs, decision.source, state, 'is out of credits (402)');
   }
   // Model-level failure benching: a model failing across keys (or repeatedly on
   // one key) must sink out of routing instead of being re-picked every request.
@@ -869,7 +987,15 @@ export function exhaustedRetryError(lastError: any, maxRetries?: number, ctx?: E
     };
   }
 
-  if (isProviderBadRequestError(lastError)) {
+  // 400 only when the trail agrees with the last error: EVERY attempt was a
+  // provider-side request rejection (or the legacy no-trail shape). A mixed
+  // trail — stale models, an empty wallet, a rate limit, and one bad-request
+  // hop that happened to come last — is not evidence the caller's request is
+  // invalid, and rendering it as one sent users debugging their own payload
+  // (#1239: 5× provider_bad_request + 3× out_of_credits read as "All routed
+  // providers rejected the request as invalid"). Those fall through to the
+  // mixed 502 below, whose message names the class breakdown.
+  if (isProviderBadRequestError(lastError) && (attempts.length === 0 || everyAttempt('provider_bad_request'))) {
     return {
       kind: 'bad_request',
       status: 400,
@@ -920,15 +1046,37 @@ export function exhaustedRetryError(lastError: any, maxRetries?: number, ctx?: E
   // those with rate limits): the upstream pool failed us, so say 502 — not 429
   // (which would promise recovery-by-waiting the attempts don't support) and
   // not 500 (which would blame our own code).
+  //
+  // The breakdown names how many attempts fell in each class so a mixed trail
+  // reads as what it is. When SOME hops were provider-side request rejections
+  // the body must not promise the request was fine either — it says which
+  // providers rejected it and leaves the verdict to the reader.
+  const breakdown = formatClassBreakdown(attempts);
+  const someBadRequest = attempts.some(a => a.errorClass === 'provider_bad_request');
+  const verdict = someBadRequest
+    ? 'Most of these failures are provider-side (stale models, exhausted credits or quotas), but some providers ' +
+      'also rejected the request shape — check the attempt trail for which ones before changing your request.'
+    : 'This is a provider-side failure, not a problem with your request; retry, or check provider status.';
   return {
     kind: 'upstream',
     status: 502,
     type: 'provider_error',
     code: 'upstream_failed',
-    message: `All ${attempts.length} routed attempt(s) failed with upstream provider errors${budgetNote}. ` +
-      `This is a provider-side failure, not a problem with your request; retry, or check provider status.` +
-      `${trail} Last error: ${safeLastError}`,
+    message: `All ${attempts.length} routed attempt(s) failed with upstream provider errors${breakdown}${budgetNote}. ` +
+      `${verdict}${trail} Last error: ${safeLastError}`,
   };
+}
+
+/** " (provider_bad_request ×5, out_of_credits ×3)" — the per-class tally of a
+ *  mixed trail, most frequent first; empty when there is nothing to tally. */
+function formatClassBreakdown(attempts: readonly AttemptRecord[]): string {
+  if (attempts.length === 0) return '';
+  const counts = new Map<AttemptErrorClass, number>();
+  for (const a of attempts) counts.set(a.errorClass, (counts.get(a.errorClass) ?? 0) + 1);
+  const parts = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([cls, n]) => `${cls} ×${n}`);
+  return ` (${parts.join(', ')})`;
 }
 
 // ── Routing exhaustion (zero attempts ran) ───────────────────────────────────
@@ -945,13 +1093,15 @@ export function exhaustedRetryError(lastError: any, maxRetries?: number, ctx?: E
 //     expiry as retryAtMs.
 //   - anything else (capability filters like vision/tools, mixed reasons) →
 //     the router's status (429) with a generic routing_exhausted code.
-type RoutingDiagClass = 'config' | 'too_large' | 'time_bound' | 'other';
+type RoutingDiagClass = 'config' | 'too_large' | 'time_bound' | 'monthly_budget' | 'other';
 
 function classifyRoutingDiagLine(line: string): RoutingDiagClass {
   const l = line.toLowerCase();
   // "< estimated" first: the tpm_limit-too-small line also contains 'tpm',
   // which would otherwise misread as a transient window.
   if (l.includes('< estimated')) return 'too_large';
+  const monthlyReasons = l.match(/key\(s\) — (.*)$/)?.[1];
+  if (monthlyReasons?.split(', ').every(reason => /^monthly-budget-cap:\d+$/.test(reason))) return 'monthly_budget';
   if (/no provider registered|no enabled\+healthy key|no usable key|decrypt-error|no-resolved-provider|custom-key-mismatch/.test(l)) return 'config';
   // 'quota-domain-exhausted' belongs here, not in 'other'. It IS time-bound —
   // the allowance is spent for a window that resets — so the caller should get
@@ -959,7 +1109,7 @@ function classifyRoutingDiagLine(line: string): RoutingDiagClass {
   // fell into by default. Matched explicitly because the string contains
   // "domain-exhausted", not "quota-exhausted", so no existing pattern caught it.
   if (l.includes('quota-domain-exhausted')) return 'time_bound';
-  if (/cooldown|rpm|rpd|tpm|tpd|provider-daily-cap|provider-minute-cap|provider-daily-token-cap|key-concurrency/.test(l)) return 'time_bound';
+  if (/cooldown|rpm|rpd|tpm|tpd|provider-daily-cap|provider-minute-cap|provider-daily-token-cap|key-concurrency|monthly-budget-cap/.test(l)) return 'time_bound';
   return 'other';
 }
 
@@ -1021,6 +1171,14 @@ export function routingExhaustionBody(routeErr: any): ExhaustionBody {
     };
   }
 
+  if (classes.includes('monthly_budget') && classes.every(c => c === 'monthly_budget' || c === 'config' || c === 'too_large')) {
+    return {
+      kind: 'rate_limit', status: 429, type: 'rate_limit_error', code: 'quota_exceeded',
+      retryAtMs: Date.parse(nextMonthResetAt()),
+      message: `Monthly key budget exhausted. Raise the cap or wait until the next UTC month. ${message}`,
+    };
+  }
+
   if (classes.some(c => c === 'time_bound') && classes.every(c => c !== 'other')) {
     const retryAtMs = getSoonestCooldownExpiry() ?? undefined;
     return {
@@ -1043,6 +1201,26 @@ export function routingExhaustionBody(routeErr: any): ExhaustionBody {
     code: 'routing_exhausted',
     message,
   };
+}
+
+/** Log the router's per-candidate disposition for a zero-attempt exhaustion.
+ *  Lives in the loop, not the surfaces: routing gave up before any upstream was
+ *  tried, so nothing else records WHY the pool was empty, and an opaque
+ *  routing_error is indistinguishable from a genuinely dry pool (issue _1).
+ *  Every surface used to be responsible for logging this itself and only
+ *  routes/proxy.ts ever did, so /v1/messages, /v1/responses and the inbound
+ *  wires logged nothing. The loop owns the format; surfaces only name
+ *  themselves via FallbackHooks.logIdentity. */
+function logRoutingExhaustion(routeErr: any, identity?: FallbackHooks['logIdentity']): void {
+  const disposition: string[] = Array.isArray(routeErr?.diagnostics) ? routeErr.diagnostics : [];
+  const surface = identity?.surface ?? 'unidentified surface';
+  const req = identity?.requestId ? ` req=${identity.requestId.replace(/-/g, '').slice(0, 6)}` : '';
+  const requested = identity?.requestedModel ? ` requested=${identity.requestedModel}` : '';
+  console.warn(
+    `[FallbackLoop] ${surface} routing exhausted (no upstream tried)${req}${requested} ` +
+    `candidates=${disposition.length}` +
+    (disposition.length ? `:\n  ${disposition.join('\n  ')}` : ''),
+  );
 }
 
 // What a surface's dispatch() returns to signal the response is finished and the
@@ -1083,6 +1261,11 @@ export interface FallbackHooks {
   // is the same array used for exhaustion bodies), so the surface can stamp
   // X-Fallback-Trail on successful responses too.
   attemptLog?: AttemptRecord[];
+  // Names this surface in the shared routing-exhaustion diagnostics line the
+  // loop logs when route() gave up before any upstream was tried (see
+  // logRoutingExhaustion). Absent = the line still fires, without identifying
+  // the surface or the request.
+  logIdentity?: { surface: string; requestId?: string; requestedModel?: string };
   // Returns true once the client has hung up. Checked before STARTING each
   // retry: a chain nobody is waiting for must not keep burning provider
   // quota. Surfaces additionally thread a client-disconnect AbortSignal into
@@ -1095,8 +1278,8 @@ export interface FallbackHooks {
   // (remaining wall-clock budget) and calls this to ABORT the in-flight
   // upstream instead of just refusing to start the next retry behind a
   // stalled attempt. The surface aborts its composed fetch signal with
-  // newHedgeAbortError() — a non-provider-health signal, so the loop renders
-  // timedOut exhaustion without benching the model+key (see the
+  // newHedgeAbortError(); the loop renders timedOut exhaustion, and benches the
+  // model+key only when that attempt ate the whole budget by itself (see the
   // isHedgeAbortError branch below). Absent = pre-v2 behavior.
   abortInFlight?: () => void;
   /**
@@ -1264,7 +1447,16 @@ async function runFallbackLoopAttempts(hooks: FallbackHooks, trace: RequestTrace
       // exactly this class of rejection. The verbatim per-candidate
       // dispositions ride in the error column, which is what names the scope,
       // metric and source of an admission block.
-      if (!lastError) logRoutingRefusal(hooks, routeErr, exhaustion, startedAt);
+      //
+      // BOTH sinks fire, because they answer different questions and neither
+      // subsumes the other: the row is the durable record the dashboard reads
+      // afterwards, and upstream's line is what an operator tailing logs sees
+      // at the moment of refusal, naming surface, request id and candidate
+      // count. Keeping only one of them was a silent loss either way.
+      if (!lastError) {
+        logRoutingRefusal(hooks, routeErr, exhaustion, startedAt);
+        logRoutingExhaustion(routeErr, hooks.logIdentity);
+      }
       hooks.onRoutingExhausted(lastError, routeErr, exhaustion, { attempts, timedOut: false });
       return;
     }
@@ -1362,12 +1554,33 @@ async function runFallbackLoopAttempts(hooks: FallbackHooks, trace: RequestTrace
       }
       // Time-budget hedge abort: the wall-clock retry budget expired while this
       // attempt was still in flight, and the surface aborted the composed fetch
-      // signal (see newHedgeAbortError). Not a provider-health signal — no
-      // cooldown, no penalty, no failure stats — and the budget is spent, so
+      // signal (see newHedgeAbortError). The budget is spent either way, so we
       // render timedOut exhaustion exactly like the loop-top budget check does.
+      //
+      // Whether it also counts as a provider-health signal depends on how much
+      // of the silence belongs to THIS attempt. Sharing a budget that earlier
+      // attempts already mostly spent says nothing about this route — it was
+      // simply last in line, and cancelling it is a scheduling accident. But an
+      // attempt that stayed silent for most of the operator's whole declared
+      // patience on its own produced no first byte over that entire window,
+      // and that is a stalled upstream. Left unbenched it stays at the head of the route
+      // order and re-stalls every subsequent request, burning the full budget
+      // each time and starving the healthy routes queued behind it — observed
+      // in production as one dead free-tier route 45s-ing every request for
+      // hours. Benching costs a short transient cooldown (a timeout is not a
+      // rate-limit signal, so cooldownDecisionForError keeps it light) plus the
+      // gradual model-level sink, both of which decay on their own if the route
+      // recovers.
       if (isHedgeAbortError(err)) {
         const elapsedMs = Date.now() - startedAt;
-        console.log(`[FallbackLoop] retry time budget expired mid-attempt on ${route.platform}/${route.modelId} after ${(elapsedMs / 1000).toFixed(1)}s — rendering timedOut exhaustion without benching`);
+        const attemptElapsedMs = Date.now() - attemptStartedAt;
+        const ownedWholeBudget = budgetMs > 0
+          && attemptElapsedMs >= budgetMs * HEDGE_BENCH_MIN_SILENT_FRACTION;
+        if (ownedWholeBudget) {
+          hooks.logFailure(route, err, attempt);
+          recordRetryableFailure(route, err, hooks.state);
+        }
+        console.log(`[FallbackLoop] retry time budget expired mid-attempt on ${route.platform}/${route.modelId} after ${(elapsedMs / 1000).toFixed(1)}s — rendering timedOut exhaustion ${ownedWholeBudget ? `and benching the route (silent for the whole ${budgetMs}ms budget)` : 'without benching'}`);
         hooks.onExhausted(
           exhaustedRetryError(lastError, maxRetries, { attempts, timedOut: true, budgetMs }),
           { attempts, timedOut: true },

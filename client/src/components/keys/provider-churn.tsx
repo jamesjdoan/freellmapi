@@ -3,6 +3,7 @@ import { Tooltip } from '@/components/tooltip'
 import { Switch } from '@/components/ui/switch'
 import { PROVIDER_CHURN_DAYS, shortDate } from '@/lib/catalogue-changes'
 import type { ProviderChurn } from '@/lib/catalogue-changes'
+import { useExtensionEnabled } from '@/lib/use-extension'
 
 // What this provider's catalogue has done lately, on the provider row itself.
 //
@@ -26,6 +27,8 @@ export function ProviderChurnChip({ churn, expanded, onToggle }: {
   expanded?: boolean
   onToggle?: () => void
 }) {
+  // `provider-churn` off: the chip and its panel are hidden; churn history is retained.
+  if (!useExtensionEnabled('provider-churn')) return null
   const { t } = useI18n()
   const added = churn?.arrived.length ?? 0
   const lost = churn?.departed.length ?? 0
@@ -100,6 +103,8 @@ export function ProviderChurnPanel({ churn, isServed, onSetServed, pending, disa
    *  scope column cannot express. Shown instead of failing silently. */
   disabledReason: (modelId: string) => string | null
 }) {
+  // `provider-churn` off: the chip and its panel are hidden; churn history is retained.
+  if (!useExtensionEnabled('provider-churn')) return null
   const { t } = useI18n()
   if (!churn || (churn.arrived.length === 0 && churn.departed.length === 0)) return null
 

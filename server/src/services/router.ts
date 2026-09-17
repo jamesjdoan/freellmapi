@@ -31,6 +31,7 @@ import {
   type HeadroomThresholds,
 } from './scoring.js';
 import { TIMEOUT_ERROR_MARKERS } from '../lib/error-classify.js';
+import { checkMonthlyBudget, reserveMonthlyBudget } from './key-budget.js';
 import { applyModelWeightOverride, getModelWeightOverrides } from './model-weight-overrides.js';
 import { modelsWithOverriddenField } from './model-state.js';
 import { parseBudget } from '../lib/budget.js';
@@ -41,6 +42,8 @@ import { customEndpointKeyIds } from './custom-endpoint.js';
 import { isDegraded } from './degradation.js';
 import { modelStatsKey, endpointScopeForBaseUrl } from '../lib/endpoint-scope.js';
 import { parseModelScope, scopeAllows } from '../lib/model-scope.js';
+import { isExtensionEnabled } from './extension-state.js';
+import { PAID_BALANCE_GUARD_ID } from '@freellmapi/shared/extension-registry.js';
 import { getKeyQuotaHeadroom, inferQuotaPoolKey, isQuotaPoolAvailable, resolveQuotaPolicy, consumesPaidBalance } from './provider-quota.js';
 import { effectiveRouteLimits } from './quota-policy.js';
 import { normalizeGroupKey } from './model-groups.js';
@@ -90,11 +93,18 @@ export function summarizeExhaustion(
   diag: string[] | undefined,
   soonestResetMs?: number | null,
   now = Date.now(),
+  keylessSkipped = 0,
 ): string {
   const eta = formatResetEta(soonestResetMs, now);
   const etaSuffix = eta ? ` Soonest reset ${eta}.` : '';
+  // Models dropped before the walk (#423 follow-up) are reported separately and
+  // never counted as "routes checked": they were never candidates, and folding
+  // them into the total inflates the pool the caller thinks it has.
+  const keylessSuffix = keylessSkipped > 0
+    ? ` ${keylessSkipped} model${keylessSkipped === 1 ? '' : 's'} skipped: no key configured for their platform.`
+    : '';
   if (!diag || diag.length === 0) {
-    return `All models exhausted. ${EXHAUSTION_ADVICE}${etaSuffix}`;
+    return `All models exhausted. ${EXHAUSTION_ADVICE}${etaSuffix}${keylessSuffix}`;
   }
 
   const counts: Record<string, number> = {};
@@ -130,7 +140,7 @@ export function summarizeExhaustion(
   ];
   const parts = order.filter(b => counts[b]).map(b => `${counts[b]} ${b}`);
   const total = diag.length;
-  return `All models exhausted: ${total} route${total === 1 ? '' : 's'} checked (${parts.join(', ')}). ${EXHAUSTION_ADVICE}${etaSuffix}`;
+  return `All models exhausted: ${total} route${total === 1 ? '' : 's'} checked (${parts.join(', ')}). ${EXHAUSTION_ADVICE}${etaSuffix}${keylessSuffix}`;
 }
 
 interface KeyRow {
@@ -366,6 +376,18 @@ export function getAllPenalties(): Array<{ modelDbId: number; count: number; pen
     }
   }
   return result.sort((a, b) => b.penalty - a.penalty);
+}
+
+/**
+ * Operator clear (#952): forget every model's penalty at once and report how
+ * many models were carrying one. Pairs with clearAllCooldowns — a pool stuck
+ * behind day-long benches also has its models sunk by penalties, and lifting
+ * one without the other leaves the router still avoiding them.
+ */
+export function clearAllPenalties(): number {
+  const count = getAllPenalties().length;
+  rateLimitPenalties.clear();
+  return count;
 }
 
 // ── Routing strategy (persisted) ────────────────────────────────────────────
@@ -1135,9 +1157,14 @@ function scoreChainEntry(
   // the min would be wrong in both directions — it would report a busy-but-full
   // pool as "low on quota", and it would clip the harvest boost straight back
   // to 1 against the two meters that have no opinion.
-  const inFlightShare = inFlightPoolShare(entry.platform, entry.model_id);
-  const diversity = diversityFactor(inFlightShare);
-  const preference = diversity * pressure.harvest;
+  // `quota-aware-scoring` off: the two quota-economy terms go neutral (1), so
+  // ordering falls back to capability and health alone. Recorded routing
+  // decisions are kept, and the existing off/shadow/active mode is untouched —
+  // enabling this extension does not promote that mode.
+  const scoringOn = isExtensionEnabled('quota-aware-scoring');
+  const inFlightShare = scoringOn ? inFlightPoolShare(entry.platform, entry.model_id) : 0;
+  const diversity = scoringOn ? diversityFactor(inFlightShare) : 1;
+  const preference = scoringOn ? diversity * pressure.harvest : 1;
 
   // Per-model env overrides (#738) scale the final score so a slow or
   // poor-quality model is demoted without being disabled outright — a manual
@@ -1248,9 +1275,15 @@ function orderChain(
       .map((e, i) => ({ e, i }))
       .sort((a, b) => a.e.priority - b.e.priority || a.i - b.i)
       .map(({ e, i }, rank) => {
+        // `quota-aware-scoring` off: this is the SECOND place the quota economy
+        // reaches an ordering — the priority strategy reorders by position
+        // rather than by score, so gating the score path alone left spreading
+        // fully active here. Off, every term below contributes zero and the
+        // operator's arrangement is returned untouched.
+        const scoringOn = isExtensionEnabled('quota-aware-scoring');
         const pressure = quotaPressure(e.platform, e.model_id, e.endpoint_scope ?? '', headroomCfgPriority);
-        const inFlightShare = inFlightPoolShare(e.platform, e.model_id);
-        const diversity = diversityFactor(inFlightShare);
+        const inFlightShare = scoringOn ? inFlightPoolShare(e.platform, e.model_id) : 0;
+        const diversity = scoringOn ? diversityFactor(inFlightShare) : 1;
         // The order the operator arranged, plus only the pre-existing 429
         // penalty. Kept so the trace can report the rank the new terms moved.
         const baseEff = rank + 1 + getPenalty(e.model_db_id);
@@ -1259,8 +1292,8 @@ function orderChain(
           i,
           baseEff,
           eff: baseEff
-            + pressurePenaltyPositions(pressure.scarcity)
-            + harvestPromotionPositions(pressure.harvest)
+            + (scoringOn ? pressurePenaltyPositions(pressure.scarcity) : 0)
+            + (scoringOn ? harvestPromotionPositions(pressure.harvest) : 0)
             + (1 - diversity) / DIVERSITY_MAX_DAMP * DIVERSITY_MAX_POSITIONS,
           signals: { scarcity: pressure.scarcity, harvest: pressure.harvest, diversity, poolKey: pressure.poolKey, inFlightShare },
         };
@@ -1409,9 +1442,6 @@ const GLOBAL_SORT_ALIASES: Record<string, string> = {
   balanced: 'balanced',
 };
 
-/** Settings key for the paid-balance opt-in below. Absent/false = free only. */
-const ALLOW_PAID_BALANCE_KEY = 'routing_allow_paid_balance';
-
 /** Drop providers the operator has excluded from automatic selection, and any
  *  route that would spend real money.
  *
@@ -1419,14 +1449,25 @@ const ALLOW_PAID_BALANCE_KEY = 'routing_allow_paid_balance';
  *  is the correct scope for the credit guard too: a request that NAMES a paid
  *  model is an explicit instruction and still routes. What must never happen is
  *  `auto:coding` quietly picking one because the catalogue grew a paid twin of
- *  a free route and it happened to score well. Opt in with
- *  `routing_allow_paid_balance = true`. */
+ *  a free route and it happened to score well.
+ *
+ *  The guard is the `paid-balance-guard` extension, and it is the ONLY control
+ *  over this. The previous `routing_allow_paid_balance` setting is gone: it
+ *  turned real spending on from a bare settings row, with nothing recorded
+ *  about who decided that or when. Disabling the extension requires the typed
+ *  confirmation and stores an acknowledgement, and an off state that has lost
+ *  its acknowledgement is repaired to ON at load rather than honoured. Two
+ *  controls over one hazard is how a guard gets bypassed by the forgotten one.
+ *
+ *  Read per call, from an in-memory snapshot, so re-enabling the guard takes
+ *  effect on the next dispatch — including a retry of a request already in
+ *  flight. It cannot recall a call already sent. */
 function withoutAutorouteDisabled(rows: ChainRow[]): ChainRow[] {
   const excluded = getAutorouteDisabledPlatforms();
-  const allowPaid = (getSetting(ALLOW_PAID_BALANCE_KEY) ?? '').trim().toLowerCase() === 'true';
+  const guarded = isExtensionEnabled(PAID_BALANCE_GUARD_ID);
   return rows.filter(row =>
     !excluded.includes(row.platform.toLowerCase())
-    && (allowPaid || !consumesPaidBalance(row.platform as Platform, row.model_id)),
+    && (!guarded || !consumesPaidBalance(row.platform as Platform, row.model_id)),
   );
 }
 
@@ -1808,6 +1849,11 @@ function selectKeyForModel(entry: ChainRow, estimatedTokens: number, skipKeys?: 
     // advisory (see ENFORCEABLE_SOURCES).
     const domains = quotaDomainsAdmit(entry.platform, entry.model_id, entry.endpoint_scope ?? '', estimatedTokens);
     if (!domains.ok) { note(`quota-domain-exhausted(${domains.blockedBy ?? 'unknown'})`); continue; }
+    // Monthly budget (#1158): a key whose request/token caps are spent for the
+    // current UTC month is not a candidate — same skip semantics as the daily
+    // gates above. The Retry-After (next-month boundary) surfaces through the
+    // fallback exhaustion path rather than blocking here.
+    if (!checkMonthlyBudget(key.id, estimatedTokens).allowed) { note('monthly-budget-cap'); continue; }
 
     let decryptedKey: string;
     try {
@@ -1827,6 +1873,9 @@ function selectKeyForModel(entry: ChainRow, estimatedTokens: number, skipKeys?: 
     roundRobinIndex.set(rrKey, idx);
     // Taken only once the key has cleared every gate and is definitely being
     // returned, so a rejected candidate never consumes concurrency budget.
+    const proxyUrl = decryptProxyUrl(key);
+    const budget = reserveMonthlyBudget(key.id, estimatedTokens);
+    if (!budget.allowed) { note('monthly-budget-cap'); continue; }
     const leaseId = acquireLease(entry.platform, entry.model_id, key.id, estimatedTokens);
     return {
       provider: resolvedProvider,
@@ -1836,14 +1885,14 @@ function selectKeyForModel(entry: ChainRow, estimatedTokens: number, skipKeys?: 
       keyId: key.id,
       keyLabel: key.label || null,
       // Decrypted once here, at the point the row is already in hand (#590).
-      proxyUrl: decryptProxyUrl(key),
+      proxyUrl,
       platform: entry.platform,
       displayName: entry.display_name,
       endpointScope: entry.endpoint_scope ?? '',
       providerBaseUrl: entry.platform === 'custom' ? (key.base_url ?? '') : '',
       rpdLimit: limits.rpd,
       tpdLimit: limits.tpd,
-      release: () => releaseLease(leaseId),
+      release: () => { releaseLease(leaseId); budget.release(); },
     };
   }
 
@@ -2230,18 +2279,23 @@ export function getOrderedFusionChain(estimatedTokens: number, exactOutputReserv
  */
 export function resolveFusionCandidate(modelId: string): FusionCandidate | null {
   const db = getDb();
-  const row = db.prepare(`
+  const rows = db.prepare(`
     SELECT m.id as model_db_id, m.platform, m.model_id, m.display_name,
            m.size_label, m.supports_vision, m.supports_tools
     FROM models m
     WHERE m.model_id = ? AND m.enabled = 1
     ORDER BY m.intelligence_rank ASC, m.id ASC
-    LIMIT 1
-  `).get(modelId) as {
+  `).all(modelId) as {
     model_db_id: number; platform: string; model_id: string; display_name: string;
     size_label: string; supports_vision: number; supports_tools: number;
-  } | undefined;
-  if (row) {
+  }[];
+  if (rows.length > 0) {
+    // A logical model can have several enabled provider rows. Prefer one with
+    // an enabled, healthy/unknown key before falling back to the deterministic
+    // ranking. Without this check a duplicate alias can pin fusion to a
+    // keyless provider (for example a free relay) while a configured provider
+    // for the same model is available.
+    const row = rows.find(candidate => routableKeyIdsForModel(candidate.model_db_id).length > 0) ?? rows[0];
     return {
       modelDbId: row.model_db_id,
       platform: row.platform,
@@ -2260,7 +2314,11 @@ export function resolveFusionCandidate(modelId: string): FusionCandidate | null 
   if (isUnifyEnabled()) {
     const resolved = resolveRequestedIdForDispatch(modelId, getModelGroups());
     if (resolved && resolved.memberDbIds.length > 0) {
-      const top = resolveModelGroupCandidates(resolved.memberDbIds, resolved.demotedDbIds)[0];
+      const candidates = resolveModelGroupCandidates(resolved.memberDbIds, resolved.demotedDbIds);
+      // Bare unified aliases may resolve to a provider row that is enabled in
+      // the catalog but has no usable key. Select the first routable member so
+      // an explicit fusion panel does not waste a slot on that dead end.
+      const top = candidates.find(candidate => routableKeyIdsForModel(candidate.model_db_id).length > 0) ?? candidates[0];
       if (top) {
         return {
           modelDbId: top.model_db_id,
@@ -2453,6 +2511,31 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
     }
   }
 
+  // Drop models whose platform has NO enabled+healthy key before the walk. Such
+  // a row can never produce a route (selectKeyForModel's first query returns
+  // empty for it), so walking it is pure overhead on every request, and its diag
+  // line pads the exhaustion summary with a constant that has nothing to do with
+  // why THIS request failed. On the clean tier that was 14 of 36 rows, reported
+  // as "37 routes checked" when only 22 were ever candidates.
+  //
+  // An explicit pin is exempt: the client named that model, so it still gets
+  // walked and still reports "no enabled+healthy key for platform" against its
+  // own label rather than vanishing into an aggregate.
+  const keyCounts = usableKeyCountsByPlatform(db);
+  const isRoutable = (e: ChainRow) =>
+    e.model_db_id === preferredModelDbId || (keyCounts.get(e.platform) ?? 0) > 0;
+  const routableChain = sortedChain.filter(isRoutable);
+  const keylessSkipped = sortedChain.length - routableChain.length;
+  // One aggregate line, not one per model: the platforms stay visible to anyone
+  // reading RouteError.diagnostics (and keep routingExhaustionBody classifying a
+  // fully-unconfigured pool as 503 config, not a 429 rate limit), without N
+  // near-identical rows drowning the request's real reasons.
+  const keylessLine = keylessSkipped > 0
+    ? `${keylessSkipped} model(s) skipped: no enabled+healthy key for platform (${
+        [...new Set(sortedChain.filter(e => !isRoutable(e)).map(e => e.platform))].sort().join(', ')
+      })`
+    : null;
+
   // Per-model disposition, attached to the exhaustion error when the loop falls
   // through with no route — the only record of WHY the pool was empty on the
   // synchronous "all exhausted" path (nothing downstream logs it). See issue _1.
@@ -2467,7 +2550,7 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
   // hop instead of no route at all.
   const servingChain: ChainRow[] = [];
   const marginDeferred: ChainRow[] = [];
-  for (const e of sortedChain) {
+  for (const e of routableChain) {
     (fitsContextWindow(e.platform, e.context_window, estimatedTokens, exactOutputReserve) ? servingChain : marginDeferred).push(e);
   }
   servingChain.push(...marginDeferred);
@@ -2570,7 +2653,13 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
     }
   }
 
-  throw new RouteError(summarizeExhaustion(diag, getSoonestCooldownExpiry()), 429, diag);
+  // The aggregate keyless line rides in diagnostics but NOT in the summary's
+  // route count: those models were never candidates for this request.
+  throw new RouteError(
+    summarizeExhaustion(diag, getSoonestCooldownExpiry(), Date.now(), keylessSkipped),
+    429,
+    keylessLine ? [...diag, keylessLine] : diag,
+  );
 }
 
 /**

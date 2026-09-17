@@ -2,6 +2,7 @@ import { getDb } from '../db/index.js';
 import { pruneRequestAnalytics } from '../services/request-retention.js';
 import { getClientContext } from './client-context.js';
 import { noteRequestRowId, type RequestTrace } from './attempt-trace.js';
+import { isExtensionEnabled } from '../services/extension-state.js';
 
 type LogTx = ReturnType<typeof getDb>;
 
@@ -67,6 +68,17 @@ export function logRequest(
   // lib/served-model.ts). NULL when it matches or the provider reported
   // nothing usable, so the column stays empty in the healthy case.
   servedModel: string | null = null,
+  // Which gateway pathway produced this request. Today every inference
+  // surface writes 'http': the OpenAI-compatible proxy (/v1/chat/completions,
+  // /v1/completions), /v1/responses, /v1/messages, the Ollama + Gemini wires
+  // (lib/inbound-chat.ts), and fusion's panel/judge sub-calls. The /mcp
+  // JSON-RPC surface is introspection-only (list models, health, usage) and
+  // runs no inference, so it logs nothing; the dashboard playground calls the
+  // same HTTP endpoints as any other client and is indistinguishable from
+  // them here. The column is free-form so a future surface can add a value
+  // without a migration. NULL for call sites that pass no caller — notably
+  // the shared fallback loop's 'canceled' row, which is surface-agnostic.
+  caller: string | null = null,
 ) {
   try {
     const db = getDb();
@@ -75,9 +87,9 @@ export function logRequest(
     const client = getClientContext();
     const tx = db.transaction(() => {
       const insert = db.prepare(`
-        INSERT INTO requests (platform, model_id, key_id, status, input_tokens, output_tokens, latency_ms, error, ttfb_ms, requested_model, served_model, client_ip, client_user_agent, client_agent)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(platform, modelId, keyId, status, inputTokens, outputTokens, latencyMs, error, ttfbMs, requestedModel, servedModel, client.ip, client.userAgent, client.agent);
+        INSERT INTO requests (platform, model_id, key_id, status, input_tokens, output_tokens, latency_ms, error, ttfb_ms, requested_model, served_model, client_ip, client_user_agent, client_agent, caller)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(platform, modelId, keyId, status, inputTokens, outputTokens, latencyMs, error, ttfbMs, requestedModel, servedModel, client.ip, client.userAgent, client.agent, caller);
 
       // Report the row id back to the fallback loop's attempt trace (if one is
       // active): the LAST id noted during a loop run is the terminal row the
@@ -126,6 +138,9 @@ export function logRequest(
 // row already.
 export function persistRequestAttempts(trace: RequestTrace): void {
   if (trace.records.length === 0 || trace.lastRequestRowId == null) return;
+  // `request-routing-trace` off: no new per-attempt rows. Traces already
+  // written stay and still render; the request row itself is unaffected.
+  if (!isExtensionEnabled('request-routing-trace')) return;
   try {
     const db = getDb();
     const insert = db.prepare(`

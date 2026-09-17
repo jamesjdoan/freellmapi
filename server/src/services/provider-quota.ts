@@ -74,15 +74,6 @@ const DEFAULT_CONFIDENCE: Record<QuotaObservationSource, number> = {
   probe: 0.6,
 };
 
-const SOURCE_PRIORITY: Record<QuotaObservationSource, number> = {
-  header: 5,
-  quota_api: 5,
-  error_body: 4,
-  probe: 3,
-  local_usage: 2,
-  documentation: 1,
-};
-
 export function runWithQuotaObservationContext<T>(context: QuotaObservationContext, fn: () => T): T {
   return contextStore.run(context, fn);
 }
@@ -107,42 +98,25 @@ function parseHeaderNumber(raw: string | null): number | null {
 }
 
 function parseResetAtFromHeader(raw: string | null, now = Date.now()): string | null {
-  if (!raw) return null;
-
-  // First, try to parse as a duration string (e.g., "2m59.56s", "59.56s", "1h2m3s", "750ms", "1m", "45s").
-  // This is safe because the raw value is retained (see captureRawHeaders), so any parsing error is auditable.
-  const durationRegex = /^(\d+(?:\.\d+)?(ms|h|m|s))+$/;
-  if (durationRegex.test(raw)) {
-    const timePartRegex = /(\d+(?:\.\d+)?)(ms|h|m|s)/g;
-    let totalMs = 0;
-    let match;
-    while ((match = timePartRegex.exec(raw)) !== null) {
-      const value = parseFloat(match[1]);
-      const unit = match[2];
-      let ms;
-      switch (unit) {
-        case 'h': ms = value * 3600 * 1000; break;
-        case 'm': ms = value * 60 * 1000; break;
-        case 's': ms = value * 1000; break;
-        case 'ms': ms = value; break;
-        default: return null; // Should not happen due to outer regex
-      }
-      totalMs += ms;
+  if (!raw?.trim()) return null;
+  const value = raw.trim();
+  let milliseconds: number;
+  if (/^\d+(?:\.\d+)?$/.test(value)) {
+    const parsed = Number(value);
+    milliseconds = parsed > 1_000_000_000_000 ? parsed
+      : parsed > 1_000_000_000 ? parsed * 1000 : now + parsed * 1000;
+  } else if (/^(?:\d+(?:\.\d+)?(?:ms|[dhms]))+$/.test(value)) {
+    // Groq reports durations such as 2m59.56s, not numeric seconds.
+    const units: Record<string, number> = { d: 86_400_000, h: 3_600_000, m: 60_000, s: 1000, ms: 1 };
+    milliseconds = now;
+    for (const part of value.matchAll(/(\d+(?:\.\d+)?)(ms|[dhms])/g)) {
+      milliseconds += Number(part[1]) * units[part[2]];
     }
-    return new Date(now + totalMs).toISOString();
-  }
-
-  // Fall back to existing numeric parsing.
-  const parsed = parseHeaderNumber(raw);
-  if (parsed === null) return null;
-  if (parsed > 1_000_000_000_000) return new Date(parsed).toISOString();
-  if (parsed > 1_000_000_000) return new Date(parsed * 1000).toISOString();
-  return new Date(now + parsed * 1000).toISOString();
-}
-
-function pickBetterSource(existing: QuotaObservationSource | null | undefined, next: QuotaObservationSource): QuotaObservationSource {
-  if (!existing) return next;
-  return SOURCE_PRIORITY[next] >= SOURCE_PRIORITY[existing] ? next : existing;
+  } else if (/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value)) {
+    milliseconds = Date.parse(value);
+  } else return null;
+  const date = new Date(milliseconds);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
 }
 
 function modelPool(platform: Platform, modelId?: string | null, prefix = 'model'): string {
@@ -257,6 +231,31 @@ export function resolveQuotaPolicy(
   if (platform === 'kilo') return policy('kilo::anonymous', 'shared_pool', 'unknown', [], 'unknown');
   if (platform === 'pollinations') return policy('pollinations::account', 'account', 'unknown', [], 'unknown');
   if (platform === 'llm7') return policy('llm7::anonymous', 'shared_pool', 'unknown', [], 'unknown');
+  // --- Providers added by upstream v0.11.0 (#1237, #1194, #1209, #1169) ------
+  // Pool NAMES are kept exactly as upstream coined them so observations already
+  // recorded against those keys keep resolving. The typed fields are graded by
+  // evidence, not by the name: a provider is 'metered'/'provider_reported' only
+  // where upstream declares a HEADER_SPEC for it (clod, blaze, router9, septor
+  // and electronhub do; the other seven send nothing we can read). Unknown
+  // stays unknown — it must not be read as unlimited capacity.
+  if (platform === 'electronhub') {
+    return normalizedModelId.endsWith(':free')
+      ? policy('electronhub::daily-free', 'shared_pool', 'metered', ['requests'], 'provider_reported', 'day')
+      : policy('electronhub::weekly-credit', 'shared_pool', 'metered', ['requests', 'credits'], 'provider_reported');
+  }
+  if (platform === 'router9') return policy('router9::monthly-credit', 'shared_pool', 'metered', ['credits'], 'provider_reported', 'month');
+  if (platform === 'septor') return policy('septor::daily-free', 'shared_pool', 'metered', ['requests'], 'provider_reported', 'day');
+  if (platform === 'clod') return policy('clod::daily-free', 'shared_pool', 'metered', ['requests'], 'provider_reported', 'day');
+  if (platform === 'blaze') return policy('blaze::daily-free', 'shared_pool', 'metered', ['tokens'], 'provider_reported', 'day');
+  // No readable allowance on any of these yet: unknown accounting, no metrics,
+  // no asserted reset. They are reachable but must not carry a critical path.
+  if (platform === 'experiential') return policy('experiential::monthly-credit', 'shared_pool', 'unknown', [], 'unknown');
+  if (platform === 'speechify') return policy('speechify::monthly-characters', 'shared_pool', 'unknown', [], 'unknown');
+  if (platform === 'lucidity') return policy('lucidity::daily-free', 'shared_pool', 'unknown', [], 'unknown');
+  if (platform === 'airforce') return policy('airforce::daily-free', 'shared_pool', 'unknown', [], 'unknown');
+  if (platform === 'dreamprompting') return policy('dreamprompting::daily-free', 'shared_pool', 'unknown', [], 'unknown');
+  if (platform === 'waterfall') return policy('waterfall::community-free', 'shared_pool', 'unknown', [], 'unknown');
+  if (platform === 'logfare') return policy('logfare::fair-use', 'shared_pool', 'unknown', [], 'unknown');
   // AI Horde: anonymous requests share one queue priority (the 0000000000 key),
   // so they pool together; a registered key has its own kudos priority but we
   // still bucket per-platform here.
@@ -380,6 +379,28 @@ type HeaderSpec = {
 };
 
 const HEADER_SPECS: Partial<Record<Platform, HeaderSpec[]>> = {
+  // Observe upstream limits without inventing per-model budgets. CLōD's
+  // rate window is distinct from its daily grant; Speechify bills characters,
+  // not tokens, and does not publish token headers.
+  clod: [
+    { metric: 'requests', limit: 'x-ratelimit-limit', remaining: 'x-ratelimit-remaining', reset: 'x-ratelimit-reset', strategy: 'provider_reported' },
+  ],
+  blaze: [
+    { metric: 'tokens', limit: 'x-ratelimit-limit-tokens', remaining: 'x-ratelimit-remaining-tokens', strategy: 'provider_reported' },
+  ],
+  // Observe actual headers only: Router9's documented request windows differ
+  // from live headers. No invented per-model quotas or credit-to-token math.
+  router9: [
+    { metric: 'credits', limit: 'x-credits-limit', remaining: 'x-credits-remaining', reset: 'x-credits-reset', strategy: 'provider_reported' },
+  ],
+  septor: [
+    { metric: 'requests', limit: 'x-ratelimit-limit', remaining: 'x-ratelimit-remaining', reset: 'x-ratelimit-reset', strategy: 'provider_reported' },
+  ],
+  // Live-observed account-wide rolling-minute headers; no invented limits or
+  // conversion of credit grants into token budgets.
+  electronhub: [
+    { metric: 'requests', limit: 'x-ratelimit-limit', remaining: 'x-ratelimit-remaining', reset: 'x-ratelimit-reset', strategy: 'provider_reported' },
+  ],
   groq: [
     { metric: 'requests', limit: 'x-ratelimit-limit-requests', remaining: 'x-ratelimit-remaining-requests', reset: 'x-ratelimit-reset-requests', strategy: 'provider_reported' },
     { metric: 'tokens', limit: 'x-ratelimit-limit-tokens', remaining: 'x-ratelimit-remaining-tokens', reset: 'x-ratelimit-reset-tokens', strategy: 'provider_reported' },
@@ -584,31 +605,37 @@ export function parseQuotaObservationsFromResponse(
     }
   }
 
-  const retryAfterMs = parseRetryAfterMs(get('retry-after')) ?? null;
-  if (retryAfterMs !== null) {
-    observations.push({
-      ...base,
-      metric: 'requests',
-      limit: parseHeaderNumber(get('x-ratelimit-limit-requests')),
-      remaining: 0,
-      resetAt: new Date(Date.now() + retryAfterMs).toISOString(),
-      retryAfterMs,
-      resetStrategy: 'provider_reported',
-      source: response.status === 429 ? 'header' : 'error_body',
-      confidence: response.status === 429 ? 1 : 0.8,
-      notes: `retry-after=${retryAfterMs}ms`,
-      statusCode: response.status,
-      rawJson: captureRawHeaders(headers, ['retry-after', 'x-ratelimit-limit-requests']),
-    });
+  // Other compatible providers can expose these explicit request/token headers.
+  // Only use the fallback when the provider-specific mapping found no such metric.
+  for (const metric of ['requests', 'tokens'] as const) {
+    if (!observations.some(row => row.metric === metric)) {
+      maybeAddObservation(
+        observations, base, metric,
+        get(`x-ratelimit-limit-${metric}`),
+        get(`x-ratelimit-remaining-${metric}`),
+        get(`x-ratelimit-reset-${metric}`),
+        'provider_reported',
+        captureRawHeaders(headers, [
+          `x-ratelimit-limit-${metric}`,
+          `x-ratelimit-remaining-${metric}`,
+          `x-ratelimit-reset-${metric}`,
+        ]),
+        response.status,
+      );
+    }
   }
 
-  if (response.status === 429 || response.status === 402) {
+  const retryAfterMs = parseRetryAfterMs(get('retry-after')) ?? null;
+  if ((response.status === 429 || response.status === 402)
+      && !observations.some(row => row.metric === 'requests' && row.remaining != null)) {
+    // A cooldown alone is not proof of an exhausted daily request allowance.
+    // Keep it as lower-confidence error evidence; do not overwrite quota headers.
     observations.push({
       ...base,
       metric: 'requests',
-      limit: parseHeaderNumber(get('x-ratelimit-limit-requests')),
+      limit: null,
       remaining: 0,
-      resetAt: get('x-ratelimit-reset-requests') ? parseResetAtFromHeader(get('x-ratelimit-reset-requests')) : null,
+      resetAt: retryAfterMs == null ? null : new Date(Date.now() + retryAfterMs).toISOString(),
       retryAfterMs,
       resetStrategy: 'unknown',
       source: 'error_body',
@@ -617,6 +644,10 @@ export function parseQuotaObservationsFromResponse(
       statusCode: response.status,
       rawJson: captureRawHeaders(headers, ['retry-after', 'x-ratelimit-limit-requests', 'x-ratelimit-reset-requests', ...specNames]),
     });
+  }
+  for (const observation of observations) {
+    observation.statusCode = response.status;
+    observation.retryAfterMs = retryAfterMs;
   }
 
   if (observations.length === 0 && response.status === 200) {
@@ -757,19 +788,6 @@ export function recordQuotaObservation(input: QuotaObservationInput): ProviderQu
   const nowSql = toSqliteUtc(observedAt);
   const updatedAt = nowSql;
 
-  const prev = db.prepare(`
-    SELECT confidence, notes, source
-      FROM provider_quota_state
-     WHERE platform = ?
-       AND key_id = ?
-       AND quota_pool_key = ?
-       AND metric = ?
-  `).get(platform, keyId, quotaPoolKey, metric) as { confidence: number; notes: string | null; source: QuotaObservationSource } | undefined;
-
-  const nextConfidence = Math.max(prev?.confidence ?? 0, confidence);
-  const nextNotes = notes ?? prev?.notes ?? null;
-  const nextSource = pickBetterSource(prev?.source, source);
-
   db.transaction(() => {
     db.prepare(`
       INSERT INTO provider_quota_state (
@@ -777,30 +795,24 @@ export function recordQuotaObservation(input: QuotaObservationInput): ProviderQu
         reset_at, reset_strategy, source, confidence, notes, observed_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(platform, key_id, quota_pool_key, metric) DO UPDATE SET
-        unit = COALESCE(excluded.unit, provider_quota_state.unit),
-        limit_value = COALESCE(excluded.limit_value, provider_quota_state.limit_value),
-        remaining_value = COALESCE(excluded.remaining_value, provider_quota_state.remaining_value),
-        reset_at = COALESCE(excluded.reset_at, provider_quota_state.reset_at),
-        reset_strategy = CASE
-          WHEN excluded.reset_strategy != 'unknown' THEN excluded.reset_strategy
-          ELSE provider_quota_state.reset_strategy
-        END,
-        confidence = MAX(provider_quota_state.confidence, excluded.confidence),
-        notes = COALESCE(excluded.notes, provider_quota_state.notes),
+        unit = excluded.unit,
+        limit_value = excluded.limit_value,
+        remaining_value = excluded.remaining_value,
+        reset_at = excluded.reset_at,
+        reset_strategy = excluded.reset_strategy,
+        source = excluded.source,
+        confidence = excluded.confidence,
+        notes = excluded.notes,
         observed_at = excluded.observed_at,
-        updated_at = datetime('now')
+        updated_at = excluded.updated_at
+      -- Keep a coherent balance snapshot. Empty/limit-only probes must not
+      -- make an older balance, reset or confidence appear freshly measured.
+      WHERE excluded.remaining_value IS NOT NULL
+        AND (provider_quota_state.remaining_value IS NULL
+          OR julianday(excluded.observed_at) >= julianday(provider_quota_state.observed_at))
     `).run(
-      platform, keyId, quotaPoolKey, metric, unit, limitValue, remainingValue, resetAt, resetStrategy, source, nextConfidence, nextNotes, nowSql, updatedAt,
+      platform, keyId, quotaPoolKey, metric, unit, limitValue, remainingValue, resetAt, resetStrategy, source, confidence, notes, nowSql, updatedAt,
     );
-
-    db.prepare(`
-      UPDATE provider_quota_state
-         SET source = ?
-       WHERE platform = ?
-         AND key_id = ?
-         AND quota_pool_key = ?
-         AND metric = ?
-    `).run(nextSource, platform, keyId, quotaPoolKey, metric);
 
     // The observations table is an append-only history, so a row is only worth
     // adding when something CHANGED. Polling a usage API every five minutes was
@@ -843,8 +855,8 @@ export function recordQuotaObservation(input: QuotaObservationInput): ProviderQu
     retryAfterMs,
     resetStrategy,
     source,
-    confidence: nextConfidence,
-    notes: nextNotes,
+    confidence,
+    notes,
     observedAt: nowSql,
     updatedAt,
     endpoint,
@@ -862,30 +874,10 @@ export function recordQuotaObservationsFromResponse(
     .filter((row): row is ProviderQuotaObservation => row !== null);
 }
 
-// A quota window whose reset_at has passed has replenished at the provider, but
-// remaining_value is only ever written on a fresh observation — so a key that hit
-// remaining=0 reads as "exhausted" forever on the dashboard health view until the
-// next live call (#453). Restore remaining to the known limit (or clear it to
-// unknown when the limit isn't known — `= limit_value` yields NULL in that case)
-// and drop the stale reset_at so the row stops reading as exhausted and this
-// fix-up doesn't recur. Runs on read; a new observation re-populates reset_at.
-function normalizeExpiredQuotaState(db: Db): void {
-  db.prepare(`
-    UPDATE provider_quota_state
-       SET remaining_value = limit_value,
-           reset_at = NULL,
-           updated_at = datetime('now')
-     WHERE reset_at IS NOT NULL
-       AND julianday(reset_at) < julianday('now')
-  `).run();
-}
-
-// ── Per-key headroom (routing signal) ───────────────────────────────────────
-// getQuotaStateForKeys is a panel query: it takes a write (the expiry fix-up)
-// and window-functions the whole observation log. The router needs a far
-// smaller answer — "how much of its budget does each key of ONE platform have
-// left" — on a path that runs per chain entry per request, so it gets its own
-// read-only, platform-filtered query behind a short TTL.
+// The router needs a smaller view than the panel's joined observation rows:
+// a read-only, platform-filtered headroom query behind a short TTL. Expired
+// windows replenish the routing estimate, while the original balance remains
+// stored for presentation as a last reported observation.
 
 /** Confidence floor for letting an observation steer routing. Keeps headers,
  *  quota APIs and 429 bodies in; leaves local estimates and probes out. */
@@ -947,7 +939,7 @@ export function getKeyQuotaHeadroom(platform: Platform, quotaPoolKey?: string): 
   for (const row of rows) {
     if (quotaPoolKey && exactKeys.has(row.keyId) && row.poolKey !== quotaPoolKey) continue;
     // A window that already reset is a full budget again. Same rule as
-    // normalizeExpiredQuotaState, minus the write — this path must not take
+    // the panel headroom view, without writes — this path must not take
     // one just to answer a routing question.
     const ratio = row.expired
       ? 1
@@ -1016,21 +1008,20 @@ export function invalidateKeyQuotaHeadroom(platform?: Platform): void {
   }
 }
 
-export function getQuotaStateForKeys(): QuotaObservationView[] {
+export function getQuotaStateForKeys(options: { normalizeExpired?: boolean } = {}): QuotaObservationView[] {
   let db;
   try {
     db = getDb();
   } catch {
     return [];
   }
-  normalizeExpiredQuotaState(db);
   // One seek per state row for its newest observation. The log is append-only
   // and grows into the hundreds of thousands of rows, so this must never scan
   // it: the correlated subquery walks idx_provider_quota_observations_latest
   // (platform, key_id, quota_pool_key, metric, observed_at DESC, created_at
   // DESC) and stops at the first entry. The window-function form it replaces
   // ranked the entire table, raw_json included, on every dashboard poll.
-  return db.prepare(`
+  const rows = db.prepare(`
     SELECT
       pqs.platform,
       pqs.key_id AS keyId,
@@ -1077,6 +1068,15 @@ export function getQuotaStateForKeys(): QuotaObservationView[] {
       )
     ORDER BY pqs.platform ASC, pqs.key_id ASC, pqs.quota_pool_key ASC, pqs.metric ASC
   `).all() as QuotaObservationView[];
+  if (options.normalizeExpired === false) return rows;
+  // Legacy callers can still display replenished headroom, but never overwrite
+  // the actual observation: the outlook must retain its age and reported value.
+  const now = Date.now();
+  return rows.map(row => {
+    const resetAt = row.resetAt?.includes('T') ? row.resetAt : row.resetAt?.replace(' ', 'T') + 'Z';
+    return row.resetAt && Date.parse(resetAt) < now
+      ? { ...row, remaining: row.limit, resetAt: null } : row;
+  });
 }
 
 // ── Learned ceilings (429 with no published limit) ──────────────────────────

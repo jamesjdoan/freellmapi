@@ -172,7 +172,7 @@ export default function KeysPage() {
         {tab === 'agents' && <AgentCompatibilitySection />}
 
         {tab === 'quotaSignals' && (
-          <QuotaSignalsSection states={(healthData?.quotaStates ?? []).slice(0, 24)} />
+          <QuotaSignalsSection states={healthData?.quotaStates ?? []} />
         )}
 
         {tab === 'providers' && (

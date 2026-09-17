@@ -24,6 +24,7 @@
  *   tsx src/scripts/apply-routing-curation.ts --db <path>
  */
 import { initDb, getDb } from '../db/index.js';
+import { isExtensionEnabled } from '../services/extension-state.js';
 import {
   CURATED_ROUTES,
   CHAIN_CONTRACTS,
@@ -133,6 +134,13 @@ export function planCuration(): CurationPlan {
  * old ones still routing — is a worse state than either end of the change.
  */
 export function applyCuration(plan: CurationPlan): void {
+  // `curated-routed-set` off: the curated contract stops being asserted onto
+  // the database. Refuse rather than half-apply — a partial write would leave
+  // chains in a state neither the file nor the operator chose. No catalogue row
+  // and no chain row is deleted either way.
+  if (!isExtensionEnabled('curated-routed-set')) {
+    throw new Error('The curated routed set is switched off in Extensions; not applying it');
+  }
   const db = getDb();
   const profiles = db.prepare('SELECT id, name FROM profiles').all() as { id: number; name: string }[];
   const profileByName = new Map<string, number>();

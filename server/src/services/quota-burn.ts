@@ -6,6 +6,7 @@ import { recordRequest, recordTokens } from './ratelimit.js';
 import { recordLearnedCeiling, runWithQuotaObservationContext, inferQuotaPoolKey } from './provider-quota.js';
 import type { Scheduler } from '../lib/scheduler.js';
 import { MINUTE_MS, HOUR_MS, DAY_MS } from './quota-clock.js';
+import { isExtensionEnabled } from './extension-state.js';
 
 // Deliberate limit discovery: spend a provider's allowance until it refuses, so
 // we learn what the allowance IS.
@@ -216,6 +217,11 @@ export class BurnStartError extends Error {
  * `listBurnRuns`.
  */
 export function startBurnRun(input: StartBurnInput): BurnRun {
+  // `quota-burn-probing` off: no new run is scheduled and no provider is
+  // called. Completed runs and their measurements are kept.
+  if (!isExtensionEnabled('quota-burn-probing')) {
+    throw new BurnStartError('Burn-down probing is switched off in Extensions', 409);
+  }
   if (!hasProvider(input.platform as never)) {
     throw new BurnStartError(`Unknown platform '${input.platform}'`);
   }

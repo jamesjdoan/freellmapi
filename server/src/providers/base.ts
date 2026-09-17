@@ -237,7 +237,11 @@ export interface KeyValidationInconclusive {
   reason: string;
 }
 
-export type KeyValidationResult = boolean | KeyValidationFailure | KeyValidationInconclusive;
+export interface KeyValidationSuccess {
+  valid: true;
+}
+
+export type KeyValidationResult = boolean | KeyValidationFailure | KeyValidationInconclusive | KeyValidationSuccess;
 
 export abstract class BaseProvider {
   abstract readonly platform: Platform;

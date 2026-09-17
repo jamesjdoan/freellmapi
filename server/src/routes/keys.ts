@@ -10,6 +10,7 @@ import { parseKeysFromFile, stripJsoncComments, stripTrailingCommas } from '../l
 import { assessProviderUrl } from '../lib/url-guard.js';
 import { verifyCredentials } from '../services/auth.js';
 import { getActiveCooldownsForKeys, clearCooldownsForKey } from '../services/ratelimit.js';
+import { getMonthlyBudgetCaps } from '../services/key-budget.js';
 import { resolveCustomEndpointKey, customEndpointKeyIds, siblingEndpointKeyId, endpointHasCredential } from '../services/custom-endpoint.js';
 import { registerCustomModels, registerCustomChatModels } from '../services/custom-model-register.js';
 import { registerCustomMediaModel } from '../services/custom-media-register.js';
@@ -19,6 +20,7 @@ import { listModelHealth, probeModel } from '../services/model-health.js';
 import { endpointScopeForBaseUrl, normalizeBaseUrl } from '../lib/endpoint-scope.js';
 import { recordCustomModelTombstone } from '../services/custom-model-tombstone.js';
 import type { Db } from '../db/types.js';
+import type { Platform } from '@freellmapi/shared/types.js';
 import { parseModelScope } from '../lib/model-scope.js';
 import { KEY_PROXY_URL_ERROR, KEY_PROXY_URL_MAX, decryptProxyUrl, encryptProxyUrl, isValidKeyProxyUrl, maskProxyUrl } from '../lib/key-proxy.js';
 import { isCatalogManagedModel, upsertModelOverrides } from '../services/model-state.js';
@@ -33,7 +35,7 @@ export const keysRouter = Router();
 // was dropped in V4 and re-added in V13 via the router.huggingface.co route.
 // SambaNova was dropped in V23 (free tier permanently retired).
 const PLATFORMS = [
-  'google', 'groq', 'cerebras', 'sail', 'bai', 'radeon', 'nvidia', 'mistral',
+  'google', 'groq', 'cerebras', 'sail', 'electronhub', 'experiential', 'router9', 'septor', 'clod', 'speechify', 'blaze', 'lucidity', 'airforce', 'dreamprompting', 'waterfall', 'logfare', 'bai', 'radeon', 'nvidia', 'mistral',
   'openrouter', 'github', 'cohere', 'cloudflare', 'zhipu', 'ollama',
   'kilo', 'pollinations', 'llm7', 'huggingface', 'opencode', 'ovh', 'agnes', 'reka', 'siliconflow',
   'routeway', 'bazaarlink', 'ainative', 'aion', 'anyapi', 'requesty', 'navy', 'nara', 'sealion', 'orcarouter', 'unorouter', 'xkiro', 'modelscope',
@@ -92,10 +94,15 @@ const updateKeySchema = z.object({
     || value.tpmLimit !== undefined || value.tpdLimit !== undefined, {
     message: 'At least one model limit must be provided',
   })).min(1).max(500).optional(),
+  // Monthly budget caps (#1158): 0 clears the cap (unlimited).
+  monthlyRequestCap: z.number().int().min(0).max(1_000_000_000).optional(),
+  monthlyTokenCap: z.number().int().min(0).max(1_000_000_000_000).optional(),
+  // An absent credential leaves the encrypted key untouched.
+  key: z.string().trim().min(1).optional(),
 }).refine(data => data.enabled !== undefined || data.label !== undefined || data.modelScope !== undefined || data.proxyUrl !== undefined
   || data.providerRpmLimit !== undefined || data.providerRpdLimit !== undefined || data.providerTpdLimit !== undefined
-  || data.modelLimits !== undefined, {
-  message: 'At least one key setting must be provided',
+  || data.modelLimits !== undefined || data.key !== undefined || data.monthlyRequestCap !== undefined || data.monthlyTokenCap !== undefined, {
+  message: 'At least one of enabled, label, modelScope, proxyUrl, key, providerRpmLimit, providerRpdLimit, providerTpdLimit, modelLimits, monthlyRequestCap or monthlyTokenCap must be provided',
 });
 
 const importKeySchema = z.object({
@@ -328,12 +335,15 @@ keysRouter.get('/', (_req: Request, res: Response) => {
     }
     const cooldowns = cooldownsByKeyId.get(Number(row.id)) ?? [];
     const scope = parseModelScope(row.model_scope_json);
+    const budgetCaps = getMonthlyBudgetCaps(Number(row.id));
     return {
       id: row.id,
       platform: row.platform,
       label: row.label,
       maskedKey,
       baseUrl: row.base_url ?? null,
+      monthlyRequestCap: budgetCaps.requestCap,
+      monthlyTokenCap: budgetCaps.tokenCap,
       status: row.status,
       enabled: row.enabled === 1,
       keyless: resolveProvider(row.platform)?.keyless === true,
@@ -1617,26 +1627,68 @@ keysRouter.patch('/:id', (req: Request, res: Response) => {
     return;
   }
 
-  const { enabled, label, modelScope, proxyUrl, providerRpmLimit, providerRpdLimit, providerTpdLimit, modelLimits } = parsed.data;
+  const { enabled, label, modelScope, proxyUrl, providerRpmLimit, providerRpdLimit, providerTpdLimit, modelLimits, key, monthlyRequestCap, monthlyTokenCap } = parsed.data;
+  const db = getDb();
+  const keyRow = db.prepare('SELECT id, platform FROM api_keys WHERE id = ?').get(id) as { id: number; platform: string } | undefined;
+  if (!keyRow) {
+    res.status(404).json({ error: { message: 'Key not found' } });
+    return;
+  }
+
   const updates: string[] = [];
   const values: (string | number | null)[] = [];
+  let changedKey: string | undefined;
+
+  if (key !== undefined) {
+    const stored = db.prepare('SELECT platform, encrypted_key, iv, auth_tag FROM api_keys WHERE id = ?').get(id) as { platform: string; encrypted_key: string; iv: string; auth_tag: string } | undefined;
+    if (!stored) {
+      res.status(404).json({ error: { message: 'Key not found' } });
+      return;
+    }
+    if (resolveProvider(stored.platform as Platform)?.keyless === true) {
+      res.status(400).json({ error: { message: 'Keyless providers cannot store a credential' } });
+      return;
+    }
+    if (stored.platform === 'cloudflare') {
+      const separator = key.indexOf(':');
+      if (separator < 1 || !key.slice(0, separator).trim() || !key.slice(separator + 1).trim()) {
+        res.status(400).json({ error: { message: 'Cloudflare key must be in format "account_id:api_token"' } });
+        return;
+      }
+    }
+    try {
+      if (decrypt(stored.encrypted_key, stored.iv, stored.auth_tag) !== key) changedKey = key;
+    } catch {
+      changedKey = key;
+    }
+  }
 
   if (enabled !== undefined) {
     updates.push('enabled = ?');
     values.push(enabled ? 1 : 0);
   }
+  if (changedKey !== undefined) {
+    const { encrypted, iv, authTag } = encrypt(changedKey);
+    updates.push('encrypted_key = ?', 'iv = ?', 'auth_tag = ?', "status = 'unknown'", 'last_checked_at = NULL', 'last_health_error = NULL');
+    values.push(encrypted, iv, authTag);
+  }
   if (label !== undefined) {
     updates.push('label = ?');
     values.push(label);
   }
-  // #590: stored encrypted (credentials), so a change rewrites all three
-  // columns; '' clears them to NULL.
   if (proxyUrl !== undefined) {
     const proxy = encryptProxyUrl(proxyUrl);
     updates.push('proxy_encrypted = ?', 'proxy_iv = ?', 'proxy_auth_tag = ?');
     values.push(proxy.encrypted, proxy.iv, proxy.authTag);
   }
-  // Deduped; an empty result stores NULL, which the router reads as "unscoped".
+  if (monthlyRequestCap !== undefined) {
+    updates.push('monthly_request_cap = ?');
+    values.push(monthlyRequestCap);
+  }
+  if (monthlyTokenCap !== undefined) {
+    updates.push('monthly_token_cap = ?');
+    values.push(monthlyTokenCap);
+  }
   const scopeIds = modelScope == null ? [] : [...new Set(modelScope)];
   if (modelScope !== undefined) {
     updates.push('model_scope_json = ?');
@@ -1653,72 +1705,71 @@ keysRouter.patch('/:id', (req: Request, res: Response) => {
     }
   }
 
-  const db = getDb();
-  const keyRow = db.prepare('SELECT id, platform FROM api_keys WHERE id = ?').get(id) as { id: number; platform: string } | undefined;
-  if (!keyRow) {
-    res.status(404).json({ error: { message: 'Key not found' } });
-    return;
-  }
-
-  const requestedModelIds = [...new Set((modelLimits ?? []).map(entry => entry.modelDbId))];
-  if (requestedModelIds.length !== (modelLimits ?? []).length) {
-    res.status(400).json({ error: { message: 'Duplicate modelDbId in modelLimits' } });
-    return;
-  }
-  const modelRows = requestedModelIds.length === 0 ? [] : db.prepare(`
-    SELECT id, platform, model_id, key_id, source
-      FROM models
-     WHERE id IN (${requestedModelIds.map(() => '?').join(', ')})
-  `).all(...requestedModelIds) as Array<{ id: number; platform: string; model_id: string; key_id: number | null; source: string }>;
-  if (modelRows.length !== requestedModelIds.length || modelRows.some(row =>
-    row.platform !== keyRow.platform || (row.source === 'custom' && row.key_id !== keyRow.id))) {
-    res.status(400).json({ error: { message: 'Every model limit must belong to the key provider' } });
-    return;
-  }
-
-  const rowById = new Map(modelRows.map(row => [row.id, row]));
-  const apply = db.transaction(() => {
-    if (updates.length > 0) {
-      db.prepare(`UPDATE api_keys SET ${updates.join(', ')} WHERE id = ?`).run(...values, id);
+  // Validate modelLimits before any writes
+  let rowById: Map<number, { id: number; platform: string; model_id: string; key_id: number | null; source: string }> | undefined;
+  if (modelLimits !== undefined) {
+    const requestedModelIds = [...new Set((modelLimits ?? []).map(entry => entry.modelDbId))];
+    if (requestedModelIds.length !== (modelLimits ?? []).length) {
+      res.status(400).json({ error: { message: 'Duplicate modelDbId in modelLimits' } });
+      return;
     }
-    for (const entry of modelLimits ?? []) {
-      const assignments: string[] = [];
-      const modelValues: Array<number | null> = [];
-      const override: Record<string, number | null> = {};
-      for (const [field, column] of [
-        ['rpmLimit', 'rpm_limit'],
-        ['rpdLimit', 'rpd_limit'],
-        ['tpmLimit', 'tpm_limit'],
-        ['tpdLimit', 'tpd_limit'],
-      ] as const) {
-        const value = entry[field];
-        if (value === undefined) continue;
-        assignments.push(`${column} = ?`);
-        modelValues.push(value);
-        override[field] = value;
+    const modelRows = requestedModelIds.length === 0 ? [] : db.prepare(`
+      SELECT id, platform, model_id, key_id, source
+        FROM models
+       WHERE id IN (${requestedModelIds.map(() => '?').join(', ')})
+    `).all(...requestedModelIds) as Array<{ id: number; platform: string; model_id: string; key_id: number | null; source: string }>;
+    if (modelRows.length !== requestedModelIds.length || modelRows.some(row =>
+      row.platform !== keyRow.platform || (row.source === 'custom' && row.key_id !== keyRow.id))) {
+      res.status(400).json({ error: { message: 'Every model limit must belong to the key provider' } });
+      return;
+    }
+    rowById = new Map(modelRows.map(row => [row.id, row]));
+  }
+
+  // All key and model-limit writes share one transaction
+  if (updates.length === 0 && modelLimits === undefined) {
+    // no-op
+  } else {
+    db.transaction(() => {
+      if (updates.length > 0) {
+        db.prepare(`UPDATE api_keys SET ${updates.join(', ')} WHERE id = ?`).run(...values, id);
       }
-      db.prepare(`UPDATE models SET ${assignments.join(', ')} WHERE id = ?`).run(...modelValues, entry.modelDbId);
-      const row = rowById.get(entry.modelDbId)!;
-      if (isCatalogManagedModel(row)) upsertModelOverrides(db, row.platform, row.model_id, override);
-      // A typed limit is an operator DECLARATION and has to be stored as one.
-      // The column alone resolves at catalogue rank, below any measured policy
-      // on the same model — so editing this dialog would change the number on
-      // screen and leave the router enforcing the measurement it disagreed
-      // with. Same subject and period as a measured policy, so this replaces
-      // it: deciding otherwise is what the operator just did.
-      writeOperatorModelLimits(db, row.platform, row.model_id, entry);
-    }
-  });
-  apply();
+      for (const entry of modelLimits ?? []) {
+        const assignments: string[] = [];
+        const modelValues: Array<number | null> = [];
+        const override: Record<string, number | null> = {};
+        for (const [field, column] of [
+          ['rpmLimit', 'rpm_limit'],
+          ['rpdLimit', 'rpd_limit'],
+          ['tpmLimit', 'tpm_limit'],
+          ['tpdLimit', 'tpd_limit'],
+        ] as const) {
+          const value = entry[field];
+          if (value === undefined) continue;
+          assignments.push(`${column} = ?`);
+          modelValues.push(value);
+          override[field] = value;
+        }
+        db.prepare(`UPDATE models SET ${assignments.join(', ')} WHERE id = ?`).run(...modelValues, entry.modelDbId);
+        const row = rowById!.get(entry.modelDbId)!;
+        if (isCatalogManagedModel(row)) upsertModelOverrides(db, row.platform, row.model_id, override);
+        writeOperatorModelLimits(db, row.platform, row.model_id, entry);
+      }
+    })();
+  }
+  if (changedKey !== undefined) clearCooldownsForKey(id);
 
   const response: Record<string, unknown> = { success: true };
   if (enabled !== undefined) response.enabled = enabled;
   if (label !== undefined) response.label = label;
   if (proxyUrl !== undefined) response.maskedProxyUrl = maskProxyUrl(proxyUrl);
+  if (key !== undefined) response.maskedKey = maskKey(key);
   if (modelScope !== undefined) response.modelScope = scopeIds.length > 0 ? scopeIds : null;
   if (providerRpmLimit !== undefined) response.providerRpmLimit = providerRpmLimit;
   if (providerRpdLimit !== undefined) response.providerRpdLimit = providerRpdLimit;
   if (providerTpdLimit !== undefined) response.providerTpdLimit = providerTpdLimit;
+  if (monthlyRequestCap !== undefined) response.monthlyRequestCap = monthlyRequestCap;
+  if (monthlyTokenCap !== undefined) response.monthlyTokenCap = monthlyTokenCap;
   if (modelLimits !== undefined) response.modelLimits = modelLimits;
   res.json(response);
 });

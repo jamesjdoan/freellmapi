@@ -3,6 +3,7 @@ import { decrypt } from '../lib/crypto.js';
 import { recordQuotaObservation } from './provider-quota.js';
 import type { Scheduler } from '../lib/scheduler.js';
 import type { Platform } from '@freellmapi/shared/types.js';
+import { isExtensionEnabled } from './extension-state.js';
 
 // Reading quota from a provider's own usage API — the second-highest source of
 // truth in the precedence order, above anything configured or documented and
@@ -136,6 +137,9 @@ interface KeyRow { id: number; platform: string; encrypted_key: string; iv: stri
  * tell "nothing to read" from "read nothing".
  */
 export async function pollProviderUsageApis(): Promise<number> {
+  // `provider-usage-apis` off: balances come from headers and inference only.
+  // Readings already recorded stay in the observation history.
+  if (!isExtensionEnabled('provider-usage-apis')) return 0;
   let rows: KeyRow[];
   try {
     const platforms = platformsWithUsageApi();

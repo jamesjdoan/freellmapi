@@ -16,6 +16,7 @@ import {
 } from './ratelimit.js';
 import { resolveQuotaPolicy } from './provider-quota.js';
 import type { Platform } from '@freellmapi/shared/types.js';
+import { isExtensionEnabled } from './extension-state.js';
 
 // Quota-domain pressure as a routing rank (ADR ARCH-20260905 W4).
 //
@@ -399,6 +400,10 @@ export function quotaDomainsAdmit(
   estimatedTokens = 0,
   now: number = Date.now(),
 ): AdmissionDecision {
+  // `quota-ledger-precedence` off: stop consulting the typed ledger and admit
+  // on upstream's own counters alone. The policies, their provenance and their
+  // history all stay in the database — this is the enforcement, not the data.
+  if (!isExtensionEnabled('quota-ledger-precedence')) return ADMITTED;
   try {
     const quotas = resolveEffectiveQuotas(platform, modelId, now, endpointScope || null);
     for (const quota of quotas) {

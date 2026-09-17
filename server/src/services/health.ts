@@ -149,7 +149,7 @@ export async function checkKeyHealth(
       : sanitizeProviderErrorMessage(
           typeof validation === 'boolean'
             ? `${provider.name} rejected the API key`
-            : validation.error,
+            : 'error' in validation ? validation.error : 'reason' in validation ? validation.reason : '',
         );
 
     const status: KeyStatus = isValid ? 'healthy' : 'invalid';

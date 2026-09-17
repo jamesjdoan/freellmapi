@@ -1,6 +1,7 @@
 import './env.js';
 import { createApp } from './app.js';
 import { initDb, getDb } from './db/index.js';
+import { loadExtensionState } from './services/extension-state.js';
 import { startHealthChecker, checkAllKeys } from './services/health.js';
 import { restoreProxySettings, flushProxyCache } from './lib/proxy.js';
 import { startWakeDetect } from './lib/wake-detect.js';
@@ -46,6 +47,11 @@ async function main() {
   }
   initDb(config.dbPath ?? undefined);
   applyDeclarativeConfigFromEnv();
+  // Publish the extension snapshot before anything reads a gate. initDb has
+  // already run the migrations, so the settings row is there to be read; the
+  // load also repairs a paid-balance guard whose acknowledgement has gone
+  // missing, and that must happen before the first request can route.
+  loadExtensionState();
   // After initDb: the unknown-model half of this check reads the catalog.
   warnOnRoutingOverrideDrift();
 

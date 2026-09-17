@@ -8,6 +8,7 @@ import { PlatformDot } from '@/components/platform-dot'
 import { partitionByActivated, useActivatedPlatforms } from '@/lib/activated-platforms'
 import { TimeTreeLog } from '@/components/time-tree-log'
 import { parseSqliteUtc } from '@/lib/time-tree'
+import { useExtensionEnabled } from '@/lib/use-extension'
 
 // The catalogue's history: every model that arrived, was retired, removed or
 // relisted, and when.
@@ -41,6 +42,8 @@ interface CatalogueLogPage {
 const GAINED = new Set(['arrived', 'relisted'])
 
 export function CatalogueLogPanel() {
+  // `catalogue-log` off: the panel is hidden; arrivals and departures keep being recorded.
+  if (!useExtensionEnabled('catalogue-log')) return null
   const { t } = useI18n()
   const [platform, setPlatform] = useState<string | null>(null)
   // Default to the providers this install turned on. The log covers the whole

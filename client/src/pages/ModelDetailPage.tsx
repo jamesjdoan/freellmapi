@@ -21,6 +21,7 @@ import { QuotaProbeLogPanel } from '@/components/quota-probe-log'
 import { ModelTableHead, RateLimitBadge, RowContent } from '@/components/model-table'
 import {
   groupQuotaBadge,
+  isMemberDepleted,
   isMemberSplit,
   memberEndpointTitle,
   memberOverrideKey,
@@ -348,7 +349,7 @@ export default function ModelDetailPage() {
                 <ModelTableHead />
                 <tbody>
                   {members.map((m, i) => (
-                    <tr key={m.modelDbId} className={`border-b last:border-0 ${m.enabled ? '' : 'opacity-50'}`}>
+                    <tr key={m.modelDbId} className={`border-b last:border-0 ${m.enabled ? (isMemberDepleted(rateUsageByModel.get(m.modelDbId)) ? 'opacity-60' : '') : 'opacity-50'}`}>
                       <RowContent row={m} rank={i + 1} draggable={false} onToggle={handleToggle} providerName={memberProviderLabel(m, siblings)} providerTitle={memberEndpointTitle(m, siblings)} rateUsage={rateUsageByModel.get(m.modelDbId)} />
                     </tr>
                   ))}
