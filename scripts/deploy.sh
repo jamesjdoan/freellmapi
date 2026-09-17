@@ -72,6 +72,11 @@ compose_project="$(label com.docker.compose.project)"
 compose_service="$(label com.docker.compose.service)"
 # The volume the container really mounts, rather than a name assumed from the
 # project. A deploy that backs up the wrong volume is not backed up.
+# The image NAME compose selects, which is not necessarily ours: this install's
+# compose file says `image: ghcr.io/tashfeenahmed/freellmapi:latest`. Tagging
+# only jamesjdoan/freellmapi:provider-routing would leave `up --no-build`
+# reusing the OLD image -- the build would succeed and change nothing.
+compose_image="$(docker inspect "$container" --format '{{.Config.Image}}' 2>/dev/null || true)"
 volume="$(docker inspect "$container" \
   --format '{{range .Mounts}}{{if eq .Destination "/app/server/data"}}{{.Name}}{{end}}{{end}}' 2>/dev/null || true)"
 
@@ -83,6 +88,7 @@ if [[ -z "$compose_file" || -z "$compose_workdir" ]]; then
   compose_project="${compose_project:-freellmapi}"
   compose_service="${compose_service:-freellmapi}"
   volume="${volume:-freellmapi_freellmapi-data}"
+  compose_image="${compose_image:-$(grep -m1 -E '^\s*image:' "$project_root/docker-compose.yml" | sed 's/.*image:[[:space:]]*//')}"
   step "no live container to read; falling back to $compose_file"
 else
   step "deploying into project '$compose_project' from $compose_file"
@@ -90,6 +96,7 @@ fi
 
 [[ -f "$compose_file" ]] || fail "compose file $compose_file does not exist"
 [[ -n "$volume" ]] || fail "could not determine the data volume for $container"
+[[ -n "$compose_image" ]] || fail "could not determine which image tag compose selects"
 
 compose() { docker compose --project-directory "$compose_workdir" -f "$compose_file" -p "$compose_project" "$@"; }
 
@@ -104,7 +111,13 @@ docker build -q -t "$build_tag" "$project_root" >/dev/null || fail "image build 
 # ── 2. Keep a rollback point ────────────────────────────────────────────────
 # Tag the image that is live NOW, not the one being replaced by name, so the
 # rollback tag points at whatever was actually serving.
-if docker image inspect "$image_repo:$live_tag" >/dev/null 2>&1; then
+# By image ID, not by tag: the tag is about to be reassigned, and the thing
+# worth being able to return to is whatever is serving right now.
+live_image_id="$(docker inspect "$container" --format '{{.Image}}' 2>/dev/null || true)"
+if [[ -n "$live_image_id" ]]; then
+  docker tag "$live_image_id" "$rollback_tag" || fail "could not tag rollback point"
+  step "rollback point $rollback_tag -> $live_image_id"
+elif docker image inspect "$image_repo:$live_tag" >/dev/null 2>&1; then
   docker tag "$image_repo:$live_tag" "$rollback_tag" || fail "could not tag rollback point"
   step "rollback point $rollback_tag"
 fi
@@ -139,6 +152,8 @@ if [[ "$skip_backup" == "0" ]]; then
   echo "    $backup"
 fi
 
+# Both names: the one compose will actually run, and ours for provenance.
+docker tag "$build_tag" "$compose_image" || fail "could not promote $build_tag to $compose_image"
 docker tag "$build_tag" "$image_repo:$live_tag" || fail "could not promote $build_tag"
 
 # ── 4. Start it ─────────────────────────────────────────────────────────────
@@ -179,7 +194,12 @@ while (( SECONDS < deadline )); do
     # `!= 000` guard. This script reported a deploy as serving on its own first
     # real run because of it.
     code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$health_url" 2>/dev/null || true)"
-    [[ -n "$code" && "$code" != "000" ]] && break
+    # Docker's healthcheck reports 'starting' for its first interval, so the
+    # loop must WAIT for it rather than break on the HTTP answer and then
+    # assert it: the first fixed deploy failed on exactly that, a few seconds
+    # before the container reported healthy.
+    health="$(docker inspect "$container" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>/dev/null || echo none)"
+    if [[ -n "$code" && "$code" != "000" && ( "$health" == "healthy" || "$health" == "none" ) ]]; then break; fi
   fi
   sleep "$poll_seconds"
 done
@@ -198,7 +218,7 @@ done
 # "running" alone is not the bar.
 health="$(docker inspect "$container" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>/dev/null || echo none)"
 [[ "$health" == "healthy" || "$health" == "none" ]] \
-  || fail "container health is '$health', not healthy"
+  || fail "container health is '$health' after ${wait_seconds}s, not healthy"
 
 # A published port, because a container serving only on its internal network is
 # not reachable by the harness roles pointed at it.
@@ -220,4 +240,4 @@ built_image="$(docker image inspect "$build_tag" --format '{{.Id}}')"
 
 echo
 echo "deployed $build_tag — $container $state/$health on $volume, $health_url answering $code"
-echo "rollback: docker tag $rollback_tag $image_repo:$live_tag && docker compose --project-directory $compose_workdir -f $compose_file -p $compose_project up -d --no-build --force-recreate $compose_service"
+echo "rollback: docker tag $rollback_tag $compose_image && docker compose --project-directory $compose_workdir -f $compose_file -p $compose_project up -d --no-build --force-recreate $compose_service"

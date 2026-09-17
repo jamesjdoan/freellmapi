@@ -13,7 +13,7 @@ import { resolveRoutingChain, setRoutingStrategy } from '../../services/router.j
 import { consumesPaidBalance, resolveQuotaPolicy } from '../../services/provider-quota.js';
 import { invalidateQuotaPressure } from '../../services/quota-pressure.js';
 import { setExtensionEnabled, resetExtensionStateCache } from '../../services/extension-state.js';
-import { PAID_BALANCE_GUARD_ID, PAID_SPEND_CONFIRMATION } from '@freellmapi/shared/extension-registry.js';
+import { PAID_BALANCE_GUARD_ID, PAID_SPEND_CONFIRMATION } from '../../data/extension-registry.js';
 import { setSetting } from '../../db/index.js';
 
 function reset(): void {

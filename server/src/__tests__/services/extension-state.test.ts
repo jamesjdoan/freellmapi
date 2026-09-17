@@ -12,7 +12,7 @@ import {
   EXTENSION_STATE_KEY,
   PAID_BALANCE_GUARD_ID,
   PAID_SPEND_CONFIRMATION,
-} from '@freellmapi/shared/extension-registry.js';
+} from '../../data/extension-registry.js';
 
 describe('extension state', () => {
   beforeEach(() => {

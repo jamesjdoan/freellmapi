@@ -10,7 +10,7 @@
  */
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { IMPERIUM_EXTENSIONS } from '@freellmapi/shared/extension-registry.js';
+import { IMPERIUM_EXTENSIONS, PAID_SPEND_CONFIRMATION } from '../data/extension-registry.js';
 import {
   getExtensionState,
   setExtensionEnabled,
@@ -24,6 +24,9 @@ extensionsRouter.get('/', (_req: Request, res: Response) => {
   res.json({
     revision: state.revision,
     paidSpendAcknowledgement: state.paidSpendAcknowledgement,
+    // Told to the client rather than shared as a constant: `@freellmapi/shared`
+    // ships no JavaScript, so a value import of it breaks inside the image.
+    paidSpendConfirmation: PAID_SPEND_CONFIRMATION,
     extensions: IMPERIUM_EXTENSIONS.map(extension => ({
       ...extension,
       enabled: state.enabled[extension.id] === true,

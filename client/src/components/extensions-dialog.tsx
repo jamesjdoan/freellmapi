@@ -9,16 +9,15 @@ import { Input } from '@/components/ui/input'
 import { apiFetch } from '@/lib/api'
 import { useI18n } from '@/i18n'
 import { refreshExtensionState } from '@/lib/use-extension'
-import {
-  PAID_BALANCE_GUARD_ID,
-  PAID_SPEND_CONFIRMATION,
-  type ImperiumExtension,
-} from '@freellmapi/shared/extension-registry'
+import type { ImperiumExtension } from '@freellmapi/shared/extension-registry'
 
 type ExtensionRow = ImperiumExtension & { enabled: boolean }
 type ExtensionsPayload = {
   revision: number
   paidSpendAcknowledgement: null | { policyVersion: 1; confirmedAt: string }
+  /** The phrase a disable must echo. Served rather than imported: the shared
+   *  package is types-only and has no runtime JavaScript. */
+  paidSpendConfirmation: string
   extensions: ExtensionRow[]
 }
 
@@ -78,7 +77,7 @@ export function ExtensionFeatureList({ onNavigate }: { onNavigate?: () => void }
               {categoryLabel[category]}
             </h3>
             {rows.map(feature => {
-              const isGuard = feature.id === PAID_BALANCE_GUARD_ID
+              const isGuard = feature.disableConfirmation === 'paid-spend'
               const confirming = confirmFor === feature.id
               return (
                 <div key={feature.id} className="rounded-2xl border bg-background p-4">
@@ -129,19 +128,19 @@ export function ExtensionFeatureList({ onNavigate }: { onNavigate?: () => void }
                     <div className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/5 p-3">
                       <p className="flex items-start gap-2 text-[11px] leading-relaxed text-rose-700 dark:text-rose-400">
                         <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
-                        <span>{t('extensions.paidWarning', { phrase: PAID_SPEND_CONFIRMATION })}</span>
+                        <span>{t('extensions.paidWarning', { phrase: data.paidSpendConfirmation })}</span>
                       </p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <Input
                           value={confirmText}
                           onChange={event => setConfirmText(event.target.value)}
-                          placeholder={PAID_SPEND_CONFIRMATION}
+                          placeholder={data.paidSpendConfirmation}
                           className="h-8 max-w-xs font-mono text-xs"
                         />
                         <Button
                           size="sm"
                           variant="destructive"
-                          disabled={confirmText !== PAID_SPEND_CONFIRMATION || toggle.isPending}
+                          disabled={confirmText !== data.paidSpendConfirmation || toggle.isPending}
                           onClick={() => toggle.mutate({ id: feature.id, enabled: false, confirmation: confirmText })}
                         >
                           {t('extensions.authorisePaid')}

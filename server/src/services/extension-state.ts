@@ -16,14 +16,14 @@
  * from before the acknowledgement therefore fails safe.
  */
 import { getSetting, setSetting } from '../db/index.js';
+import type { ExtensionState } from '@freellmapi/shared/extension-registry.js';
 import {
   EXTENSION_STATE_KEY,
   EXTENSION_IDS,
   PAID_BALANCE_GUARD_ID,
   PAID_SPEND_CONFIRMATION,
   defaultExtensionEnabled,
-  type ExtensionState,
-} from '@freellmapi/shared/extension-registry.js';
+} from '../data/extension-registry.js';
 
 export class ExtensionStateError extends Error {
   constructor(message: string, readonly code: 'unknown_extension' | 'revision_conflict' | 'confirmation_required') {

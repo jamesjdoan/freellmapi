@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initDb, getDb, setSetting, getSetting } from '../../db/index.js';
 import { setExtensionEnabled, resetExtensionStateCache } from '../../services/extension-state.js';
-import { EXTENSION_STATE_KEY } from '@freellmapi/shared/extension-registry.js';
+import { EXTENSION_STATE_KEY } from '../../data/extension-registry.js';
 import { getProviderPreferences, PROVIDER_PREFERENCES_KEY } from '../../services/model-groups.js';
 import { quotaDomainsAdmit, invalidateQuotaPressure } from '../../services/quota-pressure.js';
 import { upsertQuotaPolicy } from '../../services/quota-policy.js';

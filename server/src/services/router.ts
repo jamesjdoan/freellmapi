@@ -43,7 +43,7 @@ import { isDegraded } from './degradation.js';
 import { modelStatsKey, endpointScopeForBaseUrl } from '../lib/endpoint-scope.js';
 import { parseModelScope, scopeAllows } from '../lib/model-scope.js';
 import { isExtensionEnabled } from './extension-state.js';
-import { PAID_BALANCE_GUARD_ID } from '@freellmapi/shared/extension-registry.js';
+import { PAID_BALANCE_GUARD_ID } from '../data/extension-registry.js';
 import { getKeyQuotaHeadroom, inferQuotaPoolKey, isQuotaPoolAvailable, resolveQuotaPolicy, consumesPaidBalance } from './provider-quota.js';
 import { effectiveRouteLimits } from './quota-policy.js';
 import { normalizeGroupKey } from './model-groups.js';
