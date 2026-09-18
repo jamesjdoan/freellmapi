@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { PackagePlus, PackageMinus } from 'lucide-react'
+import { PackagePlus, PackageMinus, ChevronRight, ChevronDown } from 'lucide-react'
 import { useI18n } from '@/i18n'
 import { apiFetch } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
@@ -25,6 +25,11 @@ export function CatalogueChangesPanel() {
   // Same default as the log: this is a worklist, and a row for a provider with
   // no key is not work. Opt back in with the footer control.
   const [onlyActivated, setOnlyActivated] = useState(true)
+  // Collapsed by default. This panel and the log below it both opened fully
+  // expanded, which put two long lists at the top of the page before anything
+  // that needed reading. The counts are the part you scan; the rows are the
+  // part you open when a count is surprising.
+  const [expanded, setExpanded] = useState(false)
   const { activated, ready } = useActivatedPlatforms()
 
   const { data } = useCatalogueChanges()
@@ -49,18 +54,44 @@ export function CatalogueChangesPanel() {
   // Every row is on a deactivated provider: the panel still has something to
   // say, so it says how much and offers the way in rather than vanishing.
   if (allArrived.length === 0 && allDeparted.length === 0) return null
+  const routedArrivals = arrived.filter(m => m.routed).length
 
   return (
     <section className="rounded-xl border p-4">
-      <h2 className="text-sm font-medium">{t('catalogue.changesTitle')}</h2>
-      <p className="mt-0.5 text-xs text-muted-foreground">
-        {t('catalogue.changesHint', { since: shortDate(data?.since ?? '') })}
-        {data && data.untrackedArrivals > 0
-          ? ` ${t('catalogue.untracked', { count: data.untrackedArrivals })}`
-          : ''}
-      </p>
+      <button
+        type="button"
+        onClick={() => setExpanded(v => !v)}
+        aria-expanded={expanded}
+        className="flex w-full items-start gap-2 text-left"
+      >
+        {expanded ? <ChevronDown className="mt-0.5 size-4 flex-shrink-0 text-muted-foreground" />
+                  : <ChevronRight className="mt-0.5 size-4 flex-shrink-0 text-muted-foreground" />}
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-2">
+            <h2 className="text-sm font-medium">{t('catalogue.changesTitle')}</h2>
+            <Badge variant="secondary" className="tabular-nums">
+              {t('catalogue.changesSummary', { arrived: arrived.length, departed: departed.length })}
+            </Badge>
+            {/* An arrival already serving traffic is the row that cannot wait
+                for someone to expand a panel, so its count sits in the
+                summary. */}
+            {routedArrivals > 0 && (
+              <Badge variant="destructive" className="tabular-nums">
+                {t('catalogue.changesSummaryUrgent', { count: routedArrivals })}
+              </Badge>
+            )}
+          </span>
+          <span className="mt-0.5 block text-xs text-muted-foreground">
+            {t('catalogue.changesHint', { since: shortDate(data?.since ?? '') })}
+            {data && data.untrackedArrivals > 0
+              ? ` ${t('catalogue.untracked', { count: data.untrackedArrivals })}`
+              : ''}
+          </span>
+        </span>
+        <span className="sr-only">{expanded ? t('catalogue.hideDetail') : t('catalogue.showDetail')}</span>
+      </button>
 
-      {arrived.length > 0 && (
+      {expanded && arrived.length > 0 && (
         <div className="mt-3">
           <h3 className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
             <PackagePlus className="size-3.5" />
@@ -84,7 +115,7 @@ export function CatalogueChangesPanel() {
         </div>
       )}
 
-      {departed.length > 0 && (
+      {expanded && departed.length > 0 && (
         <div className="mt-4">
           <h3 className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
             <PackageMinus className="size-3.5" />
@@ -124,7 +155,7 @@ export function CatalogueChangesPanel() {
         </div>
       )}
 
-      {(hidden > 0 || !onlyActivated) && (
+      {expanded && (hidden > 0 || !onlyActivated) && (
         <button
           type="button"
           onClick={() => setOnlyActivated(v => !v)}

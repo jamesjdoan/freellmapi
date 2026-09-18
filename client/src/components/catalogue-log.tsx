@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { History } from 'lucide-react'
+import { History, ChevronRight, ChevronDown } from 'lucide-react'
 import { useI18n } from '@/i18n'
 import { apiFetch } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
@@ -51,11 +51,19 @@ export function CatalogueLogPanel() {
   // there is no key for and no way to call — which buried the arrivals that
   // needed reading. Opt back in with the chip; never silently.
   const [onlyActivated, setOnlyActivated] = useState(true)
+  // Collapsed by default, same reasoning as the changes panel above: the
+  // counts are what you scan, the tree is what you open.
+  const [expanded, setExpanded] = useState(false)
+  // How far back to read. The log is append-only and this install already
+  // holds hundreds of events, so the first page is a window rather than the
+  // whole record; raising it is explicit because a deeper page costs a bigger
+  // response and a longer tree.
+  const [limit, setLimit] = useState(200)
   const { activated, ready } = useActivatedPlatforms()
 
   const { data } = useQuery<CatalogueLogPage>({
-    queryKey: ['catalogue-log', platform],
-    queryFn: () => apiFetch(`/api/models/changes/log?limit=500${platform ? `&platform=${encodeURIComponent(platform)}` : ''}`),
+    queryKey: ['catalogue-log', platform, limit],
+    queryFn: () => apiFetch(`/api/models/changes/log?limit=${limit}${platform ? `&platform=${encodeURIComponent(platform)}` : ''}`),
   })
 
   // Filtered here rather than in the request: the provider chips are built from
@@ -73,12 +81,25 @@ export function CatalogueLogPanel() {
   return (
     <section className="rounded-xl border p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <History className="size-4 text-muted-foreground" />
-        <h2 className="text-sm font-medium">{t('catalogue.logTitle')}</h2>
+        <button
+          type="button"
+          onClick={() => setExpanded(v => !v)}
+          aria-expanded={expanded}
+          className="flex items-center gap-2 text-left"
+        >
+          {expanded ? <ChevronDown className="size-4 text-muted-foreground" />
+                    : <ChevronRight className="size-4 text-muted-foreground" />}
+          <History className="size-4 text-muted-foreground" />
+          <h2 className="text-sm font-medium">{t('catalogue.logTitle')}</h2>
+          <span className="text-xs text-muted-foreground">
+            {t('catalogue.logSummary', { total: filtering ? events.length : data.total, providers: providers.shown.length })}
+          </span>
+          <span className="sr-only">{expanded ? t('catalogue.logHideHistory') : t('catalogue.logShowHistory')}</span>
+        </button>
         {/* `total` counts the whole log, which can exceed the page; once we are
             hiding rows the honest number is the one on screen. */}
         <Badge variant="secondary" className="tabular-nums">{filtering ? events.length : data.total}</Badge>
-        <div className="ml-auto flex flex-wrap items-center gap-1">
+        {expanded && <div className="ml-auto flex flex-wrap items-center gap-1">
           <button
             type="button"
             onClick={() => setPlatform(null)}
@@ -113,10 +134,10 @@ export function CatalogueLogPanel() {
                 : t('catalogue.logOnlyActivated')}
             </button>
           )}
-        </div>
+        </div>}
       </div>
 
-      <div className="mt-3">
+      {expanded && <div className="mt-3">
         <TimeTreeLog
           recentLabel={t('catalogue.logRecent')}
           unit="month"
@@ -149,6 +170,8 @@ export function CatalogueLogPanel() {
                 </span>
               )}
               <span className="ml-auto flex-shrink-0 text-[11px] text-muted-foreground tabular-nums">
+                {parseSqliteUtc(e.at).toLocaleDateString(undefined, { day: '2-digit', month: 'short' })}
+                {' '}
                 {parseSqliteUtc(e.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
               </span>
               {e.reason && (
@@ -157,7 +180,22 @@ export function CatalogueLogPanel() {
             </div>
           )}
         />
-      </div>
+        {/* The log is append-only, so "older than this page" is a real place to
+            go rather than an empty state. */}
+        <div className="mt-2">
+          {data.total > events.length || limit < data.total ? (
+            <button
+              type="button"
+              onClick={() => setLimit(l => l * 4)}
+              className="text-[11px] text-muted-foreground underline decoration-dotted hover:text-foreground"
+            >
+              {t('catalogue.logLoadMore')}
+            </button>
+          ) : (
+            <span className="text-[11px] text-muted-foreground">{t('catalogue.logLoadedAll')}</span>
+          )}
+        </div>
+      </div>}
     </section>
   )
 }

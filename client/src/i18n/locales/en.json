@@ -1072,7 +1072,16 @@
       "relisted": "relisted"
     },
     "lostFrom": "lost from {chains}",
-    "acknowledge": "Acknowledge"
+    "acknowledge": "Acknowledge",
+    "changesSummary": "{arrived} arrived · {departed} departed",
+    "changesSummaryUrgent": "{count} already routing",
+    "showDetail": "Show the changes",
+    "hideDetail": "Hide the changes",
+    "logSummary": "{total} changes across {providers} providers",
+    "logShowHistory": "Show the history",
+    "logHideHistory": "Hide the history",
+    "logLoadMore": "Load more history",
+    "logLoadedAll": "Whole log loaded"
   },
   "quota": {
     "title": "Quota",
