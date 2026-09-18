@@ -175,7 +175,7 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'google', modelId: 'gemini-3.5-flash', classification: 'CORE',
-    chains: { Coding: 6, Frontier: 6, Vision: 7 },
+    chains: { Coding: 6, Frontier: 5, Vision: 7 },
     why: '70% over 132 attempts. 8723ms measured. intelligence 33. coding 70.1. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
@@ -193,10 +193,15 @@ export const CURATED_ROUTES: CuratedRoute[] = [
     chains: { Vision: 10 },
     why: 'Vision WITHOUT tools, which is why no agentic chain will take it and why Vision admits SPECIALIST at all. intelligence 16.7, 30/min, 4 attempts — a tail, not a fallback.',
   },
+  {
+    platform: 'google', modelId: 'gemini-3.1-flash-lite-preview', classification: 'OVERFLOW',
+    chains: { 'Fast-Lane': 5 },
+    why: 'Added 2026-09-18. 803ms measured direct. Google meters per project+model, so this is its own 20/day allowance rather than a second claim on one already counted. Fast-Lane tail: the chain had shrunk to three members, and this is depth that costs nothing until the faster heads refuse.',
+  },
   // ── groq ──────────────────────────────────────────────────────
   {
     platform: 'groq', modelId: 'qwen/qwen3.8-27b', classification: 'OVERFLOW',
-    chains: { Default: 2, Workhorse: 2, 'Fast-Lane': 3, Apex: 5, Coding: 5, Vision: 5 },
+    chains: { Default: 2, Workhorse: 2, 'Fast-Lane': 4, Apex: 5, Coding: 5, Vision: 5 },
     why: '62% over 16 attempts. 190ms measured. intelligence 33.9. coding 68.1.',
   },
   {
@@ -209,12 +214,18 @@ export const CURATED_ROUTES: CuratedRoute[] = [
     chains: { Default: 8, Workhorse: 8 },
     why: '94% over 88 attempts. intelligence 12.3. One of the two most-proven routes here that was in NO chain at all — found by auditing enabled models against chain membership, not by noticing it was missing.',
   },
-  // ── nvidia ────────────────────────────────────────────────────
+  // ── mistral ───────────────────────────────────────────────────
   {
-    platform: 'nvidia', modelId: 'moonshotai/kimi-k3', classification: 'OVERFLOW',
-    chains: { Frontier: 5 },
-    why: '21% over 148 attempts. 65835ms measured. intelligence 43.8. coding 76.2. 40/min.',
+    platform: 'mistral', modelId: 'ministral-3b-latest', classification: 'CORE',
+    chains: { 'Fast-Lane': 2, Vision: 11 },
+    why: 'Added 2026-09-18. 584ms measured against the provider directly, tools and vision, 256K window. Mistral held ELEVEN enabled models and not one chain row before this — an entire keyed provider contributing no capacity, found by auditing keys against membership. Mistral meters PER MODEL, so this is an allowance nothing else here draws on.',
   },
+  // ── nvidia ────────────────────────────────────────────────────
+  // nvidia/moonshotai/kimi-k3 removed 2026-09-18: 21% over 148 attempts, 65835ms
+  // measured, and on the post-v0.11.0 roster it aborted at the 180s ceiling. Its
+  // model row is switched off. Intelligence 43.8 was the highest in the NVIDIA
+  // pool, which is exactly why it held Frontier 5 for a week: capability alone
+  // kept a route that answered one call in five.
   {
     platform: 'nvidia', modelId: 'nvidia/nemotron-3-ultra-550b-a55b', classification: 'CORE',
     chains: { Workhorse: 1, Default: 1, Apex: 7 },
@@ -238,12 +249,12 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'ollama', modelId: 'gemma4:31b', classification: 'SPECIALIST',
-    chains: { 'Extra-Tier': 5 },
+    chains: { 'Extra-Tier': 4 },
     why: '5 attempt(s) — too thin to rate. 6378ms measured. intelligence 15.4. coding 43.4. SCARCE — demoted a tier.',
   },
   {
     platform: 'ollama', modelId: 'nemotron-3-super', classification: 'EXPERIMENTAL',
-    chains: { 'Extra-Tier': 6 },
+    chains: { 'Extra-Tier': 5 },
     why: '62% over 395 attempts. 11896ms measured. intelligence 13.6. coding 37.7. SCARCE — demoted a tier.',
   },
   // ── opencode ──────────────────────────────────────────────────
@@ -254,18 +265,17 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'opencode', modelId: 'nemotron-3-ultra-free', classification: 'EXPERIMENTAL',
-    chains: { 'Extra-Tier': 4 },
+    chains: { 'Extra-Tier': 3 },
     why: '72% over 145 attempts. 27385ms measured. intelligence 23.4. coding 49.3. provider barely exercised here.',
   },
+  // opencode/mimo-v2.5-free removed 2026-09-18: model row switched off, so its
+  // Extra-Tier row pointed at a route the router would never walk.
+  // opencode/big-pickle removed 2026-09-18: model row switched off, same reason.
+  // ── anyapi ────────────────────────────────────────────────────
   {
-    platform: 'opencode', modelId: 'mimo-v2.5-free', classification: 'SPECIALIST',
-    chains: { 'Extra-Tier': 3 },
-    why: '4 attempt(s) — too thin to rate. 3387ms measured. intelligence 22.3. coding 56.8. 5/min. SCARCE — demoted a tier. provider barely exercised here.',
-  },
-  {
-    platform: 'opencode', modelId: 'big-pickle', classification: 'SPECIALIST',
-    chains: { 'Extra-Tier': 7 },
-    why: '4 attempt(s) — too thin to rate. 4473ms measured. 3/min. SCARCE — demoted a tier. provider barely exercised here.',
+    platform: 'anyapi', modelId: 'dots-studio/dots-3-note-preview:free', classification: 'EXPERIMENTAL',
+    chains: { 'Extra-Tier': 6 },
+    why: 'Added 2026-09-18. Tools and vision on a 488K window, and it answered Extra-Tier on its first routed call. Intelligence reads 500 from the catalogue, which is a placeholder and not a measurement — hence EXPERIMENTAL and a tail position. Deliberately NOT in Vision despite being vision-capable: that chain admits CORE, OVERFLOW and SPECIALIST only, and its own contract refused this route when I tried. It earns Vision once it has a record rather than a placeholder. AnyAPI is one shared 100K-token/day team budget across every model.',
   },
   // ── openrouter ────────────────────────────────────────────────
   {
@@ -280,7 +290,7 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'openrouter', modelId: 'inclusionai/ling-3.0-flash-sante:free', classification: 'OVERFLOW',
-    chains: { 'Fast-Lane': 2 },
+    chains: { 'Fast-Lane': 3 },
     why: '3 attempt(s) — too thin to rate. 1394ms measured. intelligence 24.9. coding 50.6. OpenRouter spends ONE account counter (1000/day, 20/min) whichever :free model answers, so only its strongest qualifying route is listed: a weaker sibling costs the same unit for less, and adds no depth because they exhaust together.',
   },
 ];
