@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogPopup, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { ConfirmButton } from '@/components/confirm-button'
+import { hideControlPressable } from '@/lib/route-blockers'
 import { useI18n } from '@/i18n'
 import { X } from 'lucide-react'
 import type { ApiKey, QuotaGuidanceCatalog, QuotaGuidanceLimits } from '../../../../shared/types'
@@ -202,6 +203,11 @@ export function ModelScopeDialog({
     ? orderedCandidates.filter(candidate => wasEnabled(candidate.modelId))
     : orderedCandidates
   const hiddenDisabledCount = orderedCandidates.length - visibleCandidates.length
+  // What the filter WOULD hide, which is not the same number as what it is
+  // hiding: `hiddenDisabledCount` is derived after the filter runs and so reads
+  // zero whenever the filter is off. Disabling the box on that would have
+  // wedged it off permanently.
+  const hideableCount = orderedCandidates.filter(candidate => !wasEnabled(candidate.modelId)).length
   // Search narrows what the list shows and, with it, what the bulk buttons act
   // on. Matching the id as well as the name because a provider's display names
   // are often near-identical while the ids are what `modelScope` stores.
@@ -369,14 +375,18 @@ export function ModelScopeDialog({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-[11px] text-muted-foreground">Model limits below apply to all keys for this provider. Account limits remain specific to this key.</p>
               <label className="flex items-center gap-1.5 whitespace-nowrap text-[11px] text-muted-foreground">
+                {/* Nothing off in this key's scope means nothing to hide: the
+                    box says so instead of taking a press that does nothing.
+                    Stays live while ON so it can always be turned back off. */}
                 <input
                   type="checkbox"
                   checked={hideDisabled}
+                  disabled={!hideControlPressable(hideableCount, hideDisabled)}
                   onChange={event => {
                     setHideDisabled(event.target.checked)
                     try { localStorage.setItem(SCOPE_HIDE_DISABLED_KEY, event.target.checked ? '1' : '0') } catch { /* ignore */ }
                   }}
-                  className="size-3.5 accent-primary"
+                  className="size-3.5 accent-primary disabled:cursor-not-allowed disabled:opacity-40"
                 />
                 Hide disabled models
                 {hideDisabled && hiddenDisabledCount > 0 && <span>({hiddenDisabledCount})</span>}

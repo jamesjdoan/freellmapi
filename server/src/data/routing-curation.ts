@@ -185,8 +185,8 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'google', modelId: 'gemini-3.1-flash-lite', classification: 'CORE',
-    chains: { Vision: 3 },
-    why: '84% over 192 attempts. intelligence 16. coding 34.7. 15/min, 500/day — twenty-five times the allowance the Gemini Flash routes carry, which is the depth this chain needed: five of its first eight members are Google 20/day.',
+    chains: { 'Fast-Lane': 5, Vision: 3, Workhorse: 9 },
+    why: '84% over 192 attempts. intelligence 16. coding 34.7. 15/min, 500/day — twenty-five times the allowance the Gemini Flash routes carry, which is the depth this chain needed: five of its first eight members are Google 20/day. Not vision-only: 500/day and tools, so its allowance serves Fast-Lane and the Workhorse tail as well. A vision model is a model that can ALSO see.',
   },
   {
     platform: 'google', modelId: 'gemma-4-26b-a4b-it', classification: 'SPECIALIST',
@@ -195,7 +195,7 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'google', modelId: 'gemini-3.1-flash-lite-preview', classification: 'OVERFLOW',
-    chains: { 'Fast-Lane': 5 },
+    chains: { 'Fast-Lane': 6 },
     why: 'Added 2026-09-18. 803ms measured direct. Google meters per project+model, so this is its own 20/day allowance rather than a second claim on one already counted. Fast-Lane tail: the chain had shrunk to three members, and this is depth that costs nothing until the faster heads refuse.',
   },
   // ── groq ──────────────────────────────────────────────────────
@@ -222,13 +222,13 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'mistral', modelId: 'ministral-14b-2512', classification: 'CORE',
-    chains: { Vision: 6 },
-    why: 'Added 2026-09-18. 563ms, and it answered a real base64 PNG with the right colour — probed with an image rather than with text, because that is what this chain is for. Mistral meters per model, so this is its own allowance behind Google.',
+    chains: { Vision: 6, Workhorse: 10 },
+    why: 'Added 2026-09-18. 563ms, and it answered a real base64 PNG with the right colour — probed with an image rather than with text, because that is what this chain is for. Mistral meters per model, so this is its own allowance behind Google. Workhorse tail too: own Mistral per-model pool, 256k, tools.',
   },
   {
     platform: 'mistral', modelId: 'ministral-8b-2512', classification: 'OVERFLOW',
-    chains: { Vision: 12 },
-    why: 'Added 2026-09-18. 636ms, saw the image correctly. Its own per-model Mistral allowance; a tail because the 14b sibling is stronger for the same cost.',
+    chains: { 'Fast-Lane': 7, Vision: 12 },
+    why: 'Added 2026-09-18. 636ms, saw the image correctly. Its own per-model Mistral allowance; a tail because the 14b sibling is stronger for the same cost. Fast-Lane tail too: vision capability is not a reason to withhold an uncapped Mistral pool from text work.',
   },
   // ── nvidia ────────────────────────────────────────────────────
   // nvidia/moonshotai/kimi-k3 removed 2026-09-18: 21% over 148 attempts, 65835ms
@@ -253,8 +253,8 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'nvidia', modelId: 'meta/llama-3.2-11b-vision-instruct', classification: 'CORE',
-    chains: { Vision: 7 },
-    why: 'Added 2026-09-18. 882ms, saw the image correctly, tools as well as vision. NVIDIA meters per model at 40/min, so this is a third independent pool in a chain that was seven-elevenths Google.',
+    chains: { Vision: 7, Workhorse: 11 },
+    why: 'Added 2026-09-18. 882ms, saw the image correctly, tools as well as vision. NVIDIA meters per model at 40/min, so this is a third independent pool in a chain that was seven-elevenths Google. Workhorse tail too: its NVIDIA per-model minute cap is capacity the text chains had no claim on before.',
   },
   {
     platform: 'nvidia', modelId: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', classification: 'SPECIALIST',
@@ -306,7 +306,7 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   {
     platform: 'openrouter', modelId: 'nex-agi/nex-n2.5-pro:free', classification: 'OVERFLOW',
     chains: { Vision: 4 },
-    why: '2 attempt(s) — too thin to rate. intelligence 28.2. coding 59.1. OpenRouter spends ONE account counter (1000/day, 20/min) whichever :free model answers, so only its strongest qualifying route is listed: a weaker sibling costs the same unit for less, and adds no depth because they exhaust together.',
+    why: '2 attempt(s) — too thin to rate. intelligence 28.2. coding 59.1. OpenRouter spends ONE account counter (1000/day, 20/min) whichever :free model answers, so only its strongest qualifying route is listed: a weaker sibling costs the same unit for less, and adds no depth because they exhaust together. Vision only, and NOT for lack of capability: every text chain already lists an OpenRouter route, and OpenRouter free spends ONE account counter, so a second would be the duplicate-quota illusion rather than depth.',
   },
   {
     platform: 'openrouter', modelId: 'inclusionai/ling-3.0-flash-sante:free', classification: 'OVERFLOW',

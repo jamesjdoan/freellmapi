@@ -1,3 +1,4 @@
+import { blockedReason, hideControlPressable, verdictEdge } from '@/lib/route-blockers'
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
@@ -560,11 +561,16 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
             Now the question is the one worth asking: can this row serve a
             request? Hidden rows are counted in the label, so a filter can never
             make a model quietly cease to exist. */}
+        {/* Nothing to hide: the control says so rather than accepting a press
+            that changes nothing. Still pressable while it is ON, so a filter
+            left on from another provider can always be turned off. */}
         <button
           type="button"
           onClick={toggleHideDisabled}
           aria-pressed={hideDisabled}
-          className={`rounded-full border px-2 py-0.5 text-[10px] ${hideDisabled ? 'bg-muted' : 'hover:bg-muted/50'}`}
+          disabled={!hideControlPressable(unroutableCount, hideDisabled)}
+          title={hideControlPressable(unroutableCount, hideDisabled) ? undefined : t('keys.panelHideNothing')}
+          className={`rounded-full border px-2 py-0.5 text-[10px] ${hideDisabled ? 'bg-muted' : 'hover:bg-muted/50'} disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent`}
         >
           {t('keys.panelHideUnroutable')}
           {unroutableCount > 0 && (
@@ -595,10 +601,23 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
               // key's scope. The row stays readable and stops competing with
               // the models that are actually in play. The switch keeps full
               // contrast so it is still obviously operable.
-              <tr key={r.modelDbId} className={`border-t ${routable(r) ? '' : 'opacity-45'}`}>
+              <tr
+                key={r.modelDbId}
+                className={`border-t ${verdictEdge(healthByModel.get(r.modelId))} ${routable(r) ? '' : 'opacity-45'}`}
+              >
                 <td className="py-1 pr-2">
                   <span className="block max-w-[260px] truncate font-medium" title={r.displayName}>{r.displayName}</span>
                   <code className="block max-w-[260px] truncate text-[10px] text-muted-foreground" title={r.modelId}>{r.modelId}</code>
+                  {/* Why the row is greyed. Without this a tested-good route
+                      that is switched off looks like the router ignoring it. */}
+                  {(() => {
+                    const why = blockedReason(r)
+                    return why && (
+                      <span className="mt-0.5 inline-block rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                        {t(`keys.${why}`)}
+                      </span>
+                    )
+                  })()}
                   {/* The verdict sits ON the name, where the decision to enable
                       is made — not in a column that can be scrolled past. Only
                       failures are marked: a working route needs no badge, and
