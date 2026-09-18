@@ -149,7 +149,7 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // ── unorouter ─────────────────────────────────────────────────
   {
     platform: 'unorouter', modelId: 'glm-5.3:free', classification: 'OVERFLOW',
-    chains: { Frontier: 3, Apex: 4, Coding: 4, Workhorse: 4, Default: 4 },
+    chains: { Frontier: 5, Apex: 4, Coding: 4, Workhorse: 4, Default: 4 },
     why: 'intelligence 44.9 — the highest in this pool, above kimi-k3 at 43.8 — with coding 74.8 and a 977K window. Two probes only, so it heads nothing: 1328ms on 2026-09-17, and a 35s answer on the 16th while the daily token quota was already spent. One route per chain because unorouter free is a single daily token quota.',
   },
   {
@@ -170,12 +170,12 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'google', modelId: 'gemini-3.6-flash', classification: 'CORE',
-    chains: { Apex: 1, Vision: 2, Coding: 2, Frontier: 4 },
+    chains: { Apex: 1, Vision: 2, Coding: 2, Frontier: 6 },
     why: '87% over 159 attempts. 15225ms measured. intelligence 34.3. coding 69.2. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
     platform: 'google', modelId: 'gemini-3.5-flash', classification: 'CORE',
-    chains: { Coding: 6, Frontier: 5, Vision: 7 },
+    chains: { Coding: 6, Frontier: 7, Vision: 7 },
     why: '70% over 132 attempts. 8723ms measured. intelligence 33. coding 70.1. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
@@ -201,8 +201,8 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // ── groq ──────────────────────────────────────────────────────
   {
     platform: 'groq', modelId: 'qwen/qwen3.8-27b', classification: 'OVERFLOW',
-    chains: { Default: 2, Workhorse: 2, 'Fast-Lane': 4, Apex: 5, Coding: 5, Vision: 5 },
-    why: '62% over 16 attempts. 190ms measured. intelligence 33.9. coding 68.1.',
+    chains: { Default: 2, Workhorse: 2, Frontier: 3, 'Fast-Lane': 4, Apex: 5, Coding: 5, Vision: 5 },
+    why: '190ms measured, intelligence 33.9, coding 68.1, and 100% across every chain probe on 2026-09-18. Added to Frontier 3 the same day: that chain was four Google routes plus one unorouter, so a spent Google day and one credit cooldown emptied it completely — it refused all 7 candidates twice. Groq is its own counter, which is the depth Frontier was missing.',
   },
   {
     platform: 'groq', modelId: 'openai/gpt-oss-20b', classification: 'CORE',
@@ -228,8 +228,8 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // kept a route that answered one call in five.
   {
     platform: 'nvidia', modelId: 'nvidia/nemotron-3-ultra-550b-a55b', classification: 'CORE',
-    chains: { Workhorse: 1, Default: 1, Apex: 7 },
-    why: '78% over 917 attempts. 21192ms measured. intelligence 23.4. coding 49.3. 40/min.',
+    chains: { Workhorse: 1, Default: 1, Frontier: 4, Apex: 7 },
+    why: '78% over 917 attempts. 21192ms measured. intelligence 23.4. coding 49.3. 40/min. Added to Frontier 4 on 2026-09-18 for a third independent pool behind Groq: slow, but the chain needed something that is not Google and not a spent credit balance.',
   },
   {
     platform: 'nvidia', modelId: 'nvidia/nemotron-3-super-120b-a12b', classification: 'CORE',
