@@ -6,6 +6,7 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
+import { unreachableCause, unreachableChainMembers } from '../services/chain-reachability.js';
 import { getDb } from '../db/index.js';
 import { effectiveRouteLimits, effectiveRouteWindows } from '../services/quota-policy.js';
 import { resolveQuotaWindow, type QuotaPeriod } from '../services/quota-clock.js';
@@ -449,6 +450,16 @@ const membershipSchema = z.object({
  * Removal clears the enabled flag rather than deleting the row, so a model put
  * back keeps the position it had.
  */
+/**
+ * Chain positions no key can call, which is drift rather than a bad edit: the
+ * membership gate refuses to create one, but disabling a key or narrowing a
+ * scope strands members that were reachable when they were added. Empty array
+ * is the healthy answer.
+ */
+fallbackRouter.get('/reachability', (_req: Request, res: Response) => {
+  res.json({ unreachable: unreachableChainMembers(getDb()) });
+});
+
 fallbackRouter.post('/membership', (req: Request, res: Response) => {
   const parsed = membershipSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -477,6 +488,35 @@ fallbackRouter.post('/membership', (req: Request, res: Response) => {
     VALUES (?, ?, ?, ?)
     ON CONFLICT(profile_id, model_db_id) DO UPDATE SET enabled = excluded.enabled
   `);
+
+  // Refuse to ADD a route no key can call. This is the check that was missing
+  // when the Mistral key sat disabled behind three chain positions: membership
+  // and key scope were validated in different places and never joined, so a
+  // dead position looked like depth. Removal is always allowed - a member you
+  // cannot reach is exactly the one you want to be able to delete.
+  if (parsed.data.member) {
+    const keys = db.prepare('SELECT platform, enabled, status, model_scope_json FROM api_keys').all() as
+      { platform: string; enabled: number; status: string; model_scope_json: string | null }[];
+    const rows = db.prepare(
+      `SELECT id, platform, model_id FROM models WHERE id IN (${parsed.data.modelDbIds.map(() => '?').join(',')})`,
+    ).all(...parsed.data.modelDbIds) as { id: number; platform: string; model_id: string }[];
+    const blocked = rows
+      .map(r => ({ r, cause: unreachableCause(keys, r.platform, r.model_id) }))
+      .filter(x => x.cause !== null);
+    if (blocked.length > 0) {
+      res.status(409).json({
+        error: {
+          message: blocked
+            .map(b => `${b.r.platform}/${b.r.model_id}: ${b.cause === 'no_key' ? 'no key for this provider'
+              : b.cause === 'key_disabled' ? 'every key for this provider is disabled or unhealthy'
+              : 'no enabled key is scoped to this model'}`)
+            .join('; '),
+          unreachable: blocked.map(b => ({ platform: b.r.platform, modelId: b.r.model_id, cause: b.cause })),
+        },
+      });
+      return;
+    }
+  }
 
   let changed = 0;
   let next = tail.p;

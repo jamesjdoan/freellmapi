@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import type { Express } from 'express';
 import { createApp } from '../../app.js';
 import { initDb, getDb } from '../../db/index.js';
+import { encrypt } from '../../lib/crypto.js';
 import { mintDashboardToken } from '../helpers/auth.js';
 
 // Editing ONE NAMED chain, as opposed to rewriting whichever chain is active.
@@ -43,6 +44,15 @@ describe('POST /api/fallback/membership', () => {
     app = createApp();
     token = mintDashboardToken();
     const db = getDb();
+    // A usable Groq key, because membership now refuses a route no key can
+    // call (chain-reachability.ts). These tests are about ordering and the
+    // enabled flag, so the key is fixture rather than subject - but a chain
+    // member with no credential is not a state worth asserting ordering for.
+    const secret = encrypt('groq-membership-test');
+    db.prepare(`
+      INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, status, enabled)
+      VALUES ('groq', 'fixture', ?, ?, ?, 'healthy', 1)
+    `).run(secret.encrypted, secret.iv, secret.authTag);
     db.prepare(`
       INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, size_label,
                           monthly_token_budget, enabled)
@@ -121,5 +131,49 @@ describe('POST /api/fallback/membership', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.changed).toBe(0);
+  });
+
+  it('refuses a member no key can call, naming which key to fix', async () => {
+    // The invariant this endpoint now enforces: a chain position must point at
+    // a route some credential may call. Three positions violated it in
+    // production - the Mistral key sat disabled behind Fast-Lane #2 - because
+    // membership and key scope were checked in different places.
+    const db = getDb();
+    db.prepare(`
+      INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, size_label, monthly_token_budget, enabled)
+      VALUES ('mistral', 'probe/unkeyed', 'Unkeyed', 50, 50, 'Large', '', 1)
+    `).run();
+    const unkeyed = (db.prepare("SELECT id FROM models WHERE model_id = 'probe/unkeyed'").get() as { id: number }).id;
+
+    const res = await call(app, '/api/fallback/membership', token, {
+      chain: 'Default', modelDbIds: [unkeyed], member: true,
+    });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.message).toContain('no key for this provider');
+    expect(res.body.error.unreachable[0]).toMatchObject({ platform: 'mistral', cause: 'no_key' });
+    // And it wrote nothing.
+    const rows = db.prepare('SELECT COUNT(*) AS c FROM profile_models WHERE model_db_id = ?').get(unkeyed) as { c: number };
+    expect(rows.c).toBe(0);
+  });
+
+  it('still allows REMOVING a member no key can call', async () => {
+    // The member you cannot reach is exactly the one you need to delete, so the
+    // gate is on adding only.
+    const db = getDb();
+    db.prepare(`
+      INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, size_label, monthly_token_budget, enabled)
+      VALUES ('mistral', 'probe/stranded', 'Stranded', 50, 50, 'Large', '', 1)
+    `).run();
+    const stranded = (db.prepare("SELECT id FROM models WHERE model_id = 'probe/stranded'").get() as { id: number }).id;
+    db.prepare("INSERT INTO profile_models (profile_id, model_db_id, priority, enabled) SELECT id, ?, 9, 1 FROM profiles WHERE name = 'Default'").run(stranded);
+
+    const res = await call(app, '/api/fallback/membership', token, {
+      chain: 'Default', modelDbIds: [stranded], member: false,
+    });
+
+    expect(res.status).toBe(200);
+    const row = db.prepare('SELECT enabled FROM profile_models WHERE model_db_id = ?').get(stranded) as { enabled: number };
+    expect(row.enabled).toBe(0);
   });
 });
