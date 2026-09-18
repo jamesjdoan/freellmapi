@@ -5,7 +5,8 @@ import { useI18n } from '@/i18n'
 import { apiFetch } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { shortDate, useCatalogueChanges } from '@/lib/catalogue-changes'
+import { useCatalogueChanges } from '@/lib/catalogue-changes'
+import { formatStamp } from '@/lib/stamp'
 import { partitionByActivated, useActivatedPlatforms } from '@/lib/activated-platforms'
 
 // What the catalogue gained and lost since the last time anyone looked.
@@ -82,7 +83,7 @@ export function CatalogueChangesPanel() {
             )}
           </span>
           <span className="mt-0.5 block text-xs text-muted-foreground">
-            {t('catalogue.changesHint', { since: shortDate(data?.since ?? '') })}
+            {t('catalogue.changesHint', { since: formatStamp(data?.since ?? '', { time: true }) })}
             {data && data.untrackedArrivals > 0
               ? ` ${t('catalogue.untracked', { count: data.untrackedArrivals })}`
               : ''}
@@ -108,7 +109,7 @@ export function CatalogueChangesPanel() {
                 {m.routed
                   ? <Badge variant="destructive">{t('catalogue.autoRouted', { chains: m.chains.join(', ') })}</Badge>
                   : <Badge variant="outline">{t('catalogue.notRouted')}</Badge>}
-                <span className="ml-auto text-muted-foreground tabular-nums">{shortDate(m.firstSeenAt)}</span>
+                <span className="ml-auto text-muted-foreground tabular-nums">{formatStamp(m.firstSeenAt, { time: true })}</span>
               </li>
             ))}
           </ul>
@@ -136,7 +137,7 @@ export function CatalogueChangesPanel() {
                       })}
                     </Badge>
                   )}
-                  <span className="ml-auto text-muted-foreground tabular-nums">{shortDate(m.retiredAt)}</span>
+                  <span className="ml-auto text-muted-foreground tabular-nums">{formatStamp(m.retiredAt, { time: true })}</span>
                   <Button
                     size="sm"
                     variant="ghost"

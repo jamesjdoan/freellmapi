@@ -1,7 +1,8 @@
 import { useI18n } from '@/i18n'
 import { Tooltip } from '@/components/tooltip'
 import { Switch } from '@/components/ui/switch'
-import { PROVIDER_CHURN_DAYS, shortDate } from '@/lib/catalogue-changes'
+import { PROVIDER_CHURN_DAYS } from '@/lib/catalogue-changes'
+import { formatStamp } from '@/lib/stamp'
 import type { ProviderChurn } from '@/lib/catalogue-changes'
 import { useExtensionEnabled } from '@/lib/use-extension'
 
@@ -37,8 +38,8 @@ export function ProviderChurnChip({ churn, expanded, onToggle }: {
   if (added === 0 && lost === 0) return null
 
   const lines = [
-    ...churn!.arrived.map(m => `+ ${m.displayName || m.modelId} · ${shortDate(m.firstSeenAt)}${m.routed ? ` · ${m.chains.join(', ')}` : ''}`),
-    ...churn!.departed.map(m => `− ${m.modelId} · ${shortDate(m.retiredAt)}${m.lostFrom.length > 0 ? ` · ${t('catalogue.lostFrom', { chains: m.lostFrom.map(c => c.chain).join(', ') })}` : ''}`),
+    ...churn!.arrived.map(m => `+ ${m.displayName || m.modelId} · ${formatStamp(m.firstSeenAt, { time: true })}${m.routed ? ` · ${m.chains.join(', ')}` : ''}`),
+    ...churn!.departed.map(m => `− ${m.modelId} · ${formatStamp(m.retiredAt, { time: true })}${m.lostFrom.length > 0 ? ` · ${t('catalogue.lostFrom', { chains: m.lostFrom.map(c => c.chain).join(', ') })}` : ''}`),
   ]
   const label = t('keys.churnAria', { days: PROVIDER_CHURN_DAYS, added, lost })
   const counts = (
@@ -116,7 +117,7 @@ export function ProviderChurnPanel({ churn, isServed, onSetServed, pending, disa
       key: `+${m.modelId}`,
       modelId: m.modelId,
       name: m.displayName || m.modelId,
-      date: shortDate(m.firstSeenAt),
+      date: formatStamp(m.firstSeenAt, { time: true }),
       arrived: true,
       note: m.routed ? t('catalogue.autoRouted', { chains: m.chains.join(', ') }) : t('catalogue.notRouted'),
       noteIsWarning: m.routed,
@@ -127,7 +128,7 @@ export function ProviderChurnPanel({ churn, isServed, onSetServed, pending, disa
       key: `-${m.modelId}`,
       modelId: m.modelId,
       name: m.modelId,
-      date: shortDate(m.retiredAt),
+      date: formatStamp(m.retiredAt, { time: true }),
       arrived: false,
       note: m.lostFrom.length > 0
         ? t('catalogue.lostFrom', { chains: m.lostFrom.map(c => c.chain).join(', ') })

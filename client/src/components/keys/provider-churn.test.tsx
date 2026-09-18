@@ -44,6 +44,14 @@ const departure = (modelId: string, retiredAt: string) => ({
   platform: 'groq', modelId, retiredAt, reason: null, lostFrom: [], acknowledgedAt: null,
 })
 
+/** What `formatStamp` should render for a SQLite UTC stamp: locale-proof, and
+ *  independent of the formatter under test (no year here - these are all the
+ *  current year, which is exactly when the year is omitted). */
+function expectedDay(sqlite: string): string {
+  return new Date(`${sqlite.replace(' ', 'T')}Z`)
+    .toLocaleDateString(undefined, { day: '2-digit', month: 'short' })
+}
+
 describe('ProviderChurnChip', () => {
   it('says nothing at all for a provider whose catalogue held still', () => {
     // Most providers, most of the time. A "+0 -0" on every row would cost the
@@ -76,9 +84,11 @@ describe('ProviderChurnChip', () => {
     const tip = document.querySelector('[role=tooltip]')
     expect(tip).not.toBeNull()
     expect(tip!.textContent).toContain('GPT-OSS 20B')
-    expect(tip!.textContent).toContain('2026-09-08')
+    expect(tip!.textContent).toContain(expectedDay('2026-09-08 09:00:00'))
+    // The log beside this chip prints a time; these rows now do too.
+    expect(tip!.textContent).toMatch(/\d{1,2}:\d{2}/)
     expect(tip!.textContent).toContain('gemini-2.5-pro')
-    expect(tip!.textContent).toContain('2026-09-04')
+    expect(tip!.textContent).toContain(expectedDay('2026-09-04 09:00:00'))
   })
 
   it('names the chains a new model has already joined', () => {
@@ -116,7 +126,7 @@ describe('ProviderChurnPanel', () => {
     const el = renderPanel()
     expect(el.textContent).toContain('New Model')
     expect(el.textContent).toContain('gemini-2.5-pro')
-    expect(el.textContent).toContain('2026-09-08')
+    expect(el.textContent).toContain(expectedDay('2026-09-08 09:00:00'))
   })
 
   it('reports the scope change a switch would make, by model id', () => {
@@ -193,7 +203,7 @@ describe('ProviderChurnPanel, retired models', () => {
     for (const served of [true, false]) {
       const el = renderWith(() => served)
       expect(el.textContent).toContain('gemini-2.5-pro')
-      expect(el.textContent).toContain('2026-09-04')
+      expect(el.textContent).toContain(expectedDay('2026-09-04 09:00:00'))
       act(() => root!.unmount()); host!.remove(); root = null; host = null
     }
   })

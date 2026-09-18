@@ -5,9 +5,10 @@ import { useI18n } from '@/i18n'
 import { apiFetch } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { PlatformDot } from '@/components/platform-dot'
+import { formatStamp } from '@/lib/stamp'
+import { parseSqliteUtc } from '@/lib/time-tree'
 import { partitionByActivated, useActivatedPlatforms } from '@/lib/activated-platforms'
 import { TimeTreeLog } from '@/components/time-tree-log'
-import { parseSqliteUtc } from '@/lib/time-tree'
 import { useExtensionEnabled } from '@/lib/use-extension'
 
 // The catalogue's history: every model that arrived, was retired, removed or
@@ -170,9 +171,7 @@ export function CatalogueLogPanel() {
                 </span>
               )}
               <span className="ml-auto flex-shrink-0 text-[11px] text-muted-foreground tabular-nums">
-                {parseSqliteUtc(e.at).toLocaleDateString(undefined, { day: '2-digit', month: 'short' })}
-                {' '}
-                {parseSqliteUtc(e.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                {formatStamp(e.at, { time: true })}
               </span>
               {e.reason && (
                 <p className="w-full pl-5 text-[11px] text-muted-foreground break-words">{e.reason}</p>
