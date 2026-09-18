@@ -95,6 +95,18 @@ export function ModelScopeDialog({
     const seen = new Set<string>()
     return fallback.filter(row => row.platform === apiKey.platform && !seen.has(row.modelId) && seen.add(row.modelId))
   }, [fallback, apiKey.platform])
+  // Why this second query exists: /api/fallback is the candidate source and it
+  // returns only catalogue-ENABLED models, so a provider whose models are all
+  // switched off sends zero rows and the dialog cannot tell "no models" from
+  // "all switched off". Found on b.ai after its promo ended. Count only — the
+  // rows are not rendered from here.
+  const { data: allCatalogue = [] } = useQuery<{ platform: string }[]>({
+    queryKey: ['models', 'catalogue-count'],
+    queryFn: () => apiFetch('/api/models'),
+    enabled: apiKey.platform !== 'custom',
+    staleTime: 60_000,
+  })
+  const catalogueRowsForProvider = allCatalogue.filter(m => m.platform === apiKey.platform).length
   const { data: quotaCatalog } = useQuery<QuotaGuidanceCatalog>({
     queryKey: ['keys', 'quota-guidance'],
     queryFn: () => apiFetch('/api/keys/quota-guidance'),
@@ -410,7 +422,35 @@ export function ModelScopeDialog({
             </div>
             <div className="max-h-[50vh] overflow-y-auto rounded-2xl border divide-y">
               {shownCandidates.length === 0 && (
-                <p className="px-3 py-4 text-xs text-muted-foreground">No model matches this search.</p>
+                /* Three different reasons produce an empty list, and saying
+                   "no match" for all of them is what made a correctly-filtered
+                   provider read as a broken panel: b.ai holds two models, both
+                   switched off when its promo ended, so the default
+                   hide-disabled filter removed every row and the dialog said
+                   nothing at all. */
+                <div className="px-3 py-4 text-xs text-muted-foreground">
+                  {orderedCandidates.length === 0
+                    ? (catalogueRowsForProvider > 0
+                      ? t('keys.scopeEmptyCatalogueOff', { count: catalogueRowsForProvider })
+                      : t('keys.scopeEmptyNoModels'))
+                    : hideDisabled && hiddenDisabledCount === orderedCandidates.length
+                      ? (
+                        <span className="flex flex-wrap items-center gap-2">
+                          {t('keys.scopeEmptyAllDisabled', { count: orderedCandidates.length })}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setHideDisabled(false)
+                              try { localStorage.setItem(SCOPE_HIDE_DISABLED_KEY, '0') } catch { /* ignore */ }
+                            }}
+                            className="underline decoration-dotted hover:text-foreground"
+                          >
+                            {t('keys.scopeEmptyShowDisabled')}
+                          </button>
+                        </span>
+                      )
+                      : t('keys.scopeEmptyNoMatch')}
+                </div>
               )}
               {shownCandidates.map(model => (
                 <div key={model.modelId} className={`px-3 py-2 text-xs ${selectedModelId === model.modelId ? 'bg-muted/40' : 'hover:bg-muted/20'}`}>
@@ -496,7 +536,21 @@ export function ModelScopeDialog({
             </div>
             </>
           ) : ids.length === 0 ? (
-            <p className="text-xs text-muted-foreground">{t('keys.modelScopeEmpty')}</p>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">{t('keys.modelScopeEmpty')}</p>
+              {/* This is the branch a RETIRED provider lands in, and it used to
+                  stop at "no scope set" — true, but silent about why there is
+                  nothing to choose from. /api/fallback selects
+                  `WHERE m.enabled = 1`, so a provider whose catalogue rows are
+                  all switched off sends zero candidates and the picker never
+                  renders at all. b.ai: two models, both off since its promo
+                  ended, and a dialog that looked broken. */}
+              {apiKey.platform !== 'custom' && providerCandidates.length === 0 && catalogueRowsForProvider > 0 && (
+                <p className="text-[11px] text-muted-foreground">
+                  {t('keys.scopeEmptyCatalogueOff', { count: catalogueRowsForProvider })}
+                </p>
+              )}
+            </div>
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {ids.map(id => (

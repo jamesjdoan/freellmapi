@@ -881,7 +881,12 @@
     "testFailed": "Model test failed",
     "testThrottled": "Please wait {seconds}s before testing this model again.",
     "noModelsForProvider": "No models configured for this provider.",
-    "testModels": "Test models"
+    "testModels": "Test models",
+    "scopeEmptyNoModels": "This provider has no catalogue models.",
+    "scopeEmptyAllDisabled": "All {count} of this provider’s models are switched off.",
+    "scopeEmptyShowDisabled": "Show them",
+    "scopeEmptyNoMatch": "No model matches this search.",
+    "scopeEmptyCatalogueOff": "This provider has {count} models in the catalogue, all switched off there. Re-enable them on the Models page to scope this key."
   },
   "backups": {
     "title": "Backups",

@@ -773,7 +773,12 @@
     "panelHideUnroutable": "Hide can't route",
     "panelAllFiltered": "All {count} models on this provider are hidden — none can route right now.",
     "panelResetIn": "resets in {countdown}",
-    "panelResetHint": "When this provider's allowance next returns. The soonest of its quota windows, including one folded behind a shorter window on the Quota page."
+    "panelResetHint": "When this provider's allowance next returns. The soonest of its quota windows, including one folded behind a shorter window on the Quota page.",
+    "scopeEmptyNoModels": "This provider has no catalogue models.",
+    "scopeEmptyAllDisabled": "All {count} of this provider’s models are switched off.",
+    "scopeEmptyShowDisabled": "Show them",
+    "scopeEmptyNoMatch": "No model matches this search.",
+    "scopeEmptyCatalogueOff": "This provider has {count} models in the catalogue, all switched off there. Re-enable them on the Models page to scope this key."
   },
   "backups": {
     "title": "Sauvegardes",
