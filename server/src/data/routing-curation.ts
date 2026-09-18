@@ -149,7 +149,7 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // ── unorouter ─────────────────────────────────────────────────
   {
     platform: 'unorouter', modelId: 'glm-5.3:free', classification: 'OVERFLOW',
-    chains: { Frontier: 5, Apex: 4, Coding: 4, Workhorse: 4, Default: 4 },
+    chains: { Frontier: 5, Apex: 3, Coding: 3, Workhorse: 4, Default: 4 },
     why: 'intelligence 44.9 — the highest in this pool, above kimi-k3 at 43.8 — with coding 74.8 and a 977K window. Two probes only, so it heads nothing: 1328ms on 2026-09-17, and a 35s answer on the 16th while the daily token quota was already spent. One route per chain because unorouter free is a single daily token quota.',
   },
   {
@@ -160,22 +160,22 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // ── google ────────────────────────────────────────────────────
   {
     platform: 'google', modelId: 'gemini-3.8-flash', classification: 'OVERFLOW',
-    chains: { Frontier: 2, Coding: 3, Vision: 9, Apex: 3 },
+    chains: { Frontier: 2, Coding: 6, Vision: 9, Apex: 6 },
     why: '68% over 74 attempts. 18670ms measured. intelligence 41.2. coding 76.3. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
     platform: 'google', modelId: 'gemini-3.7-flash', classification: 'CORE',
-    chains: { Coding: 1, Frontier: 1, Vision: 1, Apex: 2 },
+    chains: { Coding: 1, Frontier: 1, Vision: 1, Apex: 5 },
     why: '77% over 194 attempts. 7356ms measured. intelligence 39.4. coding 76.1. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
     platform: 'google', modelId: 'gemini-3.6-flash', classification: 'CORE',
-    chains: { Apex: 1, Vision: 8, Coding: 2, Frontier: 6 },
+    chains: { Apex: 1, Vision: 8, Coding: 5, Frontier: 6 },
     why: '87% over 159 attempts. 15225ms measured. intelligence 34.3. coding 69.2. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
     platform: 'google', modelId: 'gemini-3.5-flash', classification: 'CORE',
-    chains: { Coding: 6, Frontier: 7, Vision: 10 },
+    chains: { Coding: 7, Frontier: 7, Vision: 10 },
     why: '70% over 132 attempts. 8723ms measured. intelligence 33. coding 70.1. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
@@ -201,7 +201,7 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // ── groq ──────────────────────────────────────────────────────
   {
     platform: 'groq', modelId: 'qwen/qwen3.8-27b', classification: 'OVERFLOW',
-    chains: { Default: 2, Workhorse: 2, Frontier: 3, 'Fast-Lane': 4, Apex: 5, Coding: 5, Vision: 4 },
+    chains: { Default: 2, Workhorse: 2, Frontier: 3, 'Fast-Lane': 4, Apex: 2, Coding: 2, Vision: 5 },
     why: '190ms measured, intelligence 33.9, coding 68.1, and 100% across every chain probe on 2026-09-18. Added to Frontier 3 the same day: that chain was four Google routes plus one unorouter, so a spent Google day and one credit cooldown emptied it completely — it refused all 7 candidates twice. Groq is its own counter, which is the depth Frontier was missing.',
   },
   {
@@ -222,7 +222,7 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'mistral', modelId: 'ministral-14b-2512', classification: 'CORE',
-    chains: { Vision: 5 },
+    chains: { Vision: 6 },
     why: 'Added 2026-09-18. 563ms, and it answered a real base64 PNG with the right colour — probed with an image rather than with text, because that is what this chain is for. Mistral meters per model, so this is its own allowance behind Google.',
   },
   {
@@ -253,7 +253,7 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'nvidia', modelId: 'meta/llama-3.2-11b-vision-instruct', classification: 'CORE',
-    chains: { Vision: 6 },
+    chains: { Vision: 7 },
     why: 'Added 2026-09-18. 882ms, saw the image correctly, tools as well as vision. NVIDIA meters per model at 40/min, so this is a third independent pool in a chain that was seven-elevenths Google.',
   },
   {
@@ -300,12 +300,12 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // ── openrouter ────────────────────────────────────────────────
   {
     platform: 'openrouter', modelId: 'nex-agi/nex-n2.5-mini:free', classification: 'OVERFLOW',
-    chains: { Workhorse: 3, Default: 3, Apex: 6, Coding: 7 },
+    chains: { Workhorse: 3, Default: 3, Apex: 4, Coding: 4 },
     why: '1 attempt(s) — too thin to rate. intelligence 28.2. coding 59.1. OpenRouter spends ONE account counter (1000/day, 20/min) whichever :free model answers, so only its strongest qualifying route is listed: a weaker sibling costs the same unit for less, and adds no depth because they exhaust together.',
   },
   {
     platform: 'openrouter', modelId: 'nex-agi/nex-n2.5-pro:free', classification: 'OVERFLOW',
-    chains: { Vision: 7 },
+    chains: { Vision: 4 },
     why: '2 attempt(s) — too thin to rate. intelligence 28.2. coding 59.1. OpenRouter spends ONE account counter (1000/day, 20/min) whichever :free model answers, so only its strongest qualifying route is listed: a weaker sibling costs the same unit for less, and adds no depth because they exhaust together.',
   },
   {
