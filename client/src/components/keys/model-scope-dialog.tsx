@@ -382,6 +382,7 @@ export function ModelScopeDialog({
                   type="checkbox"
                   checked={hideDisabled}
                   disabled={!hideControlPressable(hideableCount, hideDisabled)}
+                  title={hideControlPressable(hideableCount, hideDisabled) ? undefined : t('keys.panelHideNothing')}
                   onChange={event => {
                     setHideDisabled(event.target.checked)
                     try { localStorage.setItem(SCOPE_HIDE_DISABLED_KEY, event.target.checked ? '1' : '0') } catch { /* ignore */ }
