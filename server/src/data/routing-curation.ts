@@ -154,13 +154,13 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'unorouter', modelId: 'glm-5.3-flash:free', classification: 'OVERFLOW',
-    chains: { Vision: 4 },
+    chains: { Vision: 15 },
     why: 'intelligence 41.9 with tools AND vision on a 977K window, 2198ms measured. Vision only: it is the unorouter route that chain\'s metric names, and a second route from the same counter would buy nothing. Timed out at 40s on 2026-09-16 against a spent quota; answered in 2.2s once it reset.',
   },
   // ── google ────────────────────────────────────────────────────
   {
     platform: 'google', modelId: 'gemini-3.8-flash', classification: 'OVERFLOW',
-    chains: { Frontier: 2, Coding: 3, Vision: 3, Apex: 3 },
+    chains: { Frontier: 2, Coding: 3, Vision: 9, Apex: 3 },
     why: '68% over 74 attempts. 18670ms measured. intelligence 41.2. coding 76.3. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
@@ -170,27 +170,27 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'google', modelId: 'gemini-3.6-flash', classification: 'CORE',
-    chains: { Apex: 1, Vision: 2, Coding: 2, Frontier: 6 },
+    chains: { Apex: 1, Vision: 8, Coding: 2, Frontier: 6 },
     why: '87% over 159 attempts. 15225ms measured. intelligence 34.3. coding 69.2. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
     platform: 'google', modelId: 'gemini-3.5-flash', classification: 'CORE',
-    chains: { Coding: 6, Frontier: 7, Vision: 7 },
+    chains: { Coding: 6, Frontier: 7, Vision: 10 },
     why: '70% over 132 attempts. 8723ms measured. intelligence 33. coding 70.1. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
     platform: 'google', modelId: 'gemini-3.5-flash-lite', classification: 'CORE',
-    chains: { Workhorse: 5, Default: 5, Vision: 8 },
+    chains: { Workhorse: 5, Default: 5, Vision: 2 },
     why: '77% over 22 attempts. 16256ms measured. intelligence 22.7. coding 49.3. 15/min. 500/day.',
   },
   {
     platform: 'google', modelId: 'gemini-3.1-flash-lite', classification: 'CORE',
-    chains: { Vision: 9 },
+    chains: { Vision: 3 },
     why: '84% over 192 attempts. intelligence 16. coding 34.7. 15/min, 500/day — twenty-five times the allowance the Gemini Flash routes carry, which is the depth this chain needed: five of its first eight members are Google 20/day.',
   },
   {
     platform: 'google', modelId: 'gemma-4-26b-a4b-it', classification: 'SPECIALIST',
-    chains: { Vision: 10 },
+    chains: { Vision: 14 },
     why: 'Vision WITHOUT tools, which is why no agentic chain will take it and why Vision admits SPECIALIST at all. intelligence 16.7, 30/min, 4 attempts — a tail, not a fallback.',
   },
   {
@@ -201,7 +201,7 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // ── groq ──────────────────────────────────────────────────────
   {
     platform: 'groq', modelId: 'qwen/qwen3.8-27b', classification: 'OVERFLOW',
-    chains: { Default: 2, Workhorse: 2, Frontier: 3, 'Fast-Lane': 4, Apex: 5, Coding: 5, Vision: 5 },
+    chains: { Default: 2, Workhorse: 2, Frontier: 3, 'Fast-Lane': 4, Apex: 5, Coding: 5, Vision: 4 },
     why: '190ms measured, intelligence 33.9, coding 68.1, and 100% across every chain probe on 2026-09-18. Added to Frontier 3 the same day: that chain was four Google routes plus one unorouter, so a spent Google day and one credit cooldown emptied it completely — it refused all 7 candidates twice. Groq is its own counter, which is the depth Frontier was missing.',
   },
   {
@@ -219,6 +219,16 @@ export const CURATED_ROUTES: CuratedRoute[] = [
     platform: 'mistral', modelId: 'ministral-3b-latest', classification: 'CORE',
     chains: { 'Fast-Lane': 2, Vision: 11 },
     why: 'Added 2026-09-18. 584ms measured against the provider directly, tools and vision, 256K window. Mistral held ELEVEN enabled models and not one chain row before this — an entire keyed provider contributing no capacity, found by auditing keys against membership. Mistral meters PER MODEL, so this is an allowance nothing else here draws on.',
+  },
+  {
+    platform: 'mistral', modelId: 'ministral-14b-2512', classification: 'CORE',
+    chains: { Vision: 5 },
+    why: 'Added 2026-09-18. 563ms, and it answered a real base64 PNG with the right colour — probed with an image rather than with text, because that is what this chain is for. Mistral meters per model, so this is its own allowance behind Google.',
+  },
+  {
+    platform: 'mistral', modelId: 'ministral-8b-2512', classification: 'OVERFLOW',
+    chains: { Vision: 12 },
+    why: 'Added 2026-09-18. 636ms, saw the image correctly. Its own per-model Mistral allowance; a tail because the 14b sibling is stronger for the same cost.',
   },
   // ── nvidia ────────────────────────────────────────────────────
   // nvidia/moonshotai/kimi-k3 removed 2026-09-18: 21% over 148 attempts, 65835ms
@@ -240,6 +250,16 @@ export const CURATED_ROUTES: CuratedRoute[] = [
     platform: 'nvidia', modelId: 'nvidia/nemotron-3.5-lightning-30b-a3b', classification: 'CORE',
     chains: { Default: 7, Workhorse: 7 },
     why: '97% over 761 attempts, the best reliability figure on this install, and it was in no chain. Kept OUT of Fast-Lane deliberately: it averages 22,032ms despite publishing 288 tok/s. The middle tier does not rank on latency, so its reliability is what counts here. 40/min.',
+  },
+  {
+    platform: 'nvidia', modelId: 'meta/llama-3.2-11b-vision-instruct', classification: 'CORE',
+    chains: { Vision: 6 },
+    why: 'Added 2026-09-18. 882ms, saw the image correctly, tools as well as vision. NVIDIA meters per model at 40/min, so this is a third independent pool in a chain that was seven-elevenths Google.',
+  },
+  {
+    platform: 'nvidia', modelId: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', classification: 'SPECIALIST',
+    chains: { Vision: 13 },
+    why: 'Added 2026-09-18. 2721ms, saw the image correctly, but tools=false — which is why no agentic chain will take it and why Vision admits SPECIALIST at all. A tail, not a fallback.',
   },
   // ── ollama ────────────────────────────────────────────────────
   {
@@ -285,7 +305,7 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'openrouter', modelId: 'nex-agi/nex-n2.5-pro:free', classification: 'OVERFLOW',
-    chains: { Vision: 6 },
+    chains: { Vision: 7 },
     why: '2 attempt(s) — too thin to rate. intelligence 28.2. coding 59.1. OpenRouter spends ONE account counter (1000/day, 20/min) whichever :free model answers, so only its strongest qualifying route is listed: a weaker sibling costs the same unit for less, and adds no depth because they exhaust together.',
   },
   {
