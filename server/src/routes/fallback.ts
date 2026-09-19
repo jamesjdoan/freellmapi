@@ -7,6 +7,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { unreachableCause, unreachableChainMembers } from '../services/chain-reachability.js';
+import { auditChainCapabilities, capabilityBlock, verifyChain, requiredCapabilities } from '../services/chain-capability.js';
 import { getDb } from '../db/index.js';
 import { effectiveRouteLimits, effectiveRouteWindows } from '../services/quota-policy.js';
 import { resolveQuotaWindow, type QuotaPeriod } from '../services/quota-clock.js';
@@ -22,6 +23,7 @@ import { qualifiedModelMemberId } from '../lib/endpoint-scope.js';
 import { overriddenFieldNames } from '../services/model-state.js';
 import { parseModelScope, scopeAllows } from '../lib/model-scope.js';
 import { getQuotaOutlook } from '../services/quota-outlook.js';
+import { isExtensionEnabled } from '../services/extension-state.js';
 
 export const fallbackRouter = Router();
 
@@ -460,6 +462,46 @@ fallbackRouter.get('/reachability', (_req: Request, res: Response) => {
   res.json({ unreachable: unreachableChainMembers(getDb()) });
 });
 
+/**
+ * Chain positions that cannot do what their chain requires, and those nobody
+ * has checked.
+ *
+ * `failed` and `unverified` are reported SEPARATELY and never summed: one is a
+ * fault to repair, the other is an absence of evidence. `chains` carries the
+ * per-chain counts so that adding fifteen unprobed members to Vision reads as
+ * fifteen rather than as one more line in a list.
+ */
+fallbackRouter.get('/capability', (req: Request, res: Response) => {
+  const chain = typeof req.query.chain === 'string' ? req.query.chain : undefined;
+  res.json(auditChainCapabilities(getDb(), chain));
+});
+
+/**
+ * Verify one chain's members against that chain's own contracts.
+ *
+ * Per chain, not global: it spends a real provider request per member per
+ * contract, and the moment an operator wants it is straight after a recuration
+ * of one chain — which is exactly when the blind Vision route was introduced.
+ */
+fallbackRouter.post('/capability/verify', async (req: Request, res: Response) => {
+  const parsed = z.object({ chain: z.string().min(1) }).strict().safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: 'chain is required' } });
+    return;
+  }
+  const db = getDb();
+  const profile = db.prepare('SELECT id FROM profiles WHERE name = ?').get(parsed.data.chain) as { id: number } | undefined;
+  if (!profile) {
+    res.status(404).json({ error: { message: `Unknown chain ${parsed.data.chain}` } });
+    return;
+  }
+  if (requiredCapabilities(parsed.data.chain).length === 0) {
+    res.status(400).json({ error: { message: `${parsed.data.chain} declares no capability contract to verify` } });
+    return;
+  }
+  res.json({ results: await verifyChain(parsed.data.chain, db) });
+});
+
 fallbackRouter.post('/membership', (req: Request, res: Response) => {
   const parsed = membershipSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -498,8 +540,9 @@ fallbackRouter.post('/membership', (req: Request, res: Response) => {
     const keys = db.prepare('SELECT platform, enabled, status, model_scope_json FROM api_keys').all() as
       { platform: string; enabled: number; status: string; model_scope_json: string | null }[];
     const rows = db.prepare(
-      `SELECT id, platform, model_id FROM models WHERE id IN (${parsed.data.modelDbIds.map(() => '?').join(',')})`,
-    ).all(...parsed.data.modelDbIds) as { id: number; platform: string; model_id: string }[];
+      `SELECT id, platform, model_id, COALESCE(endpoint_scope, '') AS endpoint_scope
+         FROM models WHERE id IN (${parsed.data.modelDbIds.map(() => '?').join(',')})`,
+    ).all(...parsed.data.modelDbIds) as { id: number; platform: string; model_id: string; endpoint_scope: string }[];
     const blocked = rows
       .map(r => ({ r, cause: unreachableCause(keys, r.platform, r.model_id) }))
       .filter(x => x.cause !== null);
@@ -512,6 +555,30 @@ fallbackRouter.post('/membership', (req: Request, res: Response) => {
               : 'no enabled key is scoped to this model'}`)
             .join('; '),
           unreachable: blocked.map(b => ({ platform: b.r.platform, modelId: b.r.model_id, cause: b.cause })),
+        },
+      });
+      return;
+    }
+
+    // And refuse to add a route whose RECORDED probe contradicts this chain's
+    // contract. Only a recorded failure blocks: an unprobed route is allowed
+    // through and reported by GET /capability instead, because probing inside
+    // this write would fail closed whenever a provider is merely slow.
+    //
+    // This ENFORCEMENT is the only thing `chain-capability-verification`
+    // controls. Off, the refusal stops and nothing else changes: the audit,
+    // the stored probe evidence and manual verification all stay available,
+    // because a toggle must not hide a measurement that was taken.
+    const capabilityBlocked = !isExtensionEnabled('chain-capability-verification') ? [] : rows
+      .map(r => ({ r, block: capabilityBlock(r.platform, r.model_id, r.endpoint_scope, parsed.data.chain, db) }))
+      .filter(x => x.block !== null);
+    if (capabilityBlocked.length > 0) {
+      res.status(409).json({
+        error: {
+          message: capabilityBlocked
+            .map(b => `${b.r.platform}/${b.r.model_id}: failed the ${b.block!.capability} probe ${parsed.data.chain} requires${b.block!.detail ? ` (${b.block!.detail})` : ''}`)
+            .join('; '),
+          incapable: capabilityBlocked.map(b => ({ platform: b.r.platform, modelId: b.r.model_id, capability: b.block!.capability })),
         },
       });
       return;

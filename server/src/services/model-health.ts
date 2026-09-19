@@ -23,7 +23,7 @@
 import type { Db } from '../db/types.js';
 import { getDb } from '../db/index.js';
 import { getProvider } from '../providers/index.js';
-import type { Platform } from '@freellmapi/shared/types.js';
+import type { ChatMessage, Platform } from '@freellmapi/shared/types.js';
 import { decrypt } from '../lib/crypto.js';
 import { parseModelScope, scopeAllows } from '../lib/model-scope.js';
 import {
@@ -230,6 +230,53 @@ export const PROBE_MAX_TOKENS = 64;
  * be spent proving a route exists.
  */
 export async function probeModel(platform: string, modelId: string, db: Db = getDb()): Promise<ProbeResult> {
+  return runProbe(platform, modelId, [{ role: 'user', content: 'ping' }], db);
+}
+
+/**
+ * An 8x8 solid red PNG, 74 bytes, inline rather than a fixture file.
+ *
+ * NOT a style choice. `server/tsconfig.json` emits `src/**` to `dist` as
+ * JavaScript and copies nothing else, and the runtime image takes
+ * `COPY --from=build /app/server/dist ./server/dist` (Dockerfile:52). A .png
+ * under src/ therefore exists for vitest, which runs from source, and does not
+ * exist in the container — green locally, ENOENT in production. That is the
+ * same failure mode as the types-only package that shipped no JavaScript and
+ * crash-looped the first v0.11.0 deploy. A constant compiles into the JS and
+ * cannot desync from the code that reads it.
+ */
+export const PROBE_IMAGE_DATA_URL =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR42mP4z8CAFTEMLQkAKP8/wc53yE8AAAAASUVORK5CYII=';
+
+/**
+ * Ask one model whether it can actually SEE.
+ *
+ * The text probe cannot answer this and never could: nvidia/nemotron-parse-2.0
+ * answered `ping` in 696ms, passed, entered the Vision chain, and returned
+ * `empty_completion` on a real PNG four minutes later. It is a document parser
+ * carrying a vision flag, and a capability flag plus a text probe is not
+ * evidence — only an image is.
+ *
+ * The question is deliberately one a describer answers and a parser does not:
+ * a parser finds no document structure in eight red pixels and returns nothing,
+ * which the adapter raises as an empty completion and this records as failed.
+ */
+export async function probeModelVision(platform: string, modelId: string, db: Db = getDb()): Promise<ProbeResult> {
+  return runProbe(platform, modelId, [{
+    role: 'user',
+    content: [
+      { type: 'text', text: 'What colour is this image? Answer with one word.' },
+      { type: 'image_url', image_url: { url: PROBE_IMAGE_DATA_URL } },
+    ],
+  }], db);
+}
+
+async function runProbe(
+  platform: string,
+  modelId: string,
+  messages: ChatMessage[],
+  db: Db,
+): Promise<ProbeResult> {
   const provider = getProvider(platform as Platform);
   if (!provider) return { modelId, verdict: 'dead', code: 'EOTHER', detail: `No provider registered for ${platform}`, latencyMs: null };
 
@@ -252,7 +299,7 @@ export async function probeModel(platform: string, modelId: string, db: Db = get
   `);
 
   try {
-    await provider.chatCompletion(apiKey, [{ role: 'user', content: 'ping' }], modelId, {
+    await provider.chatCompletion(apiKey, messages, modelId, {
       max_tokens: PROBE_MAX_TOKENS,
       timeoutMs: 30_000,
     });

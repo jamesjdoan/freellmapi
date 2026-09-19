@@ -6,12 +6,18 @@
  * the panel; this asserts the inventory.
  */
 import { describe, it, expect } from 'vitest';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   IMPERIUM_EXTENSIONS,
   EXTENSION_IDS,
   PAID_BALANCE_GUARD_ID,
   defaultExtensionEnabled,
 } from '../../data/extension-registry.js';
+
+/** Repo root: this file sits at server/src/__tests__/data/. */
+const REPO_ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
 
 describe('the extension registry', () => {
   // Deliberately NOT pinning the id list: it grew from 19 to 32 and would fail
@@ -46,12 +52,52 @@ describe('the extension registry', () => {
     expect(defaultExtensionEnabled()[PAID_BALANCE_GUARD_ID]).toBe(true);
   });
 
-  it('claims a real file for every extension it lists', () => {
+  it('ships chain capability verification as an enforcement-only switch, on by default', () => {
+    // The ruling this entry records: OFF disables the 409 and nothing else.
+    // A registry entry claiming the audit or the stored evidence disappears
+    // would be describing a toggle that hides a measurement, which is the one
+    // thing it must never do.
+    const entry = IMPERIUM_EXTENSIONS.find(f => f.id === 'chain-capability-verification');
+    expect(entry).toBeDefined();
+    expect(entry!.defaultEnabled).toBe(true);
+    expect(entry!.disableConfirmation).toBe('none');
+    expect(entry!.offBehaviour).toMatch(/remain/i);
+    expect(entry!.offBehaviour).toMatch(/membership/i);
+    expect(defaultExtensionEnabled()['chain-capability-verification']).toBe(true);
+  });
+
+  it('claims a real file, and a real symbol, for every extension it lists', () => {
     // A codeLocations entry that names nothing is documentation rot; the
     // registry is the map an operator uses to find the behaviour.
+    //
+    // TWO checks, because the shape-match this replaces caught neither of the
+    // dead references found on 2026-09-19, and existence alone catches only
+    // one of them:
+    //
+    //   quota-routing.ts (evaluateShadowDecision)  file lives, SYMBOL deleted
+    //   20260905_000002_routing_decision.ts        file lives, its table dropped
+    //
+    // The first is what the symbol assertion below exists for. The second is
+    // not mechanically detectable at all — the migration file is still on disk
+    // and still correct as a migration; only its RELEVANCE to this extension
+    // died. No test finds that; a reader removing the last consumer has to.
     for (const feature of IMPERIUM_EXTENSIONS) {
       for (const location of feature.codeLocations) {
-        expect(location).toMatch(/\.(ts|tsx|mjs|sh|md|json)\b|\//);
+        // Entries may carry a ' (symbol, note)' annotation after the path.
+        const [relPath, annotation] = location.split(/ \((.*)\)$/);
+        const abs = join(REPO_ROOT, relPath.trim());
+        expect(existsSync(abs), `${feature.id} cites missing ${relPath}`).toBe(true);
+        if (!annotation) continue;
+        // Only bare identifiers are claims about code. Prose like
+        // 'score path gate' or 'automatic-chain filter' describes a location
+        // and asserts nothing greppable.
+        const symbols = annotation.split(',').map(s => s.trim())
+          .filter(s => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(s));
+        if (!symbols.length) continue;
+        const source = readFileSync(abs, 'utf8');
+        for (const symbol of symbols) {
+          expect(source.includes(symbol), `${feature.id} cites ${symbol}, absent from ${relPath}`).toBe(true);
+        }
       }
     }
   });

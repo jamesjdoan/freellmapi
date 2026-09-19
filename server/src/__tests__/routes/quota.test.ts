@@ -43,11 +43,15 @@ describe('/api/quota', () => {
 
   beforeEach(() => {
     getDb().prepare('DELETE FROM quota_policy').run();
-    getDb().prepare("DELETE FROM settings WHERE key = 'quota_routing_mode'").run();
   });
 
   it('refuses every route without a dashboard session', async () => {
-    for (const path of ['/api/quota/policies', '/api/quota/state?platform=groq', '/api/quota/shadow', '/api/quota/decisions', '/api/quota/mode']) {
+    // /shadow, /decisions and /mode were listed here until 2026-09-19. They no
+    // longer exist, and the assertion kept passing because the dashboard-auth
+    // middleware answers 401 before the router can 404 — a test that proved the
+    // middleware runs, dressed as a test about routes. The dead
+    // `quota_routing_mode` settings cleanup went with them.
+    for (const path of ['/api/quota/policies', '/api/quota/state?platform=groq', '/api/quota/reservation', '/api/quota/forecast']) {
       const res = await call(app, 'GET', path);
       expect(res.status).toBe(401);
     }

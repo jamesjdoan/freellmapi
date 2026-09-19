@@ -75,13 +75,17 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
     id: 'quota-aware-scoring',
     title: 'Scarcity, reset-urgency and provider spreading',
     summary: 'Score a route on how much of its allowance is left, how soon that allowance resets, and whether a concurrent worker is already drawing on the same counter.',
-    settingsLocation: 'Quota → Shadow routing (mode is opt-in: off, shadow or active)',
-    destinations: [{ kind: 'internal', label: 'Open shadow routing', href: '/quota#shadow' }],
+    // No page of its own: the switch in the Extensions dialog IS the control,
+    // and this extension's parameters have never had a UI. Naming the two
+    // endpoints is what stops the next reader hunting a panel that was never
+    // built, and what stopped this entry pointing at one that was deleted.
+    settingsLocation: 'No page of its own — this switch is the control. Its parameters are API-only: headroom ramp and floor at GET/PUT /api/settings/headroom, per-platform reservation weights at GET/PUT /api/quota/reservation. The pools it scores are shown read-only under Quota → Provider overview.',
+    destinations: [{ kind: 'internal', label: 'Open quota dashboard', href: '/quota' }],
     category: 'routing',
     defaultEnabled: true,
-    offBehaviour: 'Scores revert to capability and health alone. The recorded routing decisions are kept, and the existing off/shadow/active mode is NOT promoted by enabling this.',
+    offBehaviour: 'Both quota-economy terms go neutral at both ordering sites, so routes order on capability and health alone. Admission is unaffected — the hard quota gate belongs to quota-ledger-precedence. Quota observations, policies and their history are untouched.',
     takesEffect: 'Next request.',
-    codeLocations: ['server/src/services/quota-routing.ts (evaluateShadowDecision)', 'server/src/services/quota-pressure.ts', 'server/src/db/migrations/20260905_000002_routing_decision.ts'],
+    codeLocations: ['server/src/services/quota-pressure.ts', 'server/src/services/router.ts (score path gate, isExtensionEnabled call ~1163)', 'server/src/services/router.ts (priority path gate, ~1282)'],
     disableConfirmation: 'none',
   },
   {
@@ -95,6 +99,29 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
     offBehaviour: 'Chain membership is left to whatever the database holds; the curated contract stops being asserted. No catalogue row and no chain row is deleted.',
     takesEffect: 'Next request. Applying the curation to the database is a separate, explicit action.',
     codeLocations: ['server/src/data/routing-curation.ts', 'server/src/scripts/apply-routing-curation.ts'],
+    disableConfirmation: 'none',
+  },
+  {
+    id: 'chain-capability-verification',
+    title: 'Chain capability verification',
+    summary: 'Verify that routed models can perform the capabilities their chains require, and block known failures from being added again.',
+    // Off disables ENFORCEMENT only. The stored probe is measured evidence and
+    // a toggle must never hide or delete facts, so the audit stays readable and
+    // manual verification stays available — the same reason
+    // /api/fallback/reachability is diagnostic rather than gated. The single
+    // behaviour this controls is the 409 on a membership write.
+    settingsLocation: 'Extensions → Chain capability verification',
+    destinations: [{ kind: 'internal', label: 'Review chain capability', href: '/fallback' }],
+    category: 'routing',
+    defaultEnabled: true,
+    offBehaviour: 'Capability audit results and stored probe evidence remain visible, and manual verification remains available. Membership writes no longer reject models with a recorded capability failure.',
+    takesEffect: 'Next chain membership change.',
+    codeLocations: [
+      'server/src/services/chain-capability.ts',
+      'server/src/services/model-health.ts (probeModelVision)',
+      'server/src/routes/fallback.ts (capabilityBlock)',
+      'server/src/db/migrations/20260919_000003_model_capability_probe.ts',
+    ],
     disableConfirmation: 'none',
   },
   {

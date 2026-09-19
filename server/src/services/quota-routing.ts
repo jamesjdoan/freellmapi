@@ -9,8 +9,11 @@ import { hasActiveCooldown } from './ratelimit.js';
 //
 // This file used to hold the shadow router (ADR ARCH-20260905, W3): a second
 // provider-picker that ran on every request, recorded what it WOULD have
-// chosen, and changed nothing. It was removed 2026-09-19 after 3,943 recorded
-// decisions. See docs/adr/ARCH-20260905 and the removal commit for the
+// chosen, and changed nothing. It was removed 2026-09-19. The exact ledger size
+// is recorded once, in the down-migration comment of
+// 20260919_000001_drop_routing_decision.ts, and deliberately not repeated here:
+// three copies of it had already drifted apart by the next morning.
+// See docs/adr/ARCH-20260905 and the removal commit for the
 // evidence; the short version is that a comparison which never runs the route
 // it prefers cannot show that the preference was right, and 167 of its
 // disagreements preferred a provider that turned out to be dead upstream.

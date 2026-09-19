@@ -59,6 +59,7 @@ import * as preserveQuotaState from '../migrations/20260914_999999_preserve_quot
 import * as quotaSnapshotFreshness from '../migrations/20260915_000001_quota_snapshot_freshness.js';
 import * as dropRoutingDecision from '../migrations/20260919_000001_drop_routing_decision.js';
 import * as providerDiagnosisHistory from '../migrations/20260919_000002_provider_diagnosis_history.js';
+import * as modelCapabilityProbe from '../migrations/20260919_000003_model_capability_probe.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -185,4 +186,5 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: '20260915_000001_quota_snapshot_freshness.ts', module: quotaSnapshotFreshness },
   { filename: '20260919_000001_drop_routing_decision.ts', module: dropRoutingDecision },
   { filename: '20260919_000002_provider_diagnosis_history.ts', module: providerDiagnosisHistory },
+  { filename: '20260919_000003_model_capability_probe.ts', module: modelCapabilityProbe },
 ];

@@ -129,7 +129,8 @@ quotaRouter.get('/forecast', (_req: Request, res: Response) => {
 // 2026-09-19 with the shadow router itself. They reported how often a second
 // provider-picker would have chosen differently, which is divergence rather
 // than evidence: the route it preferred never ran. The routing_decision table
-// and its 3,943 recorded rows are kept as history.
+// went with them in 20260919_000001_drop_routing_decision — nothing is kept,
+// and that migration's down comment is the one place its row count is stated.
 
 /**
  * Per-platform scarcity multipliers, 0..1, lower meaning "hold this pool back".

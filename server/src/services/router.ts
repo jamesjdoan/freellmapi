@@ -1157,9 +1157,10 @@ function scoreChainEntry(
   // pool as "low on quota", and it would clip the harvest boost straight back
   // to 1 against the two meters that have no opinion.
   // `quota-aware-scoring` off: the two quota-economy terms go neutral (1), so
-  // ordering falls back to capability and health alone. Recorded routing
-  // decisions are kept, and the existing off/shadow/active mode is untouched —
-  // enabling this extension does not promote that mode.
+  // ordering falls back to capability and health alone. Admission is NOT
+  // affected — the hard quota gate is quotaDomainsAdmit, which answers to
+  // `quota-ledger-precedence` (quota-pressure.ts:406). Quota observations and
+  // policies are untouched either way.
   const scoringOn = isExtensionEnabled('quota-aware-scoring');
   const inFlightShare = scoringOn ? inFlightPoolShare(entry.platform, entry.model_id) : 0;
   const diversity = scoringOn ? diversityFactor(inFlightShare) : 1;
