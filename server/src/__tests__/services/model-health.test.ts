@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initDb, getDb } from '../../db/index.js';
-import { listModelHealth, verdictForError, PROBE_MAX_TOKENS } from '../../services/model-health.js';
+import { listModelHealth, verdictForError, PROBE_MAX_TOKENS, PROBE_IMAGE_DATA_URL } from '../../services/model-health.js';
 
 // Dead routes were being enabled by hand because nothing on the Keys pane told
 // them apart from working ones. Every case below is one this install actually
@@ -127,5 +127,21 @@ describe('model health', () => {
     expect(verdictForError(Object.assign(new Error('slow down'), { status: 429 }))).toBe('limited');
     // A transport wobble is not a dead model.
     expect(verdictForError(Object.assign(new Error('fetch failed'), { code: 'UND_ERR_SOCKET' }))).toBe('limited');
+  });
+
+  it('the vision probe image clears the 32px floor providers enforce', () => {
+    // Measured on the live instance 2026-09-20: Groq answers an 8x8 with
+    // HTTP 400 'Image must have at least 32 pixels in each dimension'. That is
+    // not recorded as a capability failure - correctly, it says nothing about
+    // the model - so shrinking this image does not break a test or fail a
+    // probe. It silently makes every Groq vision route UNVERIFIABLE. This
+    // decodes the constant rather than pinning its text, so the dimensions are
+    // what is asserted and not the base64.
+    const bytes = Buffer.from(PROBE_IMAGE_DATA_URL.split(',')[1], 'base64');
+    expect(bytes.subarray(0, 8)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    expect(bytes.readUInt32BE(16)).toBeGreaterThanOrEqual(32);
+    expect(bytes.readUInt32BE(20)).toBeGreaterThanOrEqual(32);
+    // Small enough that it stays a rounding error against a token-metered pool.
+    expect(bytes.length).toBeLessThan(512);
   });
 });

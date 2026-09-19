@@ -1,4 +1,27 @@
-# Session Handoff
+## Session 2026-09-20 — JD-MBP (MacBook Pro M2 Max)
+
+**Branch:** `docs/freellm-assert-start-on-redeploy` (at `a98d666d`, not main)
+
+**What was done:**
+
+1. **Chain capability verification built and committed.** `chain-capability.ts` is the sibling of `chain-reachability.ts` — it asks the next question: granted a key can call this route, can it do the job its chain requires? Three states (`ok`, `failed`, `unverified`), generic over `requiresVision` and `requiresTools`. Vision is probed for real (32x32 inline PNG, 96 bytes). Tools is NOT probed — a stub would put a wrong verdict on record; the honest `unverified` count in the audit is the measurement that decides whether designing it is worth it. The gate (`chain-capability-verification`) controls ENFORCEMENT only: off, the 409 stops and nothing else changes — audit, stored evidence, and manual verification all stay available.
+
+2. **Probe image fixed from 8x8 to 32x32.** Groq measured on the live instance rejects an 8x8 with `HTTP 400 'Image must have at least 32 pixels in each dimension'`, which the audit correctly declines to record as `failed` — so every Groq vision route was permanently `unverified`. 32 is that floor exactly; cost is 22 bytes (74→96). Inline base64 constant, not a fixture — container reasoning unchanged. Added a decode test that asserts `width >= 32 && height >= 32` and negative-tested it against the old 8x8 constant.
+
+3. **Documentation rot cleaned from the shadow-router removal.** Five dead references in the `quota-aware-scoring` registry entry (settings location, destination, code locations, offBehaviour, and the router comment that was the source text) all corrected to the live boolean gate. The deleted ledger's row count appeared three times and disagreed (3,946 vs 3,943); 3,946 is the last observed count before the drop, now appears once in the down-migration comment. A quota test asserted 401 on dead `/shadow`, `/decisions`, `/mode` endpoints — the assertion passed because auth middleware answered before the 404; cleaned and replaced with live routes. Registry test now asserts `existsSync` AND that any bare identifier in a `(symbol)` annotation appears in the cited file — negative-tested against both reinstated defects.
+
+4. **This MacBook's DNS fixed for the Studio tailnet.** MagicDNS was enabled but no `/etc/resolver/ts.net` existed; `tailscale set --accept-dns=false/true` rewrote only the search stub. Manually wrote `nameserver 100.100.100.100` to `/etc/resolver/ts.net` (R2; R1 failed). `HTTP 401` on `/api/health` without `--resolve` confirms hostname + TLS. Local OMP config (`.env`, `models.yml`) was already correct — `baseUrl` already pointed at the tailnet hostname. `/v1/models` returns `HTTP 200` with all 8 `auto:*` aliases.
+
+5. **The `chain-capability-verification` extension entry added to the registry.** OffBehaviour states exactly what you ruled: enforcement only; evidence and manual verification stay. Gate test proves the toggle — enabled + recorded failure → 409; disabled + same failure → 200 while audit still reports failed.
+
+**What's next:**
+
+1. **Restart OMP on this MacBook** — the running process holds the empty discovery from startup. The 8 `auto:*` aliases will reach the picker after reload. Timing is the user's call; it ends this session.
+2. **Studio re-verification after the image fix.** If any Vision member records `failed`, that becomes the real control for the 409 path; if none does, accept that the enforcement gate has no live evidence rather than forcing one. Watch the Groq routes — they should move off `unverified` now.
+3. **Record the unmanaged resolver file** in the handoff: `/etc/resolver/ts.net` is manually written and unmanaged by tailscaled. R1 already showed tailscaled rewrites `/etc/resolver/` without reinstalling the resolver.
+
+**In progress:** —
+
 
 ## Session 2026-09-07 — JD-MBP (MacBook Pro M2 Max)
 

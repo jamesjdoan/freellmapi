@@ -234,7 +234,7 @@ export async function probeModel(platform: string, modelId: string, db: Db = get
 }
 
 /**
- * An 8x8 solid red PNG, 74 bytes, inline rather than a fixture file.
+ * A 32x32 solid red PNG, 96 bytes, inline rather than a fixture file.
  *
  * NOT a style choice. `server/tsconfig.json` emits `src/**` to `dist` as
  * JavaScript and copies nothing else, and the runtime image takes
@@ -244,9 +244,19 @@ export async function probeModel(platform: string, modelId: string, db: Db = get
  * same failure mode as the types-only package that shipped no JavaScript and
  * crash-looped the first v0.11.0 deploy. A constant compiles into the JS and
  * cannot desync from the code that reads it.
+ *
+ * 32x32 rather than the 8x8 this shipped with, measured on the live instance
+ * 2026-09-20: Groq answers an 8x8 with HTTP 400 'Image must have at least 32
+ * pixels in each dimension', which the audit correctly declines to record as
+ * `failed` — so every Groq vision route was permanently UNVERIFIABLE, not
+ * wrong. 32 is that floor exactly; the cost of clearing it is 22 bytes.
+ *
+ * Truecolour at 8 bits, not a 1-bit palette PNG that would save another 12
+ * bytes. This image exists to be decoded by every provider we hold a key for,
+ * and an unusual bit depth trades the one property it needs for nothing.
  */
 export const PROBE_IMAGE_DATA_URL =
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR42mP4z8CAFTEMLQkAKP8/wc53yE8AAAAASUVORK5CYII=';
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAJ0lEQVR42u3NsQkAAAjAsP7/tF7hIASyp6lTCQQCgUAgEAgEgi/BAjLD/C5w/SM9AAAAAElFTkSuQmCC';
 
 /**
  * Ask one model whether it can actually SEE.
