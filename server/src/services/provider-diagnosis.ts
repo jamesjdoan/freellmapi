@@ -247,3 +247,161 @@ export function diagnoseProviders(db: Db = getDb()): ProviderDiagnosis[] {
     || a.platform.localeCompare(b.platform));
   return out;
 }
+
+/**
+ * What the verdict means and what to do about it.
+ *
+ * A code beside a provider name tells an operator that something is wrong, not
+ * what it is or whether they can fix it. The difference that matters here is
+ * whether waiting helps: a 429 clears itself and a 403 never will, and those
+ * two demand opposite responses from the person reading the row.
+ *
+ * Deliberately one sentence each. Advice nobody finishes reading is advice
+ * nobody takes.
+ */
+export interface ProviderAdvice {
+  cause: string;
+  action: string;
+  /** Does waiting fix this? Drives whether the UI nags or merely notes. */
+  selfHealing: boolean;
+}
+
+export function adviceFor(d: Pick<ProviderDiagnosis, 'verdict' | 'dominantCode' | 'activeCooldowns' | 'failingModels' | 'okModels'>): ProviderAdvice {
+  switch (d.verdict) {
+    case 'healthy':
+      return { cause: 'Serving normally.', action: 'Nothing to do.', selfHealing: true };
+    case 'untested':
+      return {
+        cause: 'Keyed and reachable, but nothing has called it recently.',
+        action: 'Probe a model, or leave it — silence is not a fault.',
+        selfHealing: true,
+      };
+    case 'no_key':
+      return {
+        cause: 'No credential is held for this provider.',
+        action: 'Add a key if its models are worth routing; otherwise ignore it.',
+        selfHealing: false,
+      };
+    case 'key_unusable':
+      return {
+        cause: 'A credential is held but it is switched off or marked unhealthy.',
+        action: 'Enable it, or re-check it — until then nothing here can route.',
+        selfHealing: false,
+      };
+    case 'key_rejected':
+      return {
+        cause: 'The provider rejected the credential itself (401).',
+        action: 'Replace the key. Every other symptom on this provider is downstream of it.',
+        selfHealing: false,
+      };
+    case 'account_blocked':
+      return {
+        cause: 'The account may not use these models (403/402) — a plan, a promotion that ended, or a region block.',
+        action: 'Waiting will not fix this. Remove it from chains, or restore access with the provider.',
+        selfHealing: false,
+      };
+    case 'models_gone':
+      return {
+        cause: 'The provider does not recognise these model ids (404) — they were renamed or retired.',
+        action: 'Re-sync the catalogue, then re-check which ids it actually serves.',
+        selfHealing: false,
+      };
+    case 'rate_limited':
+      return {
+        cause: d.activeCooldowns > 0
+          ? `Allowance spent; ${d.activeCooldowns} route(s) are on cooldown right now.`
+          : 'Allowance spent — the routes work, the quota does not.',
+        action: 'Wait for the reset. If it is constant, lower concurrency or add an independent pool.',
+        selfHealing: true,
+      };
+    case 'degraded':
+      return {
+        cause: d.okModels > 0
+          ? 'Failing on several routes for mixed reasons — provider errors or timeouts.'
+          : 'Nothing is serving, and no single cause accounts for it.',
+        action: 'Check the provider\'s status; if it persists, treat the routes as unreliable and re-rank them.',
+        selfHealing: true,
+      };
+  }
+}
+
+export interface DiagnosisTransition {
+  platform: string;
+  verdict: ProviderVerdict;
+  dominantCode: ModelHealthCode | null;
+  sample: string | null;
+  okModels: number;
+  failingModels: number;
+  startedAtMs: number;
+  lastSeenAtMs: number;
+}
+
+/**
+ * Write a row only when a provider's state CHANGES; otherwise extend the one
+ * that holds.
+ *
+ * A transition log answers "when did this start, and is it getting better or
+ * worse" in a handful of rows per provider. Sampling on a timer would answer
+ * the same questions with thousands of rows a week, and this codebase deleted
+ * one of those this morning.
+ *
+ * Idempotent: calling it twice with no change in between bumps a timestamp and
+ * writes nothing.
+ */
+export function recordDiagnosisTransitions(
+  current: ProviderDiagnosis[] = diagnoseProviders(),
+  db: Db = getDb(),
+  now: number = Date.now(),
+): { changed: string[] } {
+  const latest = db.prepare(`
+    SELECT h.platform, h.verdict, h.dominant_code, h.id
+      FROM provider_diagnosis_history h
+      JOIN (SELECT platform, MAX(id) AS id FROM provider_diagnosis_history GROUP BY platform) m
+        ON m.id = h.id
+  `).all() as { platform: string; verdict: string; dominant_code: string | null; id: number }[];
+  const byPlatform = new Map(latest.map(row => [row.platform, row]));
+
+  const insert = db.prepare(`
+    INSERT INTO provider_diagnosis_history
+      (platform, verdict, dominant_code, sample, ok_models, failing_models, started_at_ms, last_seen_at_ms)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const touch = db.prepare('UPDATE provider_diagnosis_history SET last_seen_at_ms = ? WHERE id = ?');
+
+  const changed: string[] = [];
+  db.transaction(() => {
+    for (const d of current) {
+      // Only keyed providers have a state worth tracking. Logging `no_key`
+      // would write 31 rows on this install for providers nobody has ever
+      // configured, and bury the three that matter.
+      if (!d.keyed) continue;
+      const prev = byPlatform.get(d.platform);
+      const same = prev && prev.verdict === d.verdict && (prev.dominant_code ?? null) === (d.dominantCode ?? null);
+      if (same) {
+        touch.run(now, prev.id);
+        continue;
+      }
+      insert.run(d.platform, d.verdict, d.dominantCode ?? null, d.sample ?? null,
+        d.okModels, d.failingModels, now, now);
+      changed.push(d.platform);
+    }
+  })();
+  return { changed };
+}
+
+/** Transitions for one provider or all, newest first. */
+export function listDiagnosisHistory(platform?: string, limit = 50, db: Db = getDb()): DiagnosisTransition[] {
+  const rows = platform
+    ? db.prepare(`SELECT * FROM provider_diagnosis_history WHERE platform = ? ORDER BY id DESC LIMIT ?`).all(platform, limit)
+    : db.prepare(`SELECT * FROM provider_diagnosis_history ORDER BY id DESC LIMIT ?`).all(limit);
+  return (rows as Record<string, unknown>[]).map(row => ({
+    platform: String(row.platform),
+    verdict: row.verdict as ProviderVerdict,
+    dominantCode: (row.dominant_code as ModelHealthCode | null) ?? null,
+    sample: (row.sample as string | null) ?? null,
+    okModels: Number(row.ok_models),
+    failingModels: Number(row.failing_models),
+    startedAtMs: Number(row.started_at_ms),
+    lastSeenAtMs: Number(row.last_seen_at_ms),
+  }));
+}

@@ -783,7 +783,19 @@
     "panelWhyKeyOff": "key unusable - switched off or failing",
     "panelWhyCatalogueOff": "switched off in the catalogue",
     "panelWhyOutOfScope": "outside this key’s model scope",
-    "panelHideNothing": "Every model here can serve a request - nothing to hide"
+    "panelHideNothing": "Every model here can serve a request - nothing to hide",
+    "verdict_key_unusable": "key off",
+    "verdict_key_rejected": "key rejected",
+    "verdict_account_blocked": "account blocked",
+    "verdict_models_gone": "models gone",
+    "verdict_rate_limited": "rate limited",
+    "verdict_degraded": "degraded",
+    "verdict_healthy": "healthy",
+    "verdict_untested": "untested",
+    "verdict_no_key": "no key",
+    "diagnosisCounts": "{ok} serving, {failing} failing",
+    "diagnosisCooldowns": "{count} route(s) on cooldown now",
+    "diagnosisSince": "In this state since {since}"
   },
   "backups": {
     "title": "Sauvegardes",

@@ -3,7 +3,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { z } from 'zod';
 import multer from 'multer';
 import path from 'path';
-import { diagnoseProviders } from '../services/provider-diagnosis.js';
+import { diagnoseProviders, adviceFor, recordDiagnosisTransitions, listDiagnosisHistory } from '../services/provider-diagnosis.js';
 import { getDb } from '../db/index.js';
 import { resolveProvider, getAllProviders } from '../providers/index.js';
 import { encrypt, decrypt, maskKey } from '../lib/crypto.js';
@@ -199,7 +199,32 @@ function insertImportedKey(platform: (typeof PLATFORMS)[number], keyName: string
  * allowance being diagnosed.
  */
 keysRouter.get('/diagnosis', (_req: Request, res: Response) => {
-  res.json({ providers: diagnoseProviders() });
+  const providers = diagnoseProviders();
+  // Reading is also re-diagnosing: opening the view records any state change it
+  // finds, so the history is a by-product of looking rather than a second job
+  // that can silently stop running.
+  recordDiagnosisTransitions(providers);
+  const history = listDiagnosisHistory();
+  const sinceByPlatform = new Map<string, number>();
+  for (const row of history) {
+    if (!sinceByPlatform.has(row.platform)) sinceByPlatform.set(row.platform, row.startedAtMs);
+  }
+  res.json({
+    providers: providers.map(p => ({
+      ...p,
+      ...adviceFor(p),
+      // When the CURRENT state began, which is the difference between "down for
+      // an hour" and "down since the promo ended two weeks ago".
+      sinceMs: sinceByPlatform.get(p.platform) ?? null,
+    })),
+  });
+});
+
+/** State changes per provider, newest first. Empty until something changes. */
+keysRouter.get('/diagnosis/history', (req: Request, res: Response) => {
+  const platform = typeof req.query.platform === 'string' ? req.query.platform : undefined;
+  const limit = Number(req.query.limit);
+  res.json({ history: listDiagnosisHistory(platform, Number.isFinite(limit) ? limit : 50) });
 });
 
 /**

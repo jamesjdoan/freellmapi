@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initDb, getDb } from '../../db/index.js';
 import { encrypt } from '../../lib/crypto.js';
-import { diagnoseProviders } from '../../services/provider-diagnosis.js';
+import { diagnoseProviders, adviceFor, recordDiagnosisTransitions, listDiagnosisHistory } from '../../services/provider-diagnosis.js';
 
 /**
  * One verdict per provider, and whose fault it is.
@@ -17,7 +17,7 @@ function reset(): void {
   process.env.ENCRYPTION_KEY = '0'.repeat(64);
   initDb(':memory:');
   const db = getDb();
-  for (const table of ['requests', 'rate_limit_cooldowns', 'api_keys', 'profile_models', 'fallback_config']) {
+  for (const table of ['requests', 'rate_limit_cooldowns', 'api_keys', 'profile_models', 'fallback_config', 'provider_diagnosis_history']) {
     try { db.prepare(`DELETE FROM ${table}`).run(); } catch { /* absent in this schema */ }
   }
   db.prepare('DELETE FROM models').run();
@@ -156,5 +156,71 @@ describe('provider diagnosis', () => {
     attempt('groq', 'g', addKey('groq'), null);
     const order = diagnoseProviders(getDb()).map(p => p.platform);
     expect(order.indexOf('opencode')).toBeLessThan(order.indexOf('groq'));
+  });
+});
+
+describe('what to do about it', () => {
+  beforeEach(reset);
+
+  it('separates what waiting fixes from what it does not', () => {
+    // The distinction the whole advice layer exists for: a 429 clears itself
+    // and a 403 never will, and those demand opposite responses.
+    const limited = adviceFor({ verdict: 'rate_limited', dominantCode: 'E429', activeCooldowns: 2, failingModels: 2, okModels: 0 });
+    const blocked = adviceFor({ verdict: 'account_blocked', dominantCode: 'E403', activeCooldowns: 0, failingModels: 11, okModels: 0 });
+    expect(limited.selfHealing).toBe(true);
+    expect(blocked.selfHealing).toBe(false);
+    expect(blocked.action).toContain('Waiting will not fix this');
+  });
+
+  it('counts the cooldowns it is telling you about', () => {
+    const held = adviceFor({ verdict: 'rate_limited', dominantCode: 'E429', activeCooldowns: 3, failingModels: 3, okModels: 1 });
+    expect(held.cause).toContain('3 route(s)');
+  });
+});
+
+describe('state changes over time', () => {
+  beforeEach(reset);
+
+  function opencodeFailing(): void {
+    const keyId = addKey('opencode');
+    addModel('opencode', 'a');
+    attempt('opencode', 'a', keyId, 'API error 403: free tier ended');
+  }
+
+  it('writes a row when the state changes and nothing when it holds', () => {
+    opencodeFailing();
+    expect(recordDiagnosisTransitions(diagnoseProviders(getDb()), getDb()).changed).toContain('opencode');
+    const first = listDiagnosisHistory('opencode', 50, getDb());
+    expect(first).toHaveLength(1);
+
+    // Same state again: extends the existing row rather than adding one.
+    const second = recordDiagnosisTransitions(diagnoseProviders(getDb()), getDb(), Date.now() + 60_000);
+    expect(second.changed).not.toContain('opencode');
+    expect(listDiagnosisHistory('opencode', 50, getDb())).toHaveLength(1);
+    expect(listDiagnosisHistory('opencode', 50, getDb())[0]!.lastSeenAtMs)
+      .toBeGreaterThan(first[0]!.startedAtMs);
+  });
+
+  it('records the recovery as its own transition, so a trend is readable', () => {
+    opencodeFailing();
+    recordDiagnosisTransitions(diagnoseProviders(getDb()), getDb());
+
+    // The provider comes back: newest attempt succeeds.
+    const keyId = addKey('opencode');
+    attempt('opencode', 'a', keyId, null);
+    recordDiagnosisTransitions(diagnoseProviders(getDb()), getDb(), Date.now() + 120_000);
+
+    const history = listDiagnosisHistory('opencode', 50, getDb());
+    expect(history).toHaveLength(2);
+    expect(history[0]!.verdict).toBe('healthy');
+    expect(history[1]!.verdict).toBe('account_blocked');
+  });
+
+  it('keeps the provider\'s own words after the failing traffic ages out', () => {
+    // The requests window is 14 days. The reason a key died must outlive it,
+    // or in a fortnight the history says "account_blocked" and cannot say why.
+    opencodeFailing();
+    recordDiagnosisTransitions(diagnoseProviders(getDb()), getDb());
+    expect(listDiagnosisHistory('opencode', 50, getDb())[0]!.sample).toContain('free tier ended');
   });
 });

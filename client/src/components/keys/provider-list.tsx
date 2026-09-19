@@ -35,6 +35,7 @@ import {
 } from './shared'
 import type { HealthData } from './shared'
 import { ProviderChurnChip, ProviderChurnPanel } from './provider-churn'
+import { ProviderDiagnosisChip, useProviderDiagnosis } from './provider-diagnosis'
 import { churnByPlatform, useCatalogueChanges } from '@/lib/catalogue-changes'
 import { ProviderModelsPanel } from '@/components/keys/provider-models-panel'
 import { DiscoverModelsDialog } from './discover-models-dialog'
@@ -550,6 +551,9 @@ export function ProviderList({ onAddKey, initialSearch }: {
   // provider even when nobody has acknowledged it yet.
   const { data: catalogueChanges } = useCatalogueChanges()
   const churn = churnByPlatform(catalogueChanges)
+  // One fetch for every provider; the chip reads its own row out of it.
+  const { data: diagnosis } = useProviderDiagnosis()
+  const diagnosisByPlatform = new Map((diagnosis?.providers ?? []).map(p => [p.platform, p]))
 
   // The full catalogue id list per platform, which is what decides whether a
   // scope edit has re-selected everything (and so should go back to NULL).
@@ -718,6 +722,10 @@ export function ProviderList({ onAddKey, initialSearch }: {
                       where that key is unambiguous. With several keys in the
                       group, "this key's scope" has no single answer and the
                       chip stays the read-only count it has always been. */}
+                  {/* What is happening with this credential, beside what its
+                      catalogue has been doing. Silent unless it needs a
+                      decision. */}
+                  <ProviderDiagnosisChip diagnosis={diagnosisByPlatform.get(group.value)} />
                   <ProviderChurnChip
                     churn={churn.get(group.value)}
                     expanded={single ? churnOpenKeyIds.has(group.keys[0].id) : undefined}
