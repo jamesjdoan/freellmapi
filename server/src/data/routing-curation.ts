@@ -342,11 +342,13 @@ export const CURATED_ROUTES: CuratedRoute[] = [
     chains: { 'Extra-Tier': 8 },
     why: 'Arrived 2026-09-19 in the overnight sync; probed ok in 2426ms. Tools, 1M context. Extra-Tier because it is the ONLY chain holding no OpenRouter route - the other seven already spend that single account counter, so a second route in any of them would be the duplicate-quota illusion rather than depth.',
   },
-  {
-    platform: 'nvidia', modelId: 'nvidia/nemotron-parse-2.0', classification: 'SPECIALIST',
-    chains: { Vision: 17 },
-    why: 'Arrived 2026-09-19; probed ok in 696ms. A document-parsing model: tools=false, vision=true, which is exactly what SPECIALIST is for and why Vision is the one chain that admits it. Vision tail - it is a parser, not a general describer, so it earns a place only after the general vision routes refuse.',
-  },
+  // nvidia/nemotron-parse-2.0 removed 2026-09-19, hours after being added, and
+  // the reason is worth keeping: it PROBED ok (696ms) and then failed the only
+  // job Vision exists for. A real 8x8 PNG returned `empty_completion` on 1/1
+  // attempt; a plain text prompt returned ' hi i i Ai i i i i'. It is a document
+  // PARSER with a vision flag, not a describer, and the health probe cannot tell
+  // those apart because it only sends text. Capability flags and a text probe are
+  // not evidence that a vision route can see - only an image is.
   // google/gemini-flash-latest and gemini-flash-lite-latest arrived 2026-09-19 and
   // both serve, but stay OUT of every chain: a `-latest` alias resolves to a
   // concrete model we already route, so it draws on the SAME per-model daily
