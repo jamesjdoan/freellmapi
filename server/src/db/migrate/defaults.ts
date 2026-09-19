@@ -57,6 +57,7 @@ import * as aaCostPerTask from '../migrations/20260913_000001_aa_cost_per_task.j
 import * as keyMonthlyUsage from '../migrations/20260914_000001_key_monthly_usage.js';
 import * as preserveQuotaState from '../migrations/20260914_999999_preserve_quota_state.js';
 import * as quotaSnapshotFreshness from '../migrations/20260915_000001_quota_snapshot_freshness.js';
+import * as dropRoutingDecision from '../migrations/20260919_000001_drop_routing_decision.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -181,4 +182,5 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: '20260914_000001_key_monthly_usage.ts', module: keyMonthlyUsage },
   { filename: '20260914_999999_preserve_quota_state.ts', module: preserveQuotaState },
   { filename: '20260915_000001_quota_snapshot_freshness.ts', module: quotaSnapshotFreshness },
+  { filename: '20260919_000001_drop_routing_decision.ts', module: dropRoutingDecision },
 ];

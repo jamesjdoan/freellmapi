@@ -1,6 +1,6 @@
 /**
- * Quota shadow harness — drives REAL HTTP traffic through the full proxy path
- * against stub providers, then prints what the shadow router concluded.
+ * Quota harness — drives REAL HTTP traffic through the full proxy path against
+ * stub providers, then prints what the quota subsystem recorded.
  *
  *   cd server && npm run quota:harness
  *
@@ -10,7 +10,7 @@
  * scarce pool, the ledger that could not tell two relays apart, and a partial
  * status_code fix. Each unit test supplied inputs that avoided the broken case.
  * This exercises the wiring they cannot: the HTTP surface, the fallback loop,
- * request logging, metering, header capture and the shadow ledger, end to end.
+ * request logging, metering and header capture, end to end.
  *
  * It is destructive to NOTHING: FREEAPI_DB_PATH points at a temp directory that
  * is deleted on exit. The env var matters — DATA_DIR does not exist, and a run
@@ -139,24 +139,10 @@ async function main(): Promise<void> {
     console.log(`  ${i + 1}. ${choices?.[0]?.message.content ?? JSON.stringify(reply).slice(0, 120)}`);
   }
 
-  // The shadow write is deferred off the response path.
-  await nextTurn();
-
-  console.log('\n── shadow ─────────────────────────────────────────────');
-  console.log(JSON.stringify(await call('GET', '/api/quota/shadow', token), null, 2));
-
-  console.log('\n── decisions ──────────────────────────────────────────');
-  const decisions = (await call('GET', '/api/quota/decisions?limit=5', token)).decisions as Record<string, unknown>[];
-  for (const d of decisions) {
-    console.log(`  served ${d.actualPlatform}[${d.actualEndpoint ?? '-'}] · shadow ${d.shadowPlatform}[${d.shadowEndpoint ?? '-'}] · agreed=${d.agreed}`);
-    console.log(`    ${d.reason}`);
-  }
-
   console.log('\n── metering + capture ─────────────────────────────────');
   const counts = db.prepare(`
     SELECT (SELECT COUNT(*) FROM requests) AS requests,
            (SELECT COUNT(*) FROM rate_limit_usage) AS usage,
-           (SELECT COUNT(*) FROM routing_decision) AS decisions,
            (SELECT COUNT(*) FROM provider_quota_observations WHERE raw_json IS NOT NULL) AS captured
   `).get();
   console.log(' ', JSON.stringify(counts));

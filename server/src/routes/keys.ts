@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { z } from 'zod';
 import multer from 'multer';
 import path from 'path';
+import { diagnoseProviders } from '../services/provider-diagnosis.js';
 import { getDb } from '../db/index.js';
 import { resolveProvider, getAllProviders } from '../providers/index.js';
 import { encrypt, decrypt, maskKey } from '../lib/crypto.js';
@@ -186,6 +187,21 @@ function insertImportedKey(platform: (typeof PLATFORMS)[number], keyName: string
 // its models ship in the premium/live catalog and only appear for free-tier
 // installs once they age into the monthly catalog, so a fresh install adds the
 // key and silently sees nothing.
+/**
+ * One verdict per provider: is this key working, and if not, whose fault.
+ *
+ * Model health answers "can this route serve", which is the wrong grain for the
+ * question actually asked of a key. OpenCode is the case: eleven models each
+ * answering 403 or 404 read as eleven problems, when it is one — the promo
+ * ended. Rolled up, that is a sentence instead of a spreadsheet.
+ *
+ * Reads recorded traffic only. Diagnosing a provider must never spend the
+ * allowance being diagnosed.
+ */
+keysRouter.get('/diagnosis', (_req: Request, res: Response) => {
+  res.json({ providers: diagnoseProviders() });
+});
+
 /**
  * Whether a stored row belongs in an export file. Kept in one place because the
  * export dialog shows a count before downloading, and computing that count from

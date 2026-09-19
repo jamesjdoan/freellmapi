@@ -43,7 +43,6 @@ describe('/api/quota', () => {
 
   beforeEach(() => {
     getDb().prepare('DELETE FROM quota_policy').run();
-    getDb().prepare('DELETE FROM routing_decision').run();
     getDb().prepare("DELETE FROM settings WHERE key = 'quota_routing_mode'").run();
   });
 
