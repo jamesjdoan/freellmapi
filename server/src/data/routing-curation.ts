@@ -337,6 +337,22 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // opencode/mimo-v2.5-free removed 2026-09-18: model row switched off, so its
   // Extra-Tier row pointed at a route the router would never walk.
   // opencode/big-pickle removed 2026-09-18: model row switched off, same reason.
+  {
+    platform: 'openrouter', modelId: 'deepseek/deepseek-v4-flash-0731:free', classification: 'OVERFLOW',
+    chains: { 'Extra-Tier': 8 },
+    why: 'Arrived 2026-09-19 in the overnight sync; probed ok in 2426ms. Tools, 1M context. Extra-Tier because it is the ONLY chain holding no OpenRouter route - the other seven already spend that single account counter, so a second route in any of them would be the duplicate-quota illusion rather than depth.',
+  },
+  {
+    platform: 'nvidia', modelId: 'nvidia/nemotron-parse-2.0', classification: 'SPECIALIST',
+    chains: { Vision: 17 },
+    why: 'Arrived 2026-09-19; probed ok in 696ms. A document-parsing model: tools=false, vision=true, which is exactly what SPECIALIST is for and why Vision is the one chain that admits it. Vision tail - it is a parser, not a general describer, so it earns a place only after the general vision routes refuse.',
+  },
+  // google/gemini-flash-latest and gemini-flash-lite-latest arrived 2026-09-19 and
+  // both serve, but stay OUT of every chain: a `-latest` alias resolves to a
+  // concrete model we already route, so it draws on the SAME per-model daily
+  // counter. A second name on one allowance is the duplicate-quota illusion.
+  // nvidia/nemotron-parse-2.0's siblings on unkeyed platforms (xkiro, kilo,
+  // pollinations - 254 arrivals overnight) are not evaluated: no key reaches them.
   // ── anyapi ────────────────────────────────────────────────────
   {
     platform: 'anyapi', modelId: 'dots-studio/dots-3-note-preview:free', classification: 'EXPERIMENTAL',
