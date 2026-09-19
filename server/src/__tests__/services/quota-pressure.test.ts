@@ -307,3 +307,60 @@ describe('priority mode speaks the same currency as the 429 penalty', () => {
     expect(pressurePenaltyPositions(0.5)).toBeCloseTo(MAX_PENALTY / 2);
   });
 });
+
+describe('pool pressure: confirming exhaustion before diverting', () => {
+  beforeEach(reset);
+
+  // Ported here 2026-09-19 when the shadow router was deleted. These cases
+  // lived against `scoreQuotaCandidate`, a parallel scorer that only ever ran
+  // in shadow. The rule is implemented for real in quota-pressure.ts
+  // (bindingAxis: "a zero against an estimated ceiling is a guess"), where it
+  // had no test. Deleting the shadow suite without moving them would have
+  // dropped coverage of live behaviour.
+  //
+  // `scarcity` is a factor: 1 means no penalty, lower means demoted.
+
+  function policy(source: 'catalog' | 'provider_api', spend: number): number {
+    const keyId = addKey('nvidia');
+    upsertQuotaPolicy({
+      platform: 'nvidia', modelId: 'm', endpointScope: null,
+      scope: 'model', metric: 'requests', limit: 40,
+      periodKind: 'rolling', periodMs: 60_000, timezone: null, anchorDay: null,
+      source,
+    });
+    spendRequests('nvidia', 'm', keyId, spend);
+    return quotaPressure('nvidia', 'm', '').scarcity;
+  }
+
+  it('penalises a measured zero harder than an estimated one', () => {
+    // The whole rule in one comparison: 40 of 40 against a catalogue guess is
+    // not the same evidence as 40 of 40 the provider itself reported. Diverting
+    // on the guess means never finding out whether the allowance was real.
+    const estimated = policy('catalog', 40);
+    reset();
+    const measured = policy('provider_api', 40);
+    expect(measured).toBeLessThan(estimated);
+  });
+
+  it('believes an estimated zero once a refusal is on record', () => {
+    // A real 429 is the confirmation the estimate was right.
+    const unconfirmed = policy('catalog', 40);
+    reset();
+    const keyId = addKey('nvidia');
+    upsertQuotaPolicy({
+      platform: 'nvidia', modelId: 'm', endpointScope: null,
+      scope: 'model', metric: 'requests', limit: 40,
+      periodKind: 'rolling', periodMs: 60_000, timezone: null, anchorDay: null,
+      source: 'catalog',
+    });
+    spendRequests('nvidia', 'm', keyId, 40);
+    setCooldown('nvidia', 'm', Date.now() + 60_000, 'test-429');
+    invalidateQuotaPressure();
+    expect(quotaPressure('nvidia', 'm', '').scarcity).toBeLessThan(unconfirmed);
+  });
+
+  it('leaves a partially-spent allowance alone', () => {
+    // The rule is about zero specifically; ordinary headroom must not move.
+    expect(policy('catalog', 10)).toBe(1);
+  });
+});

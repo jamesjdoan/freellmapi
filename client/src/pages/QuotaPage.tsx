@@ -1,14 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { ChevronDown, Clock, FileText, Flame, Server, Shield, Trash2 } from 'lucide-react';
+import { ChevronDown, Clock, FileText, Flame, Server, Trash2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { useI18n } from '@/i18n';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip as HoverTooltip } from '@/components/tooltip';
-import { TimeTreeLog } from '@/components/time-tree-log';
-import { parseSqliteUtc } from '@/lib/time-tree';
 import { ConfirmButton } from '@/components/confirm-button';
 import { QuotaProbeLogPanel } from '@/components/quota-probe-log';
 import { Button } from '@/components/ui/button';
@@ -81,31 +79,7 @@ interface QuotaForecastEntry {
   seconds_until_reset: number | null;
 }
 
-interface ShadowResponse {
-  mode: string;
-  stats: {
-    total: number;
-    agreed: number;
-    agreementRate: number;
-    byLogicalModel: Array<{ logicalModel: string; total: number; agreed: number }>;
-  };
-}
 
-interface DecisionRow {
-  id: number;
-  createdAt: string;
-  logicalModel: string;
-  mode: string;
-  actualPlatform: string;
-  actualModelId: string;
-  shadowPlatform: string | null;
-  shadowModelId: string | null;
-  actualEndpoint: string | null;
-  shadowEndpoint: string | null;
-  agreed: boolean;
-  reason: string | null;
-  candidates: unknown;
-}
 
 interface UsageWindow {
   used: number;
@@ -535,24 +509,9 @@ export default function QuotaPage() {
     queryFn: () => apiFetch<{ forecast: QuotaForecastEntry[] }>('/api/quota/forecast'),
   });
 
-  const { data: shadowData = { mode: 'off', stats: { total: 0, agreed: 0, agreementRate: 0, byLogicalModel: [] } }, isLoading: shadowLoading, isError: shadowError } = useQuery({
-    queryKey: ['quota', 'shadow'],
-    queryFn: () => apiFetch<ShadowResponse>('/api/quota/shadow'),
-  });
-
-  const { data: decisionsData = { decisions: [] }, isLoading: decisionsLoading, isError: decisionsError } = useQuery({
-    queryKey: ['quota', 'decisions'],
-    queryFn: () => apiFetch<{ decisions: DecisionRow[] }>('/api/quota/decisions?disagreed=1'),
-  });
-
   const { data: policiesData = { policies: [] }, isLoading: policiesLoading, isError: policiesError } = useQuery({
     queryKey: ['quota', 'policies'],
     queryFn: () => apiFetch<{ policies: PolicyRow[] }>('/api/quota/policies'),
-  });
-
-  const { data: modeData = { mode: 'shadow' } } = useQuery({
-    queryKey: ['quota', 'mode'],
-    queryFn: () => apiFetch<{ mode: string }>('/api/quota/mode'),
   });
 
   const { data: providerData = { providers: [] }, isLoading: providerLoading, isError: providerError } = useQuery({
@@ -1036,76 +995,6 @@ export default function QuotaPage() {
               ))}
             </TableBody>
           </Table>
-        </PanelState>
-      </Panel>
-
-      <Panel icon={Shield} title={t('quota.shadowTitle')}>
-        <div className="mb-3 flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground">{t('quota.routingMode')}</span>
-          <Badge variant="secondary">{modeData.mode}</Badge>
-        </div>
-        {/* Shadow can only show DIVERGENCE. The provider it preferred never ran,
-            so nothing here says the other choice would have been better. */}
-        <p className="mb-3 text-xs text-muted-foreground">{t('quota.shadowCaveat')}</p>
-        <PanelState loading={shadowLoading} error={shadowError} empty={shadowData.stats.total === 0} emptyKey="quota.emptyShadow">
-          <div className="space-y-4">
-            <p className="text-sm">
-              {t('quota.agreementSummary', {
-                agreed: String(shadowData.stats.agreed),
-                total: String(shadowData.stats.total),
-              })}
-            </p>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('quota.colLogicalModel')}</TableHead>
-                  <TableHead className="text-right">{t('quota.colDecisions')}</TableHead>
-                  <TableHead className="text-right">{t('quota.colAgreed')}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {shadowData.stats.byLogicalModel.map(lm => (
-                  <TableRow key={lm.logicalModel}>
-                    <TableCell className="font-medium">{lm.logicalModel}</TableCell>
-                    <TableCell className="text-right">{lm.total}</TableCell>
-                    <TableCell className="text-right">{lm.agreed}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </PanelState>
-      </Panel>
-
-      <Panel icon={Shield} title={t('quota.divergenceTitle')}>
-        <PanelState loading={decisionsLoading} error={decisionsError} empty={decisionsData.decisions.length === 0} emptyKey="quota.emptyDivergence">
-          {/* Folded by year/month/week, same control as the catalogue log.
-              This list only holds the rows where the two routers disagreed, so
-              it is sparse and bursty - a flat table of it reads as noise, while
-              the week summary reads as "the shadow router differed 4 times". */}
-          <TimeTreeLog
-            recentLabel={t('quota.divergenceRecent')}
-            unit="day"
-            items={decisionsData.decisions}
-            at={d => parseSqliteUtc(d.createdAt)}
-            itemKey={d => String(d.id)}
-            summary={items => (
-              <span className="tabular-nums">{t('log.disagreed', { count: items.length })}</span>
-            )}
-            row={d => (
-              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
-                <span className="font-medium">{d.logicalModel}</span>
-                {/* Endpoint disambiguates two relays that share a platform name. */}
-                <span>{d.actualEndpoint ? `${d.actualPlatform} (${d.actualEndpoint})` : d.actualPlatform}</span>
-                <span className="text-muted-foreground">→</span>
-                <span>{d.shadowPlatform == null ? '—' : d.shadowEndpoint ? `${d.shadowPlatform} (${d.shadowEndpoint})` : d.shadowPlatform}</span>
-                {d.reason && <span className="text-[11px] text-muted-foreground">{d.reason}</span>}
-                <span className="ml-auto flex-shrink-0 text-[11px] text-muted-foreground tabular-nums">
-                  {parseSqliteUtc(d.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-            )}
-          />
         </PanelState>
       </Panel>
 

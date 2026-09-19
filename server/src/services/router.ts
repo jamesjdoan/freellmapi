@@ -47,7 +47,6 @@ import { PAID_BALANCE_GUARD_ID } from '../data/extension-registry.js';
 import { getKeyQuotaHeadroom, inferQuotaPoolKey, isQuotaPoolAvailable, resolveQuotaPolicy, consumesPaidBalance } from './provider-quota.js';
 import { effectiveRouteLimits } from './quota-policy.js';
 import { normalizeGroupKey } from './model-groups.js';
-import { getQuotaRoutingMode, evaluateShadowDecision, recordRoutingDecision, type QuotaRoutingMode, type QuotaCandidate } from './quota-routing.js';
 import { quotaPressure, quotaDomainsAdmit, inFlightPoolShare } from './quota-pressure.js';
 import type { RoutingDecisionTrace } from '../lib/attempt-trace.js';
 import type { BaseProvider } from '../providers/base.js';
@@ -2354,70 +2353,6 @@ export function resolveFusionCandidate(modelId: string): FusionCandidate | null 
  * route. Deferring also means a slow or locked database delays a log write
  * rather than a request.
  */
-function noteShadowRoutingDecision(route: RouteResult, servingChain: ChainRow[]): void {
-  try {
-    const mode = getQuotaRoutingMode();
-    if (mode === 'off') return;
-
-    const chosen = servingChain.find(e => e.model_db_id === route.modelDbId);
-    if (!chosen) return;
-    const groupKey = normalizeGroupKey(chosen.display_name);
-    const peers = servingChain
-      .filter(e => normalizeGroupKey(e.display_name) === groupKey)
-      .map(e => ({
-        platform: e.platform,
-        modelId: e.model_id,
-        displayName: e.display_name,
-        // For a relay this is the only thing distinguishing two peers that
-        // both report platform 'custom' and the same model id.
-        endpointScope: e.endpoint_scope ?? '',
-      }));
-    if (peers.length < 2) return;
-
-    const platform = route.platform;
-    const modelId = route.modelId;
-    const endpointScope = route.endpointScope ?? '';
-    setImmediate(() => evaluateAndRecordShadow(peers, platform, modelId, endpointScope, mode));
-  } catch {
-    // Quota awareness is an enhancement, never a reason a request fails.
-  }
-}
-
-function evaluateAndRecordShadow(
-  peers: QuotaCandidate[],
-  actualPlatform: string,
-  actualModelId: string,
-  actualEndpointScope: string,
-  mode: QuotaRoutingMode,
-): void {
-  try {
-    const decision = evaluateShadowDecision(peers, (platform, modelId, quota) => {
-      // Reuse the limiter's own counters rather than a second accounting of the
-      // same events: whatever the gates believe has been spent is what the
-      // comparison should be judged against.
-      const windowMs = quota.window.periodStartMs == null
-        ? null
-        : Math.max(1, Date.now() - quota.window.periodStartMs);
-      if (windowMs == null) return null;
-      return quota.metric === 'requests'
-        ? countRequestsInWindow(platform, modelId, windowMs)
-        : countTokensInWindow(platform, modelId, windowMs);
-    });
-    if (!decision) return;
-
-    recordRoutingDecision({
-      logicalModel: decision.logicalModel,
-      mode,
-      actualPlatform,
-      actualModelId,
-      actualEndpointScope,
-      decision,
-    });
-  } catch {
-    // Quota awareness is an enhancement, never a reason a request fails.
-  }
-}
-
 export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, preferredModelDbId?: number, requireVision = false, requireTools = false, skipModels?: Set<number>, prefetchedChain?: ChainRow[], requireStructured = false, skipPlatforms?: Set<string>, exactOutputReserve = 0, task?: 'code' | 'chat'): RouteResult {
   const db = getDb();
 
@@ -2648,7 +2583,6 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
       // untouched whatever this concludes. It runs after selection precisely so
       // it CANNOT influence it — there is no code path from here back into the
       // choice, and every failure inside is swallowed.
-      noteShadowRoutingDecision(route, servingChain);
       return route;
     }
   }
