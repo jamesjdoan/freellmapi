@@ -866,8 +866,6 @@
     "pinnedRequests": "ပင်မထားသော တောင်းဆိုမှုများ",
     "pinnedHonored": "ဂုဏ်ပြုခံရသည်",
     "fallbackAttempts": "နောက်ပြန်လှည့်ရန် ကြိုးစားမှုများ",
-    "savingsHint": "နောက်ဆုံး ${actual} ကို {range} လောက် သိမ်းထားတယ်။ ဒါဟာ မော်ဒယ်အလိုက် စျေးနှုန်းဖြင့် ပေးသွင်းထားသော API များတွင် တူညီသော token များ၏ ကုန်ကျစရိတ်ဖြစ်သည်။ ပြသထားသော နံပါတ်သည် နောက်ဆုံး ဒေတာ {span} မှ ၃၀ ရက်အထိ သင့်အမြန်နှုန်းကို ခန့်မှန်းသည်။",
-    "savingsHintExact": "နောက်ဆုံး ${actual} ကို {range} လောက် သိမ်းထားတယ်။ ဒါဟာ မော်ဒယ်အလိုက် စျေးနှုန်းဖြင့် ပေးသွင်းထားသော API များတွင် တူညီသော token များ၏ ကုန်ကျစရိတ်ဖြစ်သည်။ ပြထားတဲ့နံပါတ်က သင့်ရဲ့ တကယ့် ၃၀ ရက်စုစုပေါင်းပါ။",
     "requestsHintPinned": "{pinned} မော်ဒယ်တစ်ခုကို အမည်ဖြင့် သတ်မှတ်ထားသည်။ {honored} pinned မော်ဒယ်ဖြင့် ဝန်ဆောင်မှုပေးခဲ့သည်။ {failed} အခြားတစ်ခုသို့ မအောင်မြင်ခဲ့ပါ။ ကျန်ရှိသော ရထားများကို အလိုအလျောက် လမ်းကြောင်းဖြင့် သွားခဲ့သည်။",
     "requestsHintAuto": "ဤကာလအတွင်း တောင်းဆိုမှုအားလုံးကို အလိုအလျောက် လမ်းညွှန်ပေးခဲ့သည်။ မည်သည့် client မှ မော်ဒယ်တစ်ခုကို အမည်ဖြင့် pin မလုပ်ခဲ့ပါ။",
     "requestsHintTypes": "{chat} စကားပြောခြင်းနှင့် {embedding} ထည့်သွင်းခြင်းတောင်းဆိုမှုများ ပြုလုပ်နိုင်သည်။",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "မှတ်တမ်းများ",

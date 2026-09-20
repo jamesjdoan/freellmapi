@@ -866,8 +866,6 @@
     "pinnedRequests": "Yêu cầu được ghim",
     "pinnedHonored": "được vinh danh",
     "fallbackAttempts": "nỗ lực dự phòng",
-    "savingsHint": "Bạn thực sự đã tiết kiệm được ${actual} trong {range} vừa qua. Đó là giá của các mã thông báo tương tự đối với các API trả phí, được định giá cho mỗi mô hình. Con số được hiển thị phản ánh tốc độ của bạn từ dữ liệu {span} cuối cùng đến đủ 30 ngày.",
-    "savingsHintExact": "Bạn thực sự đã tiết kiệm được ${actual} trong {range} vừa qua. Đó là giá của các mã thông báo tương tự đối với các API trả phí, được định giá cho mỗi mô hình. Con số hiển thị là tổng thời gian thực trong 30 ngày của bạn.",
     "requestsHintPinned": "{pinned} trong số các yêu cầu này đã ghim một mẫu máy cụ thể theo tên. {honored} được phục vụ bởi mô hình được ghim; {failed} chuyển sang một cái khác không thành công. Phần còn lại được tự động định tuyến.",
     "requestsHintAuto": "Tất cả các yêu cầu trong giai đoạn này đều được định tuyến tự động; không có khách hàng nào ghim một mô hình cụ thể theo tên.",
     "requestsHintTypes": "Yêu cầu trò chuyện {chat} và nhúng {embedding}.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "Nhật ký",

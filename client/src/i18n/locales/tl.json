@@ -866,8 +866,6 @@
     "pinnedRequests": "Mga naka-pin na kahilingan",
     "pinnedHonored": "pinarangalan",
     "fallbackAttempts": "Mga Pagtatangka sa Fallback",
-    "savingsHint": "Talagang nakasave ka ng ${actual} nitong nakaraang {range}. Iyan ang presyo ng parehong tokens sa mga bayad na API, na may presyo kada modelo. Ang bilang na ipinapakita ay nagpapakita ng iyong bilis mula sa huling {span} ng datos hanggang sa buong 30 araw.",
-    "savingsHintExact": "Talagang nakasave ka ng ${actual} nitong nakaraang {range}. Iyan ang presyo ng parehong tokens sa mga bayad na API, na may presyo kada modelo. Ang ipinakitang numero ay ang iyong tunay na kabuuan sa loob ng 30 araw.",
     "requestsHintPinned": "{pinned} sa mga kahilingang ito ay nag-pin ng isang partikular na modelo sa pangalan. {honored} ay pinagsilbihan ng pinned model; Nabigo {failed} sa iba. Ang iba pa ay auto-routed.",
     "requestsHintAuto": "Lahat ng kahilingan sa panahong ito ay auto-routed; Walang kliyente na nag-pin ng partikular na modelo sa pangalan.",
     "requestsHintTypes": "{chat} chat at {embedding} embedding requests.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "Mga Log",

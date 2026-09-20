@@ -866,8 +866,6 @@
     "pinnedRequests": "សំណើដែលបានចាក់តំណ",
     "pinnedHonored": "បានគោរព",
     "fallbackAttempts": "ការព្យាយាមត្រឡប់ក្រោយ",
-    "savingsHint": "អ្នកបានសង្គ្រោះ ${actual} ក្នុងរយៈពេល {range} ចុងក្រោយ។ នោះជាតម្លៃដែល token ដូចគ្នានឹងមានតម្លៃលើ API ដែលត្រូវបង់ប្រាក់ ដោយកំណត់តម្លៃតាមម៉ូឌែល។ ចំនួនដែលបង្ហាញបង្ហាញពីល្បឿនរបស់អ្នកចាប់ពី {span} ចុងក្រោយនៃទិន្នន័យរហូតដល់ 30 ថ្ងៃពេញ។",
-    "savingsHintExact": "អ្នកបានសង្គ្រោះ ${actual} ក្នុងរយៈពេល {range} ចុងក្រោយ។ នោះជាតម្លៃដែល token ដូចគ្នានឹងមានតម្លៃលើ API ដែលត្រូវបង់ប្រាក់ ដោយកំណត់តម្លៃតាមម៉ូឌែល។ ចំនួនដែលបង្ហាញគឺជាចំនួនសរុបពិតប្រាកដ ៣០ ថ្ងៃរបស់អ្នក។",
     "requestsHintPinned": "{pinned} ក្នុងចំណោមសំណើទាំងនេះ បានភ្ជាប់ម៉ូដែលជាក់លាក់តាមឈ្មោះ។ {honored} ត្រូវបានបម្រើដោយម៉ូដែលដែលបានដាក់ពិន; {failed} បានបរាជ័យទៅកម្មវិធីផ្សេងទៀត។ ផ្លូវដែលនៅសល់ត្រូវបានបើកបរដោយស្វ័យប្រវត្តិ។",
     "requestsHintAuto": "សំណើទាំងអស់ក្នុងរយៈពេលនេះត្រូវបានបញ្ជូនដោយស្វ័យប្រវត្តិ; មិនមានអតិថិជនណាមួយភ្ជាប់ម៉ូដែលជាក់លាក់តាមឈ្មោះទេ។",
     "requestsHintTypes": "{chat} chat {embedding} និង embedding requests។",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "កំណត់ហេតុ",

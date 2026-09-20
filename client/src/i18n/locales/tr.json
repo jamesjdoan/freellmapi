@@ -866,8 +866,6 @@
     "pinnedRequests": "Sabitlenen istekler",
     "pinnedHonored": "Onurlandırıldı",
     "fallbackAttempts": "Geri çekilme girişimleri",
-    "savingsHint": "Aslında son {range} üzerinden ${actual} tasarruf ettiniz. Aynı tokenlerin ücretli API'lerde model başına fiyatlandırıldığı maliyet de budur. Gösterilen sayı, son {span} verisinden tam 30 güne kadar olan hızınızı yansıtır.",
-    "savingsHintExact": "Aslında son {range} üzerinden ${actual} tasarruf ettiniz. Aynı tokenlerin ücretli API'lerde model başına fiyatlandırıldığı maliyet de budur. Gösterilen sayı gerçek 30 günlük toplamınızdır.",
     "requestsHintPinned": "Bu isteklerin {pinned}'si belirli bir modeli ada göre sabitledi. {honored} sabitlenmiş model tarafından sunuldu; {failed} farklı bir tanesine yük devretti. Geri kalanı otomatik olarak yönlendirildi.",
     "requestsHintAuto": "Bu dönemdeki tüm istekler otomatik olarak yönlendirildi; hiçbir müşteri belirli bir modeli ismine göre sabitlemedi.",
     "requestsHintTypes": "{chat} sohbet ve {embedding} yerleştirme istekleri.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "Günlükler",

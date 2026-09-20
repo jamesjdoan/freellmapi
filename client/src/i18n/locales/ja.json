@@ -866,8 +866,6 @@
     "pinnedRequests": "固定されたリクエスト",
     "pinnedHonored": "光栄です",
     "fallbackAttempts": "フォールバックの試行",
-    "savingsHint": "実際には、前回の {range} よりも ${actual} を節約できました。これは、同じトークンがモデルごとに価格設定された有料 API でかかるコストです。表示される数値は、最後の {span} データから丸 30 日までのペースを予測します。",
-    "savingsHintExact": "実際には、前回の {range} よりも ${actual} を節約できました。これは、同じトークンがモデルごとに価格設定された有料 API でかかるコストです。表示される数字は実際の 30 日間の合計です。",
     "requestsHintPinned": "これらのリクエストのうち {pinned} は、特定のモデルを名前で固定しました。 {honored} は固定モデルによって提供されました。 {failed} は別のものにフェイルオーバーしました。残りは自動ルーティングされました。",
     "requestsHintAuto": "この期間のすべてのリクエストは自動ルーティングされました。クライアントが特定のモデルを名前で固定することはありませんでした。",
     "requestsHintTypes": "{chat} チャットと {embedding} 埋め込みリクエスト。",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "ログ",

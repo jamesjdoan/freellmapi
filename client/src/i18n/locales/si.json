@@ -866,8 +866,6 @@
     "pinnedRequests": "අමුණන ලද ඉල්ලීම්",
     "pinnedHonored": "ගෞරව කළා",
     "fallbackAttempts": "පසුබැසීමේ උත්සාහයන්",
-    "savingsHint": "ඔබ ඇත්තටම පසුගිය {range} පුරා ${actual} ඉතිරි කර ඇත. ගෙවූ API වල එකම ටෝකන සඳහා වැය වන මුදල එයයි, මාදිලියකට මිල. පෙන්වා ඇති අංකය අවසන් {span} දත්තවල සිට සම්පූර්ණ දින 30ක් දක්වා ඔබේ වේගය ප්‍රක්ෂේපණය කරයි.",
-    "savingsHintExact": "ඔබ ඇත්තටම පසුගිය {range} පුරා ${actual} ඉතිරි කර ඇත. ගෙවූ API වල එකම ටෝකන සඳහා වැය වන මුදල එයයි, මාදිලියකට මිල. පෙන්වා ඇති අංකය ඔබේ සැබෑ දින 30 එකතුවයි.",
     "requestsHintPinned": "මෙම ඉල්ලීම්වලින් {pinned} නිශ්චිත ආකෘතියක් නමින් අමුණා ඇත. {honored} පින් කරන ලද ආකෘතිය මගින් සේවය කරන ලදී; {failed} වෙනත් එකකට අසාර්ථක විය. ඉතිරිය ස්වයංක්‍රීයව ගමන් කරන ලදී.",
     "requestsHintAuto": "මෙම කාල සීමාව තුළ සියලුම ඉල්ලීම් ස්වයංක්‍රීයව යොමු කරන ලදී; කිසිදු සේවාදායකයෙක් නිශ්චිත ආකෘතියක් නමින් ඇමිණියේ නැත.",
     "requestsHintTypes": "{chat} කතාබස් සහ {embedding} කාවැද්දීමේ ඉල්ලීම්.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "ලොග",

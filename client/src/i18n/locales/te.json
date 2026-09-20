@@ -866,8 +866,6 @@
     "pinnedRequests": "పిన్ చేసిన అభ్యర్థనలు",
     "pinnedHonored": "సన్మానించారు",
     "fallbackAttempts": "ఫాల్‌బ్యాక్ ప్రయత్నాలు",
-    "savingsHint": "మీరు నిజానికి గత {range}లో ${actual}ని సేవ్ చేసారు. అదే టోకెన్‌లు చెల్లించిన APIలలో ఒక్కో మోడల్‌కు ధర ఉండేవి. చూపబడిన సంఖ్య చివరి {span} డేటా నుండి పూర్తి 30 రోజుల వరకు మీ వేగాన్ని అంచనా వేస్తుంది.",
-    "savingsHintExact": "మీరు నిజానికి గత {range}లో ${actual}ని సేవ్ చేసారు. అదే టోకెన్‌లు చెల్లించిన APIలలో ఒక్కో మోడల్‌కు ధర ఉండేవి. చూపబడిన సంఖ్య మీ నిజమైన 30-రోజుల మొత్తం.",
     "requestsHintPinned": "ఈ అభ్యర్థనలలో {pinned} నిర్దిష్ట మోడల్‌ని పేరుతో పిన్ చేసింది. {honored} పిన్ చేయబడిన మోడల్ ద్వారా అందించబడింది; {failed} వేరొకదానిలో విఫలమైంది. మిగిలినవి ఆటో-రూట్ చేయబడ్డాయి.",
     "requestsHintAuto": "ఈ వ్యవధిలో అన్ని అభ్యర్థనలు ఆటో-రూట్ చేయబడ్డాయి; ఏ క్లయింట్ నిర్దిష్ట మోడల్‌ను పేరుతో పిన్ చేయలేదు.",
     "requestsHintTypes": "{chat} చాట్ మరియు {embedding} పొందుపరిచే అభ్యర్థనలు.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "లాగ్‌లు",

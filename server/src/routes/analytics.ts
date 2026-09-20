@@ -318,13 +318,24 @@ analyticsRouter.get('/by-platform', (req: Request, res: Response) => {
       AVG(CASE WHEN r.output_tokens > 0 AND r.latency_ms > 0
         THEN r.output_tokens / (r.latency_ms / 1000.0) ELSE NULL END) as avg_tokens_per_second,
       SUM(r.input_tokens) as total_input_tokens,
-      SUM(r.output_tokens) as total_output_tokens
+      SUM(r.output_tokens) as total_output_tokens,
+      -- Same per-request pricing as /by-model and /summary, so a provider row
+      -- and the model rows under it add up. Endpoint-scoped join for the #651
+      -- reason: (platform, model_id) alone matches one row per relay that
+      -- registered the model and multiplies the sum by that count.
+      SUM(CASE WHEN r.status = 'success' THEN
+        r.input_tokens  * COALESCE(m.paid_input_per_m,  ?) / 1000000.0 +
+        r.output_tokens * COALESCE(m.paid_output_per_m, ?) / 1000000.0
+      ELSE 0 END) as est_cost
     FROM requests r
     LEFT JOIN api_keys k ON k.id = r.key_id
+    LEFT JOIN models m
+      ON m.platform = r.platform AND m.model_id = r.model_id
+     AND m.endpoint_scope = ${ENDPOINT_ID_SQL}
     WHERE r.created_at >= ?
     GROUP BY r.platform, ${ENDPOINT_ID_SQL}
     ORDER BY requests DESC
-  `).all(since) as any[];
+  `).all(FALLBACK_INPUT_PER_M, FALLBACK_OUTPUT_PER_M, since) as any[];
 
   // P95 latency is a per-group percentile; SQLite has no native percentile
   // aggregate, so we take the nearest-rank value per group with a small
@@ -371,35 +382,58 @@ analyticsRouter.get('/by-platform', (req: Request, res: Response) => {
         : null,
       totalInputTokens: r.total_input_tokens ?? 0,
       totalOutputTokens: r.total_output_tokens ?? 0,
+      estimatedCost: Math.round((r.est_cost ?? 0) * 100) / 100,
     };
   }));
 });
 
+// Stats grouped by the CALLER, which means client_user_agent, not client_agent.
+//
+// `client_agent` is lib/client-classifier.ts's label, and it only recognises
+// harnesses that announce themselves (Claude Code's session header, Codex's UA,
+// …). Every request from this fork's own harness classifies as 'unknown', so
+// grouping on it collapsed nine distinct callers into one row. The raw UA is
+// what actually separates them, and an operator can set it per machine
+// (models.yml `headers: { User-Agent: … }`), which is how the Studio and the
+// MacBook are told apart.
+//
+// The models join mirrors /by-model: endpoint-scoped so a model served by two
+// relays does not multiply the row, and COALESCE'd to the documented fallback
+// for any model with no paid equivalent on file.
 analyticsRouter.get('/by-client', (req: Request, res: Response) => {
   const range = (req.query.range as string) ?? '7d';
   const since = getSinceTimestamp(range);
   const rows = getDb().prepare(`
     SELECT
-      COALESCE(client_agent, 'unknown') AS client_agent,
+      COALESCE(r.client_user_agent, 'unknown') AS client_ua,
       COUNT(*) AS requests,
-      SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) * 100.0 / NULLIF(SUM(CASE WHEN status <> 'canceled' THEN 1 ELSE 0 END), 0) AS success_rate,
-      AVG(latency_ms) AS avg_latency_ms,
-      SUM(input_tokens) AS total_input_tokens,
-      SUM(output_tokens) AS total_output_tokens,
-      MAX(strftime('%Y-%m-%dT%H:%M:%SZ', created_at)) AS last_seen_at
-    FROM requests
-    WHERE created_at >= ?
-    GROUP BY client_agent
+      SUM(CASE WHEN r.status = 'success' THEN 1 ELSE 0 END) * 100.0 / NULLIF(SUM(CASE WHEN r.status <> 'canceled' THEN 1 ELSE 0 END), 0) AS success_rate,
+      AVG(r.latency_ms) AS avg_latency_ms,
+      SUM(r.input_tokens) AS total_input_tokens,
+      SUM(r.output_tokens) AS total_output_tokens,
+      SUM(CASE WHEN r.status = 'success' THEN
+        r.input_tokens  * COALESCE(m.paid_input_per_m,  ?) / 1000000.0 +
+        r.output_tokens * COALESCE(m.paid_output_per_m, ?) / 1000000.0
+      ELSE 0 END) AS est_cost,
+      MAX(strftime('%Y-%m-%dT%H:%M:%SZ', r.created_at)) AS last_seen_at
+    FROM requests r
+    LEFT JOIN api_keys k ON k.id = r.key_id
+    LEFT JOIN models m
+      ON m.platform = r.platform AND m.model_id = r.model_id
+     AND m.endpoint_scope = ${ENDPOINT_ID_SQL}
+    WHERE r.created_at >= ?
+    GROUP BY client_ua
     ORDER BY requests DESC
-  `).all(since) as any[];
+  `).all(FALLBACK_INPUT_PER_M, FALLBACK_OUTPUT_PER_M, since) as any[];
 
   res.json(rows.map(row => ({
-    clientAgent: row.client_agent,
+    clientAgent: row.client_ua,
     requests: row.requests,
     successRate: Math.round((row.success_rate ?? 0) * 10) / 10,
     avgLatencyMs: Math.round(row.avg_latency_ms ?? 0),
     totalInputTokens: row.total_input_tokens ?? 0,
     totalOutputTokens: row.total_output_tokens ?? 0,
+    estimatedCost: Math.round((row.est_cost ?? 0) * 100) / 100,
     lastSeenAt: row.last_seen_at,
   })));
 });

@@ -866,8 +866,6 @@
     "pinnedRequests": "ჩამაგრებული მოთხოვნები",
     "pinnedHonored": "პატივცემული",
     "fallbackAttempts": "სარეზერვო მცდელობები",
-    "savingsHint": "თქვენ რეალურად დაზოგეთ ${actual} ბოლო {range}-ზე. ეს არის ის, რაც იგივე ტოკენები დაჯდებოდა ფასიან API-ებზე, თითო მოდელის ფასით. ნაჩვენები რიცხვი ასახავს თქვენს ტემპს ბოლო {span} მონაცემებიდან სრულ 30 დღემდე.",
-    "savingsHintExact": "თქვენ რეალურად დაზოგეთ ${actual} ბოლო {range}-ზე. ეს არის ის, რაც იგივე ტოკენები დაჯდებოდა ფასიან API-ებზე, თითო მოდელის ფასით. ნაჩვენები რიცხვი არის თქვენი რეალური 30 დღიანი ჯამი.",
     "requestsHintPinned": "ამ მოთხოვნებიდან {pinned}-მ დაასახელა კონკრეტული მოდელი სახელით. {honored} ემსახურებოდა დამაგრებული მოდელის მიერ; {failed} ვერ გადავიდა სხვაზე. დანარჩენს ავტომატური მარშრუტი გაუკეთეს.",
     "requestsHintAuto": "ამ პერიოდის ყველა მოთხოვნა განხორციელდა ავტომატური მარშრუტით; არცერთმა კლიენტმა არ დაასახელა კონკრეტული მოდელი სახელით.",
     "requestsHintTypes": "{chat} ჩატი და {embedding} ჩაშენების მოთხოვნები.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "ჟურნალი",

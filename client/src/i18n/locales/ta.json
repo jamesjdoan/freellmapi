@@ -866,8 +866,6 @@
     "pinnedRequests": "பின் செய்யப்பட்ட கோரிக்கைகள்",
     "pinnedHonored": "கௌரவிக்கப்பட்டது",
     "fallbackAttempts": "பின்னடைவு முயற்சிகள்",
-    "savingsHint": "நீங்கள் உண்மையில் கடந்த {range} இல் ${actual} சேமித்துள்ளீர்கள். அதே டோக்கன்கள் ஒரு மாதிரியின் விலையில் செலுத்தப்பட்ட APIகளில் செலவாகும். காட்டப்பட்ட எண் உங்கள் வேகத்தை கடைசி {span} தரவிலிருந்து முழு 30 நாட்களுக்குக் காட்டுகிறது.",
-    "savingsHintExact": "நீங்கள் உண்மையில் கடந்த {range} இல் ${actual} சேமித்துள்ளீர்கள். அதே டோக்கன்கள் ஒரு மாதிரியின் விலையில் செலுத்தப்பட்ட APIகளில் செலவாகும். காட்டப்பட்டுள்ள எண் உங்களின் உண்மையான 30 நாள் மொத்தமாகும்.",
     "requestsHintPinned": "இந்தக் கோரிக்கைகளில் {pinned} குறிப்பிட்ட மாதிரியின் பெயரால் பின் செய்யப்பட்டது. {honored} பின் செய்யப்பட்ட மாதிரியால் வழங்கப்பட்டது; {failed} வேறொன்றில் தோல்வியடைந்தது. மீதமுள்ளவை தானாக இயக்கப்பட்டன.",
     "requestsHintAuto": "இந்த காலகட்டத்தில் அனைத்து கோரிக்கைகளும் தானாக வழியனுப்பப்பட்டன; எந்த வாடிக்கையாளரும் குறிப்பிட்ட மாதிரியை பெயரால் பின் செய்யவில்லை.",
     "requestsHintTypes": "{chat} அரட்டை மற்றும் {embedding} உட்பொதித்தல் கோரிக்கைகள்.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "பதிவுகள்",

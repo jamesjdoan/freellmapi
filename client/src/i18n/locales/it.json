@@ -866,8 +866,6 @@
     "pinnedRequests": "Richieste fissate",
     "pinnedHonored": "Onorate",
     "fallbackAttempts": "Tentativi di fallback",
-    "savingsHint": "Hai effettivamente risparmiato ${actual} negli ultimi {range}. Questo è quanto gli stessi token sarebbero costati su API a pagamento, prezzate per modello. Il numero mostrato proietta il tuo ritmo dagli ultimi {span} di dati a 30 giorni interi.",
-    "savingsHintExact": "Hai effettivamente risparmiato ${actual} negli ultimi {range}. Questo è quanto gli stessi token sarebbero costati su API a pagamento, prezzate per modello. Il numero mostrato è il tuo totale reale di 30 giorni.",
     "requestsHintPinned": "{pinned} di queste richieste hanno fissato un modello specifico per nome. {honored} sono state servite dal modello fissato; {failed} sono cadute in fallback su uno diverso. Le restanti sono state instradate automaticamente.",
     "requestsHintAuto": "Tutte le richieste in questo periodo sono state instradate automaticamente; nessun client ha fissato un modello specifico per nome.",
     "requestsHintTypes": "{chat} richieste di chat e {embedding} di embedding.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "Log",

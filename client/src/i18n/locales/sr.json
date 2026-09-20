@@ -866,8 +866,6 @@
     "pinnedRequests": "Закачени захтеви",
     "pinnedHonored": "Почаствован",
     "fallbackAttempts": "Резервни покушаји",
-    "savingsHint": "Заправо сте уштедели ${actual} током последњег {range}. То је оно што би исти токени коштали на плаћеним АПИ-јима, по цени по моделу. Приказани број пројектује ваш темпо од последњег {span} података до пуних 30 дана.",
-    "savingsHintExact": "Заправо сте уштедели ${actual} током последњег {range}. То је оно што би исти токени коштали на плаћеним АПИ-јима, по цени по моделу. Приказани број је ваш стварни укупан број од 30 дана.",
     "requestsHintPinned": "{pinned} ових захтева је закачио одређени модел по имену. {honored} је служио закачени модел; {failed} није успео да пређе на други. Остали су аутоматски рутирани.",
     "requestsHintAuto": "Сви захтеви у овом периоду су аутоматски преусмерени; ниједан клијент није закачио одређени модел по имену.",
     "requestsHintTypes": "{chat} ћаскање и {embedding} захтеви за уграђивање.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "Логови",

@@ -1011,8 +1011,6 @@
     "pinnedRequests": "Pinned requests",
     "pinnedHonored": "Honored",
     "fallbackAttempts": "Fallback attempts",
-    "savingsHint": "You actually saved ${actual} over the last {range}. That is what the same tokens would have cost on paid APIs, priced per model. The number shown projects your pace from the last {span} of data to a full 30 days.",
-    "savingsHintExact": "You actually saved ${actual} over the last {range}. That is what the same tokens would have cost on paid APIs, priced per model. The number shown is your real 30-day total.",
     "requestsHintPinned": "{pinned} of these requests pinned a specific model by name. {honored} were served by the pinned model; {failed} failed over to a different one. The rest were auto-routed.",
     "requestsHintAuto": "All requests in this period were auto-routed; no client pinned a specific model by name.",
     "requestsHintTypes": "{chat} chat and {embedding} embedding requests.",
@@ -1070,7 +1068,9 @@
     "sortHint": "Sorting applies to the {count} loaded rows",
     "cacheHitRate": "Cache hit rate",
     "cacheSavedTokens": "{tokens} tokens saved",
-    "cacheHitRateHint": "{hits} hits vs {misses} misses since the server started · {requests} provider calls avoided"
+    "cacheHitRateHint": "{hits} hits vs {misses} misses since the server started · {requests} provider calls avoided",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "catalogue": {
     "changesTitle": "Catalogue changes",

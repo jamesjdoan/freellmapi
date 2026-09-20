@@ -866,8 +866,6 @@
     "pinnedRequests": "Καρφιτσωμένα αιτήματα",
     "pinnedHonored": "Τιμήθηκε",
     "fallbackAttempts": "Εναλλακτικές προσπάθειες",
-    "savingsHint": "Στην πραγματικότητα εξοικονομήσατε ${actual} τα τελευταία {range}. Αυτό θα κόστιζαν τα ίδια διακριτικά σε API επί πληρωμή, με τιμή ανά μοντέλο. Ο αριθμός που εμφανίζεται προβάλλει τον ρυθμό σας από την τελευταία {span} δεδομένων έως 30 ολόκληρες ημέρες.",
-    "savingsHintExact": "Στην πραγματικότητα εξοικονομήσατε ${actual} τα τελευταία {range}. Αυτό θα κόστιζαν τα ίδια διακριτικά σε API επί πληρωμή, με τιμή ανά μοντέλο. Ο αριθμός που εμφανίζεται είναι το πραγματικό σας σύνολο 30 ημερών.",
     "requestsHintPinned": "{pinned} από αυτά τα αιτήματα καρφίτσωσε ένα συγκεκριμένο μοντέλο με το όνομά του. {honored} εξυπηρετήθηκαν από το καρφιτσωμένο μοντέλο. {failed} απέτυχε σε διαφορετικό. Τα υπόλοιπα δρομολογήθηκαν αυτόματα.",
     "requestsHintAuto": "Όλα τα αιτήματα αυτής της περιόδου δρομολογήθηκαν αυτόματα. Κανένας πελάτης δεν καρφίτσωσε ένα συγκεκριμένο μοντέλο με το όνομά του.",
     "requestsHintTypes": "{chat} αιτήματα συνομιλίας και ενσωμάτωσης {embedding}.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "Καταγραφές",

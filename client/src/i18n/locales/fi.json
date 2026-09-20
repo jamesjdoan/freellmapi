@@ -866,8 +866,6 @@
     "pinnedRequests": "Kiinnitetyt pyynnöt",
     "pinnedHonored": "Kunnioitettu",
     "fallbackAttempts": "Varasuunnitelmat",
-    "savingsHint": "Olet itse asiassa säästänyt ${actual}:n viimeisen {range} aikana. Sen verran samat tokenit maksaisivat maksetuissa API-rajapinnoissa, mallikohtaisesti. Näytetty luku ennustaa vauhtisi viimeisestä {span} datasta täyteen 30 päivään.",
-    "savingsHintExact": "Olet itse asiassa säästänyt ${actual}:n viimeisen {range} aikana. Sen verran samat tokenit maksaisivat maksetuissa API-rajapinnoissa, mallikohtaisesti. Näytetty luku on todellinen 30 päivän kokonaismääräsi.",
     "requestsHintPinned": "{pinned} näistä pyynnöistä kiinnitti tietyn mallin nimeltä. {honored} palvelivat naulattua mallia; {failed} epäonnistui toiseen. Loput reititettiin automaattisesti.",
     "requestsHintAuto": "Kaikki pyynnöt tänä aikana ohjattiin automaattisesti; yksikään asiakas ei kiinnittänyt tiettyä mallia nimeltä.",
     "requestsHintTypes": "{chat} chatissa ja {embedding} upotuspyynnöissä.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "Lokit",

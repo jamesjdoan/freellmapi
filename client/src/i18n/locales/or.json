@@ -866,8 +866,6 @@
     "pinnedRequests": "ପିନ୍ ହୋଇଥିବା ଅନୁରୋଧଗୁଡିକ",
     "pinnedHonored": "ସମ୍ମାନିତ",
     "fallbackAttempts": "ଫଲବ୍ୟାକ୍ ଉଦ୍ୟମ",
-    "savingsHint": "ଆପଣ ପ୍ରକୃତରେ ଗତ {range} ରେ ${actual} ସଞ୍ଚୟ କରିଛନ୍ତି। ସମାନ ଟୋକେନ୍ ପେଡ୍ ଏପିଆଇ ଉପରେ ମୂଲ୍ୟବାନ ହୋଇଥାନ୍ତା, ଯାହା ମଡେଲ୍ ପିଛା ମୂଲ୍ୟ ରହିଥାନ୍ତା । ଦେଖାଯାଇଥିବା ନମ୍ବର ଶେଷ {span} ଡାଟାରୁ ପୂର୍ଣ୍ଣ 30 ଦିନ ପର୍ଯ୍ୟନ୍ତ ଆପଣଙ୍କ ଗତି ପ୍ରୋଜେକ୍ଟ କରେ।",
-    "savingsHintExact": "ଆପଣ ପ୍ରକୃତରେ ଗତ {range} ରେ ${actual} ସଞ୍ଚୟ କରିଛନ୍ତି। ସମାନ ଟୋକେନ୍ ପେଡ୍ ଏପିଆଇ ଉପରେ ମୂଲ୍ୟବାନ ହୋଇଥାନ୍ତା, ଯାହା ମଡେଲ୍ ପିଛା ମୂଲ୍ୟ ରହିଥାନ୍ତା । ଦେଖାଯାଉଥିବା ସଂଖ୍ୟା ହେଉଛି ଆପଣଙ୍କ ପ୍ରକୃତ 30-ଦିନର ମୋଟ।",
     "requestsHintPinned": "ଏହି ଅନୁରୋଧଗୁଡ଼ିକ ମଧ୍ୟରୁ {pinned} ଏକ ନିର୍ଦ୍ଦିଷ୍ଟ ମଡେଲକୁ ନାମ ଦ୍ୱାରା ପିନ୍ କରିଥିଲେ । {honored} ପିନ୍ ହୋଇଥିବା ମଡେଲ୍ ଦ୍ୱାରା ପରିବେଷଣ କରାଯାଇଥିଲା; {failed} ଏକ ଭିନ୍ନ ଗୋଟିଏରେ ବିଫଳ ହେଲା | ଅବଶିଷ୍ଟଗୁଡିକ ସ୍ୱୟଂଚାଳିତ ଭାବରେ ମାର୍ଗଦର୍ଶନ କରାଯାଇଥିଲା ।",
     "requestsHintAuto": "ଏହି ଅବଧିରେ ସମସ୍ତ ଅନୁରୋଧ ସ୍ୱୟଂଚାଳିତ ଭାବରେ ମାର୍ଗଦର୍ଶନ କରାଯାଇଥିଲା; କୌଣସି କ୍ଲାଏଣ୍ଟ ନାମ ଦ୍ୱାରା ଏକ ନିର୍ଦ୍ଧିଷ୍ଟ ମଡେଲ୍ ପିନ୍ କରିନାହାଁନ୍ତି।",
     "requestsHintTypes": "{chat} ଚାଟ୍ କରନ୍ତୁ ଏବଂ {embedding} ଏମ୍ବେଡିଂ ଅନୁରୋଧଗୁଡିକ।",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "ଲଗ",

@@ -866,8 +866,6 @@
     "pinnedRequests": "પિન કરેલી વિનંતીઓ",
     "pinnedHonored": "સન્માનિત",
     "fallbackAttempts": "ફોલબેક પ્રયાસો",
-    "savingsHint": "તમે ખરેખર છેલ્લા {range} કરતાં ${actual} બચાવ્યા. પેઇડ APIs પર સમાન ટોકન્સનો ખર્ચ મોડલ દીઠ ભાવ હશે. બતાવેલ નંબર ડેટાના છેલ્લા {span} થી સંપૂર્ણ 30 દિવસ સુધી તમારી ગતિને પ્રોજેક્ટ કરે છે.",
-    "savingsHintExact": "તમે ખરેખર છેલ્લા {range} કરતાં ${actual} બચાવ્યા. પેઇડ APIs પર સમાન ટોકન્સનો ખર્ચ મોડલ દીઠ ભાવ હશે. દર્શાવેલ સંખ્યા તમારી વાસ્તવિક 30-દિવસની કુલ સંખ્યા છે.",
     "requestsHintPinned": "આ વિનંતીઓમાંથી {pinned} એ નામ દ્વારા ચોક્કસ મોડેલને પિન કર્યું છે. {honored} પિન કરેલ મોડેલ દ્વારા સેવા આપવામાં આવી હતી; {failed} બીજામાં નિષ્ફળ થયું. બાકીના ઓટો-રાઉટ હતા.",
     "requestsHintAuto": "આ સમયગાળામાં તમામ વિનંતીઓ સ્વતઃ-રાઉટ કરવામાં આવી હતી; કોઈ ક્લાયન્ટે નામ દ્વારા ચોક્કસ મોડેલને પિન કર્યું નથી.",
     "requestsHintTypes": "{chat} ચેટ અને {embedding} એમ્બેડિંગ વિનંતીઓ.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "લોગ",

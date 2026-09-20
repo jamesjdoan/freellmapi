@@ -866,8 +866,6 @@
     "pinnedRequests": "指定模型的請求",
     "pinnedHonored": "已滿足",
     "fallbackAttempts": "備援嘗試",
-    "savingsHint": "過去 {range} 實際節省了 ${actual}。這是相同的 Token 在按模型計費的付費 API 上的花費。顯示的數字是根據過去 {span} 的資料按比例推算至 30 天。",
-    "savingsHintExact": "在過去 {range}，您實際節省了 ${actual}。這是相同的 Token 在按模型計費的付費 API 上的花費。顯示的數字是真實經過的 30 天總額。",
     "requestsHintPinned": "其中有 {pinned} 個請求用名稱指定了模型。{honored} 個由所指定的模型處理；{failed} 個由其他模型接手。其餘為自動路由。",
     "requestsHintAuto": "在此期間的所有請求均為自動路由；沒有用戶端用名稱指定特定模型。",
     "requestsHintTypes": "{chat} 個對話請求和 {embedding} 個嵌入請求。",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "日誌",

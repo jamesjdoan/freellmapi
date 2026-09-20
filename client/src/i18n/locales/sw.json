@@ -866,8 +866,6 @@
     "pinnedRequests": "Maombi yaliyobandikwa",
     "pinnedHonored": "Kuheshimiwa",
     "fallbackAttempts": "Majaribio ya kurudi nyuma",
-    "savingsHint": "Umehifadhi ${actual} zaidi ya {range} iliyopita. Hiyo ndiyo tokeni zile zile zingegharimu API zinazolipiwa, bei kwa kila modeli. Nambari iliyoonyeshwa inakuza kasi yako kutoka {span} ya mwisho ya data hadi siku 30 kamili.",
-    "savingsHintExact": "Umehifadhi ${actual} zaidi ya {range} iliyopita. Hiyo ndiyo tokeni zile zile zingegharimu API zinazolipiwa, bei kwa kila modeli. Nambari iliyoonyeshwa ni jumla yako halisi ya siku 30.",
     "requestsHintPinned": "{pinned} ya maombi haya yalibandikwa modeli maalum kwa jina. {honored} zilihudumiwa na kielelezo kilichobandikwa; {failed} imeshindwa hadi nyingine tofauti. Zingine zilielekezwa kiotomatiki.",
     "requestsHintAuto": "Maombi yote katika kipindi hiki yalielekezwa kiotomatiki; hakuna mteja aliyebandika mfano maalum kwa jina.",
     "requestsHintTypes": "{chat} chat na {embedding} maombi ya kupachika.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "Kumbukumbu",

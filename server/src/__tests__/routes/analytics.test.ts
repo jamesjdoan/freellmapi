@@ -232,6 +232,28 @@ describe('Analytics API', () => {
     expect(body[0].estimatedCost).toBe(2.6);
   });
 
+  // A provider row and the model rows beneath it are priced by the same rule,
+  // so they must agree. Two models on one provider, and a failed request that
+  // buys nothing: 2.60 + 6.00, with the error row contributing 0.
+  it('returns per-provider estimated cost in the by-platform breakdown', async () => {
+    insertTokensRequest('groq', 'llama-3.3-70b-versatile', 'success', 10_000_000, 5_000_000, '2026-05-29 11:00:00');
+    insertTokensRequest('groq', 'unmapped-model', 'success', 10_000_000, 5_000_000, '2026-05-29 11:00:00');
+    insertTokensRequest('groq', 'llama-3.3-70b-versatile', 'error', 10_000_000, 5_000_000, '2026-05-29 11:00:00');
+
+    const { status, body } = await request(app, '/api/analytics/by-platform?range=24h');
+
+    expect(status).toBe(200);
+    const groq = body.find((r: any) => r.platform === 'groq');
+    expect(groq.estimatedCost).toBe(8.6);
+
+    // The same traffic through /by-model must sum to the provider figure.
+    const models = await request(app, '/api/analytics/by-model?range=24h');
+    const summed = models.body
+      .filter((r: any) => r.platform === 'groq')
+      .reduce((total: number, r: any) => total + r.estimatedCost, 0);
+    expect(Math.round(summed * 100) / 100).toBe(groq.estimatedCost);
+  });
+
   describe('pinned vs auto tracking', () => {
     function insertPinnedRequest(modelId: string, requestedModel: string | null, createdAt: string) {
       getDb().prepare(`

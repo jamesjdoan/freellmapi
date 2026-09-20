@@ -866,8 +866,6 @@
     "pinnedRequests": "Belgilangan so'rovlar",
     "pinnedHonored": "hurmatli",
     "fallbackAttempts": "Qayta urinishlar",
-    "savingsHint": "Oxirgi {range} davomida siz aslida ${actual} saqladingiz. Xuddi shu tokenlar har bir model uchun narxlangan pulli API-larda shunday turadi. Ko'rsatilgan raqam oxirgi {span} ma'lumotlardan to'liq 30 kungacha bo'lgan tezlikni prognoz qiladi.",
-    "savingsHintExact": "Oxirgi {range} davomida siz aslida ${actual} saqladingiz. Xuddi shu tokenlar har bir model uchun narxlangan pulli API-larda shunday turadi. Ko'rsatilgan raqam sizning haqiqiy 30 kunlik jami hisoblanadi.",
     "requestsHintPinned": "Ushbu soʻrovlarning {pinned} qismi maʼlum bir modelni nomi bilan bogʻlab qoʻygan. {honored} mahkamlangan model tomonidan xizmat ko'rsatildi; {failed} boshqasiga o‘tib bo‘lmadi. Qolganlari avtomatik yo'naltirildi.",
     "requestsHintAuto": "Bu davrdagi barcha soʻrovlar avtomatik yoʻnaltirildi; Hech bir mijoz ma'lum bir modelni nomi bilan bog'lamagan.",
     "requestsHintTypes": "{chat} chat va {embedding} o‘rnatish so‘rovlari.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "Jurnal",

@@ -866,8 +866,6 @@
     "pinnedRequests": "የተሰኩ ጥያቄዎች",
     "pinnedHonored": "የተከበረ",
     "fallbackAttempts": "የውድቀት ሙከራዎች",
-    "savingsHint": "ባለፉት {range} ${actual}ን አስቀምጠዋል። በአንድ ሞዴል ዋጋ በሚከፈልባቸው ኤፒአይዎች ላይ ተመሳሳይ ቶከኖች ያስከፍላሉ። የሚታየው ቁጥር ከመጨረሻው የውሂብ {span} እስከ 30 ቀናት ድረስ ፍጥነትዎን ያዘጋጃል።",
-    "savingsHintExact": "ባለፉት {range} ${actual}ን አስቀምጠዋል። በአንድ ሞዴል ዋጋ በሚከፈልባቸው ኤፒአይዎች ላይ ተመሳሳይ ቶከኖች ያስከፍላሉ። የሚታየው ቁጥር የእርስዎ ትክክለኛ የ30-ቀን ድምር ነው።",
     "requestsHintPinned": "ከእነዚህ ጥያቄዎች ውስጥ {pinned} አንድን የተወሰነ ሞዴል በስም ሰካ። {honored} በተሰካው ሞዴል አገልግለዋል; {failed} ወደ ሌላ አልተሳካም። የተቀሩት በራስ-ሰር ተዘዋውረዋል።",
     "requestsHintAuto": "በዚህ ጊዜ ውስጥ ያሉት ሁሉም ጥያቄዎች በራስ-ሰር ተዘዋውረዋል; አንድም ደንበኛ አንድን የተወሰነ ሞዴል በስም አልሰካም።",
     "requestsHintTypes": "{chat} ይወያዩ እና {embedding} የመክተት ጥያቄዎች።",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "መዝገቦች",

@@ -177,8 +177,15 @@ interface ByPlatformRow {
   avgTokensPerSecond: number | null
   totalInputTokens: number
   totalOutputTokens: number
+  // Paid-API equivalent of this provider's successful traffic, same per-model
+  // pricing the summary and per-model rows use.
+  estimatedCost: number
 }
 
+// One row per caller, keyed on the raw User-Agent (server groups on
+// client_user_agent, not the classifier label — see routes/analytics.ts).
+// Machines that set a distinct UA appear as distinct rows; everything else
+// lands under its bare harness UA or 'unknown'.
 interface ByClientRow {
   clientAgent: string
   requests: number
@@ -186,6 +193,7 @@ interface ByClientRow {
   avgLatencyMs: number
   totalInputTokens: number
   totalOutputTokens: number
+  estimatedCost: number
   lastSeenAt: string | null
 }
 
@@ -722,13 +730,15 @@ export default function AnalyticsPage() {
     ? t('analytics.sortHint', { count: recentCalls.rows.length })
     : null
 
-  // Savings card shows ONE stable monthly figure regardless of the selected
-  // range: the last-30-days data projected to a full month from its actual
-  // span (a young install with 2 days of data shows 15x its 2-day total).
-  // Once 30 days of history exist the real total shows as-is. The hover
-  // hint carries the selected period's actual amount and the projection
-  // basis. Querying 30d separately is free: react-query shares the cache
-  // with the 30d tab.
+  // Savings card shows the SELECTED range's actual figure, so the number moves
+  // when the range toggle does. It used to render one 30-day projection at
+  // every setting, which made 24h, 7d, 30d and 90d read identically and looked
+  // like a frozen stat rather than a deliberate choice.
+  //
+  // The 30-day pace still has a place — it is the "what does this save me a
+  // month" number — so it moves into the hover hint, where an unchanging value
+  // is not mistaken for a broken one. Querying 30d separately is free:
+  // react-query shares the cache with the 30d tab.
   const { data: summary30 } = useQuery({
     queryKey: ['analytics', 'summary', '30d'],
     queryFn: () => apiFetch<SummaryResponse>(`/api/analytics/summary?range=30d`),
@@ -751,8 +761,8 @@ export default function AnalyticsPage() {
     : t('analytics.rangeLabel90d')
   const spanLabel = spanDays >= 2 ? t('analytics.spanDays', { count: Math.round(spanDays) }) : t('analytics.spanHours', { count: Math.max(1, Math.round(spanDays * 24)) })
   const savingsHint = extrapolated
-    ? t('analytics.savingsHint', { actual: actualSavings.toFixed(2), range: rangeLabel, span: spanLabel })
-    : t('analytics.savingsHintExact', { actual: actualSavings.toFixed(2), range: rangeLabel })
+    ? t('analytics.savingsHintRanged', { range: rangeLabel, monthly: savings30d.toFixed(2), span: spanLabel })
+    : t('analytics.savingsHintRangedExact', { range: rangeLabel, monthly: savings30d.toFixed(2) })
 
   // Pinned = the client named a specific model instead of auto-routing.
   // Honored = that model actually served it (the rest failed over).
@@ -817,9 +827,9 @@ export default function AnalyticsPage() {
               <Stat icon={Zap} label={t('analytics.avgTtft')} value={ttftValue} />
               {/* Priced per request at the served model's paid-API equivalent
                   rate (not a flat frontier-model rate) — see db/model-pricing.ts.
-                  The value is a 30-day projection; the hover hint tells the whole
-                  story (actual period amount + whether it was extrapolated). */}
-              <Stat icon={CircleDollarSign} label={t('analytics.estSavings')} value={`$${savings30d.toFixed(2)}`} hint={savingsHint} />
+                  The value follows the range toggle; the hover hint carries the
+                  30-day pace and says whether it was extrapolated. */}
+              <Stat icon={CircleDollarSign} label={t('analytics.estSavings')} value={`$${actualSavings.toFixed(2)}`} sub={rangeLabel} hint={savingsHint} />
               {/* Response-cache impact, as ONE card: hit rate with the tokens
                   it gave back underneath. Rendered only when the cache is on,
                   so installs that opted out neither lose a slot in this row nor
@@ -895,19 +905,44 @@ export default function AnalyticsPage() {
             )}
           </Panel>
 
+          {/* Callers, as a table rather than a bar chart: the rows are keyed on
+              the raw User-Agent now, so each machine that sets its own UA is a
+              row, and the figure an operator wants beside it is what its
+              traffic would have cost — which a single-series bar cannot carry.
+              Rows an operator has not tagged still read as their bare harness
+              UA, so nothing is attributed to a machine on a guess. */}
           <Panel icon={Bot} title={t('analytics.requestsByAgent')}>
             {byClient.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">{t('common.noData')}</p>
             ) : (
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={byClient} margin={{ top: 6, right: 6, left: -12, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="2 4" stroke={gridStyle} />
-                  <XAxis dataKey="clientAgent" tick={axisStyle} tickLine={false} axisLine={{ stroke: gridStyle }} {...categoryAxisProps(byClient.length)} />
-                  <YAxis tick={axisStyle} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={tooltipStyle} />
-                  <Bar dataKey="requests" name={t('analytics.requests')} fill={seriesB} radius={[3, 3, 0, 0]} maxBarSize={24} />
-                </BarChart>
-              </ResponsiveContainer>
+              <div className="max-h-[240px] overflow-y-auto -mx-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="pl-4">{t('analytics.clientAgent')}</TableHead>
+                      <TableHead className="text-right">{t('analytics.requests')}</TableHead>
+                      <TableHead className="text-right">{t('common.success')}</TableHead>
+                      <TableHead className="text-right">{t('analytics.inTokens')}</TableHead>
+                      <TableHead className="text-right">{t('analytics.outTokens')}</TableHead>
+                      <TableHead className="text-right pr-4">{t('analytics.saved')}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {byClient.map((c) => (
+                      <TableRow key={c.clientAgent}>
+                        <TableCell className="pl-4 text-xs font-medium max-w-[160px] truncate" title={c.clientAgent}>
+                          {c.clientAgent}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{c.requests}</TableCell>
+                        <TableCell className="text-right tabular-nums">{c.successRate}%</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatTokens(c.totalInputTokens)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatTokens(c.totalOutputTokens)}</TableCell>
+                        <TableCell className="text-right tabular-nums pr-4">${(c.estimatedCost ?? 0).toFixed(2)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </Panel>
 
@@ -1142,7 +1177,8 @@ export default function AnalyticsPage() {
                         <TableHead className="text-right">{t('analytics.avgTtft')}</TableHead>
                         <TableHead className="text-right">{t('analytics.tokensPerSec')}</TableHead>
                         <TableHead className="text-right">{t('analytics.inTokens')}</TableHead>
-                        <TableHead className="text-right pr-4">{t('analytics.outTokens')}</TableHead>
+                        <TableHead className="text-right">{t('analytics.outTokens')}</TableHead>
+                        <TableHead className="text-right pr-4">{t('analytics.saved')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1164,7 +1200,8 @@ export default function AnalyticsPage() {
                           <TableCell className="text-right tabular-nums">{p.avgTtfbMs != null ? `${p.avgTtfbMs} ms` : '—'}</TableCell>
                           <TableCell className="text-right tabular-nums">{p.avgTokensPerSecond != null ? p.avgTokensPerSecond : '—'}</TableCell>
                           <TableCell className="text-right tabular-nums">{formatTokens(p.totalInputTokens)}</TableCell>
-                          <TableCell className="text-right tabular-nums pr-4">{formatTokens(p.totalOutputTokens)}</TableCell>
+                          <TableCell className="text-right tabular-nums">{formatTokens(p.totalOutputTokens)}</TableCell>
+                          <TableCell className="text-right tabular-nums pr-4">${(p.estimatedCost ?? 0).toFixed(2)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

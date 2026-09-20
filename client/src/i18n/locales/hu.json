@@ -866,8 +866,6 @@
     "pinnedRequests": "Kitűzött kérések",
     "pinnedHonored": "Tisztelet",
     "fallbackAttempts": "Tartalék kísérletek",
-    "savingsHint": "Valójában az elmúlt {range} alatt ${actual}-t mentettél. Ez az, amennyibe kerültek volna ugyanazok a tokenek fizetős API-kon, modellenkénti árakon. A megjelenített szám az utolsó {span} adat ütemét mutatja elő, hogy teljes 30 napig tart.",
-    "savingsHintExact": "Valójában az elmúlt {range} alatt ${actual}-t mentettél. Ez az, amennyibe kerültek volna ugyanazok a tokenek fizetős API-kon, modellenkénti árakon. A megjelenített szám a valós 30 napos összértéked.",
     "requestsHintPinned": "{pinned} kérések közül egy adott modellt név szerint rögzítettek. {honored} a tűzött modell szolgálta ki; {failed} átcsúszott egy másik helyre. A többieket automatikusan irányították.",
     "requestsHintAuto": "Ebben az időszakban minden kérést automatikusan irányítottak; egyetlen ügyfél sem rögzített egy adott modellt név szerint.",
     "requestsHintTypes": "{chat} csevegés és {embedding} beágyazási kérések.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "Napló",

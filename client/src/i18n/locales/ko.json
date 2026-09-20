@@ -866,8 +866,6 @@
     "pinnedRequests": "고정된 요청",
     "pinnedHonored": "우호적",
     "fallbackAttempts": "대체 시도",
-    "savingsHint": "실제로 지난 {range}에 비해 ${actual}를 절약했습니다. 이는 동일한 토큰이 모델별로 가격이 책정되는 유료 API에 대한 비용입니다. 표시된 숫자는 마지막 {span} 데이터부터 전체 30일까지의 속도를 나타냅니다.",
-    "savingsHintExact": "실제로 지난 {range}에 비해 ${actual}를 절약했습니다. 이는 동일한 토큰이 모델별로 가격이 책정되는 유료 API에 대한 비용입니다. 표시된 숫자는 실제 30일 합계입니다.",
     "requestsHintPinned": "이러한 요청 중 {pinned}는 특정 모델을 이름으로 고정했습니다. {honored}는 고정된 모델에 의해 제공되었습니다. {failed}는 다른 것으로 장애 조치되었습니다. 나머지는 자동으로 라우팅되었습니다.",
     "requestsHintAuto": "이 기간의 모든 요청은 자동으로 라우팅되었습니다. 어떤 클라이언트도 특정 모델을 이름으로 고정하지 않았습니다.",
     "requestsHintTypes": "{chat} 채팅 및 {embedding} 삽입 요청.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "로그",

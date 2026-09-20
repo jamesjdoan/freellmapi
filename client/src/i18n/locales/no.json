@@ -866,8 +866,6 @@
     "pinnedRequests": "Festede forespørsler",
     "pinnedHonored": "Hedret",
     "fallbackAttempts": "Forsøk på tilbaketrekning",
-    "savingsHint": "Du har faktisk lagret ${actual} de siste {range}. Det er det de samme tokenene ville kostet på betalte API-er, priset per modell. Tallet som vises projiserer tempoet ditt fra siste {span} data til hele 30 dager.",
-    "savingsHintExact": "Du har faktisk lagret ${actual} de siste {range}. Det er det de samme tokenene ville kostet på betalte API-er, priset per modell. Tallet som vises er din reelle 30-dagers total.",
     "requestsHintPinned": "{pinned} av disse forespørslene festet en spesifikk modell ved navn. {honored} ble betjent av den pinnede modellen; {failed} gikk over til en annen. Resten ble automatisk rutet.",
     "requestsHintAuto": "Alle forespørsler i denne perioden ble automatisk rutet; Ingen kunde festet en spesifikk modell ved navn.",
     "requestsHintTypes": "{chat} chatte og {embedding} innbyggingsforespørsler.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "Logg",

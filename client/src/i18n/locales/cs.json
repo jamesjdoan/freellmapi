@@ -866,8 +866,6 @@
     "pinnedRequests": "Připnuté žádosti",
     "pinnedHonored": "Ocenění",
     "fallbackAttempts": "Záložní pokusy",
-    "savingsHint": "Ve skutečnosti jsi za poslední {range} ušetřil ${actual}. To je cena, kterou by stejné tokeny stály na placených API, oceněné podle modelu. Zobrazené číslo promítá vaše tempo od posledního {span} dat na plných 30 dní.",
-    "savingsHintExact": "Ve skutečnosti jsi za poslední {range} ušetřil ${actual}. To je cena, kterou by stejné tokeny stály na placených API, oceněné podle modelu. Zobrazené číslo je váš skutečný 30denní součet.",
     "requestsHintPinned": "{pinned} z těchto požadavků připnuly konkrétní model jménem. {honored} obsluhoval model s připnutým kolíkem; {failed} přešel na jiný. Ostatní byly automaticky směrovány.",
     "requestsHintAuto": "Všechny požadavky v tomto období byly automaticky směrovány; žádný klient nepřipnul konkrétní model jménem.",
     "requestsHintTypes": "{chat} chat a {embedding} žádosti o vložení.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "Logy",

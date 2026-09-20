@@ -866,8 +866,6 @@
     "pinnedRequests": "درخواست های پین شده",
     "pinnedHonored": "مفتخر شد",
     "fallbackAttempts": "تلاش های برگشتی",
-    "savingsHint": "شما در واقع {actual} دلار را نسبت به آخرین {range} پس انداز کرده اید. این همان چیزی است که همان توکن‌ها در APIهای پولی با قیمت هر مدل هزینه خواهند داشت. عدد نشان داده شده سرعت شما را از آخرین {span} داده تا 30 روز کامل نشان می دهد.",
-    "savingsHintExact": "شما در واقع {actual} دلار را نسبت به آخرین {range} پس انداز کرده اید. این همان چیزی است که همان توکن‌ها در APIهای پولی با قیمت هر مدل هزینه خواهند داشت. عدد نشان داده شده کل 30 روزه واقعی شماست.",
     "requestsHintPinned": "{pinned} از این درخواست ها یک مدل خاص را با نام پین کرد. {honored} توسط مدل پین شده ارائه شد. {failed} در مورد دیگری شکست خورد. بقیه به صورت خودکار مسیریابی شدند.",
     "requestsHintAuto": "همه درخواست‌ها در این دوره به‌طور خودکار مسیریابی شدند. هیچ مشتری مدل خاصی را با نام پین نکرد.",
     "requestsHintTypes": "چت {chat} و درخواست های جاسازی {embedding}.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "لاگ‌ها",

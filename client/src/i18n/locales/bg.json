@@ -866,8 +866,6 @@
     "pinnedRequests": "Закачени заявки",
     "pinnedHonored": "Почетен",
     "fallbackAttempts": "Резервни опити",
-    "savingsHint": "Всъщност запази ${actual} през последната {range}. Това е, което биха стрували същите токени при платени API-та, според цената на модел. Показаното число проектира темпото ви от последната {span} данни до пълни 30 дни.",
-    "savingsHintExact": "Всъщност запази ${actual} през последната {range}. Това е, което биха стрували същите токени при платени API-та, според цената на модел. Показаното число е реалният ти общ резултат за 30 дни.",
     "requestsHintPinned": "{pinned} от тези заявки закачиха конкретен модел по име. {honored} се обслужваха от модела с игли; {failed} се провали, преминах към друг. Останалите бяха с автомаршрут.",
     "requestsHintAuto": "Всички заявки през този период бяха автоматично насочени; Нито един клиент не е посочил конкретен модел по име.",
     "requestsHintTypes": "{chat} чат и {embedding} заявки за вграждане.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "Логове",

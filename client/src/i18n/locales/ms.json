@@ -866,8 +866,6 @@
     "pinnedRequests": "Permintaan yang disematkan",
     "pinnedHonored": "Dihormati",
     "fallbackAttempts": "Cubaan sandaran",
-    "savingsHint": "Anda sebenarnya telah menyimpan ${actual} dalam {range} lepas. Itulah kos token yang sama pada API berbayar, dinilai mengikut model. Nombor yang dipaparkan meramalkan kadar anda dari {span} data terakhir hingga 30 hari penuh.",
-    "savingsHintExact": "Anda sebenarnya telah menyimpan ${actual} dalam {range} lepas. Itulah kos token yang sama pada API berbayar, dinilai mengikut model. Nombor yang ditunjukkan adalah jumlah sebenar 30 hari anda.",
     "requestsHintPinned": "{pinned} permintaan ini menyematkan model tertentu dengan nama. {honored} dihidangkan oleh model yang disematkan; {failed} gagal beralih ke yang lain. Yang lain adalah laluan automatik.",
     "requestsHintAuto": "Semua permintaan dalam tempoh ini adalah laluan automatik; Tiada klien yang menyematkan model tertentu dengan nama.",
     "requestsHintTypes": "{chat} sembang dan {embedding} permintaan penyematan.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "Log",

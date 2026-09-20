@@ -866,8 +866,6 @@
     "pinnedRequests": "പിൻ ചെയ്‌ത അഭ്യർത്ഥനകൾ",
     "pinnedHonored": "ആദരിച്ചു",
     "fallbackAttempts": "തിരിച്ചടി ശ്രമങ്ങൾ",
-    "savingsHint": "കഴിഞ്ഞ {range}-ൽ നിങ്ങൾ യഥാർത്ഥത്തിൽ ${actual} സംരക്ഷിച്ചു. പണമടച്ചുള്ള API-കളിൽ ഒരേ ടോക്കണുകൾക്കുള്ള വില അതാണ്, ഓരോ മോഡലിനും വില. കാണിച്ചിരിക്കുന്ന നമ്പർ, അവസാനത്തെ {span} ഡാറ്റയിൽ നിന്ന് 30 ദിവസത്തേക്ക് നിങ്ങളുടെ വേഗതയെ പ്രൊജക്റ്റ് ചെയ്യുന്നു.",
-    "savingsHintExact": "കഴിഞ്ഞ {range}-ൽ നിങ്ങൾ യഥാർത്ഥത്തിൽ ${actual} സംരക്ഷിച്ചു. പണമടച്ചുള്ള API-കളിൽ ഒരേ ടോക്കണുകൾക്കുള്ള വില അതാണ്, ഓരോ മോഡലിനും വില. കാണിച്ചിരിക്കുന്ന സംഖ്യ നിങ്ങളുടെ യഥാർത്ഥ 30 ദിവസത്തെ ആകെത്തുകയാണ്.",
     "requestsHintPinned": "ഈ അഭ്യർത്ഥനകളിൽ {pinned} ഒരു നിർദ്ദിഷ്‌ട മോഡൽ പേരിൽ പിൻ ചെയ്‌തു. പിൻ ചെയ്ത മോഡൽ {honored} നൽകി; {failed} മറ്റൊരു ഒന്നിൽ പരാജയപ്പെട്ടു. ബാക്കിയുള്ളവ യാന്ത്രികമായി വഴിതിരിച്ചുവിട്ടു.",
     "requestsHintAuto": "ഈ കാലയളവിലെ എല്ലാ അഭ്യർത്ഥനകളും സ്വയമേവ റൂട്ട് ചെയ്തു; ഒരു ക്ലയൻ്റും ഒരു നിർദ്ദിഷ്ട മോഡൽ പേരിൽ പിൻ ചെയ്തിട്ടില്ല.",
     "requestsHintTypes": "{chat} ചാറ്റും {embedding} ഉൾച്ചേർക്കൽ അഭ്യർത്ഥനകളും.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "ലോഗുകൾ",

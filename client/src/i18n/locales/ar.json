@@ -866,8 +866,6 @@
     "pinnedRequests": "الطلبات المثبتة",
     "pinnedHonored": "تكريم",
     "fallbackAttempts": "محاولات تراجعية",
-    "savingsHint": "لقد قمت بالفعل بتوفير {actual} دولارًا خلال {range} الأخير. هذا هو ما ستكلفه نفس الرموز المميزة على واجهات برمجة التطبيقات المدفوعة، بسعر كل نموذج. يعرض الرقم الموضح سرعتك من آخر {span} من البيانات إلى 30 يومًا كاملة.",
-    "savingsHintExact": "لقد قمت بالفعل بتوفير {actual} دولارًا خلال {range} الأخير. هذا هو ما ستكلفه نفس الرموز المميزة على واجهات برمجة التطبيقات المدفوعة، بسعر كل نموذج. الرقم الموضح هو الإجمالي الحقيقي لمدة 30 يومًا.",
     "requestsHintPinned": "قامت {pinned} من هذه الطلبات بتثبيت نموذج محدد بالاسم. تم تقديم {honored} بواسطة النموذج المثبت. فشل {failed} في الانتقال إلى آخر. تم توجيه الباقي تلقائيًا.",
     "requestsHintAuto": "تم توجيه جميع الطلبات في هذه الفترة تلقائيًا؛ لم يقم أي عميل بتثبيت نموذج محدد بالاسم.",
     "requestsHintTypes": "طلبات الدردشة والتضمين {chat} {embedding}.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "السجلات",

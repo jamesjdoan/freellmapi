@@ -866,8 +866,6 @@
     "pinnedRequests": "Angepinnte Anfragen",
     "pinnedHonored": "Geehrt",
     "fallbackAttempts": "Rückfallversuche",
-    "savingsHint": "Sie haben gegenüber dem letzten {range} tatsächlich ${actual} gespart. Das ist der Preis, den die gleichen Token bei kostenpflichtigen APIs pro Modell gekostet hätten. Die angezeigte Zahl projiziert Ihr Tempo von den letzten {span} Daten auf volle 30 Tage.",
-    "savingsHintExact": "Sie haben gegenüber dem letzten {range} tatsächlich ${actual} gespart. Das ist der Preis, den die gleichen Token bei kostenpflichtigen APIs pro Modell gekostet hätten. Die angezeigte Zahl ist Ihr tatsächlicher 30-Tage-Gesamtbetrag.",
     "requestsHintPinned": "{pinned} dieser Anfragen hat ein bestimmtes Modell namentlich angepinnt. {honored} wurden vom gepinnten Modell bedient; {failed} ist auf ein anderes fehlgeschlagen. Der Rest wurde automatisch weitergeleitet.",
     "requestsHintAuto": "Alle Anfragen in diesem Zeitraum wurden automatisch weitergeleitet; Kein Kunde hat ein bestimmtes Modell namentlich angeheftet.",
     "requestsHintTypes": "{chat}-Chat und {embedding}-Einbettungsanfragen.",
@@ -926,7 +924,9 @@
     "routingScarcity": "quota headroom {pct}%",
     "routingHarvest": "allowance expiring unused",
     "routingDiversity": "spread ({pct}% damp)",
-    "routingInFlight": "{pct}% of in-flight work on this pool"
+    "routingInFlight": "{pct}% of in-flight work on this pool",
+    "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
   },
   "logs": {
     "title": "Protokoll",
