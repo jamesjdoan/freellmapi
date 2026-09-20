@@ -1,0 +1,17 @@
+services:
+  freellmapi:
+    # No `image:` pin here on purpose. scripts/deploy.sh promotes each build to
+    # BOTH jamesjdoan/freellmapi:provider-routing and the base compose image
+    # name, so the tag in docker-compose.yml already resolves to the local
+    # extension build. Pinning it again only broke a fresh clone, where that
+    # tag does not exist yet and `pull_policy: never` refuses to fetch it.
+    environment:
+      # NVIDIA serves most models fine but leaves deepseek-v4-pro and kimi-k3
+      # hanging ~90s before failing. With NVIDIA first in Apex (two such routes
+      # back to back) the 180s failover budget was spent before the chain ever
+      # reached GLM 5.2, which answers in ~1s. Failing an NVIDIA attempt at 45s
+      # keeps the operator's provider order while letting the chain move on.
+      #
+      # Not lower: NIM prefills long prompts for minutes on healthy calls, and
+      # this bounds the whole chat request, not just time-to-first-byte.
+      PROVIDER_TIMEOUT_NVIDIA: 45000
