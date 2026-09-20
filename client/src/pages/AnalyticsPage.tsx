@@ -751,12 +751,27 @@ export default function AnalyticsPage() {
   })
 
   // The devices worth offering as tabs: the rollup rows, never a bare caller
-  // like curl. Read from the unscoped breakdown so the tab list does not
-  // change shape depending on which tab is open.
-  const devices = useMemo(
-    () => byClient.filter((c) => c.isDevice).map((c) => c.clientAgent),
-    [byClient],
-  )
+  // like curl.
+  //
+  // Deliberately NOT read from the range-filtered breakdown above. A machine
+  // that made no calls inside the selected window would drop out of the list,
+  // and with it the tab bar itself — leaving the page filtered to that machine
+  // with no All tab to escape by, because the selected device persists while
+  // the control that changes it disappears. The tab bar is navigation, so it
+  // is built from the widest window and stays put as the range moves.
+  const { data: knownDevices = [] } = useQuery({
+    queryKey: ['analytics', 'by-client', '90d'],
+    queryFn: () => apiFetch<ByClientRow[]>('/api/analytics/by-client?range=90d'),
+  })
+  const devices = useMemo(() => {
+    const found = knownDevices.filter((c) => c.isDevice).map((c) => c.clientAgent)
+    // A device selected earlier stays selectable even if it has since fallen
+    // out of even the 90-day window: the page is filtered to it, so it must
+    // appear in the control that un-filters it.
+    return found.includes(device) || device === 'all' || device === 'compare'
+      ? found
+      : [...found, device]
+  }, [knownDevices, device])
 
   // Compare mode: one summary and one timeline per device, fetched in parallel
   // and only while comparing. `useQueries` rather than a loop of useQuery
@@ -904,17 +919,24 @@ export default function AnalyticsPage() {
         description={t('analytics.description')}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {/* Device scope. Rendered only once more than one machine has been
-                seen: with a single caller the tabs would be All / that machine
-                / a comparison of one, three ways to say the same thing. */}
-            {devices.length > 1 && (
+            {/* Device scope. Hidden while only one machine has ever been seen:
+                the tabs would read All / that machine / a comparison of one,
+                three ways to say the same thing.
+
+                But NEVER hidden while a scope is selected. The selection
+                persists in localStorage, so a control that disappears leaves
+                the page filtered with no way back to All — and it would
+                disappear exactly when a machine goes quiet, which is when an
+                operator is most likely to be looking for it. */}
+            {(devices.length > 1 || device !== 'all') && (
               <SegmentedControl
                 value={device}
                 onValueChange={updateDevice}
                 options={[
                   { value: 'all', label: t('analytics.deviceAll') },
                   ...devices.map((d) => ({ value: d, label: d })),
-                  { value: 'compare', label: t('analytics.deviceCompare') },
+                  // Comparing needs two machines to compare.
+                  ...(devices.length > 1 ? [{ value: 'compare', label: t('analytics.deviceCompare') }] : []),
                 ]}
                 ariaLabel={t('analytics.device')}
               />

@@ -16,7 +16,7 @@ import { formatStamp } from '@/lib/stamp'
 // the nine that do not.
 
 export type ProviderVerdict =
-  | 'healthy' | 'no_key' | 'key_unusable' | 'key_rejected' | 'account_blocked'
+  | 'healthy' | 'no_key' | 'key_unusable' | 'key_rejected' | 'access_denied'
   | 'models_gone' | 'rate_limited' | 'degraded' | 'untested'
 
 export interface ProviderDiagnosis {
@@ -58,7 +58,7 @@ const TONE: Record<ProviderVerdict, string | null> = {
   no_key: null,
   key_unusable: 'bg-rose-500/10 text-rose-700 dark:text-rose-400',
   key_rejected: 'bg-rose-500/10 text-rose-700 dark:text-rose-400',
-  account_blocked: 'bg-rose-500/10 text-rose-700 dark:text-rose-400',
+  access_denied: 'bg-rose-500/10 text-rose-700 dark:text-rose-400',
   models_gone: 'bg-rose-500/10 text-rose-700 dark:text-rose-400',
   rate_limited: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
   degraded: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',

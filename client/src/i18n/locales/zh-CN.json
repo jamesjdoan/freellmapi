@@ -786,7 +786,6 @@
     "panelHideNothing": "Every model here can serve a request - nothing to hide",
     "verdict_key_unusable": "key off",
     "verdict_key_rejected": "key rejected",
-    "verdict_account_blocked": "account blocked",
     "verdict_models_gone": "models gone",
     "verdict_rate_limited": "rate limited",
     "verdict_degraded": "degraded",
@@ -795,7 +794,8 @@
     "verdict_no_key": "no key",
     "diagnosisCounts": "{ok} serving, {failing} failing",
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
-    "diagnosisSince": "In this state since {since}"
+    "diagnosisSince": "In this state since {since}",
+    "verdict_access_denied": "Access denied"
   },
   "backups": {
     "title": "备份",

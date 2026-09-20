@@ -5,6 +5,8 @@
 ---
 
 - Quota tests that insert `provider_quota_state` directly must call `invalidateKeyQuotaHeadroom(platform)`. Production writes already invalidate this five-second routing cache through `recordQuotaObservation`.
+- **OpenCode Zen's free tier cannot be reached from FreeLLM at all, and no key fixes it.** A direct call answers `403 FreeTierError: "OpenCode's free tier can only be used from within OpenCode"`. Confirmed 2026-09-20 against `https://opencode.ai/zen/v1/chat/completions` with a freshly issued key: the credential is valid and the account is in good standing — the refusal is about *where the call originates*, so swapping keys, re-authenticating or adding headers changes nothing. Its 11 catalogue rows stay unroutable, and the provider's verdict is `access_denied`, not `key_rejected`. The models are still usable through the OpenCode client itself; `atelier/scripts/opencode-ask.sh` wraps `opencode run` for that, which satisfies the rule rather than dodging it.
+- **`account_blocked` was renamed `access_denied` (2026-09-20).** 403/402 covers plan limits, ended promotions, region blocks *and* caller-origin rules; only the last is what OpenCode does, and none of them mean the account is blocked. `20260920_000001_rename_access_denied.ts` rewrites stored history rows so a grep for the feature finds its past too.
 
 ## 2026-09-07 — deploy verification, provider errors, quota estimators
 

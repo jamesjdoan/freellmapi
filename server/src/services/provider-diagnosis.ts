@@ -30,8 +30,12 @@ export type ProviderVerdict =
   | 'key_unusable'
   /** The credential was rejected: 401 dominant. About the KEY. */
   | 'key_rejected'
-  /** The account may not use these models: 403/402 dominant. Plan or promo. */
-  | 'account_blocked'
+  /** The provider refused the request: 403/402 dominant. A plan limit, a
+   *  promotion that ended, a region block, or a rule about WHERE the call may
+   *  come from. Not necessarily anything wrong with the account — OpenCode Zen
+   *  answers 403 to a perfectly valid key whenever the caller is not the
+   *  OpenCode client itself, which is why this is not called account_blocked. */
+  | 'access_denied'
   /** The provider does not know these ids: 404 dominant. Models retired. */
   | 'models_gone'
   /** Allowance spent: 429 dominant, or cooldowns currently held. */
@@ -82,7 +86,7 @@ const CODE_PRIORITY: ModelHealthCode[] = ['E401', 'E403', 'E404', 'E429', 'E5XX'
 
 const CODE_VERDICT: Record<string, ProviderVerdict> = {
   E401: 'key_rejected',
-  E403: 'account_blocked',
+  E403: 'access_denied',
   E404: 'models_gone',
   E429: 'rate_limited',
   E5XX: 'degraded',
@@ -240,7 +244,7 @@ export function diagnoseProviders(db: Db = getDb()): ProviderDiagnosis[] {
   // Worst first: an operator opening this wants the provider that needs a
   // decision, not an alphabetical list.
   const SEVERITY: ProviderVerdict[] = [
-    'key_rejected', 'account_blocked', 'models_gone', 'key_unusable',
+    'key_rejected', 'access_denied', 'models_gone', 'key_unusable',
     'degraded', 'rate_limited', 'no_key', 'untested', 'healthy',
   ];
   out.sort((a, b) => SEVERITY.indexOf(a.verdict) - SEVERITY.indexOf(b.verdict)
@@ -294,10 +298,10 @@ export function adviceFor(d: Pick<ProviderDiagnosis, 'verdict' | 'dominantCode' 
         action: 'Replace the key. Every other symptom on this provider is downstream of it.',
         selfHealing: false,
       };
-    case 'account_blocked':
+    case 'access_denied':
       return {
-        cause: 'The account may not use these models (403/402) — a plan, a promotion that ended, or a region block.',
-        action: 'Waiting will not fix this. Remove it from chains, or restore access with the provider.',
+        cause: 'The provider refused these calls (403/402) — a plan limit, a promotion that ended, a region block, or a rule about where the request may come from.',
+        action: 'Waiting will not fix this. Read the provider\'s own message below: it usually names the rule. Remove it from chains, or restore access with the provider.',
         selfHealing: false,
       };
     case 'models_gone':

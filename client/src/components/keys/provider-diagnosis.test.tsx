@@ -42,7 +42,7 @@ afterEach(() => {
 describe('the provider verdict chip', () => {
   it('names the code and carries the provider\'s own words when an account is blocked', () => {
     const el = render(diagnosis({
-      verdict: 'account_blocked',
+      verdict: 'access_denied',
       dominantCode: 'E403',
       sample: "OpenCode Zen API error 403: OpenCode's free tier has ended",
       okModels: 0,
@@ -85,7 +85,7 @@ describe('the provider verdict chip', () => {
     act(() => root!.unmount())
     container!.remove()
 
-    const blocked = render(diagnosis({ verdict: 'account_blocked', dominantCode: 'E403' }))
+    const blocked = render(diagnosis({ verdict: 'access_denied', dominantCode: 'E403' }))
     expect(chip(blocked)).toContain('rose')
   })
 })

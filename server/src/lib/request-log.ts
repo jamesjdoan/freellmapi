@@ -10,7 +10,8 @@ type LogTx = ReturnType<typeof getDb>;
 // for the aggregate upsert. Duplicated from the migration helper so this
 // module has no import dependency on db/migrations/.
 function hourKey(createdAt: string): string {
-  return createdAt.slice(0, 13) + ':00:00';
+  const elapsedMs = createdAt.slice(0, 13) + ':00:00';
+  return elapsedMs;
 }
 
 function incrementSetting(db: LogTx, key: string, delta: number): void {
@@ -56,7 +57,7 @@ export function logRequest(
   status: string,
   inputTokens: number,
   outputTokens: number,
-  latencyMs: number,
+  elapsedMs: number,
   error: string | null,
   ttfbMs: number | null = null,
   // The model id the client pinned; null for auto-routed requests. Lets

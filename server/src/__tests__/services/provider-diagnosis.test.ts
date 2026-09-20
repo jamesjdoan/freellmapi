@@ -67,7 +67,7 @@ describe('provider diagnosis', () => {
       attempt('opencode', `m${i}`, keyId, `OpenCode Zen API error 401: Model m${i} is not supported`);
     }
     const d = verdictFor('opencode');
-    expect(d.verdict).toBe('account_blocked');
+    expect(d.verdict).toBe('access_denied');
     expect(d.dominantCode).toBe('E403');
     expect(d.okModels).toBe(0);
     expect(d.failingModels).toBe(11);
@@ -87,7 +87,7 @@ describe('provider diagnosis', () => {
     attempt('opencode', 'b', keyId, 'API error 403: free tier ended', 60_000);
 
     const d = verdictFor('opencode');
-    expect(d.verdict).toBe('account_blocked');
+    expect(d.verdict).toBe('access_denied');
     expect(d.okModels).toBe(0);
   });
 
@@ -166,7 +166,7 @@ describe('what to do about it', () => {
     // The distinction the whole advice layer exists for: a 429 clears itself
     // and a 403 never will, and those demand opposite responses.
     const limited = adviceFor({ verdict: 'rate_limited', dominantCode: 'E429', activeCooldowns: 2, failingModels: 2, okModels: 0 });
-    const blocked = adviceFor({ verdict: 'account_blocked', dominantCode: 'E403', activeCooldowns: 0, failingModels: 11, okModels: 0 });
+    const blocked = adviceFor({ verdict: 'access_denied', dominantCode: 'E403', activeCooldowns: 0, failingModels: 11, okModels: 0 });
     expect(limited.selfHealing).toBe(true);
     expect(blocked.selfHealing).toBe(false);
     expect(blocked.action).toContain('Waiting will not fix this');
@@ -213,12 +213,12 @@ describe('state changes over time', () => {
     const history = listDiagnosisHistory('opencode', 50, getDb());
     expect(history).toHaveLength(2);
     expect(history[0]!.verdict).toBe('healthy');
-    expect(history[1]!.verdict).toBe('account_blocked');
+    expect(history[1]!.verdict).toBe('access_denied');
   });
 
   it('keeps the provider\'s own words after the failing traffic ages out', () => {
     // The requests window is 14 days. The reason a key died must outlive it,
-    // or in a fortnight the history says "account_blocked" and cannot say why.
+    // or in a fortnight the history says "access_denied" and cannot say why.
     opencodeFailing();
     recordDiagnosisTransitions(diagnoseProviders(getDb()), getDb());
     expect(listDiagnosisHistory('opencode', 50, getDb())[0]!.sample).toContain('free tier ended');
