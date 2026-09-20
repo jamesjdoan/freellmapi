@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, Legend,
@@ -182,12 +182,17 @@ interface ByPlatformRow {
   estimatedCost: number
 }
 
-// One row per caller, keyed on the raw User-Agent (server groups on
-// client_user_agent, not the classifier label — see routes/analytics.ts).
-// Machines that set a distinct UA appear as distinct rows; everything else
-// lands under its bare harness UA or 'unknown'.
+// One row per DEVICE. The server derives it from client_user_agent and folds
+// every UA that machine has reported (routes/analytics.ts DEVICE_SQL), so a
+// machine does not gain a row each time its harness version changes.
 interface ByClientRow {
+  // The device label, e.g. 'Mac Studio'. Field name predates the rollup.
   clientAgent: string
+  // The raw User-Agents folded into it, for the hover.
+  agents: string[]
+  // True when this row is a machine the page can filter on, false for a
+  // caller reported under its own User-Agent (curl, an unknown client).
+  isDevice: boolean
   requests: number
   successRate: number
   avgLatencyMs: number
@@ -626,6 +631,19 @@ const chartVars = `
 .dark .analytics-viz { --series-a: #3987e5; --series-b: #199e70; }
 `
 
+// Device scope of the whole page. 'all' is every caller (the behaviour before
+// devices existed, and the default); a device name filters every panel to that
+// machine; 'compare' overlays the machines on the charts instead of filtering.
+type DeviceScope = string // 'all' | 'compare' | a device name
+const DEVICE_KEY = 'analytics.device'
+
+function storedDevice(): DeviceScope {
+  try { return localStorage.getItem(DEVICE_KEY) || 'all' } catch { return 'all' }
+}
+
+// Compare mode colours, reusing the two-series palette the charts already use.
+const COMPARE_COLORS = [seriesA, seriesB, 'var(--muted-foreground)']
+
 export default function AnalyticsPage() {
   const { t } = useI18n()
   const [range, setRange] = useState<TimeRange>(storedRange)
@@ -633,26 +651,42 @@ export default function AnalyticsPage() {
     setRange(r)
     try { localStorage.setItem(RANGE_KEY, r) } catch { /* ignore */ }
   }
+  const [device, setDevice] = useState<DeviceScope>(storedDevice)
+  const updateDevice = (d: DeviceScope) => {
+    setDevice(d)
+    try { localStorage.setItem(DEVICE_KEY, d) } catch { /* ignore */ }
+  }
+  // Compare overlays machines rather than filtering to one, so every panel that
+  // cannot show two series at once keeps showing everything.
+  const comparing = device === 'compare'
+  // What the per-panel queries scope to. Compare and All both mean unfiltered.
+  const scope = comparing || device === 'all' ? '' : device
+  // Appended to every analytics URL; empty when the page is unscoped, so the
+  // request is byte-identical to what it was before devices existed.
+  const deviceParam = scope ? `&device=${encodeURIComponent(scope)}` : ''
   // Capture "now" once at mount so the savings extrapolation below stays a pure
   // render (calling Date.now() during render is impure and non-deterministic).
   const [now] = useState(() => Date.now())
 
+  // `scope` rides every query key, so react-query caches each device's view
+  // separately and switching tabs is instant after the first visit.
   const { data: summary, isLoading: summaryLoading } = useQuery({
-    queryKey: ['analytics', 'summary', range],
-    queryFn: () => apiFetch<SummaryResponse>(`/api/analytics/summary?range=${range}`),
+    queryKey: ['analytics', 'summary', range, scope],
+    queryFn: () => apiFetch<SummaryResponse>(`/api/analytics/summary?range=${range}${deviceParam}`),
   })
 
   // Response-cache health: how often identical requests were served from memory
   // (zero quota cost) vs. spending a free-tier slot. The cache is process-local,
-  // so these are lifetime-this-boot numbers, not range-filtered.
+  // so these are lifetime-this-boot numbers, not range-filtered — and not
+  // device-filtered either, which is why this card keeps its own wording.
   const { data: cacheStats } = useQuery({
     queryKey: ['cache', 'stats'],
     queryFn: () => apiFetch<CacheStatsResponse>('/api/cache/stats'),
   })
 
   const { data: byPlatform = [] } = useQuery({
-    queryKey: ['analytics', 'by-platform', range],
-    queryFn: () => apiFetch<ByPlatformRow[]>(`/api/analytics/by-platform?range=${range}`),
+    queryKey: ['analytics', 'by-platform', range, scope],
+    queryFn: () => apiFetch<ByPlatformRow[]>(`/api/analytics/by-platform?range=${range}${deviceParam}`),
   })
 
   // Friendly display name per providerId: catalog → the platform id, custom →
@@ -660,6 +694,8 @@ export default function AnalyticsPage() {
   // shows 'relay.example.com', not 'custom:https://relay.example.com' (#889).
   const providerDisplay = new Map(byPlatform.map((p) => [p.providerId, p.endpoint ?? p.platform]))
 
+  // Never device-scoped: this IS the device breakdown, and filtering it to one
+  // machine would leave a table with a single row and no tabs to leave by.
   const { data: byClient = [] } = useQuery({
     queryKey: ['analytics', 'by-client', range],
     queryFn: () => apiFetch<ByClientRow[]>(`/api/analytics/by-client?range=${range}`),
@@ -670,28 +706,28 @@ export default function AnalyticsPage() {
   const tzOffset = -new Date().getTimezoneOffset()
 
   const { data: timeline = [] } = useQuery({
-    queryKey: ['analytics', 'timeline', range, tzOffset],
-    queryFn: () => apiFetch<TimelineBucket[]>(`/api/analytics/timeline?range=${range}&tzOffset=${tzOffset}`),
+    queryKey: ['analytics', 'timeline', range, tzOffset, scope],
+    queryFn: () => apiFetch<TimelineBucket[]>(`/api/analytics/timeline?range=${range}&tzOffset=${tzOffset}${deviceParam}`),
   })
 
   const { data: byModel = [] } = useQuery({
-    queryKey: ['analytics', 'by-model', range],
-    queryFn: () => apiFetch<ByModelRow[]>(`/api/analytics/by-model?range=${range}`),
+    queryKey: ['analytics', 'by-model', range, scope],
+    queryFn: () => apiFetch<ByModelRow[]>(`/api/analytics/by-model?range=${range}${deviceParam}`),
   })
 
   const { data: byKey = [] } = useQuery({
-    queryKey: ['analytics', 'by-key', range],
-    queryFn: () => apiFetch<ByKeyRow[]>(`/api/analytics/by-key?range=${range}`),
+    queryKey: ['analytics', 'by-key', range, scope],
+    queryFn: () => apiFetch<ByKeyRow[]>(`/api/analytics/by-key?range=${range}${deviceParam}`),
   })
 
   const { data: errors = [] } = useQuery({
-    queryKey: ['analytics', 'errors', range],
-    queryFn: () => apiFetch<RecentErrorRow[]>(`/api/analytics/errors?range=${range}`),
+    queryKey: ['analytics', 'errors', range, scope],
+    queryFn: () => apiFetch<RecentErrorRow[]>(`/api/analytics/errors?range=${range}${deviceParam}`),
   })
 
   const { data: errorDist } = useQuery({
-    queryKey: ['analytics', 'error-distribution', range],
-    queryFn: () => apiFetch<ErrorDistribution>(`/api/analytics/error-distribution?range=${range}`),
+    queryKey: ['analytics', 'error-distribution', range, scope],
+    queryFn: () => apiFetch<ErrorDistribution>(`/api/analytics/error-distribution?range=${range}${deviceParam}`),
   })
 
   // Recent-calls list filters (status/platform) + the row opened in the
@@ -702,16 +738,86 @@ export default function AnalyticsPage() {
   const [detailId, setDetailId] = useState<number | null>(null)
 
   const { data: recentCalls } = useQuery({
-    queryKey: ['analytics', 'requests', range, statusFilter, platformFilter],
+    queryKey: ['analytics', 'requests', range, statusFilter, platformFilter, scope],
     queryFn: () => {
       const params = new URLSearchParams({ range, limit: '100' })
       if (statusFilter !== 'all') params.set('status', statusFilter)
       // provider (not platform) so a selected custom relay filters to itself
       // instead of every custom endpoint (#889). Catalog ids equal the platform.
       if (platformFilter !== 'all') params.set('provider', platformFilter)
+      if (scope) params.set('device', scope)
       return apiFetch<RecentCallsResponse>(`/api/analytics/requests?${params}`)
     },
   })
+
+  // The devices worth offering as tabs: the rollup rows, never a bare caller
+  // like curl. Read from the unscoped breakdown so the tab list does not
+  // change shape depending on which tab is open.
+  const devices = useMemo(
+    () => byClient.filter((c) => c.isDevice).map((c) => c.clientAgent),
+    [byClient],
+  )
+
+  // Compare mode: one summary and one timeline per device, fetched in parallel
+  // and only while comparing. `useQueries` rather than a loop of useQuery
+  // because the device list is data, and hook order cannot depend on data.
+  const compareSummaries = useQueries({
+    queries: devices.map((d) => ({
+      queryKey: ['analytics', 'summary', range, d],
+      queryFn: () => apiFetch<SummaryResponse>(`/api/analytics/summary?range=${range}&device=${encodeURIComponent(d)}`),
+      enabled: comparing,
+    })),
+  })
+  const compareTimelines = useQueries({
+    queries: devices.map((d) => ({
+      queryKey: ['analytics', 'timeline', range, tzOffset, d],
+      queryFn: () => apiFetch<TimelineBucket[]>(`/api/analytics/timeline?range=${range}&tzOffset=${tzOffset}&device=${encodeURIComponent(d)}`),
+      enabled: comparing,
+    })),
+  })
+
+  // The series name for the combined line. Not a device, so it can never
+  // collide with one: a machine called "All" would need that literal UA.
+  const ALL_SERIES = t('analytics.deviceAll')
+
+  // Merge the per-device timelines AND the unfiltered one onto a single time
+  // axis: one row per bucket, one key per series. `timeline` is already the
+  // all-devices data while comparing (scope is empty in compare mode), so the
+  // combined line costs no extra request.
+  //
+  // Buckets are only present where a series actually has traffic, so the union
+  // of timestamps is taken and gaps left undefined — recharts breaks the line
+  // rather than drawing through zero, which is the honest shape for "this
+  // machine was asleep".
+  const compareChart = useMemo(() => {
+    if (!comparing) return []
+    const byTimestamp = new Map<string, Record<string, string | number>>()
+    const put = (name: string, buckets: TimelineBucket[]) => {
+      for (const bucket of buckets) {
+        const row = byTimestamp.get(bucket.timestamp) ?? { timestamp: bucket.timestamp }
+        row[name] = bucket.requests
+        byTimestamp.set(bucket.timestamp, row)
+      }
+    }
+    put(ALL_SERIES, timeline)
+    compareTimelines.forEach((q, i) => put(devices[i], q.data ?? []))
+    return [...byTimestamp.values()].sort((a, b) => String(a.timestamp).localeCompare(String(b.timestamp)))
+  }, [comparing, compareTimelines, devices, timeline, ALL_SERIES])
+
+  // How many buckets each series actually has. A series with a single point
+  // draws NO line — there is no segment to draw — so it needs a visible dot or
+  // it is legible only in the legend. Found by reading the plot: the MacBook
+  // had one bucket and rendered as an empty chart with a legend entry.
+  const seriesPointCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const row of compareChart) {
+      for (const key of Object.keys(row)) {
+        if (key === 'timestamp') continue
+        counts.set(key, (counts.get(key) ?? 0) + 1)
+      }
+    }
+    return counts
+  }, [compareChart])
 
   // Per-table column sort (client-side, remembered per table). `null` keeps
   // the API order, so the memoised arrays are the query data itself then.
@@ -740,8 +846,8 @@ export default function AnalyticsPage() {
   // is not mistaken for a broken one. Querying 30d separately is free:
   // react-query shares the cache with the 30d tab.
   const { data: summary30 } = useQuery({
-    queryKey: ['analytics', 'summary', '30d'],
-    queryFn: () => apiFetch<SummaryResponse>(`/api/analytics/summary?range=30d`),
+    queryKey: ['analytics', 'summary', '30d', scope],
+    queryFn: () => apiFetch<SummaryResponse>(`/api/analytics/summary?range=30d${deviceParam}`),
   })
   const actualSavings = summary?.estimatedCostSavings ?? 0
   const baseSavings = summary30?.estimatedCostSavings ?? 0
@@ -797,19 +903,125 @@ export default function AnalyticsPage() {
         title={t('analytics.title')}
         description={t('analytics.description')}
         actions={
-          <SegmentedControl
-            value={range}
-            onValueChange={updateRange}
-            options={TIME_RANGES.map(r => ({
-              value: r,
-              label: t(r === '24h' ? 'analytics.range24h' : r === '7d' ? 'analytics.range7d' : r === '30d' ? 'analytics.range30d' : 'analytics.range90d'),
-            }))}
-            ariaLabel={t('analytics.title')}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Device scope. Rendered only once more than one machine has been
+                seen: with a single caller the tabs would be All / that machine
+                / a comparison of one, three ways to say the same thing. */}
+            {devices.length > 1 && (
+              <SegmentedControl
+                value={device}
+                onValueChange={updateDevice}
+                options={[
+                  { value: 'all', label: t('analytics.deviceAll') },
+                  ...devices.map((d) => ({ value: d, label: d })),
+                  { value: 'compare', label: t('analytics.deviceCompare') },
+                ]}
+                ariaLabel={t('analytics.device')}
+              />
+            )}
+            <SegmentedControl
+              value={range}
+              onValueChange={updateRange}
+              options={TIME_RANGES.map(r => ({
+                value: r,
+                label: t(r === '24h' ? 'analytics.range24h' : r === '7d' ? 'analytics.range7d' : r === '30d' ? 'analytics.range30d' : 'analytics.range90d'),
+              }))}
+              ariaLabel={t('analytics.title')}
+            />
+          </div>
         }
       />
 
       <div className="space-y-6">
+        {/* Compare: the machines side by side, and their request volume on one
+            axis. Everything BELOW this stays unfiltered while comparing, so
+            the page reads as "here is each machine, and here is the whole
+            picture they add up to" rather than blanking out. */}
+        {comparing && (
+          <div className="space-y-6">
+            <div className={`grid gap-3 ${devices.length > 2 ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+              {devices.map((d, i) => {
+                const s = compareSummaries[i]?.data
+                return (
+                  <Panel key={d} icon={Bot} title={d}>
+                    {!s ? (
+                      <Skeleton className="h-[86px] rounded-2xl" />
+                    ) : (
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                        <div>
+                          <dd className="text-lg font-semibold tabular-nums" style={{ color: COMPARE_COLORS[i % COMPARE_COLORS.length] }}>
+                            {s.totalRequests}
+                          </dd>
+                          <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('analytics.requests')}</dt>
+                        </div>
+                        <div>
+                          <dd className="text-lg font-semibold tabular-nums">${(s.estimatedCostSavings ?? 0).toFixed(2)}</dd>
+                          <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('analytics.saved')}</dt>
+                        </div>
+                        <div>
+                          <dd className="text-lg font-semibold tabular-nums">{formatTokens(s.totalInputTokens)}</dd>
+                          <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('analytics.inputTokens')}</dt>
+                        </div>
+                        <div>
+                          <dd className="text-lg font-semibold tabular-nums">{s.successRate}%</dd>
+                          <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('analytics.successRate')}</dt>
+                        </div>
+                      </div>
+                    )}
+                  </Panel>
+                )
+              })}
+            </div>
+
+            <Panel icon={ChartLine} title={t('analytics.compareRequests')}>
+              {compareChart.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">{t('common.noData')}</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={240}>
+                  <LineChart data={compareChart} margin={{ top: 6, right: 6, left: -12, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="2 4" stroke={gridStyle} />
+                    <XAxis dataKey="timestamp" tick={axisStyle} tickLine={false} axisLine={{ stroke: gridStyle }} tickFormatter={formatTimelineTick} />
+                    <YAxis tick={axisStyle} tickLine={false} axisLine={false} />
+                    <Tooltip contentStyle={tooltipStyle} labelFormatter={(label) => formatTimelineTick(String(label))} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} iconType="line" />
+                    {/* The combined line first, so the devices draw over it.
+                        Dashed and muted: it is the context the machines sit
+                        inside, not a third machine. */}
+                    <Line
+                      type="monotone"
+                      dataKey={ALL_SERIES}
+                      name={ALL_SERIES}
+                      stroke="var(--muted-foreground)"
+                      strokeWidth={1.5}
+                      strokeDasharray="4 3"
+                      dot={(seriesPointCounts.get(ALL_SERIES) ?? 0) <= 2 ? { r: 3 } : false}
+                      connectNulls={false}
+                    />
+                    {devices.map((d, i) => (
+                      <Line
+                        key={d}
+                        type="monotone"
+                        dataKey={d}
+                        name={d}
+                        stroke={COMPARE_COLORS[i % COMPARE_COLORS.length]}
+                        strokeWidth={2}
+                        // A series with one or two points has no segment long
+                        // enough to read, and with a single point none at all:
+                        // recharts draws nothing and the machine exists only in
+                        // the legend. Mark those explicitly.
+                        dot={(seriesPointCounts.get(d) ?? 0) <= 2 ? { r: 3 } : false}
+                        // A machine that made no calls in a bucket has no data
+                        // point there; joining across the gap would draw
+                        // traffic that never happened.
+                        connectNulls={false}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </Panel>
+          </div>
+        )}
         {/* Summary stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-4 gap-3">
           {summaryLoading ? (
@@ -905,13 +1117,12 @@ export default function AnalyticsPage() {
             )}
           </Panel>
 
-          {/* Callers, as a table rather than a bar chart: the rows are keyed on
-              the raw User-Agent now, so each machine that sets its own UA is a
-              row, and the figure an operator wants beside it is what its
-              traffic would have cost — which a single-series bar cannot carry.
-              Rows an operator has not tagged still read as their bare harness
-              UA, so nothing is attributed to a machine on a guess. */}
-          <Panel icon={Bot} title={t('analytics.requestsByAgent')}>
+          {/* Callers rolled up to the DEVICE that made them. The server folds
+              every User-Agent one machine has reported — a new row per harness
+              version otherwise — and returns the raw list so the hover can show
+              its working. See routes/analytics.ts DEVICE_SQL for the mapping
+              and what it assumes about untagged history. */}
+          <Panel icon={Bot} title={t('analytics.usageByDevice')}>
             {byClient.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">{t('common.noData')}</p>
             ) : (
@@ -919,7 +1130,7 @@ export default function AnalyticsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="pl-4">{t('analytics.clientAgent')}</TableHead>
+                      <TableHead className="pl-4">{t('analytics.device')}</TableHead>
                       <TableHead className="text-right">{t('analytics.requests')}</TableHead>
                       <TableHead className="text-right">{t('common.success')}</TableHead>
                       <TableHead className="text-right">{t('analytics.inTokens')}</TableHead>
@@ -930,7 +1141,7 @@ export default function AnalyticsPage() {
                   <TableBody>
                     {byClient.map((c) => (
                       <TableRow key={c.clientAgent}>
-                        <TableCell className="pl-4 text-xs font-medium max-w-[160px] truncate" title={c.clientAgent}>
+                        <TableCell className="pl-4 text-xs font-medium max-w-[160px] truncate" title={(c.agents ?? []).join('\n')}>
                           {c.clientAgent}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">{c.requests}</TableCell>

@@ -909,7 +909,6 @@
     "attemptTimingHint": "自請求開始的偏移 · 嘗試耗時",
     "requestedModel": "請求的模型",
     "ttft": "首字延遲",
-    "requestsByAgent": "按代理程式統計的請求",
     "sortBy": "依{column}排序",
     "sortHint": "排序僅套用於已載入的 {count} 列",
     "cacheHitRate": "快取命中率",
@@ -926,7 +925,12 @@
     "routingDiversity": "spread ({pct}% damp)",
     "routingInFlight": "{pct}% of in-flight work on this pool",
     "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
-    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}.",
+    "usageByDevice": "Usage by device",
+    "device": "Device",
+    "deviceAll": "All",
+    "deviceCompare": "Compare",
+    "compareRequests": "Requests by device"
   },
   "logs": {
     "title": "日誌",

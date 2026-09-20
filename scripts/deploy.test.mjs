@@ -29,6 +29,9 @@ case "$1" in
   tag)   exit 0 ;;
   run)   exit 0 ;;
   compose)
+    # Record the flags the script passed, so a test can assert that EVERY
+    # compose file in the label reached the command rather than just the first.
+    [[ -n "\${STUB_COMPOSE_ARGLOG:-}" ]] && echo "$*" >> "\${STUB_COMPOSE_ARGLOG}"
     # STUB_COMPOSE_FAIL_FIRST makes the first call fail and later ones succeed,
     # which is the transient port race.
     if [[ -n "\${STUB_COMPOSE_FAIL_FIRST:-}" ]]; then
@@ -303,6 +306,42 @@ test('refuses to skip the backup without the explicit acknowledgement', async (t
   const result = await runDeploy(bin, { DEPLOY_I_ACCEPT_NO_BACKUP: '' });
   assert.equal(result.ok, false);
   assert.match(result.stderr, /DEPLOY_I_ACCEPT_NO_BACKUP=1/);
+});
+
+// An install with a docker-compose.override.yml makes compose record BOTH
+// paths in one comma-separated label. Read as a single path that string names
+// no file, so the deploy died on a compose file it had itself resolved — and
+// the override this install uses to cap the NVIDIA timeout would otherwise be
+// silently dropped from every deploy.
+test('passes every compose file from a multi-file label, in order', async (t) => {
+  const { dir, bin } = await sandbox(t);
+  await writeFile(join(dir, 'docker-compose.override.yml'), 'services: {}\n');
+  const argLog = join(dir, 'compose-args.log');
+
+  const result = await runDeploy(bin, {
+    STUB_COMPOSE_FILE: `${dir}/docker-compose.yml,${dir}/docker-compose.override.yml`,
+    STUB_COMPOSE_ARGLOG: argLog,
+  });
+
+  assert.equal(result.ok, true, result.stderr);
+  const logged = await readFile(argLog, 'utf8');
+  // Both files reached the command, base first: compose applies later files
+  // over earlier ones, so the order is what makes the override an override.
+  assert.match(
+    logged,
+    new RegExp(`-f ${dir}/docker-compose\\.yml -f ${dir}/docker-compose\\.override\\.yml`),
+  );
+  // And the rollback line a human is expected to paste carries them too.
+  assert.match(result.stdout, /rollback:.*-f .*docker-compose\.yml -f .*docker-compose\.override\.yml/);
+});
+
+test('names the missing file when only one of several does not exist', async (t) => {
+  const { dir, bin } = await sandbox(t);
+  const result = await runDeploy(bin, {
+    STUB_COMPOSE_FILE: `${dir}/docker-compose.yml,${dir}/absent-override.yml`,
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.stderr, /compose file .*absent-override\.yml does not exist/);
 });
 
 // Not tested here: the remount check that the container came back on the SAME

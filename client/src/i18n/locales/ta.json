@@ -909,7 +909,6 @@
     "attemptTimingHint": "கோரிக்கை தொடக்கத்திலிருந்து ஆஃப்செட்டைத் தொடங்கு · முயற்சி காலம்",
     "requestedModel": "கோரப்பட்ட மாதிரி",
     "ttft": "TTFT",
-    "requestsByAgent": "முகவர் வாரியாக கோரிக்கைகள்",
     "sortBy": "{column} அடிப்படையில் வரிசைப்படுத்து",
     "sortHint": "வரிசைப்படுத்தல் ஏற்றப்பட்ட {count} வரிசைகளுக்கு மட்டுமே பொருந்தும்",
     "cacheHitRate": "தற்காலிக சேமிப்பு வெற்றி விகிதம்",
@@ -926,7 +925,12 @@
     "routingDiversity": "spread ({pct}% damp)",
     "routingInFlight": "{pct}% of in-flight work on this pool",
     "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
-    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}.",
+    "usageByDevice": "Usage by device",
+    "device": "Device",
+    "deviceAll": "All",
+    "deviceCompare": "Compare",
+    "compareRequests": "Requests by device"
   },
   "logs": {
     "title": "பதிவுகள்",

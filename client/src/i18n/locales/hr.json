@@ -909,7 +909,6 @@
     "attemptTimingHint": "Početak offseta od početka zahtjeva · Trajanje pokušaja",
     "requestedModel": "Traženi model",
     "ttft": "TTFT",
-    "requestsByAgent": "Zahtjevi po agentu",
     "sortBy": "Sortiraj po: {column}",
     "sortHint": "Sortiranje vrijedi za {count} učitanih redaka",
     "cacheHitRate": "Stopa pogodaka predmemorije",
@@ -926,7 +925,12 @@
     "routingDiversity": "spread ({pct}% damp)",
     "routingInFlight": "{pct}% of in-flight work on this pool",
     "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
-    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}.",
+    "usageByDevice": "Usage by device",
+    "device": "Device",
+    "deviceAll": "All",
+    "deviceCompare": "Compare",
+    "compareRequests": "Requests by device"
   },
   "logs": {
     "title": "Logovi",

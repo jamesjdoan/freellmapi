@@ -909,7 +909,6 @@
     "attemptTimingHint": "ವಿನಂತಿಯ ಪ್ರಾರಂಭದಿಂದ ಆಫ್‌ಸೆಟ್ ಪ್ರಾರಂಭಿಸಿ · ಪ್ರಯತ್ನದ ಅವಧಿ",
     "requestedModel": "ವಿನಂತಿಸಿದ ಮಾದರಿ",
     "ttft": "TTFT",
-    "requestsByAgent": "ಏಜೆಂಟ್ ಪ್ರಕಾರ ವಿನಂತಿಗಳು",
     "sortBy": "{column} ಪ್ರಕಾರ ವಿಂಗಡಿಸಿ",
     "sortHint": "ವಿಂಗಡಣೆ ಲೋಡ್ ಆದ {count} ಸಾಲುಗಳಿಗೆ ಮಾತ್ರ ಅನ್ವಯಿಸುತ್ತದೆ",
     "cacheHitRate": "ಕ್ಯಾಶ್ ಹಿಟ್ ದರ",
@@ -926,7 +925,12 @@
     "routingDiversity": "spread ({pct}% damp)",
     "routingInFlight": "{pct}% of in-flight work on this pool",
     "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
-    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}.",
+    "usageByDevice": "Usage by device",
+    "device": "Device",
+    "deviceAll": "All",
+    "deviceCompare": "Compare",
+    "compareRequests": "Requests by device"
   },
   "logs": {
     "title": "ಲಾಗ್‌ಗಳು",

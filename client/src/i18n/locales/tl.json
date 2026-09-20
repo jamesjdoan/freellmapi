@@ -909,7 +909,6 @@
     "attemptTimingHint": "Start offset mula sa request start · tagal ng pagtatangka",
     "requestedModel": "Hinihiling na modelo",
     "ttft": "TTFT",
-    "requestsByAgent": "Mga kahilingan ayon sa agent",
     "sortBy": "Ayusin ayon sa {column}",
     "sortHint": "Ang pag-aayos ay para lamang sa {count} na-load na row",
     "cacheHitRate": "Cache hit rate",
@@ -926,7 +925,12 @@
     "routingDiversity": "spread ({pct}% damp)",
     "routingInFlight": "{pct}% of in-flight work on this pool",
     "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
-    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}.",
+    "usageByDevice": "Usage by device",
+    "device": "Device",
+    "deviceAll": "All",
+    "deviceCompare": "Compare",
+    "compareRequests": "Requests by device"
   },
   "logs": {
     "title": "Mga Log",

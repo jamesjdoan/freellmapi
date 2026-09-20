@@ -909,7 +909,6 @@
     "attemptTimingHint": "Start offset față de începutul cererii · Durata încercării",
     "requestedModel": "Modelul cerut",
     "ttft": "TTFT",
-    "requestsByAgent": "Cereri per agent",
     "sortBy": "Sortează după {column}",
     "sortHint": "Sortarea se aplică celor {count} rânduri încărcate",
     "cacheHitRate": "Rata de succes a cache-ului",
@@ -926,7 +925,12 @@
     "routingDiversity": "spread ({pct}% damp)",
     "routingInFlight": "{pct}% of in-flight work on this pool",
     "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
-    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}.",
+    "usageByDevice": "Usage by device",
+    "device": "Device",
+    "deviceAll": "All",
+    "deviceCompare": "Compare",
+    "compareRequests": "Requests by device"
   },
   "logs": {
     "title": "Jurnale",

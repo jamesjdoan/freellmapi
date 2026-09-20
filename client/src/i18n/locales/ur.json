@@ -909,7 +909,6 @@
     "attemptTimingHint": "درخواست کے آغاز سے آفسیٹ شروع کریں · کوشش کی مدت",
     "requestedModel": "ماڈل کی درخواست کی۔",
     "ttft": "TTFT",
-    "requestsByAgent": "فی ایجنٹ درخواستیں",
     "sortBy": "{column} کے لحاظ سے ترتیب دیں",
     "sortHint": "ترتیب صرف لوڈ شدہ {count} قطاروں پر لاگو ہوتی ہے",
     "cacheHitRate": "کیش ہٹ ریٹ",
@@ -926,7 +925,12 @@
     "routingDiversity": "spread ({pct}% damp)",
     "routingInFlight": "{pct}% of in-flight work on this pool",
     "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
-    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}.",
+    "usageByDevice": "Usage by device",
+    "device": "Device",
+    "deviceAll": "All",
+    "deviceCompare": "Compare",
+    "compareRequests": "Requests by device"
   },
   "logs": {
     "title": "لاگز",

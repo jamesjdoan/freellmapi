@@ -909,7 +909,6 @@
     "attemptTimingHint": "अनुरोध सुरुबाट अफसेट सुरु गर्नुहोस् · प्रयास अवधि",
     "requestedModel": "अनुरोध गरिएको नमूना",
     "ttft": "TTFT",
-    "requestsByAgent": "एजेन्टद्वारा अनुरोधहरू",
     "sortBy": "{column} अनुसार क्रमबद्ध गर्नुहोस्",
     "sortHint": "क्रमबद्धता लोड गरिएका {count} पङ्क्तिहरूमा मात्र लागू हुन्छ",
     "cacheHitRate": "क्यास हिट दर",
@@ -926,7 +925,12 @@
     "routingDiversity": "spread ({pct}% damp)",
     "routingInFlight": "{pct}% of in-flight work on this pool",
     "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
-    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}.",
+    "usageByDevice": "Usage by device",
+    "device": "Device",
+    "deviceAll": "All",
+    "deviceCompare": "Compare",
+    "compareRequests": "Requests by device"
   },
   "logs": {
     "title": "लग",

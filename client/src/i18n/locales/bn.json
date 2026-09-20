@@ -909,7 +909,6 @@
     "attemptTimingHint": "অনুরোধ শুরু থেকে অফসেট শুরু করুন · প্রচেষ্টার সময়কাল",
     "requestedModel": "অনুরোধ করা মডেল",
     "ttft": "TTFT",
-    "requestsByAgent": "এজেন্ট অনুযায়ী অনুরোধ",
     "sortBy": "{column} অনুযায়ী সাজান",
     "sortHint": "সাজানো শুধুমাত্র লোড হওয়া {count}টি সারিতে প্রযোজ্য",
     "cacheHitRate": "ক্যাশ হিট রেট",
@@ -926,7 +925,12 @@
     "routingDiversity": "spread ({pct}% damp)",
     "routingInFlight": "{pct}% of in-flight work on this pool",
     "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
-    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}.",
+    "usageByDevice": "Usage by device",
+    "device": "Device",
+    "deviceAll": "All",
+    "deviceCompare": "Compare",
+    "compareRequests": "Requests by device"
   },
   "logs": {
     "title": "লগ",

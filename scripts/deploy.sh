@@ -66,7 +66,12 @@ fi
 # ── 0. Resolve what is actually deployed, from the container itself ──────────
 label() { docker inspect "$container" --format "{{index .Config.Labels \"$1\"}}" 2>/dev/null || true; }
 
-compose_file="$(label com.docker.compose.project.config_files)"
+# Compose records EVERY file it merged, comma-separated and in precedence
+# order, so an install with a docker-compose.override.yml reports two paths in
+# one label. Read it as a list: treating it as a single path made the override
+# either invisible (dropping its settings from the deploy) or fatal, depending
+# on which half of the string got used.
+compose_files_raw="$(label com.docker.compose.project.config_files)"
 compose_workdir="$(label com.docker.compose.project.working_dir)"
 compose_project="$(label com.docker.compose.project)"
 compose_service="$(label com.docker.compose.service)"
@@ -80,25 +85,39 @@ compose_image="$(docker inspect "$container" --format '{{.Config.Image}}' 2>/dev
 volume="$(docker inspect "$container" \
   --format '{{range .Mounts}}{{if eq .Destination "/app/server/data"}}{{.Name}}{{end}}{{end}}' 2>/dev/null || true)"
 
-if [[ -z "$compose_file" || -z "$compose_workdir" ]]; then
+if [[ -z "$compose_files_raw" || -z "$compose_workdir" ]]; then
   # First deploy, or the container is gone: fall back to this repository, and
   # say so, because the fallback is a guess where the labels were evidence.
   compose_workdir="$project_root"
-  compose_file="$project_root/docker-compose.yml"
+  compose_files_raw="$project_root/docker-compose.yml"
+  # An untracked override is still part of the deployment when compose would
+  # pick it up by name, so honour it on the fallback path too.
+  [[ -f "$project_root/docker-compose.override.yml" ]] &&
+    compose_files_raw="$compose_files_raw,$project_root/docker-compose.override.yml"
   compose_project="${compose_project:-freellmapi}"
   compose_service="${compose_service:-freellmapi}"
   volume="${volume:-freellmapi_freellmapi-data}"
   compose_image="${compose_image:-$(grep -m1 -E '^\s*image:' "$project_root/docker-compose.yml" | sed 's/.*image:[[:space:]]*//')}"
-  step "no live container to read; falling back to $compose_file"
+  step "no live container to read; falling back to $compose_files_raw"
 else
-  step "deploying into project '$compose_project' from $compose_file"
+  step "deploying into project '$compose_project' from $compose_files_raw"
 fi
 
-[[ -f "$compose_file" ]] || fail "compose file $compose_file does not exist"
+# Split on commas into an ordered array, and build the repeated -f flags once.
+# Order is load-bearing: compose applies later files over earlier ones, so
+# reversing them would silently drop the override's settings.
+IFS=',' read -r -a compose_files <<< "$compose_files_raw"
+compose_flags=()
+for f in "${compose_files[@]}"; do
+  [[ -n "$f" ]] || continue
+  [[ -f "$f" ]] || fail "compose file $f does not exist (from label: $compose_files_raw)"
+  compose_flags+=(-f "$f")
+done
+[[ ${#compose_flags[@]} -gt 0 ]] || fail "no compose files resolved from: $compose_files_raw"
 [[ -n "$volume" ]] || fail "could not determine the data volume for $container"
 [[ -n "$compose_image" ]] || fail "could not determine which image tag compose selects"
 
-compose() { docker compose --project-directory "$compose_workdir" -f "$compose_file" -p "$compose_project" "$@"; }
+compose() { docker compose --project-directory "$compose_workdir" "${compose_flags[@]}" -p "$compose_project" "$@"; }
 
 stamp="$(date +%Y%m%d-%H%M%S)"
 build_tag="$image_repo:main-$stamp"
@@ -240,4 +259,4 @@ built_image="$(docker image inspect "$build_tag" --format '{{.Id}}')"
 
 echo
 echo "deployed $build_tag — $container $state/$health on $volume, $health_url answering $code"
-echo "rollback: docker tag $rollback_tag $compose_image && docker compose --project-directory $compose_workdir -f $compose_file -p $compose_project up -d --no-build --force-recreate $compose_service"
+echo "rollback: docker tag $rollback_tag $compose_image && docker compose --project-directory $compose_workdir ${compose_flags[*]} -p $compose_project up -d --no-build --force-recreate $compose_service"

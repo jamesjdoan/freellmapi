@@ -909,7 +909,6 @@
     "attemptTimingHint": "Bắt đầu bù đắp từ khi bắt đầu yêu cầu · thời gian thử",
     "requestedModel": "Mô hình được yêu cầu",
     "ttft": "TTFT",
-    "requestsByAgent": "Yêu cầu theo tác nhân",
     "sortBy": "Sắp xếp theo {column}",
     "sortHint": "Sắp xếp chỉ áp dụng cho {count} hàng đã tải",
     "cacheHitRate": "Tỷ lệ trúng bộ nhớ đệm",
@@ -926,7 +925,12 @@
     "routingDiversity": "spread ({pct}% damp)",
     "routingInFlight": "{pct}% of in-flight work on this pool",
     "savingsHintRanged": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. At this pace you save about ${monthly} per 30 days, projected from the last {span} of data.",
-    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}."
+    "savingsHintRangedExact": "That is what the same tokens would have cost on paid APIs over the last {range}, priced per model. Your real 30-day total is ${monthly}.",
+    "usageByDevice": "Usage by device",
+    "device": "Device",
+    "deviceAll": "All",
+    "deviceCompare": "Compare",
+    "compareRequests": "Requests by device"
   },
   "logs": {
     "title": "Nhật ký",
