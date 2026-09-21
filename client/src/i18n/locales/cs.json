@@ -318,7 +318,9 @@
     "providerRouting": "Provider routing",
     "providerRoutingDescription": "Automatic uses live routing scores. Preferred order tries your list first while retaining health, quota, cooldown and failover protections.",
     "providerRoutingAutomatic": "Automatic",
-    "providerRoutingPreferred": "Preferred order"
+    "providerRoutingPreferred": "Preferred order",
+    "referenceOnly": "reference",
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
   },
   "strategies": {
     "explore": "Prozkoumávat nezměřené modely",
@@ -1431,7 +1433,9 @@
     "costFree": "free",
     "costBasis": "USD per 1M tokens exactly as Artificial Analysis publishes them — unblended, sorted by input price.",
     "priceInput": "Input / 1M",
-    "priceOutput": "Output / 1M"
+    "priceOutput": "Output / 1M",
+    "filterOpencode": "OpenCode only",
+    "filterOpencodeHint": "Show only OpenCode models with baselines for comparison"
   },
   "catalogue": {
     "changesTitle": "Catalogue changes",

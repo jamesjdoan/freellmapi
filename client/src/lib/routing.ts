@@ -142,6 +142,19 @@ export function providerLabel(row: { platform: string; source?: 'catalog' | 'cus
   return row.platform
 }
 
+// Platforms we catalogue and benchmark but can never route to. OpenCode Zen's
+// free tier answers 403 to any call from outside the OpenCode CLI, so both
+// switches that appear to govern these models — the catalogue's enabled flag
+// and chain membership — are inert, and showing either states something false.
+// Their rows stay for the benchmark scores: a ranked place to see what the free
+// tier offers next to the models we do serve.
+//
+// The server keeps its own copy in `server/src/data/reference-only-platforms.ts`
+// (that side forces new catalogue rows to land disabled). `@freellmapi/shared`
+// cannot hold this: the package ships no JavaScript, so a value import of it
+// fails to resolve at runtime. Both copies are one line and must agree.
+export const REFERENCE_ONLY_PLATFORMS: Record<string, true> = { opencode: true }
+
 // Two custom endpoints can now each serve the same model id (#651). Short
 // host-ish form of an endpoint URL, used only to tell those two apart.
 export function endpointShortLabel(scope: string): string {

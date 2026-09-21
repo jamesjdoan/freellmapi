@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink, RefreshCw, Scale } from 'lucide-react'
 import { useI18n } from '@/i18n'
 import { matchesCompareQuery, sortEntries, type SortKey } from '@/lib/compare-sort'
+import { REFERENCE_ONLY_PLATFORMS } from '@/lib/routing'
 import { ModelCombobox, type ModelComboOption } from '@/components/model-combobox'
 import { apiFetch } from '@/lib/api'
 import { toast } from '@/lib/toast'
@@ -144,13 +145,14 @@ interface ProxyUpgrade {
   matchReason: string
 }
 
-type Scope = 'routed' | 'keyed' | 'enabled' | 'all'
+type Scope = 'routed' | 'keyed' | 'enabled' | 'all' | 'opencode'
 
 const SCOPES: { key: Scope; labelKey: string; hintKey: string }[] = [
   { key: 'routed', labelKey: 'compare.scopeRouted', hintKey: 'compare.scopeRoutedHint' },
   { key: 'keyed', labelKey: 'compare.scopeKeyed', hintKey: 'compare.scopeKeyedHint' },
   { key: 'enabled', labelKey: 'compare.scopeEnabled', hintKey: 'compare.scopeEnabledHint' },
   { key: 'all', labelKey: 'compare.scopeAll', hintKey: 'compare.scopeAllHint' },
+  { key: 'opencode', labelKey: 'compare.filterOpencode', hintKey: 'compare.filterOpencodeHint' },
 ]
 
 /**
@@ -163,6 +165,7 @@ function inScope(g: CompareGroup, scope: Scope): boolean {
     case 'keyed': return (g.keyedMembers ?? 0) > 0
     case 'enabled': return g.enabledMembers > 0
     case 'all': return true
+    case 'opencode': return g.members.some(m => m.platform === 'opencode')
   }
 }
 
@@ -346,7 +349,6 @@ export default function CompareModelsPage() {
     setSort(prev => prev.key === key
       ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' }
       : { key, dir: key === 'name' || key === 'latency' || key === 'price' ? 'asc' : 'desc' })
-
   const entries = useMemo(
     () => sortEntries(
       [
@@ -355,7 +357,10 @@ export default function CompareModelsPage() {
         ...(references?.groups ?? []),
         // Baselines are never searched away: they are the thing being compared
         // against, and a filtered table with no yardstick left is worse.
-        ...(grouped?.groups ?? []).filter(g => inScope(g, scope) && matchesCompareQuery(g, query)),
+        ...(grouped?.groups ?? []).filter(g =>
+          inScope(g, scope) &&
+          matchesCompareQuery(g, query)
+        ),
       ],
       sort.key,
       sort.dir,
@@ -834,19 +839,23 @@ export default function CompareModelsPage() {
                           {/* Several routes is several decisions — a generous
                               free tier and a 10-cent trial are not one — so the
                               picker lists them. One route needs no choosing. */}
-                          {!g.reference && g.members.some(m => m.keyScope === 'out') && (
+                          {/* Reference-only routes are filtered out rather than
+                              hiding the picker: a mixed group still has routes
+                              whose key scope is worth editing, and suppressing
+                              the whole control would strand them. */}
+                          {!g.reference && g.members.some(m => m.keyScope === 'out' && !REFERENCE_ONLY_PLATFORMS[m.platform]) && (
                             <ScopePicker
                               allow
                               disabled={keyScope.isPending}
-                              routes={g.members.filter(m => m.keyScope === 'out').map(m => ({ platform: m.platform, modelId: m.modelId }))}
+                              routes={g.members.filter(m => m.keyScope === 'out' && !REFERENCE_ONLY_PLATFORMS[m.platform]).map(m => ({ platform: m.platform, modelId: m.modelId }))}
                               onApply={rs => rs.forEach(r => keyScope.mutate({ ...r, allow: true }))}
                             />
                           )}
-                          {!g.reference && g.members.some(m => m.keyScope === 'in') && (
+                          {!g.reference && g.members.some(m => m.keyScope === 'in' && !REFERENCE_ONLY_PLATFORMS[m.platform]) && (
                             <ScopePicker
                               allow={false}
                               disabled={keyScope.isPending}
-                              routes={g.members.filter(m => m.keyScope === 'in').map(m => ({ platform: m.platform, modelId: m.modelId }))}
+                              routes={g.members.filter(m => m.keyScope === 'in' && !REFERENCE_ONLY_PLATFORMS[m.platform]).map(m => ({ platform: m.platform, modelId: m.modelId }))}
                               onApply={rs => rs.forEach(r => keyScope.mutate({ ...r, allow: false }))}
                             />
                           )}

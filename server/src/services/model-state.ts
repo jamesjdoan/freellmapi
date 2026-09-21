@@ -2,6 +2,7 @@ import { recordCatalogueEvent } from './catalogue-log.js';
 import type { Db } from '../db/types.js';
 import type { applyCatalog } from './catalog-sync.js';
 import { isExtensionEnabled } from './extension-state.js';
+import { REFERENCE_ONLY_PLATFORMS } from '../data/reference-only-platforms.js';
 
 export type CatalogModelKind = 'chat' | 'media';
 
@@ -532,7 +533,15 @@ export function applyModelOverrides(
   modelId: string,
 ): boolean {
   const overrides = getModelOverrides(db, platform, modelId);
-  const keys = (Object.keys(overrides) as Array<keyof ModelOverridePatch>).filter(k => k in OVERRIDE_COLUMNS);
+  const keys = (Object.keys(overrides) as Array<keyof ModelOverridePatch>)
+    .filter(k => k in OVERRIDE_COLUMNS)
+    // A platform we can never call must not be switched on by a saved override.
+    // This is the third place that claims to control `models.enabled` — after
+    // the catalogue flag and chain membership — and the only one that survives
+    // a sync, so a stale `{"enabled":1}` here silently re-enables a route that
+    // 403s. Every other override field (context window, limits) still applies:
+    // they describe the model, which is exactly what we keep these rows for.
+    .filter(k => !(k === 'enabled' && REFERENCE_ONLY_PLATFORMS[platform]));
   if (keys.length === 0) return false;
 
   const assignments: string[] = [];

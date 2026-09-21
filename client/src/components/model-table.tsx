@@ -16,6 +16,7 @@ import {
   memberEndpointTitle,
   memberProviderLabel,
   providerLabel,
+  REFERENCE_ONLY_PLATFORMS,
   tightestRateLimit,
   type ModelGroupRow,
   type RateLimitUsageRow,
@@ -262,7 +263,15 @@ export function RowContent({
         {row.score !== undefined ? row.score.toFixed(3) : '–'}
       </td>
       <td className="py-2 pr-3 align-middle text-right">
-        <Switch checked={row.enabled} onCheckedChange={(c) => onToggle(row.modelDbId, c)} />
+        {REFERENCE_ONLY_PLATFORMS[row.platform]
+          ? (
+            <Tooltip text={t('models.referenceOnlyHint')}>
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                {t('models.referenceOnly')}
+              </span>
+            </Tooltip>
+          )
+          : <Switch checked={row.enabled} onCheckedChange={(c) => onToggle(row.modelDbId, c)} />}
       </td>
     </>
   )
@@ -418,7 +427,17 @@ export function GroupHeaderCells({ group, rank, dragHandle, onToggleGroup, allRo
         )}
       </td>
       <td className="py-2 pr-3 align-middle text-right" onClick={e => e.stopPropagation()}>
-        <Switch checked={anyEnabled} onCheckedChange={(c) => onToggleGroup(group.members.map(m => m.modelDbId), c)} />
+        {/* Only when EVERY member is unroutable. A mixed group still has a
+            provider the router can reach, so its switch keeps working. */}
+        {group.members.every(m => REFERENCE_ONLY_PLATFORMS[m.platform])
+          ? (
+            <Tooltip text={t('models.referenceOnlyHint')}>
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                {t('models.referenceOnly')}
+              </span>
+            </Tooltip>
+          )
+          : <Switch checked={anyEnabled} onCheckedChange={(c) => onToggleGroup(group.members.map(m => m.modelDbId), c)} />}
       </td>
     </>
   )

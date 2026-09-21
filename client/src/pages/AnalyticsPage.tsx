@@ -438,12 +438,15 @@ function Stat({ icon: Icon, label, value, sub, hint, className }: { icon: Lucide
   return hint ? <HoverTooltip text={hint} side="bottom" className="block">{card}</HoverTooltip> : card
 }
 
-function Panel({ icon: Icon, title, actions, children }: { icon: LucideIcon; title: string; actions?: React.ReactNode; children: React.ReactNode }) {
+// `icon` is optional: the compare metric cards are a row of four small panels
+// whose titles are already one word each, and a glyph on every one of them is
+// four pieces of furniture carrying no information.
+function Panel({ icon: Icon, title, actions, children }: { icon?: LucideIcon; title: string; actions?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="rounded-3xl border bg-card">
       <div className="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-2">
         <h3 className="flex items-center gap-2 text-sm font-medium">
-          <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+          {Icon && <Icon className="size-4 text-muted-foreground" aria-hidden="true" />}
           {title}
         </h3>
         {actions}
@@ -643,6 +646,18 @@ function storedDevice(): DeviceScope {
 
 // Compare mode colours, reusing the two-series palette the charts already use.
 const COMPARE_COLORS = [seriesA, seriesB, 'var(--muted-foreground)']
+
+// Compare mode is METRIC-first, not machine-first. A panel per machine, each
+// repeating the same four figures, means reading one metric across two boxes in
+// two panels; with three machines it is three. One card per metric listing the
+// machines inside it puts the numbers being compared on adjacent lines, and the
+// swatch ties each line to its series in the chart below.
+const COMPARE_METRICS: { labelKey: string; value: (s: SummaryResponse) => string }[] = [
+  { labelKey: 'analytics.requests', value: s => String(s.totalRequests ?? 0) },
+  { labelKey: 'analytics.inputTokens', value: s => formatTokens(s.totalInputTokens) },
+  { labelKey: 'analytics.successRate', value: s => `${s.successRate ?? 0}%` },
+  { labelKey: 'analytics.saved', value: s => `$${(s.estimatedCostSavings ?? 0).toFixed(2)}` },
+]
 
 export default function AnalyticsPage() {
   const { t } = useI18n()
@@ -961,38 +976,44 @@ export default function AnalyticsPage() {
             picture they add up to" rather than blanking out. */}
         {comparing && (
           <div className="space-y-6">
-            <div className={`grid gap-3 ${devices.length > 2 ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
-              {devices.map((d, i) => {
-                const s = compareSummaries[i]?.data
-                return (
-                  <Panel key={d} icon={Bot} title={d}>
-                    {!s ? (
-                      <Skeleton className="h-[86px] rounded-2xl" />
-                    ) : (
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                        <div>
-                          <dd className="text-lg font-semibold tabular-nums" style={{ color: COMPARE_COLORS[i % COMPARE_COLORS.length] }}>
-                            {s.totalRequests}
-                          </dd>
-                          <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('analytics.requests')}</dt>
+            {/* One card per metric; every machine on its own line inside it,
+                plus the unfiltered total as context. `summary` IS the
+                all-devices figure while comparing (scope is empty then), so
+                the total costs no extra request. */}
+            <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+              {COMPARE_METRICS.map(metric => (
+                <Panel key={metric.labelKey} title={t(metric.labelKey)}>
+                  <dl className="space-y-1.5">
+                    {devices.map((d, i) => {
+                      const s = compareSummaries[i]?.data
+                      return (
+                        <div key={d} className="flex items-baseline justify-between gap-2">
+                          <dt className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+                            <span
+                              aria-hidden
+                              className="size-2 shrink-0 rounded-full"
+                              style={{ background: COMPARE_COLORS[i % COMPARE_COLORS.length] }}
+                            />
+                            <span className="truncate" title={d}>{d}</span>
+                          </dt>
+                          {s
+                            ? <dd className="text-sm font-semibold tabular-nums">{metric.value(s)}</dd>
+                            : <Skeleton className="h-4 w-10 rounded" />}
                         </div>
-                        <div>
-                          <dd className="text-lg font-semibold tabular-nums">${(s.estimatedCostSavings ?? 0).toFixed(2)}</dd>
-                          <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('analytics.saved')}</dt>
-                        </div>
-                        <div>
-                          <dd className="text-lg font-semibold tabular-nums">{formatTokens(s.totalInputTokens)}</dd>
-                          <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('analytics.inputTokens')}</dt>
-                        </div>
-                        <div>
-                          <dd className="text-lg font-semibold tabular-nums">{s.successRate}%</dd>
-                          <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('analytics.successRate')}</dt>
-                        </div>
-                      </div>
-                    )}
-                  </Panel>
-                )
-              })}
+                      )
+                    })}
+                    {/* Muted and rule-separated, matching the dashed context
+                        line in the chart: the whole these machines add up to,
+                        not another machine. */}
+                    <div className="flex items-baseline justify-between gap-2 border-t pt-1.5">
+                      <dt className="text-[11px] text-muted-foreground">{ALL_SERIES}</dt>
+                      {summary
+                        ? <dd className="text-sm tabular-nums text-muted-foreground">{metric.value(summary)}</dd>
+                        : <Skeleton className="h-4 w-10 rounded" />}
+                    </div>
+                  </dl>
+                </Panel>
+              ))}
             </div>
 
             <Panel icon={ChartLine} title={t('analytics.compareRequests')}>

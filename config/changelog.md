@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-09-21 — reference-only platforms, analytics compare, build fix
+
+- Marked OpenCode as a reference-only platform: catalogued and ranked for comparison, never
+  routable. `server/src/data/reference-only-platforms.ts` (new), mirrored in
+  `client/src/lib/routing.ts`.
+- Replaced the enable switch with a `reference` badge for those platforms in
+  `client/src/components/model-table.tsx` (row and group header, the latter only when every
+  member is unroutable) and `client/src/components/keys/provider-models-panel.tsx`.
+- Filtered reference-only routes out of the Compare key-scope pickers instead of hiding them,
+  so mixed groups keep the control for their routable members — `client/src/pages/CompareModelsPage.tsx`.
+- Added an `OpenCode only` scope to Compare Models alongside Routed / Keyed / Enabled / All.
+- Forced reference-only rows to `enabled=0` on both the insert and update branches of
+  `server/src/services/catalog-sync.ts`.
+- Made `applyModelOverrides` drop the `enabled` override for reference-only platforms in
+  `server/src/services/model-state.ts`; a stale `{"enabled":1}` had been re-enabling two models
+  on every catalogue sync.
+- Rebuilt Analytics compare mode as four shared metric cards with machines as rows and the
+  unfiltered total as context, replacing one repeated panel per machine; `Panel`'s `icon` prop
+  is now optional — `client/src/pages/AnalyticsPage.tsx`.
+- Fixed `server/src/lib/request-log.ts:93` passing the undefined `latencyMs` instead of the
+  `elapsedMs` parameter. Introduced 2026-09-11 in `c67f0857`; it failed `tsc` and blocked every
+  image build for ten days.
+- Added `filterOpencode`, `referenceOnly` and `referenceOnlyHint` to `en.json`, filled across
+  59 locales with the English text per the project convention.
+- Documented four gotchas (shared package ships no JS, the three enable layers, query-time
+  device labels, bundle baked into the image) in `docs/GOTCHAS.md`.
+
+---
+
 ## 2026-09-02
 
 - Added opt-in preferred provider ordering for unified models while preserving automatic routing, health gates, cooldowns and failover.

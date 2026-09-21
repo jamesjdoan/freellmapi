@@ -1,5 +1,53 @@
 # Session Handoff
 
+## Session 2026-09-21 — JD-STUDIO (Mac Studio M2 Max)
+
+**Branch:** `docs/freellm-assert-start-on-redeploy` (unchanged — nothing committed this session)
+
+**What was done:** Made OpenCode models reference-only, condensed the Analytics device
+comparison, and fixed a compile error that had blocked every image build since 11 Sep.
+
+- **OpenCode models are now catalogued but unroutable by construction.** Zen 403s any call
+  from outside its own CLI (already recorded in `docs/GOTCHAS.md`), so every control offering
+  to enable one stated something false. The enable switch is replaced by a `reference` pill on
+  all three surfaces that had one — Models table row, its group header, and the Keys provider
+  panel — and the key-scope pickers on Compare filter reference-only routes out of their route
+  list rather than hiding the control, so a mixed group's routable siblings stay editable.
+  One definition, `server/src/data/reference-only-platforms.ts`, with a client copy in
+  `client/src/lib/routing.ts`; it cannot live in `@freellmapi/shared` (see gotchas).
+- **They now stay disabled.** `catalog-sync` forces `enabled=0` for these platforms on both the
+  insert and the update branch, and `applyModelOverrides` drops the `enabled` key for them.
+  That last one was the actual bug: a stale `{"enabled":1}` in `model_overrides` had been
+  re-enabling two models on every sync, reverting manual `UPDATE`s twice before it was found.
+  Verified by setting rows to `enabled=1` directly in SQLite and watching a restart clear them.
+- **Compare Models gained an `OpenCode only` scope pill** beside Routed / Keyed / Enabled / All.
+- **Analytics compare mode is metric-first.** Was one panel per machine each repeating the same
+  four figures; now four shared cards with the machines as rows inside them and the unfiltered
+  total as a muted context row, colour-matched to the existing combined chart. `Panel`'s `icon`
+  is now optional.
+- **`lib/request-log.ts:93` passed `latencyMs`, a name that does not exist** (the parameter is
+  `elapsedMs`). Introduced 2026-09-11 in `c67f0857`; it failed `tsc` and so blocked every
+  `docker compose build` for ten days. Unrelated to the rest of this session's work.
+- **Diagnosed UnoRouter's free GLM failures as provider-side capacity, not our request pacing** —
+  17% success all-time, 3 `rate_limited` rows ever, 170s minimum gap. Written up in memory as
+  `upstream-capacity-is-not-our-pacing`.
+
+**What's next:**
+
+1. Nothing is committed — ten files across five deploys, including the unrelated
+   `request-log.ts` fix, which reads better as its own commit. `git status --porcelain`.
+2. No visual confirmation of any UI change this session. The omp browser relay serves on
+   `:9224` but its extension never connects (`omp browser-relay install`), and headless Chrome
+   stops at the login screen because `requireAuth` has no bypass. Everything was verified from
+   the shipped bundle and the database instead. The Compare metric cards at `md` width are the
+   one thing genuinely unverified.
+3. UnoRouter sits at priority 3 in Apex at a 17% success rate — demote or drop it. Recommended,
+   not actioned.
+4. `PATCH /api/models/:id` still accepts an enable for a reference-only platform; sync reverts
+   it at the next pass rather than refusing it. Three lines in the route would close the window.
+
+**In progress:** —
+
 ## Session 2026-09-07 — JD-MBP (MacBook Pro M2 Max)
 
 **Branch:** `docs/freellm-assert-start-on-redeploy` (NOT main — see below)

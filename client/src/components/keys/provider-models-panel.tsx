@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { readHideDisabled, writeHideDisabled } from '@/lib/hide-disabled-pref'
 import { formatCountdown } from '@/lib/countdown'
+import { REFERENCE_ONLY_PLATFORMS } from '@/lib/routing'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip } from '@/components/tooltip'
 import { ChainPicker } from '@/components/compare/chain-picker'
@@ -690,12 +691,22 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
                   })()}
                 </td>
                 <td className="py-1 text-center opacity-100">
-                  <Switch
-                    checked={routable(r)}
-                    disabled={busy}
-                    aria-label={t('keys.panelColEnabled')}
-                    onCheckedChange={on => setRoutable.mutate({ row: r, on })}
-                  />
+                  {REFERENCE_ONLY_PLATFORMS[r.platform]
+                    ? (
+                      <Tooltip text={t('models.referenceOnlyHint')}>
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                          {t('models.referenceOnly')}
+                        </span>
+                      </Tooltip>
+                    )
+                    : (
+                      <Switch
+                        checked={routable(r)}
+                        disabled={busy}
+                        aria-label={t('keys.panelColEnabled')}
+                        onCheckedChange={on => setRoutable.mutate({ row: r, on })}
+                      />
+                    )}
                 </td>
               </tr>
             )

@@ -5,6 +5,7 @@ import { hasProvider } from '../providers/index.js';
 import { MEDIA_PLATFORMS, TRANSCRIPTION_PLATFORMS, VIDEO_PLATFORMS } from './media.js';
 import { EMBEDDING_PLATFORMS } from './embeddings.js';
 import type { Platform } from '@freellmapi/shared/types.js';
+import { REFERENCE_ONLY_PLATFORMS } from '../data/reference-only-platforms.js';
 import type { Scheduler } from '../lib/scheduler.js';
 import { recordCatalogueEvent } from './catalogue-log.js';
 import {
@@ -423,14 +424,21 @@ function applyCatalogInner(db: Db, catalog: Catalog): NonNullable<SyncResult['co
         supportsTools: m.supportsTools ? 1 : 0,
       };
       if (row) {
-        // Catalog disable wins (dead upstream); local disable also wins.
-        const enabled = m.enabled ? row.enabled : 0;
+        // Catalog disable wins (dead upstream); local disable also wins. For a
+        // platform we can never call, neither question arises: sync drives it
+        // to off on every pass, so a row flipped on by hand — in the database,
+        // or by anything that bypasses the UI — is corrected at the next sync
+        // rather than left as a route that 403s.
+        const enabled = REFERENCE_ONLY_PLATFORMS[m.platform] ? 0 : (m.enabled ? row.enabled : 0);
         updateModel.run({ ...fields, id: row.id, enabled });
         refreshModelOverrideBaselines(db, m.platform, m.modelId);
         applyModelOverrides(db, m.platform, m.modelId);
         counts.updated++;
       } else {
-        insertModel.run({ ...fields, platform: m.platform, modelId: m.modelId, enabled: m.enabled ? 1 : 0 });
+        // Same guarantee for a model the catalogue publishes for the first
+        // time: it must not arrive switched on.
+        const enabled = REFERENCE_ONLY_PLATFORMS[m.platform] ? 0 : (m.enabled ? 1 : 0);
+        insertModel.run({ ...fields, platform: m.platform, modelId: m.modelId, enabled });
         refreshModelOverrideBaselines(db, m.platform, m.modelId);
         applyModelOverrides(db, m.platform, m.modelId);
         recordCatalogueEvent(db, {
