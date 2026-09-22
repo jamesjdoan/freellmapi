@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-09-22 — free CLI fleet telemetry, shared combobox fixes, honest scopes
+
+- Added Cline to the free-CLI delegation path and built fleet telemetry for both agents.
+  `server/src/db/migrations/20260922_000001_clifree_fleet_snapshot.ts` and
+  `20260922_000002_clifree_fleet_benchmark_slug.ts` (new, both registered in
+  `server/src/db/migrate/defaults.ts`), `server/src/services/clifree-fleet.ts` (new),
+  `server/src/routes/clifree-fleet.ts` (new, mounted in `server/src/app.ts`),
+  `server/src/data/extension-registry.ts` (new `clifree-fleet-telemetry` entry, `tooling`),
+  `server/src/services/analysis.ts` (`lookupAa` exported).
+- Free CLI fleet panel with nine columns mirroring the comparison table, benchmark-merged
+  capabilities, editable mapping and OC/CL provider marks.
+  `client/src/components/clifree-fleet.tsx` (new),
+  `client/src/pages/CompareModelsPage.tsx`, `client/src/lib/vendor-tint.ts` (new).
+- Fixed two defects in shared components affecting every page: `PopoverContent` never
+  forwarded `side`, and `ModelCombobox`'s `autoFocus` scrolled the document to the top when
+  the popup was portalled. `client/src/components/ui/popover.tsx`,
+  `client/src/components/model-combobox.tsx`.
+- Compare scope pills now nest honestly — `Enabled` means enabled AND keyed, tested on the
+  same member, and the pills are ordered narrowest to widest.
+  `client/src/pages/CompareModelsPage.tsx`.
+- Restored `compare.chainApply`, dropped from `en.json` by a code-sync while present in all
+  59 locales, and resynced two changed scope hints across the locales.
+  `client/src/i18n/locales/*.json`.
+- Migrations can declare `dataOnly`; the roundtrip suite no longer fails a data migration
+  whose `down()` is correctly a no-op on an empty database.
+  `server/src/db/migrate/defaults.ts`,
+  `server/src/db/migrations/20260920_000001_rename_access_denied.ts`,
+  `server/src/__tests__/db/migrate/roundtrip.test.ts`.
+- ADR: `docs/adr/ARCH-20260922-clifree-fleet-telemetry.md` (APPROVED).
+
 ## 2026-09-21 — reference-only platforms, analytics compare, build fix
 
 - Marked OpenCode as a reference-only platform: catalogued and ranked for comparison, never

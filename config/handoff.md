@@ -1,5 +1,53 @@
 # Session Handoff
 
+## Session 2026-09-22 — JD-STUDIO (Mac Studio M2 Max)
+
+**Branch:** `docs/freellm-assert-start-on-redeploy` — 4 commits, pushed to `fork`
+(`8688c534`, `4002ee7a`, `4a3e6a21`, `65dfa8de`). Note `origin` is upstream
+`tashfeenahmed/freellmapi`; a `git push origin` on this branch 403s, which is correct.
+
+**What was done:** Added Cline to the free-CLI delegation path, then built fleet telemetry
+for it in FreeLLM — machines report what they can reach, the dashboard shows it.
+
+- **Cline's free tier has the same shape as OpenCode Zen's**, so it got the same answer: its
+  docs say free models are "not supported through the Cline API", matching Zen's 403, so both
+  are driven through the vendor CLI rather than routed. `atelier` now carries `jd-clifree`
+  (replacing `jd-opencode`, retired to `tier: manual`, not deleted) over 28 free routes on one
+  capability ladder — 7 Zen, 21 Cline. Benchmarked 11/11 vs 1/11 baseline on a recorded rung.
+- **Fleet telemetry (ADR `ARCH-20260922-clifree-fleet-telemetry`, APPROVED).** The container
+  has one mount and cannot read host state, so each machine POSTs its own snapshot;
+  `clifree_fleet_snapshot` holds one row per (machine, spec) and a delivery replaces that
+  machine's rows wholesale. Transport is SSH to the Studio, which posts to its own loopback —
+  listening on the tailnet was rejected, since it turns the dashboard into a network service
+  every later change inherits.
+- **The ingest endpoint accepts the unified API key as well as a session**, deliberately:
+  sessions expire after 30 days, so a reporter on a timer would authenticate today and fail
+  silently next month with the panel showing that machine as stale rather than broken.
+- **Free CLI fleet panel** on `/analytics/compare`: nine columns mirroring the comparison
+  table, capabilities merged on benchmark (28 routes → 24 rows), remappable, with OC/CL marks
+  naming which agent reaches each row. Baselines can be toggled in and interleave by score.
+- **Three pre-existing defects fixed in shared code**, all affecting pages beyond this feature:
+  `PopoverContent` accepted `side` and never forwarded it; `ModelCombobox`'s `autoFocus`
+  scrolled the page to the top on open; and the Compare scope pills claimed containment while
+  `Enabled` (355) was larger than `Have a key` (58) and contained models it did not. `Enabled`
+  now means enabled AND keyed, tested on the same member.
+- **`compare.chainApply` was missing from `en.json`** while present in all 59 locales — a
+  code-sync dropped it, so the chain-picker button rendered a raw key and `check:i18n` was red.
+  The migration roundtrip suite was red too, on a data-only migration whose `down()` is
+  correctly a no-op; migrations can now declare `dataOnly`.
+
+**What's next:**
+
+1. Only one machine reports, so the cross-machine comparison the feature exists for is
+   untested. Run on the MBP: `clifree-report.sh | ssh <studio> 'FREELLM_API_KEY=… ~/Code/Instrumenta/atelier/scripts/clifree-report.sh --post-stdin'`.
+2. Reachability reads `unprobed` for every route — probing costs quota. `clifree-rank.sh -p`
+   then re-report, and the tool-incompatible routes (`z-ai/glm-5.2:free`, `qwen3.8-27b:free`)
+   will read `notools` instead of unknown.
+3. Find out why `client/` `tsc --noEmit` passes what the Docker build rejects; until then the
+   local check is not a gate. See the 2026-09-22 block in `docs/GOTCHAS.md`.
+
+**In progress:** nothing mid-flight; tree clean, all four commits pushed.
+
 ## Session 2026-09-21 — JD-STUDIO (Mac Studio M2 Max)
 
 **Branch:** `docs/freellm-assert-start-on-redeploy` (unchanged — nothing committed this session)
