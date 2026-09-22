@@ -10,6 +10,7 @@ import { toast } from '@/lib/toast'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ScopePicker } from '@/components/compare/scope-picker'
+import { ClifreeFleet } from '@/components/clifree-fleet'
 import { ChainPicker } from '@/components/compare/chain-picker'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/page-header'
@@ -987,6 +988,12 @@ export default function CompareModelsPage() {
           </section>
         </>
       )}
+
+      {/* The free CLI fleet sits after the comparison table and before the
+          attribution: it answers a different question — not "which model scores
+          best" but "what can each machine actually reach right now" — and its
+          routes are NOT callable from FreeLLM, which the panel states itself. */}
+      <ClifreeFleet />
 
       {/* Required by the Artificial Analysis terms of use wherever their data
           is displayed. */}

@@ -1435,7 +1435,30 @@
     "priceInput": "Input / 1M",
     "priceOutput": "Output / 1M",
     "filterOpencode": "OpenCode only",
-    "filterOpencodeHint": "Show only OpenCode models with baselines for comparison"
+    "filterOpencodeHint": "Show only OpenCode models with baselines for comparison",
+    "fleet": {
+      "title": "Free CLI fleet",
+      "description": "What each machine can reach on the free CLI rosters, and what it has spent. Machines report their own state; FreeLLM stores what it is told.",
+      "notRoutable": "Observation only — these routes cannot be called from FreeLLM. Their free tiers refuse callers outside the vendor's own CLI, so they never appear in routing or model pickers.",
+      "machine": "Machine",
+      "route": "Route",
+      "class": "Class",
+      "intelligence": "Intelligence",
+      "availability": "Available",
+      "availableNow": "Yes",
+      "coolingFor": "{{minutes}}m ({{reason}})",
+      "reachability": "Reached",
+      "reachOk": "ok",
+      "reachFail": "failed",
+      "reachNotools": "no tool support",
+      "reachUnprobed": "unprobed",
+      "proxyScore": "estimated",
+      "proxyScoreHint": "This score is an estimate for a related variant, not a measurement of this route.",
+      "lastReported": "Reported {{ago}} ago",
+      "staleWarning": "This machine has not reported for {{ago}}. Its rows may no longer be true.",
+      "empty": "No machine has reported yet.",
+      "emptyHint": "Run clifree-report.sh --post on a machine with the free CLIs installed."
+    }
   },
   "catalogue": {
     "changesTitle": "Catalogue changes",

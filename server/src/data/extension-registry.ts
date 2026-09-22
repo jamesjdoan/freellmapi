@@ -362,6 +362,25 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
     disableConfirmation: 'none',
   },
   {
+    id: 'clifree-fleet-telemetry',
+    title: 'Free CLI-agent fleet telemetry',
+    summary:
+      'What each MACHINE can reach on the free CLI rosters (OpenCode Zen, Cline), and what it has spent. The Mac Studio and the MBP spend the same free accounts from different machines, so "are we out of Cline quota, and who spent it" is unanswerable on either one — each holds half the evidence. Machines deliver their own snapshot; the server stores what it is told, because the container cannot read a host filesystem or run a host binary. OBSERVATION ONLY: these routes are not callable from FreeLLM and never appear in routing or model-picker controls.',
+    settingsLocation: 'Analytics → Compare models → Free CLI fleet',
+    destinations: [{ kind: 'internal', label: 'Open the fleet panel', href: '/analytics/compare' }],
+    category: 'tooling',
+    defaultEnabled: true,
+    offBehaviour:
+      'The ingest endpoint refuses deliveries and the panel is hidden. Rows already stored are retained and the migration still runs, so switching back on shows the fleet as it was last reported, marked stale.',
+    takesEffect: 'Next delivery for ingest, next page load for the panel.',
+    codeLocations: [
+      'server/src/db/migrations/20260922_000001_clifree_fleet_snapshot.ts',
+      'server/src/services/clifree-fleet.ts',
+      'docs/adr/ARCH-20260922-clifree-fleet-telemetry.md',
+    ],
+    disableConfirmation: 'none',
+  },
+  {
     id: 'provider-churn',
     title: 'Per-provider catalogue churn',
     summary: 'What each provider gained and lost lately, on its key row, expanding into per-model scope switches. A retirement names what it cost - the chains that model was serving.',

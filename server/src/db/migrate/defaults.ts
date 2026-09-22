@@ -200,4 +200,5 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: '20260919_000002_provider_diagnosis_history.ts', module: providerDiagnosisHistory },
   { filename: '20260919_000003_model_capability_probe.ts', module: modelCapabilityProbe },
   { filename: '20260920_000001_rename_access_denied.ts', module: renameAccessDenied },
+  { filename: '20260922_000001_clifree_fleet_snapshot.ts', module: clifreeFleetSnapshot },
 ];
