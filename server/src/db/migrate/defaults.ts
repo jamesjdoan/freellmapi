@@ -62,6 +62,7 @@ import * as providerDiagnosisHistory from '../migrations/20260919_000002_provide
 import * as modelCapabilityProbe from '../migrations/20260919_000003_model_capability_probe.js';
 import * as renameAccessDenied from '../migrations/20260920_000001_rename_access_denied.js';
 import * as clifreeFleetSnapshot from '../migrations/20260922_000001_clifree_fleet_snapshot.js';
+import * as clifreeFleetBenchmarkSlug from '../migrations/20260922_000002_clifree_fleet_benchmark_slug.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -201,4 +202,5 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: '20260919_000003_model_capability_probe.ts', module: modelCapabilityProbe },
   { filename: '20260920_000001_rename_access_denied.ts', module: renameAccessDenied },
   { filename: '20260922_000001_clifree_fleet_snapshot.ts', module: clifreeFleetSnapshot },
+  { filename: '20260922_000002_clifree_fleet_benchmark_slug.ts', module: clifreeFleetBenchmarkSlug },
 ];

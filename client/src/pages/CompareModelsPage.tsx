@@ -10,7 +10,9 @@ import { toast } from '@/lib/toast'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ScopePicker } from '@/components/compare/scope-picker'
-import { ClifreeFleet } from '@/components/clifree-fleet'
+import { ClifreeFleet, useFleet } from '@/components/clifree-fleet'
+import { vendorTint } from '@/lib/vendor-tint'
+import { useExtensionEnabled } from '@/lib/use-extension'
 import { ChainPicker } from '@/components/compare/chain-picker'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/page-header'
@@ -79,6 +81,9 @@ interface CompareGroup {
   keyedMembers?: number
   /** A pinned baseline rather than a model we serve. */
   reference?: boolean
+  /** Free CLI routes reaching this capability, `provider:id`. Several when one
+   *  model is served by more than one agent. */
+  fleetSpecs?: string[]
   conflicted: boolean
   chains: string[]
   /** Per chain: where it sits, and which member row holds that slot. */
@@ -146,27 +151,102 @@ interface ProxyUpgrade {
   matchReason: string
 }
 
-type Scope = 'routed' | 'keyed' | 'enabled' | 'all' | 'opencode'
+/**
+ * Diagonal hatch for a model no chain is using.
+ *
+ * A row can be enabled, keyed, well scored and still serve nothing, which the
+ * numbers cannot show: an unallocated model looks identical to a working one
+ * until you read the chains column. The hatch makes "nothing routes here"
+ * visible at a glance in the scopes where unallocated models are the majority.
+ *
+ * Baselines and fleet routes are excluded -- they are not ours to allocate, so
+ * hatching them would mark a state they can never leave.
+ */
+const HATCH =
+  'opacity-55 bg-[repeating-linear-gradient(45deg,transparent,transparent_3px,rgba(127,127,127,0.22)_3px,rgba(127,127,127,0.22)_7px)]'
+
+function unallocated(g: CompareGroup): boolean {
+  return !g.reference && g.chains.length === 0
+}
+
+/** A free CLI route, not a pinned baseline. Both are `reference: true`. */
+function isFleet(g: CompareGroup): boolean {
+  return g.groupKey.startsWith('fleet:')
+}
+
+/** Two-letter marks for the agents that can reach a capability. A merged row
+ *  carries BOTH when the same model is served by both agents, which is the
+ *  whole reason the marks exist: "reachable" is per-agent, and a row saying
+ *  only "CLI Fleet" hides that one of your two wallets cannot serve it. */
+const FLEET_MARK: Record<string, string> = { opencode: 'OC', cline: 'CL' }
+
+/** One colour per agent, so a row's reach is readable without stopping to read
+ *  two letters. Kept out of the metric palette above. */
+const MARK_CLASS: Record<string, string> = {
+  OC: 'border-indigo-500/40 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300',
+  CL: 'border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300',
+}
+
+/**
+ * Which agents can reach this row.
+ *
+ * Two sources, because a row arrives here two ways. A fleet entry carries its
+ * own specs. A CATALOGUE row -- one FreeLLM can serve -- carries none, and was
+ * previously unmarked even when an agent reports reaching it: `MiMo-V2.5 ×5`
+ * sat under the fleet scope saying nothing about why it was there.
+ *
+ * A catalogue row deliberately gets marks WITHOUT the orange badge. The badge
+ * means "reachable only from a free CLI agent, never from FreeLLM", which is
+ * false for a row we serve; the marks alone say "also reachable from these".
+ */
+function fleetMarks(g: CompareGroup, byModelId: Record<string, Record<string, true>>): string[] {
+  const seen: Record<string, true> = {}
+  for (const spec of g.fleetSpecs ?? []) {
+    const mark = FLEET_MARK[spec.slice(0, spec.indexOf(':'))]
+    if (mark) seen[mark] = true
+  }
+  for (const m of g.members) {
+    for (const mark of Object.keys(byModelId[m.modelId] ?? {})) seen[mark] = true
+  }
+  return Object.keys(seen).sort()
+}
+
+type Scope = 'routed' | 'keyed' | 'enabled' | 'all' | 'clifree'
 
 const SCOPES: { key: Scope; labelKey: string; hintKey: string }[] = [
+  // Ordered narrowest to widest, and they now genuinely nest. Before this,
+  // `enabled` counted models switched on ANYWHERE, including 476 on providers
+  // with no key -- so it was larger than `keyed` and contained models `keyed`
+  // did not, while the UI order and the comment below both claimed containment.
   { key: 'routed', labelKey: 'compare.scopeRouted', hintKey: 'compare.scopeRoutedHint' },
-  { key: 'keyed', labelKey: 'compare.scopeKeyed', hintKey: 'compare.scopeKeyedHint' },
   { key: 'enabled', labelKey: 'compare.scopeEnabled', hintKey: 'compare.scopeEnabledHint' },
+  { key: 'keyed', labelKey: 'compare.scopeKeyed', hintKey: 'compare.scopeKeyedHint' },
   { key: 'all', labelKey: 'compare.scopeAll', hintKey: 'compare.scopeAllHint' },
-  { key: 'opencode', labelKey: 'compare.filterOpencode', hintKey: 'compare.filterOpencodeHint' },
+  { key: 'clifree', labelKey: 'compare.scopeClifree', hintKey: 'compare.scopeClifreeHint' },
 ]
 
 /**
- * Widening rings, each a superset of the last: serving a chain now, reachable
- * at all, switched on in the catalogue, known to exist.
+ * Widening rings, each a genuine superset of the last: serving a chain now,
+ * switched on AND reachable, reachable at all, known to exist.
+ *
+ * `clifree` is NOT part of that progression. It is an orthogonal cut — the
+ * routes a free CLI agent can actually drive — and it replaced a plain
+ * `opencode` platform filter because the question was never "which rows are
+ * OpenCode's". It was "what can I delegate to for free", and a Zen route no
+ * machine reports is not an answer to that however the catalogue lists it.
  */
-function inScope(g: CompareGroup, scope: Scope): boolean {
+function inScope(g: CompareGroup, scope: Scope, fleetModelIds: Record<string, true>): boolean {
   switch (scope) {
     case 'routed': return g.chains.length > 0
-    case 'keyed': return (g.keyedMembers ?? 0) > 0
-    case 'enabled': return g.enabledMembers > 0
+    // Enabled AND reachable, tested on the SAME member. The group-level counts
+    // cannot express that intersection: a group can hold one member that is
+    // enabled but unkeyed and another that is keyed but switched off, and
+    // `enabledMembers > 0 && keyedMembers > 0` would call that servable when
+    // no single route is.
+    case 'enabled': return g.members.some(m => m.enabled && m.hasKey)
+    case 'keyed': return g.members.some(m => m.hasKey)
     case 'all': return true
-    case 'opencode': return g.members.some(m => m.platform === 'opencode')
+    case 'clifree': return g.members.some(m => m.platform === 'opencode' && fleetModelIds[m.modelId] === true)
   }
 }
 
@@ -204,6 +284,35 @@ export default function CompareModelsPage() {
   // provider. On this install 510 of 588 models sit on providers we have no
   // key for — enabled, ranked, merged, and unreachable.
   const [scope, setScope] = useState<Scope>('routed')
+
+
+  // Which catalogue routes a machine has actually reported reaching. Keyed by
+  // modelId because that is what a CompareRow carries; the fleet's `spec` is
+  // `provider:id` and only its opencode half can correspond to a catalogue row
+  // at all — Cline has no rows here, by design, since FreeLLM cannot call it.
+  const fleetEnabled = useExtensionEnabled('clifree-fleet-telemetry')
+  const { data: fleetData } = useFleet(fleetEnabled)
+  // modelId -> the agents that report reaching it. Only OpenCode ids can ever
+  // match a catalogue row; Cline has none here, which is the whole reason its
+  // routes need synthetic entries.
+  const fleetMarksByModelId = useMemo(() => {
+    const byId: Record<string, Record<string, true>> = {}
+    for (const r of fleetData?.routes ?? []) {
+      const mark = FLEET_MARK[r.provider]
+      if (!mark) continue
+      const id = r.spec.slice(r.spec.indexOf(':') + 1)
+      byId[id] = { ...(byId[id] ?? {}), [mark]: true }
+    }
+    return byId
+  }, [fleetData])
+
+  const fleetModelIds = useMemo(() => {
+    const ids: Record<string, true> = {}
+    for (const r of fleetData?.routes ?? []) {
+      if (r.provider === 'opencode') ids[r.spec.slice(r.spec.indexOf(':') + 1)] = true
+    }
+    return ids
+  }, [fleetData])
   const [query, setQuery] = useState('')
 
   const { data, isLoading } = useQuery<ComparePayload>({
@@ -344,6 +453,28 @@ export default function CompareModelsPage() {
   // Measured intelligence first: the reason to open this page is to see what
   // the benchmarks say, and the payload order is the router's, not a ranking.
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'intelligenceIndex', dir: 'desc' })
+
+  // Every toggle this view holds, and the value it starts at. Reset reads from
+  // here rather than repeating literals at the call site: a toggle added later
+  // and forgotten here would leave "reset" quietly incomplete, which is worse
+  // than no reset at all -- the operator believes they are back at a known
+  // state and they are not.
+  const catalogueSlugs = useMemo(() => {
+    const slugs: Record<string, true> = {}
+    for (const g of grouped?.groups ?? []) {
+      if (g.analysis?.slug && inScope(g, 'clifree', fleetModelIds)) slugs[g.analysis.slug] = true
+    }
+    return slugs
+  }, [grouped, fleetModelIds])
+
+  const RESET = { metric: 'intelligenceIndex' as ChartView, scope: 'routed' as Scope,
+                  sort: { key: 'intelligenceIndex' as SortKey, dir: 'desc' as const }, query: '' }
+  const dirty = metric !== RESET.metric || scope !== RESET.scope || query !== RESET.query
+    || sort.key !== RESET.sort.key || sort.dir !== RESET.sort.dir || selected.size > 0
+  const resetAll = () => {
+    setMetric(RESET.metric); setScope(RESET.scope); setSort(RESET.sort)
+    setQuery(RESET.query); setSelected(new Set())
+  }
   // Second click reverses; moving to a new column starts descending, except for
   // the three where "low is good" (name A-Z, latency, price).
   const sortBy = (key: SortKey) =>
@@ -356,17 +487,36 @@ export default function CompareModelsPage() {
         // References are never filtered out by "only routed": the whole point
         // is that they sit beside our models wherever those land.
         ...(references?.groups ?? []),
+        // The free CLI routes, and ONLY under their own scope. They are not
+        // ours to serve -- FreeLLM cannot call them -- so they must not appear
+        // in the views that answer "what is my router doing". Under the CLI
+        // fleet cut that IS the question, and all 28 belong, including the
+        // Cline ones that have no catalogue row at all.
+        //
+        // `reference: true` on each is what keeps the chain and scope controls
+        // off them: a chain slot pointing at an uncallable route would silently
+        // never serve.
+        ...(scope === 'clifree'
+          ? ((fleetData?.groups ?? []) as CompareGroup[])
+              .filter(g => matchesCompareQuery(g, query))
+              // A fleet route whose benchmark is already on screen as a
+              // catalogue row is the SAME capability reached another way, and
+              // two rows scoring 48.1 read as two models. The catalogue row
+              // wins: it is the one we can actually serve, and it carries the
+              // chain and key state a fleet row has nothing to say about.
+              .filter(g => !g.analysis || !catalogueSlugs[g.analysis.slug])
+          : []),
         // Baselines are never searched away: they are the thing being compared
         // against, and a filtered table with no yardstick left is worse.
         ...(grouped?.groups ?? []).filter(g =>
-          inScope(g, scope) &&
+          inScope(g, scope, fleetModelIds) &&
           matchesCompareQuery(g, query)
         ),
       ],
       sort.key,
       sort.dir,
     ),
-    [grouped, references, scope, sort, query],
+    [grouped, references, fleetData, scope, sort, query],
   )
   const chosen = useMemo(
     () => entries.filter(g => selected.has(entryKey(g))),
@@ -556,6 +706,18 @@ export default function CompareModelsPage() {
               <Scale className="size-4 text-muted-foreground" />
               <h2 className="text-sm font-medium">{t('compare.chartTitle')}</h2>
               <div className="ml-auto flex flex-wrap items-center gap-1">
+                {/* Shown only when something is off-default: a reset that is
+                    always present invites a click that does nothing. */}
+                {dirty && (
+                  <button
+                    type="button"
+                    onClick={resetAll}
+                    className="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/50"
+                    title={t('compare.resetHint')}
+                  >
+                    {t('compare.reset')}
+                  </button>
+                )}
                 {CHART_VIEWS.map(m => (
                   <button
                     key={m.key}
@@ -589,7 +751,9 @@ export default function CompareModelsPage() {
                 {/* Counted from the same predicate that filters, so a label
                     can never disagree with the list under it. */}
                 {SCOPES.map(sc => {
-                  const count = (grouped?.groups ?? []).filter(g => inScope(g, sc.key)).length
+                  const count =
+                    (grouped?.groups ?? []).filter(g => inScope(g, sc.key, fleetModelIds)).length +
+                    (sc.key === 'clifree' ? (fleetData?.groups ?? []).length : 0)
                   return (
                     <button
                       key={sc.key}
@@ -613,7 +777,14 @@ export default function CompareModelsPage() {
                   // table says it with a badge; this list said it by recolouring
                   // the whole row and its bar, so the same fact looked like two
                   // different states depending which half of the page you read.
-                  <li key={entryKey(g)} className="flex items-center gap-2 text-xs">
+                  <li
+                    key={entryKey(g)}
+                    className={`flex items-center gap-2 rounded px-1 text-xs ${
+                      g.reference && !isFleet(g)
+                        ? vendorTint(g.name, g.analysis?.creator)
+                        : unallocated(g) ? HATCH : ''
+                    }`}
+                  >
                     {/* Name first, dots after it. Leading with a variable
                         number of swatches started every name at a different
                         offset, so the column could not be read down. */}
@@ -622,11 +793,35 @@ export default function CompareModelsPage() {
                       {g.members.length > 1 && (
                         <span className="text-muted-foreground tabular-nums">{`×${g.members.length}`}</span>
                       )}
-                      {g.reference && (
-                        <Badge variant="secondary" className="bg-sky-500/15 text-[10px] text-sky-700 dark:text-sky-300">
-                          {t('compare.referenceBadge')}
-                        </Badge>
-                      )}
+                      {/* The badge is for rows we do NOT serve. The marks are
+                          for any row an agent can reach, served or not, so they
+                          sit outside that guard -- a catalogue row reachable
+                          from OpenCode Zen was previously unmarked and gave no
+                          reason for being under the fleet scope at all. */}
+                      <span className="flex items-center gap-1">
+                        {/* Baseline keeps its badge here; a fleet row does not.
+                            In this list the OC/CL marks already say the row is
+                            agent-reachable, and the orange badge beside them
+                            was a second label for the same fact in a column
+                            200px wide. The table still carries it, where the
+                            distinction between "we serve it" and "only an agent
+                            can" has room to be read. */}
+                        {g.reference && !isFleet(g) && (
+                          <Badge variant="secondary" className="bg-sky-500/15 text-[10px] text-sky-700 dark:text-sky-300">
+                            {t('compare.referenceBadge')}
+                          </Badge>
+                        )}
+                        {fleetMarks(g, fleetMarksByModelId).map(mark => (
+                          <Badge
+                            key={mark}
+                            variant="outline"
+                            className={`px-1 font-mono text-[10px] ${MARK_CLASS[mark]}`}
+                            title={t(mark === 'OC' ? 'compare.fleet.markOc' : 'compare.fleet.markCl')}
+                          >
+                            {mark}
+                          </Badge>
+                        ))}
+                      </span>
                     </span>
                     <span className="flex w-[70px] flex-shrink-0 items-center gap-0.5">
                       {[...new Map(g.members.map(m => [m.platform, m])).values()].slice(0, 7).map(m => (
@@ -691,10 +886,18 @@ export default function CompareModelsPage() {
                       </div>
                     ) : (
                       <div className="h-3 min-w-0 flex-1 rounded bg-muted">
-                        {/* The bar keeps the badge's hue so the two halves of
-                            the page agree on which colour means "yardstick". */}
+                        {/* Sky marks a pinned yardstick. Everything else -- the
+                            models we serve and the free CLI routes alike -- is
+                            a measurement of something real and keeps the metric
+                            colour, so the bars stay comparable down the column
+                            instead of one class of row reading as a different
+                            quantity. */}
                         <div
-                          className={`h-3 rounded ${g.reference ? 'bg-sky-500/70' : 'bg-emerald-500/70'}`}
+                          className={`h-3 rounded ${g.reference && !isFleet(g) ? 'bg-sky-500/70' : 'bg-emerald-500/70'} ${
+                            unallocated(g)
+                              ? 'opacity-60 bg-[repeating-linear-gradient(45deg,rgba(16,185,129,0.75),rgba(16,185,129,0.75)_3px,rgba(16,185,129,0.15)_3px,rgba(16,185,129,0.15)_7px)]'
+                              : ''
+                          }`}
                           style={{ width: peak > 0 ? `${Math.max((value / peak) * 100, 2)}%` : '2%' }}
                         />
                       </div>
@@ -777,6 +980,29 @@ export default function CompareModelsPage() {
                 keyStates={platformKeyStates}
               />
             </div>
+            {/* Only under the fleet scope, where the marks appear. A legend
+                for symbols that are not on screen is noise, and this page
+                already carries a platform legend for the rows that have one. */}
+            {scope === 'clifree' && (
+              <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                <span className="inline-flex items-center gap-1">
+                  <Badge variant="secondary" className="bg-orange-500/15 text-[10px] text-orange-700 dark:text-orange-300">
+                    {t('compare.fleet.badge')}
+                  </Badge>
+                  {t('compare.fleet.legendFleet')}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Badge variant="outline" className={`px-1 font-mono text-[10px] ${MARK_CLASS.OC}`}>OC</Badge>
+                  {t('compare.fleet.markOc')}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Badge variant="outline" className={`px-1 font-mono text-[10px] ${MARK_CLASS.CL}`}>CL</Badge>
+                  {t('compare.fleet.markCl')}
+                </span>
+                <span>{t('compare.fleet.legendBoth')}</span>
+                <span>{t('compare.fleet.legendServed')}</span>
+              </p>
+            )}
             <Table className="mt-3">
               <TableHeader>
                 <TableRow>
@@ -798,9 +1024,9 @@ export default function CompareModelsPage() {
                 {entries.map(g => {
                   const solo = g.members.length === 1 ? g.members[0] : null
                   return (
-                    <TableRow key={entryKey(g)} className={`group/row ${g.reference ? 'bg-sky-500/5' : ''}`}>
+                    <TableRow key={entryKey(g)} className={`group/row ${g.reference && !isFleet(g) ? (vendorTint(g.name, g.analysis?.creator) || 'bg-sky-500/5') : unallocated(g) ? HATCH : ''}`}>
                       <TableCell>
-                        {g.reference
+                        {g.reference && !isFleet(g)
                           ? (
                             // Confirm-gated like every other destructive action
                             // here: the × sits exactly where the selection
@@ -861,10 +1087,25 @@ export default function CompareModelsPage() {
                             />
                           )}
                           {g.reference && (
-                            <Badge variant="secondary" className="bg-sky-500/15 text-[10px] text-sky-700 dark:text-sky-300">
-                              {t('compare.referenceBadge')}
+                            <Badge
+                              variant="secondary"
+                              className={isFleet(g)
+                                ? 'bg-orange-500/15 text-[10px] text-orange-700 dark:text-orange-300'
+                                : 'bg-sky-500/15 text-[10px] text-sky-700 dark:text-sky-300'}
+                            >
+                              {t(isFleet(g) ? 'compare.fleet.badge' : 'compare.referenceBadge')}
                             </Badge>
                           )}
+                          {fleetMarks(g, fleetMarksByModelId).map(mark => (
+                            <Badge
+                              key={mark}
+                              variant="outline"
+                              className={`px-1 font-mono text-[10px] ${MARK_CLASS[mark]}`}
+                              title={t(mark === 'OC' ? 'compare.fleet.markOc' : 'compare.fleet.markCl')}
+                            >
+                              {mark}
+                            </Badge>
+                          ))}
                           {/* The routes live in a tooltip, not inline. Printed
                               in the cell, seven `platform/modelId` pairs made
                               this column 1584px wide inside a 1070px container

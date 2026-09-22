@@ -1446,7 +1446,7 @@
       "intelligence": "Intelligence",
       "availability": "Available",
       "availableNow": "Yes",
-      "coolingFor": "{{minutes}}m ({{reason}})",
+      "coolingFor": "{minutes}m ({reason})",
       "reachability": "Reached",
       "reachOk": "ok",
       "reachFail": "failed",
@@ -1454,11 +1454,25 @@
       "reachUnprobed": "unprobed",
       "proxyScore": "estimated",
       "proxyScoreHint": "This score is an estimate for a related variant, not a measurement of this route.",
-      "lastReported": "Reported {{ago}} ago",
-      "staleWarning": "This machine has not reported for {{ago}}. Its rows may no longer be true.",
+      "lastReported": "Reported {ago} ago",
+      "staleWarning": "This machine has not reported for {ago}. Its rows may no longer be true.",
       "empty": "No machine has reported yet.",
-      "emptyHint": "Run clifree-report.sh --post on a machine with the free CLIs installed."
-    }
+      "emptyHint": "Run clifree-report.sh --post on a machine with the free CLIs installed.",
+      "compareBaselines": "Compare baselines",
+      "baseline": "baseline",
+      "badge": "CLI fleet",
+      "markOc": "OpenCode Zen",
+      "markCl": "Cline",
+      "legendFleet": "reachable only from a free CLI agent, never from FreeLLM",
+      "legendBoth": "A model showing both marks is reachable from either agent.",
+      "legendServed": "Marks with no CLI fleet badge: FreeLLM can serve it too, and an agent can also reach it.",
+      "colRoutes": "Routes",
+      "coolingMinutes": "{minutes}m"
+    },
+    "scopeClifree": "CLI fleet",
+    "scopeClifreeHint": "Routes a free CLI agent can actually drive, as reported by your machines. Not a platform filter: a catalogue route no machine reports is excluded, and Cline's free models appear only in the fleet table below — FreeLLM cannot call them.",
+    "reset": "Reset",
+    "resetHint": "Back to defaults: intelligence chart, routed scope, no search, nothing pinned."
   },
   "catalogue": {
     "changesTitle": "Catalogue changes",

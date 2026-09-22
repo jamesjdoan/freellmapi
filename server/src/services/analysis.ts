@@ -748,7 +748,7 @@ function nudge(value: number | null, row: Record<string, unknown>, metric: Proxy
 /** One speed step, as a fraction of the proxy's own figure. */
 const SPEED_STEP = 0.15;
 
-function lookupAa(db: Db, slug: string): CompareRow['analysis'] {
+export function lookupAa(db: Db, slug: string): CompareRow['analysis'] {
   const r = db.prepare(`
     SELECT slug, name, creator, intelligence_index, coding_index, agentic_index,
            price_1m_input, price_1m_output, index_cost_per_task, median_output_tokens_per_second,

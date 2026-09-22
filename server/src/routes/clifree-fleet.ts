@@ -28,6 +28,8 @@ import {
   parseDelivery,
   recordDelivery,
   listFleet,
+  getFleetGroups,
+  setFleetLink,
   FleetDeliveryError,
 } from '../services/clifree-fleet.js';
 
@@ -96,8 +98,44 @@ clifreeFleetRouter.get('/', (_req: Request, res: Response) => {
     // Rows are retained when the extension is off, so this reports "no fleet"
     // rather than 404: the panel is hidden by the client, and a reader hitting
     // the API directly should see an empty fleet, not a missing endpoint.
-    res.json({ routes: [] });
+    res.json({ routes: [], groups: [] });
     return;
   }
-  res.json({ routes: listFleet(getDb()) });
+  const db = getDb();
+  // `groups` carries the same routes shaped as comparison entries, so the page
+  // can rank and plot them beside the catalogue without a second request or a
+  // client-side join it would have to keep in step with the server's shape.
+  res.json({ routes: listFleet(db), groups: getFleetGroups(db) });
+});
+
+/**
+ * Remap one free route to a different benchmark, or to none.
+ *
+ * The catalogue's own /api/analysis/link keys on platform+modelId and cannot
+ * serve these: a Cline route has no catalogue row at all, which is the same
+ * reason its capability needed a synthetic entry in the first place.
+ */
+clifreeFleetRouter.put('/link', (req: Request, res: Response) => {
+  if (!isExtensionEnabled(EXTENSION_ID)) {
+    res.status(404).json({ error: 'clifree fleet telemetry is disabled' });
+    return;
+  }
+  const body: unknown = req.body;
+  if (typeof body !== 'object' || body === null || !('spec' in body)) {
+    res.status(400).json({ error: 'spec is required' });
+    return;
+  }
+  const spec = (body as { spec: unknown }).spec;
+  const aaSlug = 'aaSlug' in body ? (body as { aaSlug: unknown }).aaSlug : null;
+  if (typeof spec !== 'string' || !spec.includes(':')) {
+    res.status(400).json({ error: 'spec must be provider:id' });
+    return;
+  }
+  if (aaSlug !== null && typeof aaSlug !== 'string') {
+    res.status(400).json({ error: 'aaSlug must be a string or null' });
+    return;
+  }
+  const db = getDb();
+  setFleetLink(db, spec, aaSlug);
+  res.json({ groups: getFleetGroups(db) });
 });
