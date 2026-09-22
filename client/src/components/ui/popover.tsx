@@ -13,6 +13,7 @@ function PopoverTrigger({ ...props }: PopoverPrimitive.Trigger.Props) {
 function PopoverContent({
   className,
   align = "center",
+  side,
   sideOffset = 8,
   children,
   ...props
@@ -20,9 +21,14 @@ function PopoverContent({
   Pick<PopoverPrimitive.Positioner.Props, "align" | "side" | "sideOffset">) {
   return (
     <PopoverPrimitive.Portal>
+      {/* `side` was accepted by the prop type and then dropped: only align and
+          sideOffset reached the positioner. Every caller passing `side` was
+          silently ignored, the popup positioned at its default, and focusing it
+          scrolled the page. */}
       <PopoverPrimitive.Positioner
         className="isolate z-50 outline-none"
         align={align}
+        side={side}
         sideOffset={sideOffset}
       >
         <PopoverPrimitive.Popup

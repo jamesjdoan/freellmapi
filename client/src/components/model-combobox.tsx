@@ -33,6 +33,7 @@ export function ModelCombobox({
   header,
   footer,
   align = 'end',
+  side,
   triggerClassName,
   triggerPlaceholder,
   ariaInvalid,
@@ -49,6 +50,9 @@ export function ModelCombobox({
   /** Optional hint row under the list (e.g. "add a key to see models"). */
   footer?: ReactNode
   align?: 'start' | 'center' | 'end'
+  /** Which side of the trigger to open on. Default (bottom) clips when the
+   *  trigger sits near the foot of the page. */
+  side?: 'top' | 'bottom' | 'left' | 'right'
   triggerClassName?: string
   /** Shown on the trigger while nothing is selected. */
   triggerPlaceholder?: string
@@ -117,11 +121,16 @@ export function ModelCombobox({
         <span className={`truncate ${triggerLabel ? '' : 'text-muted-foreground'}`} title={triggerLabel || undefined}>{triggerLabel || triggerPlaceholder}</span>
         <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
       </PopoverTrigger>
-      <PopoverContent align={align} className="w-[300px] p-0" onKeyDown={onKeyDown}>
+      <PopoverContent align={align} side={side} sideOffset={6} className="w-[300px] border p-0 shadow-lg" onKeyDown={onKeyDown}>
         <div className="flex items-center gap-2 border-b px-3">
           <Search className="size-4 shrink-0 text-muted-foreground" />
           <input
-            autoFocus
+            ref={el => {
+              // focus({ preventScroll: true }) instead of autoFocus: keep the
+              // keyboard in the search box without letting the browser scroll
+              // the page to a popup it has not positioned yet.
+              if (el && document.activeElement !== el) el.focus({ preventScroll: true })
+            }}
             value={query}
             onChange={e => {
               setQuery(e.target.value)
