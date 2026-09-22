@@ -61,10 +61,21 @@ import * as dropRoutingDecision from '../migrations/20260919_000001_drop_routing
 import * as providerDiagnosisHistory from '../migrations/20260919_000002_provider_diagnosis_history.js';
 import * as modelCapabilityProbe from '../migrations/20260919_000003_model_capability_probe.js';
 import * as renameAccessDenied from '../migrations/20260920_000001_rename_access_denied.js';
+import * as clifreeFleetSnapshot from '../migrations/20260922_000001_clifree_fleet_snapshot.js';
 
 export interface MigrationModule {
   up(db: Db): void;
   down(db: Db): void;
+  /**
+   * This migration rewrites ROWS, not schema.
+   *
+   * The round-trip test asserts that every `down()` changes app state, which
+   * catches a migration that silently fails to reverse itself. A data-only
+   * migration cannot satisfy that on a database with no matching rows — it is
+   * correct AND a no-op — so it declares itself here rather than the test
+   * carrying a list of exceptions it cannot see.
+   */
+  dataOnly?: boolean;
 }
 
 export interface DefaultMigration {

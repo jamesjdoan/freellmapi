@@ -242,6 +242,12 @@ async function runDownToBaseline(db: Database.Database): Promise<void> {
 
     await runMigrations(db, 'down');
 
+    // A migration that rewrites ROWS rather than schema is correctly a no-op
+    // here: this database has no rows for it to rewrite. It declares that
+    // itself, so the assertion keeps its teeth for every schema migration
+    // instead of being weakened for all of them.
+    if (DEFAULT_MIGRATIONS.find(m => m.filename === migrationName)?.module.dataOnly === true) continue;
+
     expect(snapshotAppState(db), `${migrationName} down() must alter app DB state or throw irreversible`)
       .not.toEqual(before);
   }

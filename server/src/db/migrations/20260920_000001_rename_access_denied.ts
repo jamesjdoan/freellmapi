@@ -33,3 +33,8 @@ export function down(db: Db): void {
     `UPDATE provider_diagnosis_history SET verdict = 'account_blocked' WHERE verdict = 'access_denied'`,
   ).run();
 }
+
+// Rewrites rows, not schema. On a database with no `access_denied` verdict
+// there is nothing to rename, so `down()` is correctly a no-op — which the
+// round-trip test would otherwise read as a migration failing to reverse.
+export const dataOnly = true;
