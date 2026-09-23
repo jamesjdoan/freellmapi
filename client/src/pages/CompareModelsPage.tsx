@@ -1394,7 +1394,7 @@ function MappingCell({ members, catalogue, onLink }: {
       return (
         <Tooltip text={t('compare.matchProxyHint', { name: their.name, slug: their.slug })}>
           <span className="flex max-w-[118px] flex-col items-start">
-            <span className="w-full truncate">≈ {their.name}</span>
+            <span className="w-full truncate">≈ <ModelName name={their.name} /></span>
             <span className="w-full truncate text-[10px] text-muted-foreground">{t('compare.matchProxy')}</span>
           </span>
         </Tooltip>
@@ -1414,7 +1414,7 @@ function MappingCell({ members, catalogue, onLink }: {
         model: `${scored.platform}/${scored.modelId}`,
       })}>
         <span className="flex max-w-[118px] flex-col items-start">
-          <span className={`w-full truncate ${allManual ? '' : 'text-muted-foreground'}`}>{their.name}</span>
+          <ModelName name={their.name} className={`w-full truncate ${allManual ? '' : 'text-muted-foreground'}`} />
           <span className="w-full truncate text-[10px] text-muted-foreground">{how}</span>
         </span>
       </Tooltip>

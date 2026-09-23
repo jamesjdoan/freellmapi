@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useExtensionEnabled } from '@/lib/use-extension'
 import { vendorTint } from '@/lib/vendor-tint'
 import { ModelCombobox, type ModelComboOption } from '@/components/model-combobox'
+import { ModelName } from '@/components/model-name'
 
 // What each MACHINE can reach on the free CLI rosters, and what it has spent.
 //
@@ -401,7 +402,7 @@ export function ClifreeFleet() {
                           {t('compare.referenceBadge')}
                         </Badge>
                       )}
-                      <span className="truncate">{e.name}</span>
+                      <ModelName name={e.name} className="truncate" />
                     </span>
                   </TableCell>
                   <TableCell className="text-xs">{e.cls ?? <span className="text-muted-foreground">–</span>}</TableCell>
