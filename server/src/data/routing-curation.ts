@@ -242,14 +242,14 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'mistral', modelId: 'ministral-3b-2512', classification: 'OVERFLOW',
-    chains: { 'Fast-Lane': 9 },
+    chains: { 'Fast-Lane': 8 },
     why: 'Added 2026-09-18. ok on probe. Fast-Lane tail: cheapest Mistral route, own allowance.',
   },
-  {
-    platform: 'nvidia', modelId: 'openai/gpt-oss-20b', classification: 'CORE',
-    chains: { Coding: 10, Workhorse: 13, 'Fast-Lane': 8 },
-    why: 'Added 2026-09-18. ok on probe, intelligence 12. Same model Groq serves, on a DIFFERENT provider - the case where a duplicate model is real capacity, because the pools are independent. Placed in Coding, Workhorse and Fast-Lane where Groq\'s copy is the head.',
-  },
+  // nvidia/openai/gpt-oss-20b removed 2026-09-23: two consecutive probes aborted
+  // at the 30s ceiling while the same model answered on Groq in 405ms and on
+  // Ollama in 1266ms. Taken out of the NVIDIA key scope the same day, so its
+  // Coding 10 / Workhorse 13 / Fast-Lane 8 rows pointed at a route no key could
+  // serve. Groq's copy still heads Fast-Lane; re-probe before restoring it.
   {
     platform: 'nvidia', modelId: 'meta/muse-glimmer-30b', classification: 'CORE',
     chains: { Apex: 8, Frontier: 8, Vision: 9 },
@@ -311,6 +311,11 @@ export const CURATED_ROUTES: CuratedRoute[] = [
     chains: { Vision: 14 },
     why: 'Added 2026-09-18. 2721ms, saw the image correctly, but tools=false — which is why no agentic chain will take it and why Vision admits SPECIALIST at all. A tail, not a fallback.',
   },
+  {
+    platform: 'nvidia', modelId: 'google/diffusiongemma-26b-a4b-it', classification: 'SPECIALIST',
+    chains: { Vision: 17 },
+    why: 'Added 2026-09-23. Text probe ok in 4967ms, then shown the 8x8 red PNG and answered "The image is red." in 1029ms — probed with an image because nemotron-parse-2.0 passed the text probe and could not see. tools=false, so Vision only, as a SPECIALIST tail. NVIDIA meters per model, so this is its own pool: the one working unchained route on 2026-09-23 that adds depth rather than a second name for an allowance already routed.',
+  },
   // ── ollama ────────────────────────────────────────────────────
   {
     platform: 'ollama', modelId: 'nemotron-3-ultra', classification: 'EXPERIMENTAL',
@@ -355,6 +360,23 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // counter. A second name on one allowance is the duplicate-quota illusion.
   // nvidia/nemotron-parse-2.0's siblings on unkeyed platforms (xkiro, kilo,
   // pollinations - 254 arrivals overnight) are not evaluated: no key reaches them.
+  // Audited 2026-09-23 after probing all 50 keyed routes: 46 answered, and ten
+  // of the working ones stay OUT of every chain on purpose. Re-read before
+  // adding any of them.
+  //   mistral/codestral-2508, mistral/ministral-14b-latest — a pinned build and
+  //     a `-latest` alias of codestral-latest and ministral-14b-2512, which are
+  //     routed. Same per-model allowance, so no depth.
+  //   mistral/mistral-code-fim-latest — fill-in-the-middle completion, not chat.
+  //   mistral/voxtral-small-2507, voxtral-small-latest — audio models on a 32K
+  //     window with no published intelligence score. A ping proves they answer
+  //     text, not that they are fit for any chain's purpose.
+  //   nvidia/nemotron-parse-2.0 — the parser above, still unable to see.
+  //   openrouter/dots-studio/dots-3-note-preview:free,
+  //   openrouter/inclusionai/ling-3.0-flash-vl:free,
+  //   openrouter/nvidia/nemotron-3-ultra-550b-a55b:free — one OpenRouter account
+  //     counter, already spent by a route in every chain.
+  //   anyapi/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free — AnyAPI is one
+  //     shared team budget, and the same model is already in Vision via NVIDIA.
   // ── anyapi ────────────────────────────────────────────────────
   {
     platform: 'anyapi', modelId: 'dots-studio/dots-3-note-preview:free', classification: 'EXPERIMENTAL',
