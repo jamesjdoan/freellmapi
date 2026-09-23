@@ -393,7 +393,7 @@ export function ClifreeFleet() {
             <TableBody>
               {sorted.map(e => (
                 <TableRow key={e.key} className={e.baseline ? (vendorTint(e.name, e.analysis?.creator) || 'bg-sky-500/5') : undefined}>
-                  <TableCell title={e.baseline ? e.name : e.specs.join('\n')}>
+                  <TableCell title={e.baseline ? e.name : [e.name, ...e.specs].join('\n')}>
                     <span className="flex items-center gap-1">
                       {/* Badge first and non-shrinking: it is the one thing on
                           this row that must survive truncation. */}
@@ -402,7 +402,9 @@ export function ClifreeFleet() {
                           {t('compare.referenceBadge')}
                         </Badge>
                       )}
-                      <ModelName name={e.name} className="truncate" />
+                      {/* Wrapped, not truncated, as on the Compare table: the
+                          variant is the tail, which truncation cuts first. */}
+                      <ModelName name={e.name} className="min-w-0 whitespace-normal [overflow-wrap:anywhere]" />
                     </span>
                   </TableCell>
                   <TableCell className="text-xs">{e.cls ?? <span className="text-muted-foreground">–</span>}</TableCell>
