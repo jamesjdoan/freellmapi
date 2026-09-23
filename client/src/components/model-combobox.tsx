@@ -121,7 +121,11 @@ export function ModelCombobox({
         <span className={`truncate ${triggerLabel ? '' : 'text-muted-foreground'}`} title={triggerLabel || undefined}>{triggerLabel || triggerPlaceholder}</span>
         <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
       </PopoverTrigger>
-      <PopoverContent align={align} side={side} sideOffset={6} className="w-[300px] border p-0 shadow-lg" onKeyDown={onKeyDown}>
+      {/* Sized to the longest name, up to the viewport, and each option wraps
+          instead of truncating: benchmark and baseline pickers list names that
+          differ only in their tail, and a cut-off tail is the one part that
+          tells them apart. */}
+      <PopoverContent align={align} side={side} sideOffset={6} className="w-max min-w-[300px] max-w-[min(36rem,calc(100vw-2rem))] border p-0 shadow-lg" onKeyDown={onKeyDown}>
         <div className="flex items-center gap-2 border-b px-3">
           <Search className="size-4 shrink-0 text-muted-foreground" />
           <input
@@ -157,7 +161,7 @@ export function ModelCombobox({
                 }`}
               >
                 <Check className={`size-4 shrink-0 ${o.value === value ? 'opacity-100' : 'opacity-0'}`} />
-                <span className={`min-w-0 flex-1 truncate ${o.note ? 'opacity-50' : ''}`} title={o.label}>{o.label}</span>
+                <span className={`min-w-0 flex-1 [overflow-wrap:anywhere] ${o.note ? 'opacity-50' : ''}`}>{o.label}</span>
                 {o.note && (
                   <span className="rounded px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide bg-amber-500/15 text-amber-600 dark:text-amber-400">
                     {o.note}
