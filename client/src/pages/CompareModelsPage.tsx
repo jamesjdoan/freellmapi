@@ -5,6 +5,7 @@ import { useI18n } from '@/i18n'
 import { matchesCompareQuery, sortEntries, type SortKey } from '@/lib/compare-sort'
 import { REFERENCE_ONLY_PLATFORMS } from '@/lib/routing'
 import { ModelCombobox, type ModelComboOption } from '@/components/model-combobox'
+import { shortModelName } from '@/lib/model-name'
 import { apiFetch } from '@/lib/api'
 import { toast } from '@/lib/toast'
 import { Badge } from '@/components/ui/badge'
@@ -1058,7 +1059,10 @@ export default function CompareModelsPage() {
                             name differently, so the column could not be read
                             down. */}
                         <span className="flex flex-wrap items-center gap-1.5">
-                          <span className="max-w-[175px] truncate font-medium" title={g.name}>{g.name}</span>
+                          {/* Shortened, then wrapped rather than truncated: the
+                              tail of a benchmark name is what tells siblings
+                              apart, so it is the last part that may be cut. */}
+                          <span className="max-w-[220px] whitespace-normal font-medium [overflow-wrap:anywhere]" title={g.name}>{shortModelName(g.name)}</span>
                           {/* Routes the platform holds a key for that the key
                               does not name. One press each way, because this is
                               the difference between a model being unreachable
