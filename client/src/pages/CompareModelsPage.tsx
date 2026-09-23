@@ -112,7 +112,9 @@ type Metric = 'intelligenceIndex' | 'codingIndex' | 'agenticIndex'
 /** What the chart plots. The three indices are one scale and can share an axis;
  *  cost is a different quantity in different units, so it gets its own view
  *  rather than a fourth bar nobody could compare against the others. */
-type ChartView = Metric | 'all' | 'costPerTask'
+type ChartView = Metric | 'all' | 'price'
+/** What the price view ranks on. Two different quantities, never blended. */
+type PriceBasis = 'task' | 'tokens'
 
 /**
  * Price, exactly as Artificial Analysis publishes it: USD per 1M input tokens
@@ -120,12 +122,12 @@ type ChartView = Metric | 'all' | 'costPerTask'
  *
  * Three things were tried here before this and every one of them was arithmetic
  * of ours laid over their data — a task size invented in this file, their 3:1
- * blend applied by us, then their measured cost-per-task (their number, but
- * answering a different question). The page shows what they give: two prices,
- * unblended, in the units they state.
+ * blend applied by us, then their measured cost-per-task passed off as a price.
+ * The token view shows what they give: two prices, unblended, in the units they
+ * state, ranked on input with output as the tie-break.
  *
- * Ranked on input price with output as the tie-break. That is an ordering
- * choice, not a derived figure: no number on screen is computed.
+ * Their cost-per-task is back as a SEPARATE basis the reader picks, labelled
+ * as what it is (see the task basis in valueOf), rather than standing in for a price.
  *
  * Null on BOTH halves means unpriced, which is not free. Zero on both is free,
  * and that is a real answer.
@@ -136,9 +138,9 @@ function priceOf(a: CompareGroup['analysis']): { input: number; output: number }
   return { input: a.price1mInput ?? 0, output: a.price1mOutput ?? 0 }
 }
 
-function costPerTask(a: CompareGroup['analysis']): number | null {
-  const p = priceOf(a)
-  return p ? p.input : null
+function formatTaskCost(v: number, freeLabel: string): string {
+  if (v === 0) return freeLabel
+  return v < 0.01 ? '<$0.01' : `$${v.toFixed(2)}`
 }
 
 interface ProxyUpgrade {
@@ -270,7 +272,7 @@ const OVERLAY: { key: Metric; labelKey: string; bar: string }[] = [
 const CHART_VIEWS: { key: ChartView; labelKey: string }[] = [
   ...METRICS,
   { key: 'all', labelKey: 'compare.chartAll' },
-  { key: 'costPerTask', labelKey: 'compare.chartCost' },
+  { key: 'price', labelKey: 'compare.chartCost' },
 ]
 
 export default function CompareModelsPage() {
@@ -279,6 +281,7 @@ export default function CompareModelsPage() {
   const [keyDraft, setKeyDraft] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [metric, setMetric] = useState<ChartView>('intelligenceIndex')
+  const [priceBasis, setPriceBasis] = useState<PriceBasis>('task')
   // What "available" means, said out loud. The page used to offer one toggle
   // between "in a chain" and "switched on", and neither answers the question
   // that decides whether a model can serve at all: do we hold a key for its
@@ -468,12 +471,12 @@ export default function CompareModelsPage() {
     return slugs
   }, [grouped, fleetModelIds])
 
-  const RESET = { metric: 'intelligenceIndex' as ChartView, scope: 'routed' as Scope,
+  const RESET = { metric: 'intelligenceIndex' as ChartView, priceBasis: 'task' as PriceBasis, scope: 'routed' as Scope,
                   sort: { key: 'intelligenceIndex' as SortKey, dir: 'desc' as const }, query: '' }
-  const dirty = metric !== RESET.metric || scope !== RESET.scope || query !== RESET.query
+  const dirty = metric !== RESET.metric || priceBasis !== RESET.priceBasis || scope !== RESET.scope || query !== RESET.query
     || sort.key !== RESET.sort.key || sort.dir !== RESET.sort.dir || selected.size > 0
   const resetAll = () => {
-    setMetric(RESET.metric); setScope(RESET.scope); setSort(RESET.sort)
+    setMetric(RESET.metric); setPriceBasis(RESET.priceBasis); setScope(RESET.scope); setSort(RESET.sort)
     setQuery(RESET.query); setSelected(new Set())
   }
   // Second click reverses; moving to a new column starts descending, except for
@@ -535,18 +538,23 @@ export default function CompareModelsPage() {
    * since the question there is "what can I afford", not "what is biggest".
    */
   const valueOf = useMemo(() => (g: CompareGroup): number | null => {
-    if (metric === 'costPerTask') return costPerTask(g.analysis)
+    // Task basis: what Artificial Analysis measured it cost to run ONE task of
+    // their Intelligence Index on this model, unmodified. It answers "what does
+    // a typical task cost here", which a token price cannot, because it already
+    // includes how many tokens the model spends thinking. It is not a price for
+    // your task, and null means AA has not run it, which is not free.
+    if (metric === 'price') return priceBasis === 'task' ? g.analysis?.indexCostPerTask ?? null : priceOf(g.analysis)?.input ?? null
     if (metric === 'all') {
       const parts = OVERLAY.map(o => g.analysis?.[o.key]).filter((v): v is number => v != null)
       return parts.length > 0 ? parts.reduce((a, b) => a + b, 0) / parts.length : null
     }
     return (g.analysis?.[metric] as number | null) ?? null
-  }, [metric])
+  }, [metric, priceBasis])
 
   const scored = useMemo(
     () => comparing
       .filter(g => valueOf(g) != null)
-      .sort((a, b) => metric === 'costPerTask'
+      .sort((a, b) => metric === 'price'
         ? (valueOf(a) as number) - (valueOf(b) as number)
         : (valueOf(b) as number) - (valueOf(a) as number)),
     [comparing, metric, valueOf],
@@ -560,7 +568,7 @@ export default function CompareModelsPage() {
       // Both halves share one axis, so the dearer output price sets the scale —
       // otherwise every output bar clips at full width and the comparison the
       // two bars exist for disappears.
-      if (metric === 'costPerTask') {
+      if (metric === 'price' && priceBasis === 'tokens') {
         const p = priceOf(g.analysis)
         return p ? Math.max(p.input, p.output) : 0
       }
@@ -729,6 +737,23 @@ export default function CompareModelsPage() {
                     {t(m.labelKey)}
                   </button>
                 ))}
+                {/* Only while the price view is open: the two bases are
+                    different quantities, so the switch belongs to that view. */}
+                {metric === 'price' && (
+                  <span className="ml-1 inline-flex rounded-full border p-0.5" role="group" aria-label={t('compare.priceBasisAria')}>
+                    {(['task', 'tokens'] as const).map(b => (
+                      <button
+                        key={b}
+                        type="button"
+                        onClick={() => setPriceBasis(b)}
+                        aria-pressed={priceBasis === b}
+                        className={`rounded-full px-2 py-0.5 text-[11px] ${priceBasis === b ? 'bg-muted' : 'hover:bg-muted/50'}`}
+                      >
+                        {t(b === 'task' ? 'compare.priceBasisTask' : 'compare.priceBasisTokens')}
+                      </button>
+                    ))}
+                  </span>
+                )}
                 <span className="ml-2">
                   <ModelCombobox
                     value=""
@@ -847,7 +872,7 @@ export default function CompareModelsPage() {
                     {/* Scaled to the largest value on screen, not to 100: the
                         indices are not percentages and the gap between the top
                         few is what a reader is looking for. */}
-                    {metric === 'costPerTask' ? (
+                    {metric === 'price' && priceBasis === 'tokens' ? (
                       // Input and output as published, never combined: output
                       // runs several times input on most models, and any single
                       // figure hides which half a given workload actually pays.
@@ -900,20 +925,22 @@ export default function CompareModelsPage() {
                               ? 'opacity-60 bg-[repeating-linear-gradient(45deg,rgba(16,185,129,0.75),rgba(16,185,129,0.75)_3px,rgba(16,185,129,0.15)_3px,rgba(16,185,129,0.15)_7px)]'
                               : ''
                           }`}
-                          style={{ width: peak > 0 ? `${Math.max((value / peak) * 100, 2)}%` : '2%' }}
+                          style={{ width: peak > 0 ? `${Math.max((value / peak) * 100, metric === 'price' && value === 0 ? 0 : 2)}%` : '2%' }}
                         />
                       </div>
                     )}
                     <span className="w-16 flex-shrink-0 text-right tabular-nums">
-                      {metric === 'costPerTask'
+                      {metric === 'price'
                         // Free is a result, not a blank: most of this catalogue
                         // costs nothing and that is the finding.
-                        ? (() => {
-                          const p = priceOf(g.analysis)!
-                          return p.input === 0 && p.output === 0
-                            ? t('compare.costFree')
-                            : `$${p.input.toFixed(2)}/$${p.output.toFixed(2)}`
-                        })()
+                        ? priceBasis === 'task'
+                          ? formatTaskCost(value, t('compare.costFree'))
+                          : (() => {
+                            const p = priceOf(g.analysis)!
+                            return p.input === 0 && p.output === 0
+                              ? t('compare.costFree')
+                              : `$${p.input.toFixed(2)}/$${p.output.toFixed(2)}`
+                          })()
                         : value.toFixed(1)}
                     </span>
                   </li>
@@ -930,15 +957,19 @@ export default function CompareModelsPage() {
                 ))}
               </p>
             )}
-            {metric === 'costPerTask' && (
+            {metric === 'price' && (
               <p className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-muted-foreground">
-                <span className="inline-flex items-center gap-1">
-                  <span className="inline-block h-2 w-3 rounded-sm bg-sky-500/70" />{t('compare.priceInput')}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="inline-block h-2 w-3 rounded-sm bg-rose-500/70" />{t('compare.priceOutput')}
-                </span>
-                <span>{t('compare.costBasis')}</span>
+                {priceBasis === 'tokens' && (
+                  <>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="inline-block h-2 w-3 rounded-sm bg-sky-500/70" />{t('compare.priceInput')}
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="inline-block h-2 w-3 rounded-sm bg-rose-500/70" />{t('compare.priceOutput')}
+                    </span>
+                  </>
+                )}
+                <span>{t(priceBasis === 'task' ? 'compare.costBasisTask' : 'compare.costBasis')}</span>
               </p>
             )}
             {unscored.length > 0 && (

@@ -502,6 +502,10 @@
     "chartCost": "Price",
     "costFree": "free",
     "costBasis": "USD per 1M tokens exactly as Artificial Analysis publishes them — unblended, sorted by input price.",
+    "costBasisTask": "USD Artificial Analysis measured to run one task of its Intelligence Index, cheapest first. Covers only the models AA has run it on.",
+    "priceBasisAria": "Price basis",
+    "priceBasisTask": "Per task",
+    "priceBasisTokens": "Per 1M tokens",
     "priceInput": "Input / 1M",
     "priceOutput": "Output / 1M",
     "fleet": {

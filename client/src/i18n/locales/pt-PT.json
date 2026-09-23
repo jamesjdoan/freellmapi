@@ -1479,7 +1479,11 @@
     "scopeClifree": "CLI fleet",
     "scopeClifreeHint": "Routes a free CLI agent can actually drive, as reported by your machines. Not a platform filter: a catalogue route no machine reports is excluded, and Cline's free models appear only in the fleet table below — FreeLLM cannot call them.",
     "reset": "Reset",
-    "resetHint": "Back to defaults: intelligence chart, routed scope, no search, nothing pinned."
+    "resetHint": "Back to defaults: intelligence chart, routed scope, no search, nothing pinned.",
+    "costBasisTask": "USD Artificial Analysis measured to run one task of its Intelligence Index, cheapest first. Covers only the models AA has run it on.",
+    "priceBasisAria": "Price basis",
+    "priceBasisTask": "Per task",
+    "priceBasisTokens": "Per 1M tokens"
   },
   "catalogue": {
     "changesTitle": "Catalogue changes",
