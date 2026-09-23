@@ -36,10 +36,13 @@ export type FleetRoute = {
   benchmarkSlug: string | null;
 };
 
-/** One route's lifetime consumption, as the reporting machine last read it
- *  from the agent's own store. Totals, never deltas — see the migration. */
+/** One route's consumption on one UTC day, as the reporting machine last read
+ *  it from the agent's own store. Each delivery carries the machine's FULL
+ *  history in these buckets — never deltas. See the per-day migration. */
 export type FleetUsage = {
   spec: string;
+  /** UTC calendar day, YYYY-MM-DD. */
+  day: string;
   requests: number;
   inputTokens: number;
   outputTokens: number;
@@ -56,7 +59,11 @@ export type FleetDelivery = {
   /** Empty from a reporter that predates usage reporting, which is a machine
    *  with no usage on record rather than a malformed delivery. */
   usage: FleetUsage[];
+  /** Why a delivery's usage was set aside while its roster was kept, or null. */
+  usageIgnored: string | null;
 };
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const REACHABILITY: Record<string, true> = { ok: true, fail: true, notools: true, unprobed: true };
 
 /** Thrown for a malformed delivery. The caller maps this to a 400. */
@@ -113,30 +120,42 @@ export function parseDelivery(body: unknown): FleetDelivery {
   // Usage is optional: an older reporter sends none, and refusing its roster
   // over a field it cannot know about would blind the panel to that machine
   // entirely. A present `usage` must still be well formed.
-  const usage: FleetUsage[] = !('usage' in b) || b.usage == null ? [] : (() => {
+  //
+  // Undated usage is a LIFETIME total from a reporter that predates per-day
+  // buckets. It is set aside, not folded into one day: filing a machine's whole
+  // history under today would inflate every window that includes today.
+  let usageIgnored: string | null = null;
+  const rawUsage: unknown[] = !('usage' in b) || b.usage == null ? [] : (() => {
     if (!Array.isArray(b.usage)) throw new FleetDeliveryError('usage must be an array');
-    return b.usage.map((raw, i) => {
-      if (typeof raw !== 'object' || raw === null) throw new FleetDeliveryError(`usage[${i}] must be an object`);
-      const u = raw as Record<string, unknown>;
-      const spec = typeof u.spec === 'string' ? u.spec.trim() : '';
-      if (!spec.includes(':')) {
-        throw new FleetDeliveryError(`usage[${i}].spec must be provider:id, got ${JSON.stringify(u.spec)}`);
-      }
-      // Counters floor at zero rather than throwing: a negative total is
-      // nonsense the reporter should never send, and dropping the machine's
-      // whole delivery over one is worse than recording it as no usage.
-      const count = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
-      return {
-        spec,
-        requests: Math.trunc(count(u.requests)),
-        inputTokens: Math.trunc(count(u.inputTokens)),
-        outputTokens: Math.trunc(count(u.outputTokens)),
-        reportedCostUsd: count(u.reportedCostUsd),
-      };
-    });
+    return b.usage;
   })();
+  const undated = rawUsage.some(raw => typeof raw === 'object' && raw !== null && !('day' in raw));
+  if (undated) usageIgnored = 'usage without `day` is lifetime totals from an older reporter; update clifree-report.sh';
+  const usage: FleetUsage[] = undated ? [] : rawUsage.map((raw, i) => {
+    if (typeof raw !== 'object' || raw === null) throw new FleetDeliveryError(`usage[${i}] must be an object`);
+    const u = raw as Record<string, unknown>;
+    const spec = typeof u.spec === 'string' ? u.spec.trim() : '';
+    if (!spec.includes(':')) {
+      throw new FleetDeliveryError(`usage[${i}].spec must be provider:id, got ${JSON.stringify(u.spec)}`);
+    }
+    if (typeof u.day !== 'string' || !DAY.test(u.day)) {
+      throw new FleetDeliveryError(`usage[${i}].day must be YYYY-MM-DD, got ${JSON.stringify(u.day)}`);
+    }
+    // Counters floor at zero rather than throwing: a negative total is
+    // nonsense the reporter should never send, and dropping the machine's
+    // whole delivery over one is worse than recording it as no usage.
+    const count = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
+    return {
+      spec,
+      day: u.day,
+      requests: Math.trunc(count(u.requests)),
+      inputTokens: Math.trunc(count(u.inputTokens)),
+      outputTokens: Math.trunc(count(u.outputTokens)),
+      reportedCostUsd: count(u.reportedCostUsd),
+    };
+  });
 
-  return { machine, observedAtMs, routes, usage };
+  return { machine, observedAtMs, routes, usage, usageIgnored };
 }
 
 /**
@@ -161,10 +180,17 @@ export function recordDelivery(db: Db, delivery: FleetDelivery): number {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const delUsage = db.prepare('DELETE FROM clifree_fleet_usage WHERE machine = ?');
+  // A delivery naming the same (spec, day) twice is summed, not a constraint
+  // failure: one malformed bucket must not throw away the machine's roster.
   const insUsage = db.prepare(`
     INSERT INTO clifree_fleet_usage
-      (machine, spec, provider, requests, input_tokens, output_tokens, reported_cost_usd, observed_at_ms)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      (machine, spec, provider, day, requests, input_tokens, output_tokens, reported_cost_usd, observed_at_ms)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(machine, spec, day) DO UPDATE SET
+      requests = requests + excluded.requests,
+      input_tokens = input_tokens + excluded.input_tokens,
+      output_tokens = output_tokens + excluded.output_tokens,
+      reported_cost_usd = reported_cost_usd + excluded.reported_cost_usd
   `);
 
   const run = db.transaction((d: FleetDelivery) => {
@@ -188,7 +214,7 @@ export function recordDelivery(db: Db, delivery: FleetDelivery): number {
       for (const u of d.usage) {
         const provider = u.spec.slice(0, u.spec.indexOf(':'));
         insUsage.run(
-          d.machine, u.spec, provider, u.requests, u.inputTokens,
+          d.machine, u.spec, provider, u.day, u.requests, u.inputTokens,
           u.outputTokens, u.reportedCostUsd, d.observedAtMs,
         );
       }
@@ -327,9 +353,27 @@ export function getFleetGroups(db: Db): CompareGroup[] {
   });
 }
 
+/**
+ * Dashboard device for a fleet machine's `hostname -s`.
+ *
+ * The Analytics page tabs by device, and `deviceSql` in routes/analytics.ts
+ * derives it from the proxy's user agent (`omp-mbp…`, `omp-studio…`). Fleet
+ * rows carry a hostname instead, so the two must land on the SAME labels or a
+ * device tab would show one machine's proxy traffic beside another's CLI work.
+ */
+export function fleetDevice(machine: string): string {
+  if (/macbook-?pro/i.test(machine)) return 'MacBook Pro';
+  if (/mac-?studio/i.test(machine)) return 'Mac Studio';
+  return machine;
+}
+
 /** One machine's consumption and what that inference was worth. */
 export type FleetValueRow = {
   machine: string;
+  /** Dashboard device label — see fleetDevice. */
+  device: string;
+  /** The machine's last delivery, from its snapshot rows; null if it never sent one. */
+  reportedAtMs: number | null;
   requests: number;
   inputTokens: number;
   outputTokens: number;
@@ -351,29 +395,34 @@ export type FleetValueRow = {
   reportedCostUsd: number;
 };
 
-/**
- * Per-machine usage priced at the benchmark equivalent's published rates.
- *
- * The price comes from `aa_model`, the same source the comparison table reads,
- * reached through the route's `benchmark_slug` and honouring an operator's
- * link override exactly as `getFleetGroups` does — otherwise remapping a route
- * on the panel would silently leave its value computed against the old model.
- */
-export function listFleetValue(db: Db): FleetValueRow[] {
-  const usage = db.prepare(`
-    SELECT machine, spec, requests,
-           input_tokens AS inputTokens, output_tokens AS outputTokens,
-           reported_cost_usd AS reportedCostUsd
-      FROM clifree_fleet_usage
-  `).all() as {
-    machine: string; spec: string; requests: number;
-    inputTokens: number; outputTokens: number; reportedCostUsd: number;
-  }[];
-  if (usage.length === 0) return [];
+/** One route on one machine over the window, with the quality of the model. */
+export type FleetUsageRow = {
+  machine: string;
+  device: string;
+  spec: string;
+  provider: string;
+  /** From the machine's current roster; null once the route has left it. */
+  class: string | null;
+  intelligence: number | null;
+  benchmarkSlug: string | null;
+  requests: number;
+  inputTokens: number;
+  outputTokens: number;
+  valueUsd: number | null;
+  reportedCostUsd: number;
+};
 
-  // Which benchmark each spec resolves to. Grouped rather than per machine:
-  // the benchmark is a property of the model, identical on every machine that
-  // can reach it.
+type Rate = { input: number; output: number };
+
+/**
+ * Spec -> benchmark slug and published rate, resolved the way the comparison
+ * table resolves it: the route's `benchmark_slug`, overridden by an operator
+ * link. Otherwise remapping a route on the panel would silently leave its value
+ * computed against the old model.
+ */
+function makePricer(db: Db): { slugBySpec: Map<string, string | null>; rateFor: (spec: string) => Rate | null } {
+  // Grouped rather than per machine: the benchmark is a property of the
+  // model, identical on every machine that can reach it.
   const slugBySpec = new Map<string, string | null>();
   for (const r of db.prepare(
     'SELECT spec, benchmark_slug AS slug FROM clifree_fleet_snapshot GROUP BY spec, benchmark_slug',
@@ -384,8 +433,9 @@ export function listFleetValue(db: Db): FleetValueRow[] {
   for (const spec of Object.keys(links)) slugBySpec.set(spec, links[spec]);
 
   // One lookup per distinct benchmark, not per usage row.
-  const priced = new Map<string, { input: number; output: number } | null>();
-  const rateFor = (slug: string | null | undefined): { input: number; output: number } | null => {
+  const priced = new Map<string, Rate | null>();
+  const rateFor = (spec: string): Rate | null => {
+    const slug = slugBySpec.get(spec);
     if (!slug) return null;
     const cached = priced.get(slug);
     if (cached !== undefined) return cached;
@@ -398,13 +448,53 @@ export function listFleetValue(db: Db): FleetValueRow[] {
     priced.set(slug, rate);
     return rate;
   };
+  return { slugBySpec, rateFor };
+}
+
+/** Usage summed per (machine, spec) from `sinceDay` (YYYY-MM-DD, inclusive). */
+function readUsage(db: Db, sinceDay: string) {
+  return db.prepare(`
+    SELECT machine, spec, provider,
+           SUM(requests) AS requests,
+           SUM(input_tokens) AS inputTokens, SUM(output_tokens) AS outputTokens,
+           SUM(reported_cost_usd) AS reportedCostUsd
+      FROM clifree_fleet_usage
+     WHERE day >= ?
+     GROUP BY machine, spec, provider
+  `).all(sinceDay) as {
+    machine: string; spec: string; provider: string; requests: number;
+    inputTokens: number; outputTokens: number; reportedCostUsd: number;
+  }[];
+}
+
+/**
+ * Per-machine usage over the window, priced at the benchmark equivalent's
+ * published rates.
+ *
+ * `sinceDay` is a UTC calendar day, so the window is day-granular: "24h" on the
+ * page includes all of yesterday's bucket. The proxy's own figures are exact to
+ * the second; the fleet's cannot be finer than the buckets the reporter sends.
+ * Omitted, it covers all history.
+ */
+export function listFleetValue(db: Db, sinceDay = '0000-00-00'): FleetValueRow[] {
+  const usage = readUsage(db, sinceDay);
+  if (usage.length === 0) return [];
+  const { rateFor } = makePricer(db);
+  const reportedAt = new Map<string, number>();
+  for (const r of db.prepare(
+    'SELECT machine, MAX(observed_at_ms) AS at FROM clifree_fleet_snapshot GROUP BY machine',
+  ).all() as { machine: string; at: number }[]) {
+    reportedAt.set(r.machine, r.at);
+  }
 
   const byMachine = new Map<string, FleetValueRow & { anyPriced: boolean }>();
   for (const u of usage) {
     let row = byMachine.get(u.machine);
     if (!row) {
       row = {
-        machine: u.machine, requests: 0, inputTokens: 0, outputTokens: 0,
+        machine: u.machine, device: fleetDevice(u.machine),
+        reportedAtMs: reportedAt.get(u.machine) ?? null,
+        requests: 0, inputTokens: 0, outputTokens: 0,
         valueUsd: 0, unpricedSpecs: 0, reportedCostUsd: 0, anyPriced: false,
       };
       byMachine.set(u.machine, row);
@@ -414,7 +504,7 @@ export function listFleetValue(db: Db): FleetValueRow[] {
     row.outputTokens += u.outputTokens;
     row.reportedCostUsd += u.reportedCostUsd;
 
-    const rate = rateFor(slugBySpec.get(u.spec));
+    const rate = rateFor(u.spec);
     if (!rate) {
       row.unpricedSpecs += 1;
       continue;
@@ -432,4 +522,42 @@ export function listFleetValue(db: Db): FleetValueRow[] {
       reportedCostUsd: Math.round(row.reportedCostUsd * 100) / 100,
     }))
     .sort((a, b) => a.machine.localeCompare(b.machine));
+}
+
+/**
+ * Per-route usage over the window, with the class and AA score the machine's
+ * roster currently gives that route — "which models did the work, and how good
+ * are they". Most input tokens first, the order an operator scans in. Value is
+ * kept to four places: a single delegation is often worth under a cent, and
+ * rounding it to $0.00 would read as worthless.
+ */
+export function listFleetUsage(db: Db, sinceDay = '0000-00-00'): FleetUsageRow[] {
+  const usage = readUsage(db, sinceDay);
+  if (usage.length === 0) return [];
+  const { slugBySpec, rateFor } = makePricer(db);
+  const quality = db.prepare(
+    'SELECT class, intelligence FROM clifree_fleet_snapshot WHERE machine = ? AND spec = ?',
+  );
+  return usage
+    .map(u => {
+      const q = quality.get(u.machine, u.spec) as { class: string | null; intelligence: number | null } | undefined;
+      const rate = rateFor(u.spec);
+      return {
+        machine: u.machine,
+        device: fleetDevice(u.machine),
+        spec: u.spec,
+        provider: u.provider,
+        class: q?.class ?? null,
+        intelligence: q?.intelligence ?? null,
+        benchmarkSlug: slugBySpec.get(u.spec) ?? null,
+        requests: u.requests,
+        inputTokens: u.inputTokens,
+        outputTokens: u.outputTokens,
+        valueUsd: rate
+          ? Math.round((u.inputTokens * rate.input + u.outputTokens * rate.output) / 1_000_000 * 10_000) / 10_000
+          : null,
+        reportedCostUsd: Math.round(u.reportedCostUsd * 100) / 100,
+      };
+    })
+    .sort((a, b) => b.inputTokens - a.inputTokens || a.spec.localeCompare(b.spec));
 }

@@ -38,8 +38,9 @@ const ENDPOINT_ID_SQL = "COALESCE(rtrim(trim(k.base_url), '/'), '')";
 const toSqliteDateTime = (timestamp: number) =>
     new Date(timestamp).toISOString().slice(0, 19).replace('T', ' ');
 
-// Return the rolling cutoff timestamp for the selected analytics range.
-function getSinceTimestamp(range: string): string {
+// Return the rolling cutoff timestamp (UTC) for the selected analytics range.
+// Exported so the CLI-fleet read windows by exactly the same ranges.
+export function getSinceTimestamp(range: string): string {
   const now = Date.now();
 
   switch (range) {

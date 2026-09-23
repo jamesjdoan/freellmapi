@@ -199,8 +199,9 @@ describe('clifree fleet value', () => {
     ).run(slug, slug, priceIn, priceOut);
   }
 
-  const usage = (spec: string, inputTokens: number, outputTokens: number, reportedCostUsd = 0) =>
-    ({ spec, requests: 1, inputTokens, outputTokens, reportedCostUsd });
+  const today = new Date().toISOString().slice(0, 10);
+  const usage = (spec: string, inputTokens: number, outputTokens: number, reportedCostUsd = 0, day = today) =>
+    ({ spec, day, requests: 1, inputTokens, outputTokens, reportedCostUsd });
 
   const valueFor = async (machine: string) => {
     const { body } = await call(app, 'GET', '/api/clifree-fleet', token);
@@ -320,9 +321,96 @@ describe('clifree fleet value', () => {
   it('rejects a usage row whose spec has no provider prefix', async () => {
     const res = await call(app, 'POST', '/api/clifree-fleet', token, {
       machine: 'studio', observedAtMs: Date.now(), routes: [],
-      usage: [{ spec: 'nocolon', requests: 1, inputTokens: 1, outputTokens: 1 }],
+      usage: [{ spec: 'nocolon', day: today, requests: 1, inputTokens: 1, outputTokens: 1 }],
     });
     expect(res.status).toBe(400);
     expect(ErrorResponse.parse(res.body).error).toMatch(/provider:id/);
+  });
+
+  it('rejects a malformed day rather than filing tokens under a date it cannot read', async () => {
+    const res = await call(app, 'POST', '/api/clifree-fleet', token, {
+      machine: 'studio', observedAtMs: Date.now(), routes: [],
+      usage: [{ ...usage('opencode:x-free', 1, 1), day: '23/09/2026' }],
+    });
+    expect(res.status).toBe(400);
+    expect(ErrorResponse.parse(res.body).error).toMatch(/YYYY-MM-DD/);
+  });
+
+  it('windows usage by the analytics range, and covers all history without one', async () => {
+    // The offloaded-inference card adds this to the proxy's own figures for ONE
+    // range. A bucket outside the window leaking in would overstate the total.
+    seedBenchmark('window-model', 1, 0);
+    const old = new Date(Date.now() - 100 * 86_400_000).toISOString().slice(0, 10);
+    await call(app, 'POST', '/api/clifree-fleet', token, {
+      machine: 'window-box', observedAtMs: Date.now(),
+      routes: [route('opencode:window-free', { benchmarkSlug: 'window-model' })],
+      usage: [usage('opencode:window-free', 1_000_000, 0), usage('opencode:window-free', 5_000_000, 0, 0, old)],
+    });
+
+    const inRange = await call(app, 'GET', '/api/clifree-fleet?range=30d', token);
+    const row30 = ValueResponse.parse(inRange.body).value.find(v => v.machine === 'window-box');
+    expect(row30?.inputTokens).toBe(1_000_000);
+    expect(row30?.valueUsd).toBe(1);
+    expect((await valueFor('window-box'))?.inputTokens).toBe(6_000_000);
+  });
+
+  it('sets undated lifetime totals aside instead of filing them under one day', async () => {
+    // An older reporter sends lifetime totals with no day. Folding them into
+    // today would inflate every window that includes today; they are ignored,
+    // the roster is still taken, and the machine's dated history survives.
+    seedBenchmark('lifetime-model', 1, 0);
+    await call(app, 'POST', '/api/clifree-fleet', token, {
+      machine: 'upgrading-box', observedAtMs: Date.now(),
+      routes: [route('opencode:life-free', { benchmarkSlug: 'lifetime-model' })],
+      usage: [usage('opencode:life-free', 1_000_000, 0)],
+    });
+
+    const res = await call(app, 'POST', '/api/clifree-fleet', token, {
+      machine: 'upgrading-box', observedAtMs: Date.now() + 1,
+      routes: [route('opencode:life-free', { benchmarkSlug: 'lifetime-model' })],
+      usage: [{ spec: 'opencode:life-free', requests: 9, inputTokens: 9_000_000, outputTokens: 0 }],
+    });
+    expect(res.status).toBe(200);
+    expect(z.object({ usageIgnored: z.string() }).parse(res.body).usageIgnored).toMatch(/older reporter/);
+    expect((await valueFor('upgrading-box'))?.inputTokens).toBe(1_000_000);
+  });
+
+  it('maps each machine to the device the Analytics tabs use', async () => {
+    // The proxy's device comes from its user agent; the fleet's from a hostname.
+    // Both must land on one label or a tab mixes two machines.
+    const Device = z.object({ value: z.array(z.object({ machine: z.string(), device: z.string() })) });
+    for (const machine of ['Jamess-MacBook-Pro', 'Mac-Studio-2']) {
+      await call(app, 'POST', '/api/clifree-fleet', token, {
+        machine, observedAtMs: Date.now(), routes: [],
+        usage: [usage('cline:vendor/dev:free', 10, 1)],
+      });
+    }
+    const { body } = await call(app, 'GET', '/api/clifree-fleet', token);
+    const device = (m: string) => Device.parse(body).value.find(v => v.machine === m)?.device;
+    expect(device('Jamess-MacBook-Pro')).toBe('MacBook Pro');
+    expect(device('Mac-Studio-2')).toBe('Mac Studio');
+  });
+
+  it('reports each route with the class and score its machine gives it, priced or not', async () => {
+    seedBenchmark('route-model', 2, 10);
+    await call(app, 'POST', '/api/clifree-fleet', token, {
+      machine: 'route-box', observedAtMs: Date.now(),
+      routes: [
+        route('opencode:good-free', { benchmarkSlug: 'route-model', class: 'sol-class', intelligence: 48.1 }),
+        route('cline:vendor/odd:free', { benchmarkSlug: null }),
+      ],
+      usage: [usage('opencode:good-free', 1_000, 100), usage('cline:vendor/odd:free', 50, 5)],
+    });
+    const Usage = z.object({ usage: z.array(z.object({
+      machine: z.string(), spec: z.string(), class: z.string().nullable(),
+      intelligence: z.number().nullable(), valueUsd: z.number().nullable(),
+    })) });
+    const { body } = await call(app, 'GET', '/api/clifree-fleet', token);
+    const rows = Usage.parse(body).usage.filter(u => u.machine === 'route-box');
+    const good = rows.find(r => r.spec === 'opencode:good-free');
+    expect(good).toMatchObject({ class: 'sol-class', intelligence: 48.1 });
+    // 1,000 × $2/M + 100 × $10/M = $0.003 — kept to four places, not rounded to $0.00.
+    expect(good?.valueUsd).toBe(0.003);
+    expect(rows.find(r => r.spec === 'cline:vendor/odd:free')?.valueUsd).toBeNull();
   });
 });

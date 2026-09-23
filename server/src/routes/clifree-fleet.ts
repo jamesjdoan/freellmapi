@@ -24,11 +24,13 @@ import { getDb, getUnifiedApiKey } from '../db/index.js';
 import { timingSafeStringEqual } from '../lib/system-prompt.js';
 import { isExtensionEnabled } from '../services/extension-state.js';
 import { validateSession } from '../services/auth.js';
+import { getSinceTimestamp } from './analytics.js';
 import {
   parseDelivery,
   recordDelivery,
   listFleet,
   listFleetValue,
+  listFleetUsage,
   getFleetGroups,
   setFleetLink,
   FleetDeliveryError,
@@ -85,8 +87,12 @@ clifreeFleetRouter.post('/', (req: Request, res: Response) => {
     const delivery = parseDelivery(req.body);
     const stored = recordDelivery(getDb(), delivery);
     // `usage` echoes what the reporter sent, so a machine wired up for the
-    // first time can tell "delivered with no usage" from "usage delivered".
-    res.json({ machine: delivery.machine, routes: stored, usage: delivery.usage.length });
+    // first time can tell "delivered with no usage" from "usage delivered";
+    // `usageIgnored` says why dated-less usage from an old reporter was kept out.
+    res.json({
+      machine: delivery.machine, routes: stored,
+      usage: delivery.usage.length, usageIgnored: delivery.usageIgnored,
+    });
   } catch (err) {
     if (err instanceof FleetDeliveryError) {
       res.status(400).json({ error: err.message });
@@ -96,21 +102,33 @@ clifreeFleetRouter.post('/', (req: Request, res: Response) => {
   }
 });
 
-clifreeFleetRouter.get('/', (_req: Request, res: Response) => {
+clifreeFleetRouter.get('/', (req: Request, res: Response) => {
   if (!isExtensionEnabled(EXTENSION_ID)) {
     // Rows are retained when the extension is off, so this reports "no fleet"
     // rather than 404: the panel is hidden by the client, and a reader hitting
     // the API directly should see an empty fleet, not a missing endpoint.
-    res.json({ routes: [], groups: [], value: [] });
+    res.json({ routes: [], groups: [], value: [], usage: [] });
     return;
   }
   const db = getDb();
+  // `?range=` uses the Analytics ranges so the offloaded-inference card can add
+  // the fleet to the proxy's own figures for one window. Usage is bucketed by
+  // UTC day, so the window starts at the start of the cutoff's day. Absent, the
+  // read covers all history — what the Compare page has always shown.
+  const sinceDay = typeof req.query.range === 'string'
+    ? getSinceTimestamp(req.query.range).slice(0, 10)
+    : undefined;
   // `groups` carries the same routes shaped as comparison entries, so the page
   // can rank and plot them beside the catalogue without a second request or a
   // client-side join it would have to keep in step with the server's shape.
-  // `value` is per MACHINE, not per route: the question it answers is "what
-  // was this machine given", which no per-row figure states.
-  res.json({ routes: listFleet(db), groups: getFleetGroups(db), value: listFleetValue(db) });
+  // `value` is per MACHINE ("what was this machine given"); `usage` is per
+  // route on a machine ("which models did the work, and how good are they").
+  res.json({
+    routes: listFleet(db),
+    groups: getFleetGroups(db),
+    value: listFleetValue(db, sinceDay),
+    usage: listFleetUsage(db, sinceDay),
+  });
 });
 
 /**

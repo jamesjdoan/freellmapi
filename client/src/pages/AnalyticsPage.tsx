@@ -39,6 +39,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { PlatformDot } from '@/components/platform-dot'
 import { Tooltip as HoverTooltip } from '@/components/tooltip'
 import { SortableHeader } from '@/components/sortable-header'
+import { OffloadedInference } from '@/components/offloaded-inference'
 import { formatSqliteUtcToLocalTime } from '@/lib/utils'
 import { sortRows, useTableSort, type SortValueFn } from '@/lib/table-sort'
 import { categoryAxisProps, verticalCategoryAxisProps } from '@/lib/chart-axis'
@@ -1101,6 +1102,20 @@ export default function AnalyticsPage() {
             </>
           )}
         </div>
+
+        {/* Everything moved off the subscription for this range and device:
+            the proxy's own traffic plus the free CLI fleet, priced alike. */}
+        <OffloadedInference
+          range={range}
+          device={scope}
+          now={now}
+          proxy={summary && {
+            requests: summary.totalRequests,
+            inputTokens: summary.totalInputTokens,
+            outputTokens: summary.totalOutputTokens,
+            valueUsd: summary.estimatedCostSavings ?? 0,
+          }}
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="lg:col-span-2">

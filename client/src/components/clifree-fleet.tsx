@@ -60,12 +60,33 @@ export interface FleetGroup {
  *  not per route: "what was this machine given" is not a per-row question. */
 export interface FleetValue {
   machine: string
+  /** Dashboard device label, matching the Analytics device tabs. */
+  device: string
+  /** The machine's last delivery (epoch ms); null if it never sent a roster. */
+  reportedAtMs: number | null
   requests: number
   inputTokens: number
   outputTokens: number
   /** Null when nothing this machine used maps to a priced benchmark. */
   valueUsd: number | null
   unpricedSpecs: number
+  reportedCostUsd: number
+}
+
+/** One route on one machine over the window, with the model's quality. */
+export interface FleetUsageRow {
+  machine: string
+  device: string
+  spec: string
+  provider: string
+  /** From the machine's current roster; null once the route left it. */
+  class: string | null
+  intelligence: number | null
+  benchmarkSlug: string | null
+  requests: number
+  inputTokens: number
+  outputTokens: number
+  valueUsd: number | null
   reportedCostUsd: number
 }
 

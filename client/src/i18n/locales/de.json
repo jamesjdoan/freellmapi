@@ -933,7 +933,26 @@
     "device": "Device",
     "deviceAll": "All",
     "deviceCompare": "Compare",
-    "compareRequests": "Requests by device"
+    "compareRequests": "Requests by device",
+    "offload": {
+      "title": "Offloaded inference",
+      "valueHint": "Value = what the same tokens cost on the equivalent paid model. Not subscription money saved.",
+      "source": "Source",
+      "value": "Value",
+      "proxy": "FreeLLM proxy",
+      "fleetOn": "Free CLI fleet · {device}",
+      "reportedAt": "last report {when}",
+      "neverReported": "no roster reported",
+      "stale": "stale",
+      "total": "Total",
+      "partial": "partial: some routes unpriced",
+      "unpriced": "unpriced",
+      "noFleet": "No CLI-fleet usage reported for this range. Machines report via clifree-report.sh.",
+      "route": "Route",
+      "class": "Class",
+      "aa": "AA score",
+      "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days."
+    }
   },
   "logs": {
     "title": "Protokoll",

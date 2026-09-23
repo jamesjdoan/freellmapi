@@ -64,6 +64,7 @@ import * as renameAccessDenied from '../migrations/20260920_000001_rename_access
 import * as clifreeFleetSnapshot from '../migrations/20260922_000001_clifree_fleet_snapshot.js';
 import * as clifreeFleetBenchmarkSlug from '../migrations/20260922_000002_clifree_fleet_benchmark_slug.js';
 import * as clifreeFleetUsage from '../migrations/20260922_000003_clifree_fleet_usage.js';
+import * as clifreeFleetUsagePerDay from '../migrations/20260923_000001_clifree_fleet_usage_per_day.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -205,4 +206,5 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: '20260922_000001_clifree_fleet_snapshot.ts', module: clifreeFleetSnapshot },
   { filename: '20260922_000002_clifree_fleet_benchmark_slug.ts', module: clifreeFleetBenchmarkSlug },
   { filename: '20260922_000003_clifree_fleet_usage.ts', module: clifreeFleetUsage },
+  { filename: '20260923_000001_clifree_fleet_usage_per_day.ts', module: clifreeFleetUsagePerDay },
 ];

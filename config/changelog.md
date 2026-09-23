@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-09-23 — Offloaded-inference card on Analytics; CLI-fleet usage per UTC day, per device
+
+- Migration `20260923_000001_clifree_fleet_usage_per_day` (manifest `defaults.ts:209`): usage keyed
+  `(machine, spec, day)`. The lifetime table is renamed `clifree_fleet_usage_lifetime_archive`, not
+  dropped (0 rows in prod when checked). Deliveries with undated usage keep their roster and set the
+  usage aside (`usageIgnored`) instead of filing a lifetime total under one day.
+- `GET /api/clifree-fleet?range=` windows by the Analytics ranges. Per-machine `value` gains `device`
+  and `reportedAtMs`; new per-route `usage` carries class, AA score, benchmark and 4-place value.
+  `fleetDevice()` maps hostnames onto the same labels `deviceSql` gives the proxy.
+- `client/src/components/offloaded-inference.tsx` on the Analytics page: proxy + each machine + total,
+  per-route table, stale flag at 24h, observation-only line. Follows the range and device tabs.
+- Verified: `clifree-fleet.test.ts` 20/20 (15 kept, 5 new), `src/__tests__/db` + analytics routes
+  142 pass / 4 skipped, server and client `tsc` clean, `check:i18n` pass. Rendered on :3002 against a
+  backup of the live DB with the Studio's real snapshot and a SYNTHETIC MBP delivery: All
+  $248.95 = proxy $247.22 + MBP $0.08 + Studio $1.65; device tabs split correctly. **Not deployed.**
+- Two `react-refresh`/`purity` lint errors in `clifree-fleet.tsx` predate this change (same at HEAD).
+
 ## 2026-09-22 — free CLI fleet telemetry, shared combobox fixes, honest scopes
 
 - Added Cline to the free-CLI delegation path and built fleet telemetry for both agents.
