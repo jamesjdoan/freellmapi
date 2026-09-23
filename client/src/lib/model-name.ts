@@ -1,31 +1,42 @@
-// Benchmark names spell out their variant in full:
+// Benchmark names spell out their variant in a trailing parenthetical:
 //   "Claude Fable 5.1 (Adaptive Reasoning, Xhigh Effort, Default Fallback)"
-// In a table column the effort level is the only part that tells siblings
-// apart, and it sits at the end, where truncation cuts first.
+//   "GPT-5.2 (high)"
+//   "Qwen3.6 Max (Non-reasoning)"
+// In a table column the variant is what tells siblings apart, and it sits at
+// the end, where truncation cuts first. So every such name is split into the
+// base and a variant rendered subdued beside it.
 //
-// Only names carrying an "<level> Effort" part are split, into the base
-// "Claude Fable 5.1" and the variant "Xhigh". Parts that are the assumed
-// default for an effort variant are dropped. Anything else is an exception
-// and is kept: "Non-reasoning" is the reason the variant is not simply the
-// effort, because the catalogue lists both
-// "Claude Sonnet 5 (Adaptive Reasoning, High Effort)" and
-// "Claude Sonnet 5 (Non-reasoning, High Effort)".
+// The effort level leads the variant in one spelling, whether the source wrote
+// "Xhigh Effort" or "xhigh". Parts that are the assumed default are dropped.
+// Anything else is an exception and is kept: "Non-reasoning" survives because
+// the catalogue lists both "Claude Sonnet 5 (Adaptive Reasoning, High Effort)"
+// and "Claude Sonnet 5 (Non-reasoning, High Effort)".
 const ASSUMED: Record<string, true> = { 'adaptive reasoning': true, reasoning: true, 'default fallback': true }
+const LEVELS: Record<string, string> = { minimal: 'Minimal', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Xhigh', max: 'Max' }
 const VARIANT = /^(.*?)\s*\(([^()]*)\)\s*$/
 const EFFORT = /^(.+?)\s+effort$/i
 
 export interface ModelNameParts {
   base: string
-  /** Effort level plus any non-default parts, or null when the name is kept whole. */
+  /** Effort level first, then any non-default parts; null when nothing is left. */
   variant: string | null
+}
+
+function effortLevel(part: string): string | null {
+  const word = (EFFORT.exec(part)?.[1] ?? part).toLowerCase()
+  return LEVELS[word] ?? null
 }
 
 export function splitModelName(name: string): ModelNameParts {
   const m = VARIANT.exec(name)
-  if (!m) return { base: name, variant: null }
-  const parts = m[2].split(',').map(p => p.trim()).filter(Boolean)
-  const effort = parts.map(p => EFFORT.exec(p)).find(Boolean)
-  if (!effort) return { base: name, variant: null }
-  const kept = parts.filter(p => !EFFORT.test(p) && !ASSUMED[p.toLowerCase()])
-  return { base: m[1], variant: [effort[1], ...kept].join(' · ') }
+  if (!m || !m[1]) return { base: name, variant: null }
+  let level: string | null = null
+  const kept: string[] = []
+  for (const part of m[2].split(',').map(p => p.trim()).filter(Boolean)) {
+    const l = effortLevel(part)
+    if (l) level ??= l
+    else if (!ASSUMED[part.toLowerCase()]) kept.push(part)
+  }
+  const variant = [...(level ? [level] : []), ...kept].join(' · ')
+  return { base: m[1], variant: variant || null }
 }
