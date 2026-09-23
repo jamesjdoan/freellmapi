@@ -357,7 +357,8 @@ groq/qwen/qwen3.6-27b     share=0      div=1.000   rank 2->1   ← spreading cho
 ### The pool inventory
 
 `GET /api/quota/providers` carries `members[]` per pool — the routed models that
-spend it — rendered under the pool key in the Quota page's Provider Overview.
+spend it — rendered under the pool key in the Provider Overview, on Keys →
+Quota signals → Provider headroom and declared limits.
 Without it the panel reported `ollama::weekly 540/10000` and never said whether
 one overflow route or four chain heads were draining it, which is the fact that
 decides what to do about it. It is also where a shared allowance stops reading

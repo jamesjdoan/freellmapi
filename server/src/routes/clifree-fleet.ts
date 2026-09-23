@@ -28,6 +28,7 @@ import {
   parseDelivery,
   recordDelivery,
   listFleet,
+  listFleetValue,
   getFleetGroups,
   setFleetLink,
   FleetDeliveryError,
@@ -83,7 +84,9 @@ clifreeFleetRouter.post('/', (req: Request, res: Response) => {
   try {
     const delivery = parseDelivery(req.body);
     const stored = recordDelivery(getDb(), delivery);
-    res.json({ machine: delivery.machine, routes: stored });
+    // `usage` echoes what the reporter sent, so a machine wired up for the
+    // first time can tell "delivered with no usage" from "usage delivered".
+    res.json({ machine: delivery.machine, routes: stored, usage: delivery.usage.length });
   } catch (err) {
     if (err instanceof FleetDeliveryError) {
       res.status(400).json({ error: err.message });
@@ -98,14 +101,16 @@ clifreeFleetRouter.get('/', (_req: Request, res: Response) => {
     // Rows are retained when the extension is off, so this reports "no fleet"
     // rather than 404: the panel is hidden by the client, and a reader hitting
     // the API directly should see an empty fleet, not a missing endpoint.
-    res.json({ routes: [], groups: [] });
+    res.json({ routes: [], groups: [], value: [] });
     return;
   }
   const db = getDb();
   // `groups` carries the same routes shaped as comparison entries, so the page
   // can rank and plot them beside the catalogue without a second request or a
   // client-side join it would have to keep in step with the server's shape.
-  res.json({ routes: listFleet(db), groups: getFleetGroups(db) });
+  // `value` is per MACHINE, not per route: the question it answers is "what
+  // was this machine given", which no per-row figure states.
+  res.json({ routes: listFleet(db), groups: getFleetGroups(db), value: listFleetValue(db) });
 });
 
 /**

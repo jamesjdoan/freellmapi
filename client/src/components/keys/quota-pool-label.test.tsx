@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { poolLabel } from './QuotaPage'
+import { poolLabel } from './quota-limits-section'
 
 describe('provider overview column width', () => {
   it('drops the redundant platform prefix from the pool key', () => {

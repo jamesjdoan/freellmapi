@@ -13,6 +13,7 @@ import { apiFetch } from '@/lib/api'
 import { toast } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/i18n'
+import { QuotaBurnSection } from '@/components/quota-burn-section'
 import {
   advanceCursor,
   buildLogsQuery,
@@ -427,6 +428,16 @@ export default function LogsPage() {
           {t('logs.buffered', { count: entries.length, max: LOG_BUFFER_LIMIT })}
         </p>
       )}
+
+      {/* Quota discovery lives with the other run records rather than on a tab
+          of its own. Collapsed: a burn is a rare, deliberate experiment, and
+          the probe log beneath it is reference, not a feed to watch. */}
+      <details className="mt-6 overflow-hidden rounded-3xl border bg-card">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-medium">{t('quota.discoveryDisclosure')}</summary>
+        <div className="border-t p-4">
+          <QuotaBurnSection />
+        </div>
+      </details>
     </div>
   )
 }

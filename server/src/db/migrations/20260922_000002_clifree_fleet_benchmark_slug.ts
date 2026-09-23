@@ -20,7 +20,14 @@
 
 import type { Db } from '../types.js';
 
+// Guarded, because migrations are re-run against a live database rather than
+// only against a fresh one: catalog-sync replays the baseline set to rebuild
+// catalogue state, and a bare ALTER threw `duplicate column name` and aborted
+// the whole transaction — taking every later migration with it. The same guard
+// is why 000001 uses IF NOT EXISTS and aa_cost_per_task reads table_info first.
 export function up(db: Db): void {
+  const columns = db.prepare('PRAGMA table_info(clifree_fleet_snapshot)').all() as { name: string }[];
+  if (columns.some(c => c.name === 'benchmark_slug')) return;
   db.exec(`ALTER TABLE clifree_fleet_snapshot ADD COLUMN benchmark_slug TEXT`);
 }
 

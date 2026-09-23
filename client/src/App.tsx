@@ -40,7 +40,6 @@ import MediaDetailPage from '@/pages/MediaDetailPage'
 import EmbeddingDetailPage from '@/pages/EmbeddingDetailPage'
 import AnalyticsPage from '@/pages/AnalyticsPage'
 import CompareModelsPage from '@/pages/CompareModelsPage'
-import QuotaPage from '@/pages/QuotaPage'
 import LogsPage from '@/pages/LogsPage'
 import PremiumPage from '@/pages/PremiumPage'
 import NotFoundPage from '@/pages/NotFoundPage'
@@ -76,7 +75,6 @@ const navItems = [
   { to: '/models', labelKey: 'nav.models' },
   { to: '/keys', labelKey: 'nav.keys' },
   { to: '/analytics', labelKey: 'nav.analytics' },
-  { to: "/quota", labelKey: "nav.quota" },
   { to: '/premium', labelKey: 'nav.premium' },
 ]
 
@@ -519,7 +517,6 @@ function App() {
                       <Route path="/fallback" element={<Navigate to="/models/chat" replace />} />
                       <Route path="/analytics" element={<AnalyticsPage />} />
                       <Route path="/analytics/compare" element={<CompareModelsPage />} />
-                      <Route path="/quota" element={<QuotaPage />} />
                       <Route path="/logs" element={<LogsPage />} />
                       <Route path="/premium" element={<PremiumPage />} />
                       <Route path="/test" element={<Navigate to="/playground" replace />} />

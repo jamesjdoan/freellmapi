@@ -797,7 +797,8 @@
     "diagnosisCounts": "{ok} serving, {failing} failing",
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
-    "verdict_access_denied": "Access denied"
+    "verdict_access_denied": "Access denied",
+    "limitsDisclosure": "Provider headroom and declared limits"
   },
   "backups": {
     "title": "Sauvegardes",
@@ -1467,7 +1468,13 @@
       "legendBoth": "A model showing both marks is reachable from either agent.",
       "legendServed": "Marks with no CLI fleet badge: FreeLLM can serve it too, and an agent can also reach it.",
       "colRoutes": "Routes",
-      "coolingMinutes": "{minutes}m"
+      "coolingMinutes": "{minutes}m",
+      "valueDelivered": "${value} of inference",
+      "valueHint": "Market value of the inference this machine was given: the published per-million rates of each route's benchmark equivalent, applied to the tokens it actually consumed. Not what we paid, which is nothing.",
+      "valueUnknown": "value unknown",
+      "valueUnknownHint": "No route this machine used maps to a benchmark that publishes a price, so the inference cannot be valued. Unpriced is not the same as worthless.",
+      "valueUnpriced": "{count} unpriced",
+      "valueBilled": "billed ${cost}"
     },
     "scopeClifree": "CLI fleet",
     "scopeClifreeHint": "Routes a free CLI agent can actually drive, as reported by your machines. Not a platform filter: a catalogue route no machine reports is excluded, and Cline's free models appear only in the fleet table below — FreeLLM cannot call them.",
@@ -1685,7 +1692,8 @@
     "bindsFirstHint": "One allowance, measured over more than one window. This is the window with the least headroom, so it is the one that will refuse the next request.",
     "poolSummedMark": "summed",
     "poolSummedHint": "This total is the sum of the models below, each of which holds its own allowance — not a ceiling the provider stated.",
-    "inferredCount": "{count} estimated"
+    "inferredCount": "{count} estimated",
+    "discoveryDisclosure": "Quota discovery"
   },
   "extensions": {
     "reading": "Reading extension state…",

@@ -10,6 +10,7 @@ import { Plus, Download } from 'lucide-react'
 import { useI18n } from '@/i18n'
 import type { HealthData } from '@/components/keys/shared'
 import { QuotaSignalsSection } from '@/components/keys/quota-signals-section'
+import { QuotaLimitsSection } from '@/components/keys/quota-limits-section'
 import { UnifiedKeySection } from '@/components/keys/unified-key-section'
 import { ClientProfilesSection } from '@/components/keys/client-profiles-section'
 import { ProxySettingsSection } from '@/components/keys/proxy-settings-section'
@@ -22,6 +23,7 @@ import { ExportKeysDialog } from '@/components/keys/export-keys-dialog'
 import { AgentCompatibilitySection } from '@/components/keys/agent-compatibility-section'
 import { FreeCatalogCopyAction } from '@/components/keys/free-catalog-copy-action'
 import { freeCatalogProviders, providerKeyAccess } from '@/lib/model-scope-selection'
+import { useExtensionEnabled } from '@/lib/use-extension'
 import {
   formatFreeCatalogModels,
   type FreeCatalogScope,
@@ -42,10 +44,17 @@ export default function KeysPage() {
   const { t } = useI18n()
   const queryClient = useQueryClient()
   const [tab, setTab] = useState<KeysTab>('providers')
+  // `quota-capacity-dashboard` off: the overview and policy panels are hidden,
+  // which here means the whole Quota signals tab. Collection continues server-side.
+  const quotaDashboard = useExtensionEnabled('quota-capacity-dashboard')
   const [addOpen, setAddOpen] = useState(false)
   // Provider the Add key dialog opens preselected to, when the add flow was
   // entered from a checklist chip rather than the generic Add key button.
   const [addPlatform, setAddPlatform] = useState<Platform | ''>('')
+  // Null until the operator touches the disclosure: their click outranks the
+  // default, and reading the default straight into state would latch `false`
+  // from the query's empty first render.
+  const [limitsOpen, setLimitsOpen] = useState<boolean | null>(null)
   const [exportOpen, setExportOpen] = useState(false)
 
   const openAddKey = (platform: Platform | '' = '') => {
@@ -107,6 +116,16 @@ export default function KeysPage() {
     queryFn: () => apiFetch('/api/keys/quota-guidance'),
   })
 
+  // Same query the limits section runs, deduped by react-query — asked here
+  // only to decide whether that section is worth opening on arrival. Enabled
+  // with the tab so the Providers view does not pay for it.
+  const { data: policiesData } = useQuery<{ policies: unknown[] }>({
+    queryKey: ['quota', 'policies'],
+    queryFn: () => apiFetch('/api/quota/policies'),
+    enabled: quotaDashboard && tab === 'quotaSignals',
+  })
+  const hasPolicies = (policiesData?.policies ?? []).length > 0
+
   // Formatted on demand inside the copy click, so a 300-model export costs
   // nothing until it is asked for. `selected` is decided by what the usable
   // keys are scoped to serve, which is why the keys list feeds in here.
@@ -151,7 +170,7 @@ export default function KeysPage() {
             <SegmentedControl
               value={tab}
               onValueChange={setTab}
-              options={KEYS_TABS.map(tb => ({ value: tb.id, label: t(tb.labelKey) }))}
+              options={KEYS_TABS.filter(tb => quotaDashboard || tb.id !== 'quotaSignals').map(tb => ({ value: tb.id, label: t(tb.labelKey) }))}
               ariaLabel={t('keys.pageTitle')}
             />
           </>
@@ -171,8 +190,33 @@ export default function KeysPage() {
         {tab === 'anthropic' && <AnthropicSection />}
         {tab === 'agents' && <AgentCompatibilitySection />}
 
-        {tab === 'quotaSignals' && (
-          <QuotaSignalsSection states={healthData?.quotaStates ?? []} />
+        {tab === 'quotaSignals' && quotaDashboard && (
+          <>
+            <QuotaSignalsSection states={healthData?.quotaStates ?? []} />
+            {/* Collapsed by default, like the raw signals inside the section
+                above: the outlook already answers "how much is left and when
+                does it run out", and this is the detail behind it. It used to
+                be a Quota tab of its own, opening with every table expanded.
+
+                Open on arrival where the operator has DECLARED policies —
+                those exist only because someone wrote them for a provider that
+                reports nothing, so hiding them hides the one quota fact this
+                instance cannot rediscover on its own. A manual toggle wins
+                from then on, which is why the state is null until clicked
+                rather than initialised from a query that starts empty. */}
+            <details
+              className="overflow-hidden rounded-3xl border bg-card"
+              open={limitsOpen ?? hasPolicies}
+              onToggle={e => setLimitsOpen((e.currentTarget as HTMLDetailsElement).open)}
+            >
+              <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
+                {t('keys.limitsDisclosure')}
+              </summary>
+              <div className="border-t p-4">
+                <QuotaLimitsSection />
+              </div>
+            </details>
+          </>
         )}
 
         {tab === 'providers' && (

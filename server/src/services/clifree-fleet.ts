@@ -36,11 +36,26 @@ export type FleetRoute = {
   benchmarkSlug: string | null;
 };
 
+/** One route's lifetime consumption, as the reporting machine last read it
+ *  from the agent's own store. Totals, never deltas — see the migration. */
+export type FleetUsage = {
+  spec: string;
+  requests: number;
+  inputTokens: number;
+  outputTokens: number;
+  /** What the AGENT said it billed. Diagnostic only: a non-zero figure on a
+   *  free route means a free route charged money. Never a term in the value. */
+  reportedCostUsd: number;
+};
+
 export type FleetDelivery = {
   /** `hostname -s` on the reporting machine. */
   machine: string;
   observedAtMs: number;
   routes: FleetRoute[];
+  /** Empty from a reporter that predates usage reporting, which is a machine
+   *  with no usage on record rather than a malformed delivery. */
+  usage: FleetUsage[];
 };
 const REACHABILITY: Record<string, true> = { ok: true, fail: true, notools: true, unprobed: true };
 
@@ -95,7 +110,33 @@ export function parseDelivery(body: unknown): FleetDelivery {
     };
   });
 
-  return { machine, observedAtMs, routes };
+  // Usage is optional: an older reporter sends none, and refusing its roster
+  // over a field it cannot know about would blind the panel to that machine
+  // entirely. A present `usage` must still be well formed.
+  const usage: FleetUsage[] = !('usage' in b) || b.usage == null ? [] : (() => {
+    if (!Array.isArray(b.usage)) throw new FleetDeliveryError('usage must be an array');
+    return b.usage.map((raw, i) => {
+      if (typeof raw !== 'object' || raw === null) throw new FleetDeliveryError(`usage[${i}] must be an object`);
+      const u = raw as Record<string, unknown>;
+      const spec = typeof u.spec === 'string' ? u.spec.trim() : '';
+      if (!spec.includes(':')) {
+        throw new FleetDeliveryError(`usage[${i}].spec must be provider:id, got ${JSON.stringify(u.spec)}`);
+      }
+      // Counters floor at zero rather than throwing: a negative total is
+      // nonsense the reporter should never send, and dropping the machine's
+      // whole delivery over one is worse than recording it as no usage.
+      const count = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
+      return {
+        spec,
+        requests: Math.trunc(count(u.requests)),
+        inputTokens: Math.trunc(count(u.inputTokens)),
+        outputTokens: Math.trunc(count(u.outputTokens)),
+        reportedCostUsd: count(u.reportedCostUsd),
+      };
+    });
+  })();
+
+  return { machine, observedAtMs, routes, usage };
 }
 
 /**
@@ -119,6 +160,12 @@ export function recordDelivery(db: Db, delivery: FleetDelivery): number {
        reachability, cooling_until_ms, cooling_reason, observed_at_ms, benchmark_slug)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
+  const delUsage = db.prepare('DELETE FROM clifree_fleet_usage WHERE machine = ?');
+  const insUsage = db.prepare(`
+    INSERT INTO clifree_fleet_usage
+      (machine, spec, provider, requests, input_tokens, output_tokens, reported_cost_usd, observed_at_ms)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
 
   const run = db.transaction((d: FleetDelivery) => {
     del.run(d.machine);
@@ -130,6 +177,21 @@ export function recordDelivery(db: Db, delivery: FleetDelivery): number {
         d.machine, r.spec, provider, r.class, r.intelligence, r.matchQuality,
         r.reachability, r.coolingUntilMs, r.coolingReason, d.observedAtMs, r.benchmarkSlug,
       );
+    }
+
+    // Usage is replaced in the SAME transaction and only when the delivery
+    // carried some. A reporter that sends no usage leaves the machine's
+    // existing totals alone: it is reporting a roster, not asserting that the
+    // machine has never done any work.
+    if (d.usage.length > 0) {
+      delUsage.run(d.machine);
+      for (const u of d.usage) {
+        const provider = u.spec.slice(0, u.spec.indexOf(':'));
+        insUsage.run(
+          d.machine, u.spec, provider, u.requests, u.inputTokens,
+          u.outputTokens, u.reportedCostUsd, d.observedAtMs,
+        );
+      }
     }
     return d.routes.length;
   });
@@ -263,4 +325,111 @@ export function getFleetGroups(db: Db): CompareGroup[] {
       fleetSpecs: group.map(g => g.spec).sort(),
     };
   });
+}
+
+/** One machine's consumption and what that inference was worth. */
+export type FleetValueRow = {
+  machine: string;
+  requests: number;
+  inputTokens: number;
+  outputTokens: number;
+  /**
+   * USD market value of the inference this machine was given: the published
+   * per-million rates of the model each route is benchmarked against, applied
+   * to the tokens actually consumed.
+   *
+   * NOT what we paid, which is approximately nothing. `null` when no route on
+   * this machine maps to a benchmark that publishes a price — a dash, never a
+   * zero, because unpriced and worthless are different claims.
+   */
+  valueUsd: number | null;
+  /** Specs excluded from `valueUsd` for want of a published price. Shown so a
+   *  partial figure is never read as a complete one. */
+  unpricedSpecs: number;
+  /** What the agents said they billed. A free route billing money is an alarm;
+   *  it is reported beside the value and never summed into it. */
+  reportedCostUsd: number;
+};
+
+/**
+ * Per-machine usage priced at the benchmark equivalent's published rates.
+ *
+ * The price comes from `aa_model`, the same source the comparison table reads,
+ * reached through the route's `benchmark_slug` and honouring an operator's
+ * link override exactly as `getFleetGroups` does — otherwise remapping a route
+ * on the panel would silently leave its value computed against the old model.
+ */
+export function listFleetValue(db: Db): FleetValueRow[] {
+  const usage = db.prepare(`
+    SELECT machine, spec, requests,
+           input_tokens AS inputTokens, output_tokens AS outputTokens,
+           reported_cost_usd AS reportedCostUsd
+      FROM clifree_fleet_usage
+  `).all() as {
+    machine: string; spec: string; requests: number;
+    inputTokens: number; outputTokens: number; reportedCostUsd: number;
+  }[];
+  if (usage.length === 0) return [];
+
+  // Which benchmark each spec resolves to. Grouped rather than per machine:
+  // the benchmark is a property of the model, identical on every machine that
+  // can reach it.
+  const slugBySpec = new Map<string, string | null>();
+  for (const r of db.prepare(
+    'SELECT spec, benchmark_slug AS slug FROM clifree_fleet_snapshot GROUP BY spec, benchmark_slug',
+  ).all() as { spec: string; slug: string | null }[]) {
+    slugBySpec.set(r.spec, r.slug);
+  }
+  const links = getFleetLinks(db);
+  for (const spec of Object.keys(links)) slugBySpec.set(spec, links[spec]);
+
+  // One lookup per distinct benchmark, not per usage row.
+  const priced = new Map<string, { input: number; output: number } | null>();
+  const rateFor = (slug: string | null | undefined): { input: number; output: number } | null => {
+    if (!slug) return null;
+    const cached = priced.get(slug);
+    if (cached !== undefined) return cached;
+    const aa = lookupAa(db, slug);
+    // Both halves required: pricing only one side would undercount every
+    // route asymmetrically and still look like a real number.
+    const rate = aa && aa.price1mInput != null && aa.price1mOutput != null
+      ? { input: aa.price1mInput, output: aa.price1mOutput }
+      : null;
+    priced.set(slug, rate);
+    return rate;
+  };
+
+  const byMachine = new Map<string, FleetValueRow & { anyPriced: boolean }>();
+  for (const u of usage) {
+    let row = byMachine.get(u.machine);
+    if (!row) {
+      row = {
+        machine: u.machine, requests: 0, inputTokens: 0, outputTokens: 0,
+        valueUsd: 0, unpricedSpecs: 0, reportedCostUsd: 0, anyPriced: false,
+      };
+      byMachine.set(u.machine, row);
+    }
+    row.requests += u.requests;
+    row.inputTokens += u.inputTokens;
+    row.outputTokens += u.outputTokens;
+    row.reportedCostUsd += u.reportedCostUsd;
+
+    const rate = rateFor(slugBySpec.get(u.spec));
+    if (!rate) {
+      row.unpricedSpecs += 1;
+      continue;
+    }
+    row.anyPriced = true;
+    row.valueUsd = (row.valueUsd ?? 0)
+      + (u.inputTokens * rate.input + u.outputTokens * rate.output) / 1_000_000;
+  }
+
+  return [...byMachine.values()]
+    .map(({ anyPriced, ...row }) => ({
+      ...row,
+      // Nothing priced at all is unknown, not zero.
+      valueUsd: anyPriced ? Math.round((row.valueUsd ?? 0) * 100) / 100 : null,
+      reportedCostUsd: Math.round(row.reportedCostUsd * 100) / 100,
+    }))
+    .sort((a, b) => a.machine.localeCompare(b.machine));
 }

@@ -32,8 +32,8 @@ quota-ledger   quota-policy, quota-clock, quota-routing, pressure, burn, forecas
 routing-core   router, scoring, fallback-loop, ratelimit, provider-quota
 catalogue      catalogue log, churn, model-state, catalog-sync, model-health
 benchmarks     analysis, model groups, compare surfaces
-keys-ui        Keys page panels, model scope, provider list
-pages-ui       Quota page, Fallback page, shared client lib
+keys-ui        Keys page panels, quota headroom and limits, model scope, provider list
+pages-ui       Fallback page, Logs page, shared client lib
 extensions     the registry, the state store, the toggle API and panel
 ```
 

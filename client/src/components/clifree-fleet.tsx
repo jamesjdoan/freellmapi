@@ -55,6 +55,19 @@ export interface FleetGroup {
   fleetSpecs?: string[]
 }
 
+/** One machine's consumption and what that inference was worth. Per machine,
+ *  not per route: "what was this machine given" is not a per-row question. */
+export interface FleetValue {
+  machine: string
+  requests: number
+  inputTokens: number
+  outputTokens: number
+  /** Null when nothing this machine used maps to a priced benchmark. */
+  valueUsd: number | null
+  unpricedSpecs: number
+  reportedCostUsd: number
+}
+
 interface BaselineGroup {
   groupKey: string
   name: string
@@ -90,7 +103,7 @@ type Col = 'name' | 'class' | 'intelligence' | 'coding' | 'agentic' | 'routes' |
 export function useFleet(enabled: boolean) {
   return useQuery({
     queryKey: ['clifree-fleet'],
-    queryFn: () => apiFetch<{ routes: FleetRow[]; groups: FleetGroup[] }>('/api/clifree-fleet'),
+    queryFn: () => apiFetch<{ routes: FleetRow[]; groups: FleetGroup[]; value: FleetValue[] }>('/api/clifree-fleet'),
     enabled,
   })
 }
@@ -276,6 +289,10 @@ export function ClifreeFleet() {
 
   const reportedAt = new Map<string, number>()
   for (const r of routes) reportedAt.set(r.machine, Math.max(reportedAt.get(r.machine) ?? 0, r.observedAtMs))
+  // Keyed by machine like reportedAt above: both answer "what is true of this
+  // machine right now", and the strip renders them together.
+  const valueByMachine = new Map<string, FleetValue>()
+  for (const v of data?.value ?? []) valueByMachine.set(v.machine, v)
 
   return (
     <section className="mt-8 space-y-3 rounded-lg border p-4">
@@ -313,10 +330,41 @@ export function ClifreeFleet() {
             </Button>
             {[...reportedAt.entries()].map(([machine, at]) => {
               const stale = now - at > STALE_AFTER_MS
+              const value = valueByMachine.get(machine)
               return (
                 <span key={machine} className="inline-flex items-center gap-1">
                   <span className="font-medium text-foreground">{machine}</span>
                   <span>{t('compare.fleet.lastReported', { ago: ago(now - at) })}</span>
+                  {/* What the machine was GIVEN, priced at the benchmark
+                      equivalent's published rates. Absent entirely until a
+                      reporter sends usage, so an older reporter degrades to
+                      today's strip rather than showing a misleading $0. */}
+                  {value && (
+                    value.valueUsd === null ? (
+                      <span className="text-muted-foreground" title={t('compare.fleet.valueUnknownHint')}>
+                        {t('compare.fleet.valueUnknown')}
+                      </span>
+                    ) : (
+                      <span
+                        className="font-medium tabular-nums text-emerald-600 dark:text-emerald-400"
+                        title={t('compare.fleet.valueHint')}
+                      >
+                        {t('compare.fleet.valueDelivered', { value: value.valueUsd.toFixed(2) })}
+                      </span>
+                    )
+                  )}
+                  {/* A partial figure must never read as a complete one. */}
+                  {value && value.valueUsd !== null && value.unpricedSpecs > 0 && (
+                    <span className="text-muted-foreground">
+                      {t('compare.fleet.valueUnpriced', { count: value.unpricedSpecs })}
+                    </span>
+                  )}
+                  {/* A "free" route that billed money is an alarm, not a saving. */}
+                  {value && value.reportedCostUsd > 0 && (
+                    <Badge variant="outline" className="border-amber-500/40 text-amber-600">
+                      {t('compare.fleet.valueBilled', { cost: value.reportedCostUsd.toFixed(2) })}
+                    </Badge>
+                  )}
                   {stale && (
                     <Badge variant="outline" className="border-amber-500/40 text-amber-600">
                       {t('compare.fleet.staleWarning', { ago: ago(now - at) })}

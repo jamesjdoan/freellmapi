@@ -10,7 +10,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { z } from 'zod';
 import type { Express } from 'express';
 import { createApp } from '../../app.js';
-import { initDb, getUnifiedApiKey } from '../../db/index.js';
+import { initDb, getDb, getUnifiedApiKey } from '../../db/index.js';
 import { mintDashboardToken } from '../helpers/auth.js';
 
 // Validated once at the boundary, so every read below is typed rather than
@@ -165,5 +165,164 @@ describe('clifree fleet telemetry', () => {
       machine: 'x', observedAtMs: Date.now(), routes: [],
     });
     expect(res.status).toBe(401);
+  });
+});
+
+// What the fleet was GIVEN, priced at the benchmark equivalent's published
+// rates. The figure is not our spend — a free route costs us nothing, which is
+// the point — so the behaviour worth defending is that it is priced from
+// aa_model, that an unpriced route reads as unknown rather than zero, and that
+// a route billing money is reported apart from the value rather than inside it.
+describe('clifree fleet value', () => {
+  let app: Express;
+  let token: string;
+
+  const ValueResponse = z.object({
+    value: z.array(z.object({
+      machine: z.string(),
+      requests: z.number(),
+      inputTokens: z.number(),
+      outputTokens: z.number(),
+      valueUsd: z.number().nullable(),
+      unpricedSpecs: z.number(),
+      reportedCostUsd: z.number(),
+    })),
+  });
+
+  /** An AA row with published per-million rates, as benchmark sync would leave it. */
+  function seedBenchmark(slug: string, priceIn: number | null, priceOut: number | null): void {
+    getDb().prepare(
+      `INSERT INTO aa_model (slug, name, price_1m_input, price_1m_output)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(slug) DO UPDATE SET price_1m_input = excluded.price_1m_input,
+                                       price_1m_output = excluded.price_1m_output`,
+    ).run(slug, slug, priceIn, priceOut);
+  }
+
+  const usage = (spec: string, inputTokens: number, outputTokens: number, reportedCostUsd = 0) =>
+    ({ spec, requests: 1, inputTokens, outputTokens, reportedCostUsd });
+
+  const valueFor = async (machine: string) => {
+    const { body } = await call(app, 'GET', '/api/clifree-fleet', token);
+    return ValueResponse.parse(body).value.find(v => v.machine === machine);
+  };
+
+  beforeAll(async () => {
+    initDb(':memory:');
+    app = await createApp();
+    token = await mintDashboardToken();
+  });
+
+  it('prices delivered inference at the benchmark equivalent\'s published rates', async () => {
+    // $3/M in, $15/M out on 2M in + 1M out = 6.00 + 15.00 = $21.00 of inference
+    // we were handed for nothing.
+    seedBenchmark('priced-model', 3, 15);
+    await call(app, 'POST', '/api/clifree-fleet', token, {
+      machine: 'studio', observedAtMs: Date.now(),
+      routes: [route('opencode:priced-free', { benchmarkSlug: 'priced-model' })],
+      usage: [usage('opencode:priced-free', 2_000_000, 1_000_000)],
+    });
+
+    expect((await valueFor('studio'))?.valueUsd).toBe(21);
+  });
+
+  it('reads unknown, not zero, when no route maps to a priced benchmark', async () => {
+    // An unrated route did real work whose value we cannot state. Reporting $0
+    // would claim the work was worthless, which is a different assertion.
+    await call(app, 'POST', '/api/clifree-fleet', token, {
+      machine: 'unrated-box', observedAtMs: Date.now(),
+      routes: [route('opencode:unrated-free', { benchmarkSlug: null })],
+      usage: [usage('opencode:unrated-free', 500_000, 10_000)],
+    });
+
+    const row = await valueFor('unrated-box');
+    expect(row?.valueUsd).toBeNull();
+    // The tokens are still counted: the consumption is known, only its price is not.
+    expect(row?.inputTokens).toBe(500_000);
+    expect(row?.unpricedSpecs).toBe(1);
+  });
+
+  it('values what it can and says how much it could not', async () => {
+    seedBenchmark('half-priced', 1, 2);
+    await call(app, 'POST', '/api/clifree-fleet', token, {
+      machine: 'mixed', observedAtMs: Date.now(),
+      routes: [
+        route('opencode:known-free', { benchmarkSlug: 'half-priced' }),
+        route('opencode:mystery-free', { benchmarkSlug: null }),
+      ],
+      usage: [
+        usage('opencode:known-free', 1_000_000, 0),
+        usage('opencode:mystery-free', 9_000_000, 0),
+      ],
+    });
+
+    const row = await valueFor('mixed');
+    // Only the priced half is valued...
+    expect(row?.valueUsd).toBe(1);
+    // ...and the partial figure is labelled as partial, so it is never read as
+    // the machine's whole contribution.
+    expect(row?.unpricedSpecs).toBe(1);
+  });
+
+  it('keeps what an agent billed out of the value figure', async () => {
+    seedBenchmark('billed-model', 10, 10);
+    await call(app, 'POST', '/api/clifree-fleet', token, {
+      machine: 'billed-box', observedAtMs: Date.now(),
+      routes: [route('cline:vendor/billed:free', { benchmarkSlug: 'billed-model' })],
+      usage: [usage('cline:vendor/billed:free', 1_000_000, 0, 0.42)],
+    });
+
+    const row = await valueFor('billed-box');
+    // Value is the inference's worth; the 0.42 the agent charged is an alarm
+    // reported beside it. Summing them would net a real cost against a notional
+    // benefit and produce a number that is neither.
+    expect(row?.valueUsd).toBe(10);
+    expect(row?.reportedCostUsd).toBe(0.42);
+  });
+
+  it('reprices when the operator remaps a route to another benchmark', async () => {
+    seedBenchmark('cheap-model', 1, 1);
+    seedBenchmark('dear-model', 100, 100);
+    await call(app, 'POST', '/api/clifree-fleet', token, {
+      machine: 'remap-box', observedAtMs: Date.now(),
+      routes: [route('opencode:remap-free', { benchmarkSlug: 'cheap-model' })],
+      usage: [usage('opencode:remap-free', 1_000_000, 0)],
+    });
+    expect((await valueFor('remap-box'))?.valueUsd).toBe(1);
+
+    // The operator says this route is really the dearer model. The panel's
+    // mapping and its value must not disagree.
+    await call(app, 'PUT', '/api/clifree-fleet/link', token, {
+      spec: 'opencode:remap-free', aaSlug: 'dear-model',
+    });
+    expect((await valueFor('remap-box'))?.valueUsd).toBe(100);
+  });
+
+  it('leaves stored usage alone when an older reporter sends none', async () => {
+    // A reporter that predates usage reporting still delivers a roster. Treating
+    // its silence as "this machine has done nothing" would wipe a real figure on
+    // the next timer tick.
+    seedBenchmark('kept-model', 2, 2);
+    await call(app, 'POST', '/api/clifree-fleet', token, {
+      machine: 'old-reporter', observedAtMs: Date.now(),
+      routes: [route('opencode:kept-free', { benchmarkSlug: 'kept-model' })],
+      usage: [usage('opencode:kept-free', 1_000_000, 0)],
+    });
+    expect((await valueFor('old-reporter'))?.valueUsd).toBe(2);
+
+    await call(app, 'POST', '/api/clifree-fleet', token, {
+      machine: 'old-reporter', observedAtMs: Date.now() + 1,
+      routes: [route('opencode:kept-free', { benchmarkSlug: 'kept-model' })],
+    });
+    expect((await valueFor('old-reporter'))?.valueUsd).toBe(2);
+  });
+
+  it('rejects a usage row whose spec has no provider prefix', async () => {
+    const res = await call(app, 'POST', '/api/clifree-fleet', token, {
+      machine: 'studio', observedAtMs: Date.now(), routes: [],
+      usage: [{ spec: 'nocolon', requests: 1, inputTokens: 1, outputTokens: 1 }],
+    });
+    expect(res.status).toBe(400);
+    expect(ErrorResponse.parse(res.body).error).toMatch(/provider:id/);
   });
 });
