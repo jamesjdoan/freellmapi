@@ -5,7 +5,7 @@ import { useI18n } from '@/i18n'
 import { matchesCompareQuery, sortEntries, type SortKey } from '@/lib/compare-sort'
 import { REFERENCE_ONLY_PLATFORMS } from '@/lib/routing'
 import { ModelCombobox, type ModelComboOption } from '@/components/model-combobox'
-import { shortModelName } from '@/lib/model-name'
+import { ModelName } from '@/components/model-name'
 import { apiFetch } from '@/lib/api'
 import { toast } from '@/lib/toast'
 import { Badge } from '@/components/ui/badge'
@@ -789,8 +789,8 @@ export default function CompareModelsPage() {
                     {/* Name first, dots after it. Leading with a variable
                         number of swatches started every name at a different
                         offset, so the column could not be read down. */}
-                    <span className="flex w-[200px] flex-shrink-0 items-center gap-1 truncate" title={g.members.map(m => m.modelId).join('\n')}>
-                      <span className="truncate">{g.name}</span>
+                    <span className="flex w-[200px] flex-shrink-0 items-center gap-1 truncate" title={[g.name, ...g.members.map(m => m.modelId)].join('\n')}>
+                      <ModelName name={g.name} className="truncate" />
                       {g.members.length > 1 && (
                         <span className="text-muted-foreground tabular-nums">{`×${g.members.length}`}</span>
                       )}
@@ -1062,7 +1062,7 @@ export default function CompareModelsPage() {
                           {/* Shortened, then wrapped rather than truncated: the
                               tail of a benchmark name is what tells siblings
                               apart, so it is the last part that may be cut. */}
-                          <span className="max-w-[220px] whitespace-normal font-medium [overflow-wrap:anywhere]" title={g.name}>{shortModelName(g.name)}</span>
+                          <span className="max-w-[220px] whitespace-normal font-medium [overflow-wrap:anywhere]" title={g.name}><ModelName name={g.name} /></span>
                           {/* Routes the platform holds a key for that the key
                               does not name. One press each way, because this is
                               the difference between a model being unreachable
