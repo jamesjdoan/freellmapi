@@ -740,6 +740,7 @@ export default function CompareModelsPage() {
                         sub: c.intelligenceIndex == null ? (c.creator ?? undefined) : c.intelligenceIndex.toFixed(0),
                         platforms: c.creator ? [c.creator] : undefined,
                       }))}
+                    renderLabel={label => <ModelName name={label} />}
                     onSelect={addReference}
                     ariaLabel={t('compare.referenceAdd')}
                     placeholder={t('compare.mapSearchPlaceholder')}
@@ -1453,6 +1454,7 @@ function MappingCell({ members, catalogue, onLink }: {
       <ModelCombobox
         value={pending ?? common ?? NO_COUNTERPART}
         options={options}
+        renderLabel={label => <ModelName name={label} />}
         onSelect={setPending}
         stayOpen
         footer={

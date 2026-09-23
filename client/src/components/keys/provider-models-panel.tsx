@@ -11,6 +11,7 @@ import { ChainPicker } from '@/components/compare/chain-picker'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import { ModelCombobox } from '@/components/model-combobox'
+import { ModelName } from '@/components/model-name'
 import { useExtensionEnabled } from '@/lib/use-extension'
 
 // Every model this provider serves, with the measured scores beside the two
@@ -877,6 +878,7 @@ function MappingCell({ row, catalogue, onLink, disabled }: {
             platforms: c.creator ? [c.creator] : undefined,
           })),
         ]}
+        renderLabel={label => <ModelName name={label} />}
         onSelect={setPending}
         stayOpen
         footer={

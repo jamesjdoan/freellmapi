@@ -465,6 +465,7 @@ export function ClifreeFleet() {
                             sub: c.intelligenceIndex == null ? (c.creator ?? undefined) : c.intelligenceIndex.toFixed(0),
                           } satisfies ModelComboOption)),
                         ]}
+                        renderLabel={label => <ModelName name={label} />}
                         onSelect={slug => {
                           // Every route reaching this capability remaps
                           // together: they were merged BECAUSE they are one
