@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-09-24 — Offloaded inference card collapsed by default
+
+- The card collapses by default and remembers the choice per browser. Its collapsed header shows
+  the FreeLLM proxy, free CLI fleet and total values. `client/src/components/offloaded-inference.tsx`,
+  new key `analytics.offload.fleet` in `client/src/i18n/locales/*.json`.
+
 ## 2026-09-23 — Offloaded-inference card on Analytics; CLI-fleet usage per UTC day, per device
 
 - Migration `20260923_000001_clifree_fleet_usage_per_day` (manifest `defaults.ts:209`): usage keyed
@@ -16,6 +22,30 @@
   backup of the live DB with the Studio's real snapshot and a SYNTHETIC MBP delivery: All
   $248.95 = proxy $247.22 + MBP $0.08 + Studio $1.65; device tabs split correctly. **Not deployed.**
 - Two `react-refresh`/`purity` lint errors in `clifree-fleet.tsx` predate this change (same at HEAD).
+
+## 2026-09-23 — quota tab gating, readable model names, probed free routes, per-task price
+
+- Clifree fleet usage value and the Quota page folded into Keys and Logs; the Quota signals tab
+  is gated on `quota-capacity-dashboard`. `client/src/pages/KeysPage.tsx`,
+  `server/src/data/extension-registry.ts`, plus the previously uncommitted clifree/quota files
+  (`30ff896e`).
+- Model pickers size to the longest name and wrap. `client/src/components/model-combobox.tsx`
+  (`be79636d`).
+- Benchmark names split into base and a subdued variant. `client/src/lib/model-name.ts` and
+  `client/src/lib/model-name.test.ts` (new), `client/src/components/model-name.tsx` (new),
+  `client/src/pages/CompareModelsPage.tsx`, `client/src/components/clifree-fleet.tsx`,
+  `client/src/components/keys/provider-models-panel.tsx`,
+  `client/src/components/model-combobox.tsx` (`renderLabel`)
+  (`c4689a21`, `81c27073`, `c2e1ffe4`, `5b8b9e7f`, `259067de`, `e898e6b1`).
+- Curated chains: NVIDIA `gpt-oss-20b` removed, `diffusiongemma-26b-a4b-it` added at Vision 17,
+  and ten unchained routes documented. `server/src/data/routing-curation.ts` (`6c0e6829`).
+  Runtime state also changed: NVIDIA key 18 scope 15 → 13, and live chain rows via
+  `/api/fallback/membership` and `/position`.
+- Price chart ranks by AA cost per task with a per-1M-token switch; 4 new strings filled into
+  every locale. `client/src/pages/CompareModelsPage.tsx`, `client/src/i18n/locales/*.json`
+  (`8f9e4e26`).
+- Session-wrap docs: `docs/GOTCHAS.md` (2026-09-23 section), `config/handoff.md`,
+  `config/changelog.md`. Recall of a long session may be incomplete.
 
 ## 2026-09-22 — free CLI fleet telemetry, shared combobox fixes, honest scopes
 

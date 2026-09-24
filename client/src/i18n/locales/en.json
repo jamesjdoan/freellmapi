@@ -1134,6 +1134,7 @@
       "value": "Value",
       "proxy": "FreeLLM proxy",
       "fleetOn": "Free CLI fleet · {device}",
+      "fleet": "Free CLI fleet",
       "reportedAt": "last report {when}",
       "neverReported": "no roster reported",
       "stale": "stale",

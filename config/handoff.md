@@ -1,5 +1,74 @@
 # Session Handoff
 
+## Session 2026-09-24 — JD-STUDIO (Mac Studio M2 Max)
+
+**Branch:** `docs/freellm-assert-start-on-redeploy` — nothing committed. Changes are in the
+working tree and deployed (container rebuilt with `docker compose up -d --build`, `Up (healthy)`
+on `127.0.0.1:3001`).
+
+### Done
+
+- Offloaded inference card (Analytics) collapses by default, remembered per browser under
+  `freellmapi.offloadedInference.collapsed`. The collapsed header shows `FreeLLM proxy $x`,
+  `Free CLI fleet $y` (only when `clifree-fleet-telemetry` is on) and `Total $z`.
+  Verified live: collapsed on a cleared key, header read $77.56 / $0.93 / $78.49 for 24h.
+- Router pressure and Fallback chains on Models → Chat were already collapsed by default
+  (`freellmapi.penaltyInspector.collapsed`, `freellmapi.chainManager.collapsed`). No change. A
+  browser that once expanded them keeps them expanded until its localStorage key is cleared.
+- New key `analytics.offload.fleet`, filled into 59 locales with the English text.
+- Client: `tsc` clean, 57 files / 483 tests pass, `check:i18n` passes.
+
+### Open
+
+- Uncommitted: `client/src/components/offloaded-inference.tsx`, 60 locale files, plus the
+  pre-existing `config/*`, `docs/GOTCHAS.md` and `.compressa/ledger.jsonl` edits from earlier.
+- The stray `jamesjdoan/freellmapi:client-update` image from this session can be deleted.
+
+## Session 2026-09-23 — JD-STUDIO (Mac Studio M2 Max)
+
+**Branch:** `docs/freellm-assert-start-on-redeploy` — 10 commits, all deployed and pushed to
+`fork` (`30ff896e` → `8f9e4e26`). Local and `fork` are level.
+
+**What was done:**
+
+- **The "F1–F7 review" this session was meant to apply did not exist.** No 2026-09-23 block, no
+  review file, no transcript. The only F1–F7 in the repo belong to the quota-ledger ADR. A fresh
+  `reviewer` pass found one real defect: the Quota signals tab ignored `quota-capacity-dashboard`.
+  Fixed in `KeysPage.tsx`, and the registry `codeLocations` now follow the move. Then committed and
+  deployed the clifree usage-value and quota-tab work (`30ff896e`): migration 000003 ran, and keys
+  decrypt `ok=11 fail=0`. The old `/quota` URL now 404s in-app.
+- **Model names everywhere read as base plus a faint variant.** `client/src/lib/model-name.ts`
+  (`splitModelName`) and `client/src/components/model-name.tsx`. "Claude Fable 5.1 (Adaptive
+  Reasoning, Xhigh Effort, Default Fallback)" and "GPT-5.2 (xhigh)" both become base plus *Xhigh*.
+  Non-default parts are kept ("Non-reasoning" is what stops Sonnet 5 High colliding), with
+  0 collisions over AA's 673 names. Applied to the Compare graph and table, the Mapped to column,
+  the fleet table and all four benchmark pickers (the new opt-in `renderLabel` on
+  `ModelCombobox`). Pickers size to the longest name and wrap.
+- **Probed all 50 keyed free routes:** 46 ok, 4 limited, 0 dead. NVIDIA `gemma-4-31b-it` and
+  `gpt-oss-20b` timed out twice and were removed from NVIDIA key 18's scope. `gpt-oss-20b` also
+  left the curated chains. `nvidia/google/diffusiongemma-26b-a4b-it` passed a real image probe
+  and joined Vision 17. The ten working-but-unchained routes are recorded in
+  `routing-curation.ts` with the reason each stays out (you chose "only real depth"). The live
+  chains and the container's spec agree: 79 rows, 0 switched off.
+- **The Compare Price chart now ranks by AA cost per task by default** (`indexCostPerTask`,
+  157 of 673 models), with a Per 1M tokens switch. The view had been keyed `costPerTask` while
+  ranking on token price.
+
+**What's next:**
+
+1. **APEX domain comparison, Pass 1 pending the source.** AA's free tier has no APEX fields (all
+   673 models checked). Mercor's leaderboard pages carry the full data in `__NEXT_DATA__`, with no
+   key, and `readyBenchmarks` lists the domains dynamically. You want a summary block ("best model
+   for which domain") plus per-domain scores. It stays display-only and must not touch
+   `auto:apex` routing. Choose Mercor pages or an AA commercial key, then write
+   `docs/adr/ARCH-20260923-apex-domain-comparison.md` as PENDING.
+2. `openrouter/deepseek/deepseek-v4-flash-0731:free` holds Extra-Tier 8 but is outside the
+   OpenRouter key's scope, so that position adds nothing. Scope it or drop it —
+   `GET /api/fallback/reachability`.
+3. Optional: redirect `/quota` to `/keys` for old bookmarks.
+
+**In progress:** —
+
 ## Session 2026-09-22 — JD-STUDIO (Mac Studio M2 Max)
 
 **Branch:** `docs/freellm-assert-start-on-redeploy` — 4 commits, pushed to `fork`

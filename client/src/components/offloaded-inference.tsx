@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Share2, AlertTriangle } from 'lucide-react'
+import { Share2, AlertTriangle, ChevronDown } from 'lucide-react'
 import { useI18n } from '@/i18n'
 import { apiFetch } from '@/lib/api'
 import { formatTokens } from '@/lib/routing'
@@ -23,6 +24,20 @@ import type { FleetUsageRow, FleetValue } from '@/components/clifree-fleet'
 
 const STALE_MS = 24 * 60 * 60 * 1000
 
+// Collapsed by default and remembered per browser, the same shape as the chain
+// manager and penalty inspector: the headline total stays in the header, the
+// per-machine and per-route breakdown waits behind a click.
+const COLLAPSED_KEY = 'freellmapi.offloadedInference.collapsed'
+
+function readCollapsed(): boolean {
+  try {
+    const stored = localStorage.getItem(COLLAPSED_KEY)
+    return stored === null ? true : stored === '1'
+  } catch {
+    return true
+  }
+}
+
 export interface ProxyTotals {
   requests: number
   inputTokens: number
@@ -40,6 +55,7 @@ export function OffloadedInference({ range, device, proxy, now }: {
 }) {
   const { t } = useI18n()
   const fleetOn = useExtensionEnabled('clifree-fleet-telemetry')
+  const [collapsed, setCollapsed] = useState<boolean>(readCollapsed)
   const { data } = useQuery({
     queryKey: ['clifree-fleet', range],
     queryFn: () => apiFetch<{ value: FleetValue[]; usage: FleetUsageRow[] }>(`/api/clifree-fleet?range=${range}`),
@@ -49,23 +65,58 @@ export function OffloadedInference({ range, device, proxy, now }: {
   const machines = (data?.value ?? []).filter(v => !device || v.device === device)
   const routes = (data?.usage ?? []).filter(u => !device || u.device === device)
   const unpriced = machines.some(m => m.valueUsd === null || m.unpricedSpecs > 0)
+  const fleetValueUsd = machines.reduce((n, m) => n + (m.valueUsd ?? 0), 0)
   const total = {
     requests: (proxy?.requests ?? 0) + machines.reduce((n, m) => n + m.requests, 0),
     inputTokens: (proxy?.inputTokens ?? 0) + machines.reduce((n, m) => n + m.inputTokens, 0),
     outputTokens: (proxy?.outputTokens ?? 0) + machines.reduce((n, m) => n + m.outputTokens, 0),
-    valueUsd: (proxy?.valueUsd ?? 0) + machines.reduce((n, m) => n + (m.valueUsd ?? 0), 0),
+    valueUsd: (proxy?.valueUsd ?? 0) + fleetValueUsd,
   }
   const money = (v: number | null, places = 2) => (v === null ? t('analytics.offload.unpriced') : `$${v.toFixed(places)}`)
 
+  function toggle() {
+    setCollapsed(prev => {
+      const next = !prev
+      try { localStorage.setItem(COLLAPSED_KEY, next ? '1' : '0') } catch { /* ignore */ }
+      return next
+    })
+  }
+
   return (
     <div className="rounded-3xl border bg-card">
-      <div className="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-2">
-        <h3 className="flex items-center gap-2 text-sm font-medium">
-          <Share2 className="size-4 text-muted-foreground" aria-hidden="true" />
-          {t('analytics.offload.title')}
-        </h3>
-        <p className="text-[11px] text-muted-foreground">{t('analytics.offload.valueHint')}</p>
-      </div>
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? t('common.show') : t('common.hide')}
+        className={`flex w-full flex-wrap items-center justify-between gap-2 px-4 py-3 text-left ${collapsed ? '' : 'border-b'}`}
+      >
+        <div>
+          <h3 className="flex items-center gap-2 text-sm font-medium">
+            <Share2 className="size-4 text-muted-foreground" aria-hidden="true" />
+            {t('analytics.offload.title')}
+          </h3>
+          <p className="text-[11px] text-muted-foreground">{t('analytics.offload.valueHint')}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-[11px] tabular-nums">
+          <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
+            {t('analytics.offload.proxy')} {money(proxy?.valueUsd ?? 0)}
+          </span>
+          {fleetOn && (
+            <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
+              {t('analytics.offload.fleet')} {money(fleetValueUsd)}
+            </span>
+          )}
+          <span
+            className="rounded-full bg-muted px-2 py-0.5 font-medium text-foreground"
+            title={unpriced ? t('analytics.offload.partial') : undefined}
+          >
+            {t('analytics.offload.total')} {money(total.valueUsd)}
+          </span>
+          <ChevronDown className={`size-4 text-muted-foreground transition-transform ${collapsed ? '-rotate-90' : ''}`} />
+        </div>
+      </button>
+      {!collapsed && (
       <div className="p-4 space-y-4">
         <div className="-mx-4">
           <Table>
@@ -163,6 +214,7 @@ export function OffloadedInference({ range, device, proxy, now }: {
 
         {fleetOn && <p className="text-[11px] text-muted-foreground">{t('analytics.offload.notCallable')}</p>}
       </div>
+      )}
     </div>
   )
 }

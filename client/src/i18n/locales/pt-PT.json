@@ -951,7 +951,8 @@
       "route": "Route",
       "class": "Class",
       "aa": "AA score",
-      "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days."
+      "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
+      "fleet": "Free CLI fleet"
     }
   },
   "logs": {
