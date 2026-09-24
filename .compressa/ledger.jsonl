@@ -1455,3 +1455,194 @@
 {"event": "compress", "content_type": "read:md", "strategy": "string:headtail", "original_tokens": 2686, "digest_tokens": 2060, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "anthropic/claude-opus-5", "stash_hashes": ["eac103e9fde7"], "ts": 1790063467.329202}
 {"event": "compress", "content_type": "read:md", "strategy": "string:headtail", "original_tokens": 2686, "digest_tokens": 2060, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "anthropic/claude-opus-5", "stash_hashes": ["eac103e9fde7"], "ts": 1790063617.9868412}
 {"event": "compress", "content_type": "read:md", "strategy": "string:headtail", "original_tokens": 3978, "digest_tokens": 744, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "anthropic/claude-opus-5", "stash_hashes": ["fba89279b371"], "ts": 1790063665.865283}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 1422, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790064307.758338}
+{"event": "compress", "content_type": "read:md", "strategy": "string:headtail", "original_tokens": 1697, "digest_tokens": 717, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "anthropic/claude-opus-5", "stash_hashes": ["16c4ba9e552a"], "ts": 1790064307.761214}
+{"event": "compress", "content_type": "read:md", "strategy": "string:headtail", "original_tokens": 1153, "digest_tokens": 424, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "anthropic/claude-opus-5", "stash_hashes": ["fbd9aeffe26f"], "ts": 1790064307.7613068}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 536, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790064313.734785}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 873, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790064316.70322}
+{"event": "compress", "content_type": "json_object", "strategy": "string:headtail", "original_tokens": 1197, "digest_tokens": 271, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "anthropic/claude-opus-5", "stash_hashes": ["d571de3dcef2"], "ts": 1790064327.792925}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 656, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790064339.308285}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 935, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790064345.407218}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 541, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790064347.907449}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 2546, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790064349.698575}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 633, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790064382.476562}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 1170, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790064382.47712}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 2003, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790064382.478296}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 672, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790064402.7711098}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 562, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790064408.34981}
+{"event": "read_skip", "extension": ".tsx:1-60,154-300", "est_tokens": 2291, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790064408.3523588}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 682, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790064417.0454981}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 657, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064466.936696}
+{"event": "compress", "content_type": "json_object", "strategy": "string:headtail", "original_tokens": 1075, "digest_tokens": 493, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "freellmapi/auto:fast-lane", "stash_hashes": ["4aafd61db125"], "ts": 1790064485.398547}
+{"event": "compress", "content_type": "json_object", "strategy": "string:headtail", "original_tokens": 1488, "digest_tokens": 624, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "freellmapi/auto:fast-lane", "stash_hashes": ["45061e78142d"], "ts": 1790064488.2052119}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 914, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064497.725164}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 770, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064589.342231}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 1312, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064593.955709}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 1566, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064597.6097019}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 2676, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064601.088655}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 602, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064644.410292}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 562, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064652.7957928}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 914, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064652.797374}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 562, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064657.550876}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 633, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064657.5508952}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 3382, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064657.5508869}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 1312, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064657.5510101}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 3291, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064663.727104}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 1534, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064663.727345}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 902, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064663.72904}
+{"event": "read_skip", "extension": ".json", "est_tokens": 855, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064663.7300758}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 1358, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064675.82851}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 3969, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064675.8305411}
+{"event": "read_skip", "extension": ".sh", "est_tokens": 744, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064675.8315468}
+{"event": "read_skip", "extension": ".sh", "est_tokens": 527, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064682.951661}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 1618, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064682.95331}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 3382, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064694.68334}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 1190, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064714.556586}
+{"event": "read_skip", "extension": ".sh", "est_tokens": 744, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064757.555837}
+{"event": "read_skip", "extension": ".sh", "est_tokens": 723, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064772.207862}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 2698, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064772.207971}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 1862, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064826.204072}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 2591, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064828.06333}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 907, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790064828.064814}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 914, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065178.0112278}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 656, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065181.0792}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 1308, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065229.4325812}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 1335, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065239.718944}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 544, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065253.202225}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 882, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065267.2589161}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 790, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065272.1862998}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 850, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065276.9097018}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 600, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065281.70313}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 991, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065292.6746612}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 638, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065297.734526}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 1017, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065306.913707}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 596, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065311.9680378}
+{"event": "read_skip", "extension": ".json", "est_tokens": 591, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065313.9009259}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 880, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065329.604536}
+{"event": "read_skip", "extension": ".ts:18-27,59-169", "est_tokens": 1347, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065403.617415}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 1170, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065695.7761862}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 947, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065831.080967}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 780, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065831.080962}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 655, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065831.080962}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 638, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065831.080962}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 725, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065831.0819929}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 1308, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065831.082425}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 994, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065842.19075}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 999, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065842.191725}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 579, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065842.194326}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 1190, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065842.195831}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 725, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065859.330582}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 1710, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790065873.727118}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 2026, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790112200.2035148}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 1164, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790112275.869356}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 1215, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790112309.922622}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 1273, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790112339.942684}
+{"event": "read_skip", "extension": ".tsx:155-260,368-502", "est_tokens": 3267, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790112347.450594}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 2230, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790112351.2286751}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 1250, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790112368.225395}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 794, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790112376.549833}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 661, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790112423.001717}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 712, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790112423.0017762}
+{"event": "read_skip", "extension": ".tsx:517-524,616-660", "est_tokens": 748, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790112457.1184242}
+{"event": "read_skip", "extension": "(none)", "est_tokens": 1144, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790112504.94929}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 538, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790112547.3037848}
+{"event": "read_skip", "extension": ".md", "est_tokens": 245, "reason": "small", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790113223.499954}
+{"event": "read_skip", "extension": ".md", "est_tokens": 223, "reason": "small", "source": "pi", "model": "anthropic/claude-opus-5", "ts": 1790113223.5014532}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 584, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790116058.646909}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 600, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790116058.6481159}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 952, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790116070.981066}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 993, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790116089.533893}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 1422, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790116089.535729}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 580, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790116160.527952}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 577, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790116160.529127}
+{"event": "read_skip", "extension": "(none)", "est_tokens": 1413, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790116466.677432}
+{"event": "compress", "content_type": "read:md", "strategy": "string:headtail", "original_tokens": 663, "digest_tokens": 430, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "anthropic/claude-opus-5-5", "stash_hashes": ["912b65757448"], "ts": 1790116470.179959}
+{"event": "compress", "content_type": "read:md", "strategy": "string:headtail", "original_tokens": 3538, "digest_tokens": 589, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "anthropic/claude-opus-5-5", "stash_hashes": ["ab29ed8e4ee7"], "ts": 1790116470.18091}
+{"event": "read_skip", "extension": ".md", "est_tokens": 58, "reason": "small", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790116542.678685}
+{"event": "read_skip", "extension": "(none)", "est_tokens": 930, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790116542.6789691}
+{"event": "compress", "content_type": "read:md", "strategy": "string:headtail", "original_tokens": 3978, "digest_tokens": 744, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "anthropic/claude-opus-5-5", "stash_hashes": ["fba89279b371"], "ts": 1790116542.6818979}
+{"event": "compress", "content_type": "json_object", "strategy": "string:headtail", "original_tokens": 1220, "digest_tokens": 456, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "anthropic/claude-opus-5-5", "stash_hashes": ["d2e5643ceef3"], "ts": 1790116586.977799}
+{"event": "compress", "content_type": "read:md", "strategy": "string:headtail", "original_tokens": 656, "digest_tokens": 421, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "anthropic/claude-opus-5-5", "stash_hashes": ["562fae7c459b"], "ts": 1790116642.1793761}
+{"event": "compress", "content_type": "read:md", "strategy": "string:headtail", "original_tokens": 3978, "digest_tokens": 744, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "anthropic/claude-opus-5-5", "stash_hashes": ["fba89279b371"], "ts": 1790117793.587372}
+{"event": "read_skip", "extension": ".md", "est_tokens": 130, "reason": "small", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790117815.419425}
+{"event": "compress", "content_type": "json_object", "strategy": "string:headtail", "original_tokens": 1235, "digest_tokens": 369, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "anthropic/claude-opus-5-5", "stash_hashes": ["49ae69feb411"], "ts": 1790118073.0732281}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 947, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790118093.392831}
+{"event": "compress", "content_type": "json_object", "strategy": "string:headtail", "original_tokens": 3137, "digest_tokens": 337, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "freellmapi/auto:apex", "stash_hashes": ["983e5aa7e5d9"], "ts": 1790118137.201022}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 1305, "reason": "ext", "source": "pi", "model": "freellmapi/auto:apex", "ts": 1790118144.321398}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 651, "reason": "ext", "source": "pi", "model": "freellmapi/auto:apex", "ts": 1790118144.322103}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 622, "reason": "ext", "source": "pi", "model": "freellmapi/auto:apex", "ts": 1790118144.323787}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 1063, "reason": "ext", "source": "pi", "model": "freellmapi/auto:apex", "ts": 1790118144.329918}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 604, "reason": "ext", "source": "pi", "model": "freellmapi/auto:apex", "ts": 1790118148.987608}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 700, "reason": "ext", "source": "pi", "model": "freellmapi/auto:apex", "ts": 1790118154.1149938}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 583, "reason": "ext", "source": "pi", "model": "freellmapi/auto:apex", "ts": 1790118154.116836}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 874, "reason": "ext", "source": "pi", "model": "freellmapi/auto:apex", "ts": 1790118154.1179268}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 1238, "reason": "ext", "source": "pi", "model": "freellmapi/auto:apex", "ts": 1790118157.256444}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 510, "reason": "ext", "source": "pi", "model": "freellmapi/auto:apex", "ts": 1790118157.257851}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 1238, "reason": "ext", "source": "pi", "model": "freellmapi/auto:apex", "ts": 1790118160.1541288}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 1284, "reason": "ext", "source": "pi", "model": "freellmapi/auto:apex", "ts": 1790118163.968756}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 510, "reason": "ext", "source": "pi", "model": "freellmapi/auto:apex", "ts": 1790118166.820804}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 557, "reason": "ext", "source": "pi", "model": "freellmapi/auto:apex", "ts": 1790118169.4521432}
+{"event": "compress", "content_type": "json_object", "strategy": "string:headtail", "original_tokens": 1060, "digest_tokens": 519, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "freellmapi/auto:apex", "stash_hashes": ["a4eb9710ee05"], "ts": 1790118248.4191082}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 700, "reason": "ext", "source": "pi", "model": "freellmapi/auto:apex", "ts": 1790118336.093353}
+{"event": "compress", "content_type": "json_object", "strategy": "string:headtail", "original_tokens": 1091, "digest_tokens": 330, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "freellmapi/auto:apex", "stash_hashes": ["790ec044223d"], "ts": 1790118349.701045}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 599, "reason": "ext", "source": "pi", "model": "freellmapi/auto:apex", "ts": 1790118442.486926}
+{"event": "compress", "content_type": "json_object", "strategy": "string:headtail", "original_tokens": 1414, "digest_tokens": 441, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "freellmapi/auto:apex", "stash_hashes": ["84b52e7c1c27"], "ts": 1790118610.181004}
+{"event": "compress", "content_type": "json_object", "strategy": "string:headtail", "original_tokens": 1405, "digest_tokens": 403, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "freellmapi/auto:apex", "stash_hashes": ["a5ccedc6aa8e"], "ts": 1790118957.323605}
+{"event": "compress", "content_type": "json_object", "strategy": "string:headtail", "original_tokens": 1123, "digest_tokens": 410, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "freellmapi/auto:apex", "stash_hashes": ["94aa690d2903"], "ts": 1790118995.213001}
+{"event": "compress", "content_type": "json_object", "strategy": "string:headtail", "original_tokens": 1658, "digest_tokens": 391, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "freellmapi/auto:apex", "stash_hashes": ["085bf454d6ac"], "ts": 1790119029.98926}
+{"event": "compress", "content_type": "json_object", "strategy": "string:headtail", "original_tokens": 1062, "digest_tokens": 289, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "freellmapi/auto:apex", "stash_hashes": ["7c54bf34925b"], "ts": 1790119035.5207522}
+{"event": "compress", "content_type": "json_object", "strategy": "string:headtail", "original_tokens": 1969, "digest_tokens": 324, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "freellmapi/auto:apex", "stash_hashes": ["f6118765f317"], "ts": 1790119055.736286}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 622, "reason": "ext", "source": "pi", "model": "freellmapi/auto:apex", "ts": 1790119070.19744}
+{"event": "compress", "content_type": "json_object", "strategy": "string:headtail", "original_tokens": 1778, "digest_tokens": 447, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "freellmapi/auto:apex", "stash_hashes": ["50b339956e89"], "ts": 1790119072.352801}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 547, "reason": "ext", "source": "pi", "model": "freellmapi/auto:apex", "ts": 1790119092.231253}
+{"event": "compress", "content_type": "json_object", "strategy": "string:headtail", "original_tokens": 1270, "digest_tokens": 460, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "anthropic/claude-opus-5-5", "stash_hashes": ["96af36ae4958"], "ts": 1790119402.743994}
+{"event": "read_skip", "extension": ".ts:186-215,308-326", "est_tokens": 775, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790119421.237505}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 500, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790119421.237761}
+{"event": "read_skip", "extension": ".tsx:1-40,170-220", "est_tokens": 1211, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790119432.2529018}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 1564, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790119439.214551}
+{"event": "compress", "content_type": "json_object", "strategy": "string:headtail", "original_tokens": 1499, "digest_tokens": 641, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "anthropic/claude-opus-5-5", "stash_hashes": ["9625e6c5f82c"], "ts": 1790121598.1397471}
+{"event": "compress", "content_type": "json_object", "strategy": "string:headtail", "original_tokens": 1289, "digest_tokens": 729, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "anthropic/claude-opus-5-5", "stash_hashes": ["8821258d2920"], "ts": 1790122550.4346082}
+{"event": "read_skip", "extension": ".md", "est_tokens": 448, "reason": "small", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790122640.589119}
+{"event": "read_skip", "extension": ".tsx:26-60,100-175", "est_tokens": 1391, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790129583.032063}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 1620, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790129583.0337431}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 565, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790129664.056407}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 849, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790130333.1516411}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 2274, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790131006.293476}
+{"event": "read_skip", "extension": ".tsx:1-25,60-90", "est_tokens": 609, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790131572.313787}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 1036, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790131579.58862}
+{"event": "read_skip", "extension": ".ts:1-60,150-262", "est_tokens": 2188, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790132685.443286}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 544, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790132696.660874}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 1009, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790134001.542243}
+{"event": "read_skip", "extension": ".ts:57-67,116-380,382-459", "est_tokens": 6140, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790134004.1216698}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 799, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790134034.6667929}
+{"event": "read_skip", "extension": ".ts:306-316,350-366", "est_tokens": 647, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790134351.896044}
+{"event": "read_skip", "extension": ".ts", "est_tokens": 2212, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790134377.227873}
+{"event": "read_skip", "extension": "(none)", "est_tokens": 2155, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790135805.145033}
+{"event": "read_skip", "extension": "(none)", "est_tokens": 2475, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790136006.268121}
+{"event": "read_skip", "extension": "(none)", "est_tokens": 3505, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790138653.480108}
+{"event": "read_skip", "extension": "(none)", "est_tokens": 4319, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790138654.522815}
+{"event": "read_skip", "extension": ".tsx:100-145,266-275,530-575", "est_tokens": 1196, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790146225.405733}
+{"event": "read_skip", "extension": ".tsx:700-735,846-870,905-950", "est_tokens": 1661, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790146225.407496}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 549, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790146260.8412511}
+{"event": "read_skip", "extension": "(none)", "est_tokens": 1413, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790146863.9133801}
+{"event": "compress", "content_type": "read:md", "strategy": "string:headtail", "original_tokens": 3342, "digest_tokens": 551, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "anthropic/claude-opus-5-5", "stash_hashes": ["c462e19a6fd6"], "ts": 1790146869.344463}
+{"event": "read_skip", "extension": ".md", "est_tokens": 284, "reason": "small", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790146903.6572}
+{"event": "read_skip", "extension": ".md", "est_tokens": 900, "reason": "small", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790146919.9096289}
+{"event": "read_skip", "extension": ".md", "est_tokens": 163, "reason": "small", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790146919.9101481}
+{"event": "compress", "content_type": "read:md", "strategy": "string:headtail", "original_tokens": 520, "digest_tokens": 393, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "anthropic/claude-opus-5-5", "stash_hashes": ["0277636709d1"], "ts": 1790146919.910922}
+{"event": "read_skip", "extension": "(none)", "est_tokens": 2612, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790146983.232827}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 641, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790199535.050594}
+{"event": "read_skip", "extension": ".tsx:1-21,60-160", "est_tokens": 1390, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790199535.050713}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 1090, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790199543.753304}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 1174, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790199574.662074}
+{"event": "compress", "content_type": "json_object", "strategy": "string:headtail", "original_tokens": 2868, "digest_tokens": 455, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "freellmapi/auto:fast-lane", "stash_hashes": ["0fa564b99306"], "ts": 1790200895.9105222}
+{"event": "compress", "content_type": "json_object", "strategy": "string:headtail", "original_tokens": 2683, "digest_tokens": 255, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "freellmapi/auto:fast-lane", "stash_hashes": ["92b51af3b936"], "ts": 1790201854.413845}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 604, "reason": "ext", "source": "pi", "model": "freellmapi/auto:fast-lane", "ts": 1790202097.444093}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 1875, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790206731.220033}
+{"event": "read_skip", "extension": "(none)", "est_tokens": 1413, "reason": "ext", "source": "pi", "model": "anthropic/claude-opus-5-5", "ts": 1790206822.5447092}
+{"event": "compress", "content_type": "read:md", "strategy": "string:headtail", "original_tokens": 3538, "digest_tokens": 589, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "anthropic/claude-opus-5-5", "stash_hashes": ["ab29ed8e4ee7"], "ts": 1790206825.6269639}
+{"event": "compress", "content_type": "json_object", "strategy": "string:headtail", "original_tokens": 1332, "digest_tokens": 415, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "anthropic/claude-opus-5-5", "stash_hashes": ["46ab9fbfe654"], "ts": 1790206825.659859}
+{"event": "compress", "content_type": "read:md", "strategy": "string:headtail", "original_tokens": 2872, "digest_tokens": 490, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "anthropic/claude-opus-5-5", "stash_hashes": ["b86bd7b6cc43"], "ts": 1790206831.9634979}
+{"event": "read_skip", "extension": ".tsx", "est_tokens": 704, "reason": "ext", "source": "pi", "model": "freellmapi/auto:apex", "ts": 1790214021.675292}
+{"event": "compress", "content_type": "json_object", "strategy": "string:headtail", "original_tokens": 2747, "digest_tokens": 302, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "freellmapi/auto:apex", "stash_hashes": ["3503164ba205"], "ts": 1790214307.5858638}
+{"event": "read_skip", "extension": ".md", "est_tokens": 351, "reason": "small", "source": "pi", "model": "freellmapi/auto:apex", "ts": 1790214474.512506}

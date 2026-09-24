@@ -17,6 +17,11 @@ on `127.0.0.1:3001`).
   browser that once expanded them keeps them expanded until its localStorage key is cleared.
 - New key `analytics.offload.fleet`, filled into 59 locales with the English text.
 - Client: `tsc` clean, 57 files / 483 tests pass, `check:i18n` passes.
+### Open
+
+- Uncommitted: `client/src/components/offloaded-inference.tsx`, 60 locale files, plus the
+  pre-existing `config/*`, `docs/GOTCHAS.md` and `.compressa/ledger.jsonl` edits from earlier.
+- The stray `jamesjdoan/freellmapi:client-update` image from this session can be deleted.
 
 ### Open
 
