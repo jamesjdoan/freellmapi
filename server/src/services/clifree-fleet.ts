@@ -362,8 +362,8 @@ export function getFleetGroups(db: Db): CompareGroup[] {
  * device tab would show one machine's proxy traffic beside another's CLI work.
  */
 export function fleetDevice(machine: string): string {
-  if (/macbook-?pro/i.test(machine)) return 'MacBook Pro';
-  if (/mac-?studio/i.test(machine)) return 'Mac Studio';
+  if (/macbook-?pro|mbp/i.test(machine)) return 'MacBook Pro';
+  if (/mac-?studio|studio/i.test(machine)) return 'Mac Studio';
   return machine;
 }
 
