@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch'
 import { Tooltip } from '@/components/tooltip'
 import { ChainPicker } from '@/components/compare/chain-picker'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { useI18n } from '@/i18n'
 import { ModelCombobox } from '@/components/model-combobox'
 import { ModelName } from '@/components/model-name'
@@ -299,6 +300,21 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
   // An unscoped key has no per-model list to edit, so only the flag moves. A
   // scope edit that would empty the list is refused by the server (409); the
   // flag still lands, which is the half that matters.
+  // Rename a model where it is listed. A relay's /v1/models gives raw ids
+  // ("coding-glm-4.6-free"), so this is where a bad name is noticed and fixed.
+  const [renaming, setRenaming] = useState<{ id: number; value: string } | null>(null)
+  const rename = useMutation({
+    mutationFn: ({ id, displayName }: { id: number; displayName: string }) =>
+      apiFetch(`/api/models/${id}`, { method: 'PATCH', body: JSON.stringify({ displayName }) }),
+    onSuccess: () => { setRenaming(null); invalidate() },
+  })
+  const saveRename = (r: Row) => {
+    const value = renaming?.value.trim() ?? ''
+    // Blank or unchanged is a cancel, not a save: displayName cannot be empty.
+    if (!value || value === r.displayName) { setRenaming(null); return }
+    rename.mutate({ id: r.modelDbId, displayName: value })
+  }
+
   const unlimitedOn = useExtensionEnabled('unlimited-models')
   const setUnlimited = useMutation({
     mutationFn: ({ row, on }: { row: Row; on: boolean }) =>
@@ -663,12 +679,38 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
               >
                 <td className="py-1 pr-2">
                   <span className="flex max-w-[260px] items-center gap-1">
-                    <span className="truncate font-medium" title={r.displayName}>{r.displayName}</span>
+                    {renaming?.id === r.modelDbId ? (
+                      <Input
+                        autoFocus
+                        value={renaming.value}
+                        onChange={e => setRenaming({ id: r.modelDbId, value: e.target.value })}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') saveRename(r)
+                          if (e.key === 'Escape') setRenaming(null)
+                        }}
+                        onBlur={() => saveRename(r)}
+                        disabled={rename.isPending}
+                        aria-label={t('keys.renameModel')}
+                        className="h-6 w-[220px] text-xs"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => { rename.reset(); setRenaming({ id: r.modelDbId, value: r.displayName }) }}
+                        title={t('keys.renameModelHint')}
+                        className="truncate text-left font-medium decoration-dotted underline-offset-2 hover:underline"
+                      >
+                        {r.displayName}
+                      </button>
+                    )}
                     {newModelIds.has(r.modelId) && (
                       <span className="shrink-0 rounded-full bg-amber-500 px-1.5 text-[9px] font-semibold uppercase tracking-wide text-white">{t('keys.newArrivalBadge')}</span>
                     )}
                   </span>
                   <code className="block max-w-[260px] truncate text-[10px] text-muted-foreground" title={r.modelId}>{r.modelId}</code>
+                  {rename.isError && rename.variables?.id === r.modelDbId && (
+                    <span className="block text-[10px] text-destructive">{(rename.error as Error).message}</span>
+                  )}
                   {/* Why the row is greyed. Without this a tested-good route
                       that is switched off looks like the router ignoring it. */}
                   {(() => {

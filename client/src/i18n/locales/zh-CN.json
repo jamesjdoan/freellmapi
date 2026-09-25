@@ -835,7 +835,9 @@
     "unlimitedEffective": "∞ unlimited",
     "unlimitedWaiting": "∞ unlimited · waiting for a $0 price",
     "unlimitedOnHint": "Free with no meter: skip every limit, count toward none, try first in its chains. On OpenRouter it only takes effect while OpenRouter prices it at $0.",
-    "unlimitedOffHint": "Remove unlimited: limits and the paid-balance guard apply again."
+    "unlimitedOffHint": "Remove unlimited: limits and the paid-balance guard apply again.",
+    "renameModel": "Rename model",
+    "renameModelHint": "Click to rename. Enter saves, Esc cancels. The model ID is unchanged."
   },
   "backups": {
     "title": "备份",

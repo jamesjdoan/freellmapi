@@ -232,7 +232,7 @@ export function DiscoverModelsDialog({
           <p className="mt-3 text-xs text-destructive">{(register.error as Error).message}</p>
         )}
 
-        <div className="mt-5 flex items-center justify-end gap-2">
+        <div className="mt-5 flex items-center justify-end gap-2 sticky bottom-0 bg-card/95 backdrop-blur-sm py-3 border-t border-border">
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
             {t('common.cancel')}
           </Button>

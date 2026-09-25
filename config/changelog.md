@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-09-26 — Rename a model from its Keys row; Add stays in view
+
+- Keys → expand a provider → click a model's name to rename it (Enter saves, Esc cancels; blank or
+  unchanged is a cancel). Uses `PATCH /api/models/:id` `displayName`, so a catalogue model keeps the
+  name as an override across syncs. The model ID is unchanged. Meant for relays whose `/v1/models`
+  only gives raw ids.
+- Fetch models dialog: the Cancel / Add N models bar is sticky, so it no longer sits below a long list.
+
 ## 2026-09-25 — Unlimited models (Space Bunny)
 
 - Keys → expand a provider → **∞ set unlimited** on a model row. An unlimited model skips every
