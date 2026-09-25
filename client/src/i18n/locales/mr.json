@@ -829,7 +829,13 @@
     "creditAllowanceEffect": "{amount} a month. When it runs out (402), this provider is paused until the next reset, around {date} ({timezone}), instead of being retried every day.",
     "discoverSelectFree": "Select all free ({count})",
     "discoverSelectFreeHint": "Ticks every model this endpoint marks free in its id (ending -free or :free). Nothing is inferred from price.",
-    "baseUrlEdit": "Edit base URL - usually ends in /v1. Its models and limits move with it."
+    "baseUrlEdit": "Edit base URL - usually ends in /v1. Its models and limits move with it.",
+    "renameAccount": "Rename",
+    "unlimitedSet": "∞ set unlimited",
+    "unlimitedEffective": "∞ unlimited",
+    "unlimitedWaiting": "∞ unlimited · waiting for a $0 price",
+    "unlimitedOnHint": "Free with no meter: skip every limit, count toward none, try first in its chains. On OpenRouter it only takes effect while OpenRouter prices it at $0.",
+    "unlimitedOffHint": "Remove unlimited: limits and the paid-balance guard apply again."
   },
   "backups": {
     "title": "Backups",

@@ -25,6 +25,7 @@ import { logRequest } from '../lib/request-log.js';
 import { withKeyProxy } from '../lib/proxy.js';
 import { sanitizeProviderErrorMessage } from '../lib/error-redaction.js';
 import { recordRequest, recordTokens } from '../services/ratelimit.js';
+import { invalidateUnlimitedCache, refreshUnlimitedPrices, unlimitedStatus } from '../services/unlimited-models.js';
 
 export const modelsRouter = Router();
 
@@ -51,6 +52,9 @@ const modelUpdateSchema = z.object({
   supportsVision: z.boolean().optional(),
   supportsTools: z.boolean().optional(),
   fallbackEnabled: z.boolean().optional(),
+  /** Free with no meter (services/unlimited-models.ts). Not a catalogue
+   *  override: it is the operator's own call and survives every sync. */
+  unlimited: z.boolean().optional(),
 }).strict();
 
 const MODEL_FIELD_COLUMNS: Record<keyof ModelOverridePatch | 'enabled', string> = {
@@ -247,7 +251,7 @@ modelsRouter.delete('/custom/:id', (req: Request, res: Response) => {
   res.json({ success: true });
 });
 
-modelsRouter.patch('/:id', (req: Request, res: Response) => {
+modelsRouter.patch('/:id', async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {
     res.status(400).json({ error: { message: 'Invalid id' } });
@@ -269,7 +273,22 @@ modelsRouter.patch('/:id', (req: Request, res: Response) => {
 
   const modelPatch: Partial<typeof parsed.data> = { ...parsed.data };
   delete modelPatch.fallbackEnabled;
+  delete modelPatch.unlimited;
   const modelKeys = Object.keys(modelPatch) as Array<keyof typeof modelPatch>;
+  if (parsed.data.unlimited !== undefined) {
+    db.prepare('UPDATE models SET unlimited = ? WHERE id = ?').run(parsed.data.unlimited ? 1 : 0, id);
+    invalidateUnlimitedCache();
+    if (parsed.data.unlimited) {
+      // A guarded platform's flag waits on a $0 price, so check it now rather
+      // than at the next six-hourly pass. Awaited so the reply says whether
+      // the flag is already in force.
+      await refreshUnlimitedPrices(db);
+    }
+    if (modelKeys.length === 0 && parsed.data.fallbackEnabled === undefined) {
+      res.json({ success: true, id, unlimited: unlimitedStatus(db, row.platform, row.model_id) });
+      return;
+    }
+  }
   if (modelKeys.length === 0 && parsed.data.fallbackEnabled === undefined) {
     res.status(400).json({ error: { message: 'No model fields provided' } });
     return;

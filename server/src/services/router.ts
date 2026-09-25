@@ -32,6 +32,7 @@ import {
 } from './scoring.js';
 import { TIMEOUT_ERROR_MARKERS } from '../lib/error-classify.js';
 import { checkMonthlyBudget, reserveMonthlyBudget } from './key-budget.js';
+import { isUnlimitedModel } from './unlimited-models.js';
 import { applyModelWeightOverride, getModelWeightOverrides } from './model-weight-overrides.js';
 import { modelsWithOverriddenField } from './model-state.js';
 import { parseBudget } from '../lib/budget.js';
@@ -1224,6 +1225,11 @@ function orderChain(
   // else, so this is a no-op outside slug-fallback resolution.
   const tier = (e: ChainRow) => e.match_tier ?? 0;
   const preference = (e: ChainRow) => e.provider_preference_rank ?? 0;
+  // An unlimited model (services/unlimited-models.ts) is tried first among the
+  // chain's members, after the match tier and before provider preference. It
+  // only orders: a benched or keyless one is still skipped at key selection,
+  // so health, cooldowns and capability keep winning.
+  const unlimitedFirst = (e: ChainRow) => (isUnlimitedModel(e.platform, e.model_id) ? 0 : 1);
   // `let`, not `const`: the peak-hours adjustment reassigns this below.
   let weights = weightsFor(strategy);
   if (!weights) {
@@ -1302,7 +1308,7 @@ function orderChain(
       });
 
     const outer = (a: { e: ChainRow }, b: { e: ChainRow }) =>
-      tier(a.e) - tier(b.e) || preference(a.e) - preference(b.e);
+      tier(a.e) - tier(b.e) || unlimitedFirst(a.e) - unlimitedFirst(b.e) || preference(a.e) - preference(b.e);
     const ordered = [...scoredByPriority]
       .sort((a, b) => outer(a, b) || a.eff - b.eff || a.e.priority - b.e.priority || a.i - b.i);
 
@@ -1333,7 +1339,7 @@ function orderChain(
 
   const scored = chain.map(e => ({ e, s: scoreChainEntry(e, weights, intelMin, intelMax, sampled, keyCounts, headroomCfg) }));
   const outer = (a: { e: ChainRow }, b: { e: ChainRow }) =>
-    tier(a.e) - tier(b.e) || preference(a.e) - preference(b.e);
+    tier(a.e) - tier(b.e) || unlimitedFirst(a.e) - unlimitedFirst(b.e) || preference(a.e) - preference(b.e);
   // Higher score first WITHIN a tier; manual priority breaks ties so the chain
   // still matters.
   const ordered = [...scored]
@@ -1469,7 +1475,10 @@ function withoutAutorouteDisabled(rows: ChainRow[]): ChainRow[] {
   const guarded = isExtensionEnabled(PAID_BALANCE_GUARD_ID);
   return rows.filter(row =>
     !excluded.includes(row.platform.toLowerCase())
-    && (!guarded || !consumesPaidBalance(row.platform as Platform, row.model_id)),
+    // An unlimited model is exempt only while its provider prices it at $0
+    // (isUnlimitedModel re-checks that), so the exemption cannot outlive a
+    // stealth period.
+    && (!guarded || !consumesPaidBalance(row.platform as Platform, row.model_id) || isUnlimitedModel(row.platform, row.model_id)),
   );
 }
 
@@ -1823,19 +1832,23 @@ function selectKeyForModel(entry: ChainRow, estimatedTokens: number, skipKeys?: 
       note(why === 'tier' || why === 'credit' ? 'provider-blocked' : 'cooldown');
       continue;
     }
-    if (!isQuotaPoolAvailable(entry.platform as Platform, key.id, entry.model_id, key.base_url)) { note('observed-quota-exhausted'); continue; }
-    if (!canUseProvider(entry.platform, key.id)) { note('provider-daily-cap'); continue; }
+    // Unlimited (services/unlimited-models.ts): no usage gate applies. Cooldown
+    // above and concurrency below still do - those are the provider saying no,
+    // not a count of ours.
+    const unlimited = isUnlimitedModel(entry.platform, entry.model_id);
+    if (!unlimited && !isQuotaPoolAvailable(entry.platform as Platform, key.id, entry.model_id, key.base_url)) { note('observed-quota-exhausted'); continue; }
+    if (!unlimited && !canUseProvider(entry.platform, key.id)) { note('provider-daily-cap'); continue; }
     // Account-wide per-minute budget, checked before the per-model gates: a model
     // with a NULL rpm_limit would otherwise sail past them and spend a budget its
     // siblings share.
-    if (!canUseProviderMinute(entry.platform, key.id)) { note('provider-minute-cap'); continue; }
+    if (!unlimited && !canUseProviderMinute(entry.platform, key.id)) { note('provider-minute-cap'); continue; }
     // Skip a key that already has its allowed requests in the air. Without this,
     // parallel streams all pick the same key and 429 each other on providers that
     // meter concurrency per credential.
     if (!canUseKeyConcurrency(entry.platform, key.id)) { note('key-concurrency'); continue; }
-    if (!canMakeRequest(entry.platform, entry.model_id, key.id, limits)) { note('rpm/rpd-limit'); continue; }
-    if (!canUseTokens(entry.platform, entry.model_id, key.id, estimatedTokens, limits)) { note('tpm/tpd-limit'); continue; }
-    if (!canUseProviderTokens(entry.platform, key.id, entry.model_id, estimatedTokens)) { note('provider-daily-token-cap'); continue; }
+    if (!unlimited && !canMakeRequest(entry.platform, entry.model_id, key.id, limits)) { note('rpm/rpd-limit'); continue; }
+    if (!unlimited && !canUseTokens(entry.platform, entry.model_id, key.id, estimatedTokens, limits)) { note('tpm/tpd-limit'); continue; }
+    if (!unlimited && !canUseProviderTokens(entry.platform, key.id, entry.model_id, estimatedTokens)) { note('provider-daily-token-cap'); continue; }
     // Every governing quota domain, resolved through the precedence chain, not
     // just the counters this file happens to keep.
     //
@@ -1850,12 +1863,12 @@ function selectKeyForModel(entry: ChainRow, estimatedTokens: number, skipKeys?: 
     // here; shipped catalogue guesses and ceilings inferred from one 429 stay
     // advisory (see ENFORCEABLE_SOURCES).
     const domains = quotaDomainsAdmit(entry.platform, entry.model_id, entry.endpoint_scope ?? '', estimatedTokens);
-    if (!domains.ok) { note(`quota-domain-exhausted(${domains.blockedBy ?? 'unknown'})`); continue; }
+    if (!unlimited && !domains.ok) { note(`quota-domain-exhausted(${domains.blockedBy ?? 'unknown'})`); continue; }
     // Monthly budget (#1158): a key whose request/token caps are spent for the
     // current UTC month is not a candidate — same skip semantics as the daily
     // gates above. The Retry-After (next-month boundary) surfaces through the
     // fallback exhaustion path rather than blocking here.
-    if (!checkMonthlyBudget(key.id, estimatedTokens).allowed) { note('monthly-budget-cap'); continue; }
+    if (!unlimited && !checkMonthlyBudget(key.id, estimatedTokens).allowed) { note('monthly-budget-cap'); continue; }
 
     let decryptedKey: string;
     try {
@@ -1876,7 +1889,7 @@ function selectKeyForModel(entry: ChainRow, estimatedTokens: number, skipKeys?: 
     // Taken only once the key has cleared every gate and is definitely being
     // returned, so a rejected candidate never consumes concurrency budget.
     const proxyUrl = decryptProxyUrl(key);
-    const budget = reserveMonthlyBudget(key.id, estimatedTokens);
+    const budget = unlimited ? { allowed: true as const, release: () => {} } : reserveMonthlyBudget(key.id, estimatedTokens);
     if (!budget.allowed) { note('monthly-budget-cap'); continue; }
     const leaseId = acquireLease(entry.platform, entry.model_id, key.id, estimatedTokens);
     return {

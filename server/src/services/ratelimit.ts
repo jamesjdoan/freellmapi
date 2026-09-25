@@ -3,6 +3,7 @@
 import { getDb, getSetting, setSetting } from '../db/index.js';
 import { isLoopbackOrPrivateUrl } from '../lib/url-guard.js';
 import { parseModelScope, scopeAllows } from '../lib/model-scope.js';
+import { isUnlimitedModel } from './unlimited-models.js';
 
 interface Window {
   timestamps: number[];
@@ -977,6 +978,13 @@ function pushMemoryTokens(key: string, windowMs: number, now: number, tokens: nu
 
 export function recordRequest(platform: string, modelId: string, keyId: number) {
   const now = Date.now();
+  // An unlimited model counts toward nothing: not its own windows, and not the
+  // provider-wide counters (countPlatformUsageInWindow) its siblings share.
+  if (isUnlimitedModel(platform, modelId)) {
+    clearNullLimitHits(platform, modelId, keyId);
+    clearCooldownHits(platform, modelId, keyId);
+    return;
+  }
 
   if (!recordUsage(platform, modelId, keyId, 'request', 0, now)) {
     pushMemoryRequest(`${platform}:${modelId}:${keyId}:rpm`, MINUTE, now);
@@ -994,6 +1002,7 @@ export function recordTokens(
   tokens: number,
 ) {
   const now = Date.now();
+  if (isUnlimitedModel(platform, modelId)) return;
 
   if (!recordUsage(platform, modelId, keyId, 'tokens', tokens, now)) {
     pushMemoryTokens(`${platform}:${modelId}:${keyId}:tpm`, MINUTE, now, tokens);

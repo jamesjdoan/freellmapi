@@ -107,6 +107,9 @@ interface Row {
   modelId: string
   /** Relay a custom row belongs to (normalised base URL); '' for catalogue rows. */
   endpointScope?: string
+  /** Operator's unlimited flag, and whether it is in force (a guarded platform
+   *  needs a $0 price from the provider). */
+  unlimited?: { flagged: boolean; effective: boolean }
   displayName: string
   enabled: boolean
   contextWindow: number | null
@@ -296,6 +299,13 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
   // An unscoped key has no per-model list to edit, so only the flag moves. A
   // scope edit that would empty the list is refused by the server (409); the
   // flag still lands, which is the half that matters.
+  const unlimitedOn = useExtensionEnabled('unlimited-models')
+  const setUnlimited = useMutation({
+    mutationFn: ({ row, on }: { row: Row; on: boolean }) =>
+      apiFetch(`/api/models/${row.modelDbId}`, { method: 'PATCH', body: JSON.stringify({ unlimited: on }) }),
+    onSuccess: () => invalidate(),
+  })
+
   const setRoutable = useMutation({
     mutationFn: async ({ row, on }: { row: Row; on: boolean }) => {
       await apiFetch(`/api/models/${row.modelDbId}`, { method: 'PATCH', body: JSON.stringify({ enabled: on }) })
@@ -649,7 +659,7 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
               // contrast so it is still obviously operable.
               <tr
                 key={r.modelDbId}
-                className={`border-t ${verdictEdge(healthByModel.get(r.modelId))} ${newModelIds.has(r.modelId) ? 'bg-amber-500/10' : routable(r) ? '' : 'opacity-45'}`}
+                className={`group/row border-t ${verdictEdge(healthByModel.get(r.modelId))} ${newModelIds.has(r.modelId) ? 'bg-amber-500/10' : routable(r) ? '' : 'opacity-45'}`}
               >
                 <td className="py-1 pr-2">
                   <span className="flex max-w-[260px] items-center gap-1">
@@ -688,6 +698,21 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
                       failures are marked: a working route needs no badge, and
                       untested is left blank because it is not evidence. */}
                   <HealthMark health={healthByModel.get(r.modelId)} />
+                  {unlimitedOn && (
+                    <button
+                      type="button"
+                      disabled={setUnlimited.isPending}
+                      onClick={() => setUnlimited.mutate({ row: r, on: !r.unlimited?.flagged })}
+                      aria-pressed={!!r.unlimited?.flagged}
+                      title={t(r.unlimited?.flagged ? 'keys.unlimitedOffHint' : 'keys.unlimitedOnHint')}
+                      className={`mt-0.5 ml-1 inline-block rounded-full border px-1.5 py-0.5 text-[10px] ${
+                        !r.unlimited?.flagged ? 'border-dashed text-muted-foreground/70 opacity-0 transition-opacity group-hover/row:opacity-100 hover:bg-muted focus-visible:opacity-100'
+                        : r.unlimited.effective ? 'border-emerald-500/50 bg-emerald-500/12 text-emerald-800 dark:text-emerald-300'
+                        : 'border-amber-500/50 bg-amber-500/15 text-amber-800 dark:text-amber-300'}`}
+                    >
+                      {!r.unlimited?.flagged ? t('keys.unlimitedSet') : r.unlimited.effective ? t('keys.unlimitedEffective') : t('keys.unlimitedWaiting')}
+                    </button>
+                  )}
                   <span className="mt-0.5 block"><ChainFit score={scoreRowOf(r)} chains={r.chains} /></span>
                 </td>
                 <Num v={r.analysis?.intelligenceIndex} row={r} metric="intelligence" onNudge={nudge.mutate} busy={busy} tone={tone('general', r.analysis?.intelligenceIndex)} />

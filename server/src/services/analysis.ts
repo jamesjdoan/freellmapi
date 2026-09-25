@@ -1,3 +1,4 @@
+import { isUnlimitedModel } from './unlimited-models.js';
 import { getDb, getSetting, setSetting } from '../db/index.js';
 import { parseModelScope, scopeAllows } from '../lib/model-scope.js';
 import type { Db } from '../db/types.js';
@@ -372,6 +373,9 @@ export interface CompareRow {
   /** Which relay a custom row belongs to (its normalised base URL); '' for
    *  catalogue rows. Lets a per-endpoint view show only that endpoint's models. */
   endpointScope: string;
+  /** Operator flag, and whether it is in force (a guarded platform needs a $0
+   *  price from the provider). services/unlimited-models.ts */
+  unlimited: { flagged: boolean; effective: boolean };
   displayName: string;
   enabled: boolean;
   contextWindow: number | null;
@@ -450,7 +454,7 @@ export interface ComparePayload {
  */
 export function getComparePayload(db: Db = getDb()): ComparePayload {
   const rows = db.prepare(`
-    SELECT m.id AS model_db_id, m.platform, m.model_id, m.display_name, m.enabled, m.context_window, m.endpoint_scope,
+    SELECT m.id AS model_db_id, m.platform, m.model_id, m.display_name, m.enabled, m.context_window, m.endpoint_scope, m.unlimited,
            m.supports_tools, m.supports_vision, m.intelligence_rank, m.speed_rank,
            l.aa_slug, l.source AS link_source, l.match_reason,
            l.proxy_delta_intelligence, l.proxy_delta_coding, l.proxy_delta_agentic, l.proxy_delta_speed,
@@ -562,6 +566,7 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
       platform: String(r.platform),
       modelId: String(r.model_id),
       endpointScope: String(r.endpoint_scope ?? ''),
+      unlimited: { flagged: r.unlimited === 1, effective: r.unlimited === 1 && isUnlimitedModel(String(r.platform), String(r.model_id)) },
       displayName: String(r.display_name ?? r.model_id),
       enabled: r.enabled === 1,
       contextWindow: r.context_window == null ? null : Number(r.context_window),

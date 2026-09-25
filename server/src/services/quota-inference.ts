@@ -458,6 +458,8 @@ export function inferAllowanceFromFraction(
       FROM requests
      WHERE platform = ? AND created_at > ? AND created_at <= ?
        AND request_type <> 'burn_test'
+       -- An unlimited call took nothing from the balance being sized.
+       AND unlimited = 0
   `);
   const priceInterval = getDb().prepare(`
     SELECT model_id,
@@ -466,6 +468,8 @@ export function inferAllowanceFromFraction(
       FROM requests
      WHERE platform = ? AND created_at > ? AND created_at <= ?
        AND request_type <> 'burn_test'
+       -- An unlimited call took nothing from the balance being sized.
+       AND unlimited = 0
      GROUP BY model_id
   `);
 

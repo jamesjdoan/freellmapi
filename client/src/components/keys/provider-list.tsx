@@ -312,6 +312,10 @@ export function ProviderList({ onAddKey, initialSearch }: {
   // Custom endpoint whose model list is being fetched (#488) — relays change
   // what they serve constantly, so this is a repeat action, not a one-off.
   const [discoverKeyId, setDiscoverKeyId] = useState<number | null>(null)
+  // Rename from an account row's menu opens the edit dialog rather than the
+  // inline field: the menu hands focus back to its trigger as it closes, which
+  // would blur (and so save and close) an inline input the instant it opened.
+  const [renameKeyId, setRenameKeyId] = useState<number | null>(null)
   // Inline base-URL correction for an OpenAI-compatible account, like the
   // label: click the URL, fix it, Enter. Its models and limits move with it.
   const [editingBaseUrl, setEditingBaseUrl] = useState<{ id: number; value: string } | null>(null)
@@ -833,6 +837,15 @@ export function ProviderList({ onAddKey, initialSearch }: {
                             <FlaskConical className="ml-auto size-3.5" />
                           </DropdownMenuItem>
                         )}
+                        {/* An OpenAI-compatible account is named by its label, and that
+                            name is the row's title - so renaming it is offered here, not
+                            only by clicking the label beside the key. */}
+                        {group.endpointScope !== undefined && (
+                          <DropdownMenuItem onClick={() => setRenameKeyId(group.keys[0].id)}>
+                            {t('keys.renameAccount')}
+                            <Pencil className="ml-auto size-3.5" />
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem onClick={() => setAddModelTarget({ platform: group.platform })}>
                           {t('keys.addCustomModel')}
                           <Sparkles className="ml-auto size-3.5" />
@@ -1280,6 +1293,13 @@ export function ProviderList({ onAddKey, initialSearch }: {
           })}
         </div>
       )}
+
+      {(() => {
+        const renameKey = renameKeyId !== null ? keys.find(k => k.id === renameKeyId) : undefined
+        return renameKey ? (
+          <EditKeyDialog apiKey={renameKey} onOpenChange={(open) => { if (!open) setRenameKeyId(null) }} />
+        ) : null
+      })()}
 
       {discoverKeyId !== null && (
         <DiscoverModelsDialog

@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-09-25 — Unlimited models (Space Bunny)
+
+- Keys → expand a provider → **∞ set unlimited** on a model row. An unlimited model skips every
+  local usage gate (per-model RPM/RPD/TPM/TPD, provider account caps, quota domains, monthly key
+  caps), is counted toward none (`recordRequest`/`recordTokens` skip it; each `requests` row records
+  `unlimited` at log time, and the monthly-usage trigger and pool inference read that), is tried
+  first in the chains it is in, and passes the paid-balance guard. Cooldowns, health, capability
+  and per-key concurrency still apply.
+- On OpenRouter/AnyAPI/UnoRouter it is only in force while the provider's public listing prices it
+  at $0 (`model_price_check`, checked on flag, at boot and every 6h). Charging, delisted or never
+  checked = off, and every limit and the guard apply again; a failed check keeps the last price.
+  The chip reads `∞ unlimited` (in force) or `∞ unlimited · waiting for a $0 price`.
+- Extension `unlimited-models` (off = flags kept, treated as normal). Migration `20260925_000003`
+  (`models.unlimited` nullable, `model_price_check`, `requests.unlimited`, trigger).
+  Test `unlimited-models.test.ts`.
+
+## 2026-09-25 — Rename an OpenAI-compatible account from its row
+
+- An account row's ⋯ menu gains **Rename**, opening Edit key on its label (the row's title).
+  Clicking the label beside the key still edits it inline.
+
 ## 2026-09-25 — One row per OpenAI-compatible account; fix a base URL in place; pull all free models
 
 - Keys: every custom (OpenAI-compatible) endpoint is its own provider row, named by its label (or

@@ -113,6 +113,7 @@ export function getRecentQuotaActivity(now: number): RecentQuotaActivity[] {
       FROM requests
      WHERE created_at >= ? AND datetime(created_at) >= ? AND datetime(created_at) <= ?
        AND status = 'success'
+       AND unlimited = 0
      GROUP BY platform, key_id, model_id
   `).all(since, since, sqliteUtc(now)) as { platform: Platform; keyId: number | null; modelId: string; count: number }[];
   return rows.map(row => ({ platform: row.platform, keyId: row.keyId,

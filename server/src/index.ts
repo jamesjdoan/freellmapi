@@ -1,3 +1,4 @@
+import { startUnlimitedPriceCheck } from './services/unlimited-models.js';
 import './env.js';
 import { createApp } from './app.js';
 import { initDb, getDb } from './db/index.js';
@@ -95,6 +96,7 @@ async function main() {
     startDbBackupPump(getDb(), scheduler, config.dbPath ?? undefined);
     startBackupScheduler(scheduler);
     startCustomModelSync(getDb(), scheduler);
+    startUnlimitedPriceCheck();
 
     // Post-sleep recovery: while the host was suspended (laptop lid, VM
     // pause) timers and keep-alive sockets froze, so the first requests after
