@@ -817,7 +817,9 @@
     "pause_tier": "paused · not on this plan",
     "pause_authoritative": "paused · rate-limited by the provider",
     "pause_heuristic": "paused · cooling down after errors",
-    "pauseBackIn": "back in {time}"
+    "pauseBackIn": "back in {time}",
+    "expandAll": "Expand all",
+    "collapseAll": "Collapse all"
   },
   "backups": {
     "title": "备份",
@@ -1762,5 +1764,37 @@
     "title": "Imperium extensions",
     "intro": "Features added by the separate Imperium FreeLLMAPI branch. Each switch turns one extension off without deleting anything it has stored; the links open the pages that own its real settings.",
     "footer": "Switching an extension off hides its surface and stops its behaviour. It never drops a table, a saved scope or a merge you have already made — see “When off” on each entry."
+  },
+  "chainMinimums": {
+    "open": "Chain minimums",
+    "title": "Chain minimums",
+    "close": "Close",
+    "neverSaved": "Draft defaults - not saved yet",
+    "revision": "Revision {revision} · saved {when}",
+    "compareAgainst": "Highlight scores against",
+    "compareNone": "nothing",
+    "recommendOnly": "Recommendations only. Nothing here changes a chain or routing.",
+    "highlightHint": "Highlight scores against this chain",
+    "counts": "{qualify} qualify · {pass}/{members} members pass",
+    "metric_general": "General",
+    "metric_coding": "Coding",
+    "metric_agentic": "Agentic",
+    "acceptEstimated": "Accept estimated (proxy) scores",
+    "needsTools": "needs tool calling",
+    "needsVision": "needs vision",
+    "fastLaneReserved": "Fast-Lane is system reserved and not graded",
+    "reset": "Reset",
+    "off": "off - set a minimum",
+    "shiftHint": "Shift-click for ±5",
+    "turnOff": "Remove this minimum",
+    "turnOffShort": "off"
+  },
+  "chainFit": {
+    "fits": "fits: {chains}",
+    "inChain": "in {chain} · {why}",
+    "shortfall": "{metric} {value} < {min}",
+    "unknown": "no {metrics} score",
+    "missing_tools": "no tool calling",
+    "missing_vision": "no vision"
   }
 }

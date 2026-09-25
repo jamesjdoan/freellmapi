@@ -15,6 +15,8 @@ import { ModelName } from '@/components/model-name'
 import { useExtensionEnabled } from '@/lib/use-extension'
 import { churnByPlatform, useCatalogueChanges } from '@/lib/catalogue-changes'
 import { markArrivalsSeen, useUnseenArrivals } from '@/lib/seen-arrivals'
+import { ChainFit } from '@/components/chain-fit'
+import { scoreRowOf, useScoreTone } from '@/lib/chain-minimums'
 
 // Every model this provider serves, with the measured scores beside the two
 // switches that decide whether it can route. Lives inside the expanded provider
@@ -476,6 +478,8 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
   const { data: catalogueChanges } = useCatalogueChanges()
   const unseenArrivals = useUnseenArrivals(churnEnabled ? churnByPlatform(catalogueChanges).get(platform)?.arrived : undefined)
   const newModelIds = new Set(unseenArrivals.map(m => m.modelId))
+  // Highlights scores against the chain picked in the chain-minimums panel.
+  const tone = useScoreTone()
   const hiddenNewCount = hideDisabled
     ? (data?.rows ?? []).filter(r => r.platform === platform && newModelIds.has(r.modelId) && !routable(r)).length
     : 0
@@ -674,10 +678,11 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
                       failures are marked: a working route needs no badge, and
                       untested is left blank because it is not evidence. */}
                   <HealthMark health={healthByModel.get(r.modelId)} />
+                  <span className="mt-0.5 block"><ChainFit score={scoreRowOf(r)} chains={r.chains} /></span>
                 </td>
-                <Num v={r.analysis?.intelligenceIndex} row={r} metric="intelligence" onNudge={nudge.mutate} busy={busy} />
-                <Num v={r.analysis?.codingIndex} row={r} metric="coding" onNudge={nudge.mutate} busy={busy} />
-                <Num v={r.analysis?.agenticIndex} row={r} metric="agentic" onNudge={nudge.mutate} busy={busy} />
+                <Num v={r.analysis?.intelligenceIndex} row={r} metric="intelligence" onNudge={nudge.mutate} busy={busy} tone={tone('general', r.analysis?.intelligenceIndex)} />
+                <Num v={r.analysis?.codingIndex} row={r} metric="coding" onNudge={nudge.mutate} busy={busy} tone={tone('coding', r.analysis?.codingIndex)} />
+                <Num v={r.analysis?.agenticIndex} row={r} metric="agentic" onNudge={nudge.mutate} busy={busy} tone={tone('agentic', r.analysis?.agenticIndex)} />
                 <Num v={r.analysis?.medianOutputTokensPerSecond} digits={0} row={r} metric="speed" onNudge={nudge.mutate} busy={busy} />
                 <td className="py-1 pr-2 text-right tabular-nums text-muted-foreground">
                   {r.contextWindow ? `${Math.round(r.contextWindow / 1000)}K` : '–'}
@@ -814,8 +819,10 @@ function SortTh({ active, onClick, right, children }: {
  * that is one signed number, green up or red down and nothing when level; the
  * − and + appear on hover so the column stays readable.
  */
-function Num({ v, digits = 1, row, metric, onNudge, busy }: {
+function Num({ v, digits = 1, row, metric, onNudge, busy, tone }: {
   v: number | null | undefined
+  /** Highlight against the chain-minimums panel's chosen chain. */
+  tone?: string
   digits?: number
   row?: Row
   metric?: ProxyMetric
@@ -827,7 +834,7 @@ function Num({ v, digits = 1, row, metric, onNudge, busy }: {
   const delta = adjustable ? row.link!.proxyDelta[metric] : 0
 
   return (
-    <td className="group/num py-1 pr-2 text-right tabular-nums">
+    <td className={`group/num py-1 pr-2 text-right tabular-nums ${tone ?? ''}`}>
       <span className="inline-flex items-center justify-end gap-1">
         {adjustable && (
           <button

@@ -272,6 +272,15 @@ export function ProviderList({ onAddKey, initialSearch }: {
   // The one open provider group, or '' for none. Accordion rather than a set of
   // independent disclosures (see isGroupExpanded).
   const [openGroup, setOpenGroup] = useState('')
+  // Every provider open at once, for reading the whole reachable catalogue in
+  // one scroll. Off by default for the reason below; remembered per browser.
+  const [expandAll, setExpandAll] = useState(() => {
+    try { return localStorage.getItem('imperium.keys.expandAll') === '1' } catch { return false }
+  })
+  const setExpandAllRemembered = (on: boolean) => {
+    setExpandAll(on)
+    try { localStorage.setItem('imperium.keys.expandAll', on ? '1' : '0') } catch { /* view state only */ }
+  }
   const [search, setSearch] = useState(initialSearch ?? '')
   // The prop arrives AFTER mount — the URL parameter is read in an effect one
   // level up — so seeding useState alone silently did nothing.
@@ -603,10 +612,14 @@ export function ProviderList({ onAddKey, initialSearch }: {
   // them behind disclosures would be worse than useless.
   function isGroupExpanded(group: (typeof grouped)[number]): boolean {
     if (q) return true // an active search auto-expands every matching group
+    if (expandAll) return true
     return openGroup === group.value
   }
 
   function toggleGroup(value: string, expanded: boolean) {
+    // Closing one provider while all are open drops back to one-at-a-time,
+    // with nothing open: a single header click never reopens the whole wall.
+    if (expandAll) setExpandAllRemembered(false)
     setOpenGroup(expanded ? '' : value)
   }
 
@@ -650,6 +663,9 @@ export function ProviderList({ onAddKey, initialSearch }: {
           ]}
           ariaLabel={t('keys.filterAll')}
         />
+        <Button size="sm" variant="outline" className="h-8" aria-pressed={expandAll} onClick={() => { setExpandAllRemembered(!expandAll); setOpenGroup('') }}>
+          {expandAll ? t('keys.collapseAll') : t('keys.expandAll')}
+        </Button>
         <span className="flex-1" />
         <span className="text-xs text-muted-foreground tabular-nums">
           {t('keys.providerCountSummary', { providers: totalProviders, keys: totalKeys })}

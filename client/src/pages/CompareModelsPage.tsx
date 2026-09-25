@@ -17,6 +17,9 @@ import { useExtensionEnabled } from '@/lib/use-extension'
 import { ChainPicker } from '@/components/compare/chain-picker'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/page-header'
+import { ChainMinimumsButton } from '@/components/chain-minimums-panel'
+import { ChainFit } from '@/components/chain-fit'
+import { scoreRowOf, useScoreTone, type ScoreRow } from '@/lib/chain-minimums'
 import { PlatformDot, PlatformLegend, type PlatformScope } from '@/components/platform-dot'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tooltip } from '@/components/tooltip'
@@ -456,6 +459,7 @@ export default function CompareModelsPage() {
   // ones in use.
   // Measured intelligence first: the reason to open this page is to see what
   // the benchmarks say, and the payload order is the router's, not a ranking.
+  const tone = useScoreTone()
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'intelligenceIndex', dir: 'desc' })
 
   // Every toggle this view holds, and the value it starts at. Reset reads from
@@ -598,14 +602,15 @@ export default function CompareModelsPage() {
         title={t('compare.pageTitle')}
         description={t('compare.pageDescription')}
         actions={
-          status?.configured && !status.unreadable
-            ? (
+          <>
+            <ChainMinimumsButton />
+            {status?.configured && !status.unreadable && (
               <Button size="sm" variant="outline" onClick={() => sync.mutate()} disabled={sync.isPending}>
                 <RefreshCw className={`size-3.5 ${sync.isPending ? 'animate-spin' : ''}`} />
                 {t('compare.sync')}
               </Button>
-            )
-            : undefined
+            )}
+          </>
         }
       />
 
@@ -1095,6 +1100,7 @@ export default function CompareModelsPage() {
                               tail of a benchmark name is what tells siblings
                               apart, so it is the last part that may be cut. */}
                           <span className="max-w-[220px] whitespace-normal font-medium [overflow-wrap:anywhere]" title={g.name}><ModelName name={g.name} /></span>
+                          {!g.reference && <ChainFit score={groupScore(g)} chains={g.chains} />}
                           {/* Routes the platform holds a key for that the key
                               does not name. One press each way, because this is
                               the difference between a model being unreachable
@@ -1211,13 +1217,13 @@ export default function CompareModelsPage() {
                           The signs say a human moved it and which way, in the
                           same green/red as the Keys panel — this is the table
                           people actually rank models in. */}
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className={`text-right tabular-nums ${tone('general', g.analysis?.intelligenceIndex)}`}>
                         {score(g.analysis?.intelligenceIndex)}<DeltaMark delta={proxyDeltaOf(g, 'intelligence')} />
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className={`text-right tabular-nums ${tone('coding', g.analysis?.codingIndex)}`}>
                         {score(g.analysis?.codingIndex)}<DeltaMark delta={proxyDeltaOf(g, 'coding')} />
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className={`text-right tabular-nums ${tone('agentic', g.analysis?.agenticIndex)}`}>
                         {score(g.analysis?.agenticIndex)}<DeltaMark delta={proxyDeltaOf(g, 'agentic')} />
                       </TableCell>
                       {/* Measured by Artificial Analysis, so they are blank
@@ -1368,6 +1374,18 @@ function DeltaMark({ delta }: { delta: number }) {
 }
 
 /** A dash, not a zero: their nulls mean "not measured". */
+/** One logical model's grading input: its AA scores, estimated only when every
+ *  link is a proxy, and the tools/vision any of its routes can offer. */
+function groupScore(g: CompareGroup): ScoreRow {
+  const base = scoreRowOf({ ...g.members[0], analysis: g.analysis })
+  return {
+    ...base,
+    estimated: g.members.length > 0 && g.members.every(m => m.link?.source === 'proxy'),
+    supportsTools: g.members.some(m => m.supportsTools),
+    supportsVision: g.members.some(m => m.supportsVision),
+  }
+}
+
 function score(value: number | null | undefined) {
   return value == null ? <span className="text-muted-foreground">–</span> : value.toFixed(1)
 }

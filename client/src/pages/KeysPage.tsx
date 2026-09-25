@@ -5,6 +5,7 @@ import { apiFetch } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { PageHeader } from '@/components/page-header'
+import { ChainMinimumsButton } from '@/components/chain-minimums-panel'
 import type { ApiKey, Platform } from '../../../shared/types'
 import { Plus, Download } from 'lucide-react'
 import { useI18n } from '@/i18n'
@@ -147,6 +148,7 @@ export default function KeysPage() {
         description={t('keys.pageDescription')}
         actions={
           <>
+            <ChainMinimumsButton />
             {(tab === 'providers' || tab === 'quotaSignals') && keys.length > 0 && (
               <Button variant="outline" size="sm" onClick={() => checkAll.mutate()} disabled={checkAll.isPending}>
                 {checkAll.isPending ? t('keys.checking') : t('keys.checkAll')}

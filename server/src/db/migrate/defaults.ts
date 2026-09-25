@@ -65,6 +65,7 @@ import * as clifreeFleetSnapshot from '../migrations/20260922_000001_clifree_fle
 import * as clifreeFleetBenchmarkSlug from '../migrations/20260922_000002_clifree_fleet_benchmark_slug.js';
 import * as clifreeFleetUsage from '../migrations/20260922_000003_clifree_fleet_usage.js';
 import * as clifreeFleetUsagePerDay from '../migrations/20260923_000001_clifree_fleet_usage_per_day.js';
+import * as chainMinimumsAndAaHistory from '../migrations/20260925_000001_chain_minimums_and_aa_history.js';
 import * as requestModelAttribution from '../migrations/20260913_000001_request_model_attribution.js';
 
 export interface MigrationModule {
@@ -213,4 +214,5 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: '20260922_000002_clifree_fleet_benchmark_slug.ts', module: clifreeFleetBenchmarkSlug },
   { filename: '20260922_000003_clifree_fleet_usage.ts', module: clifreeFleetUsage },
   { filename: '20260923_000001_clifree_fleet_usage_per_day.ts', module: clifreeFleetUsagePerDay },
+  { filename: '20260925_000001_chain_minimums_and_aa_history.ts', module: chainMinimumsAndAaHistory },
 ];

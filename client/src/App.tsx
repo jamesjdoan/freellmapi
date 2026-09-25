@@ -21,6 +21,7 @@ import { ErrorBoundary } from '@/components/error-boundary'
 import { ExtensionsDialog } from '@/components/extensions-dialog'
 import { SettingsDialog } from '@/components/settings-dialog'
 import { Toaster } from '@/components/toaster'
+import { ChainMinimumsPanel } from '@/components/chain-minimums-panel'
 import { UpdateReminder } from '@/components/update-reminder'
 import { usePremium } from '@/hooks/use-premium'
 import { I18nProvider, useI18n } from '@/i18n'
@@ -526,6 +527,7 @@ function App() {
                   </PageBoundary>
                 </PageContainer>
                 <Toaster />
+                <ChainMinimumsPanel />
                 <CommandPalette />
                 <UpdateReminder />
               </AppShell>

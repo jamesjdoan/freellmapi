@@ -192,7 +192,7 @@ export async function syncAnalysis(db: Db = getDb()): Promise<SyncResult> {
                           median_output_tokens_per_second, median_time_to_first_token_seconds,
                           index_version, fetched_at)
     VALUES (@slug, @name, @creator, @releaseDate, @intelligence, @coding, @agentic,
-            @priceIn, @priceOut, @indexCostPerTask, @tps, @ttft, @version, datetime('now'))
+            @priceIn, @priceOut, @indexCostPerTask, @tps, @ttft, @version, @fetchedAt)
     ON CONFLICT(slug) DO UPDATE SET
       name = excluded.name, creator = excluded.creator, release_date = excluded.release_date,
       intelligence_index = excluded.intelligence_index, coding_index = excluded.coding_index,
@@ -203,10 +203,21 @@ export async function syncAnalysis(db: Db = getDb()): Promise<SyncResult> {
       index_version = excluded.index_version, fetched_at = excluded.fetched_at
   `);
 
+  // Append-only history beside the in-place cache (migration 20260925_000001):
+  // one row per slug per sync, sharing one timestamp so a sync reads as one
+  // snapshot. aa_model keeps serving "latest" to every existing reader.
+  const record = db.prepare(`
+    INSERT OR IGNORE INTO aa_measurement (
+      slug, index_version, fetched_at, intelligence_index, coding_index, agentic_index,
+      median_output_tokens_per_second, median_time_to_first_token_seconds, index_cost_per_task
+    ) VALUES (@slug, @version, @fetchedAt, @intelligence, @coding, @agentic, @tps, @ttft, @indexCostPerTask)
+  `);
+  const fetchedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
   db.transaction(() => {
     for (const m of models) {
       if (!m.slug) continue;
-      upsert.run({
+      const measurement = {
         slug: m.slug,
         name: m.name ?? m.slug,
         creator: m.model_creator?.name ?? null,
@@ -220,7 +231,10 @@ export async function syncAnalysis(db: Db = getDb()): Promise<SyncResult> {
         tps: m.performance?.median_output_tokens_per_second ?? null,
         ttft: m.performance?.median_time_to_first_token_seconds ?? null,
         version,
-      });
+        fetchedAt,
+      };
+      upsert.run(measurement);
+      record.run(measurement);
     }
     // Slugs that vanished upstream: the cache is a mirror, so a stale row would
     // keep serving scores AA has withdrawn. Links to them survive - see

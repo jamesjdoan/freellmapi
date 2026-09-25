@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-09-25 — Chain minimums: set AA floors per chain, see where every model fits
+
+- **Chain minimums** side panel (Compare or Keys → Chain minimums): minimum AA General, Coding and
+  Agentic per chain with ±1 steppers (Shift ±5), off per metric, "accept estimated" per chain, and
+  live counts - models that qualify, current members that pass, the nearest model either side of
+  the line. Docked, not modal, so the page underneath re-grades as a stepper moves. Starting values
+  are the audit's draft (Apex 45, Frontier 35, Workhorse/Default 25, Coding 45 + Agentic 30,
+  Vision 25, Extra-Tier 20), unsaved until the first Save. Fast-Lane is listed as reserved.
+- Compare and Keys rows show `fits: …` and, for current members that fall short,
+  `in <chain> · General 22.0 < 25` / `no Agentic score` / `no tool calling`. Score cells turn green
+  or amber against the chain picked in the panel. **Recommendation only**: no chain or routing
+  change. Unmeasured is unknown, never a fail.
+- Every save is a numbered revision (`chain_minimum_revision`, compare-and-set on save), and every
+  AA sync is now also appended to `aa_measurement` (backfilled from the current v4.3 snapshot), so a
+  past recommendation can be reconstructed. Migration `20260925_000001`.
+- Keys: **Expand all / Collapse all** opens every provider's model table at once (remembered per
+  browser).
+- Extension `chain-minimums`. `server/src/services/chain-minimums.ts`, `routes/chain-minimums.ts`,
+  `client/src/lib/chain-minimums.ts`, `components/chain-minimums-panel.tsx`, `components/chain-fit.tsx`.
+
 ## 2026-09-25 — Chain table sorts the view; key dialog edits limits only
 
 - Keys panel: a switched-off row now says why - `held by a saved override since <date>`, `marked
