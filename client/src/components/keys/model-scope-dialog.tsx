@@ -4,8 +4,6 @@ import { apiFetch } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogPopup, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { ConfirmButton } from '@/components/confirm-button'
-import { hideControlPressable } from '@/lib/route-blockers'
 import { useI18n } from '@/i18n'
 import { X } from 'lucide-react'
 import type { ApiKey, QuotaGuidanceCatalog, QuotaGuidanceLimits } from '../../../../shared/types'
@@ -24,7 +22,6 @@ import { ProviderModelDetailsCopyAction } from './provider-model-details-copy-ac
 
 type ModelLimitDraft = Record<keyof QuotaGuidanceLimits, string>
 
-const SCOPE_HIDE_DISABLED_KEY = 'imperium.modelScope.hideDisabled'
 
 function toDraft(limits: QuotaGuidanceLimits): ModelLimitDraft {
   return {
@@ -64,7 +61,6 @@ export function ModelScopeDialog({
   const queryClient = useQueryClient()
   // Mounted only while open, so state seeds from the row without reset effects.
   const [ids, setIds] = useState<string[]>(apiKey.modelScope ?? [])
-  const [catalogTouched, setCatalogTouched] = useState(false)
   const [modelQuery, setModelQuery] = useState('')
   const [draft, setDraft] = useState('')
   const [providerRpmLimit, setProviderRpmLimit] = useState(apiKey.providerRpmLimit?.toString() ?? '')
@@ -72,17 +68,6 @@ export function ModelScopeDialog({
   const [providerTpdLimit, setProviderTpdLimit] = useState(apiKey.providerTpdLimit?.toString() ?? '')
   const [modelLimitDrafts, setModelLimitDrafts] = useState<Record<number, ModelLimitDraft>>({})
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null)
-  // Most of a big provider catalogue is models the operator will never tick, and
-  // a retired or switched-off one cannot serve traffic at all, so they start out
-  // of the way. Remembered per browser, like the FreeLLM tab's own toggle.
-  const [hideDisabled, setHideDisabled] = useState(() => {
-    try {
-      return localStorage.getItem(SCOPE_HIDE_DISABLED_KEY) !== '0'
-    } catch {
-      return true
-    }
-  })
-
   const { data: fallback = [], isLoading: catalogLoading, isError: catalogError } = useQuery<FallbackEntry[]>({
     queryKey: ['fallback'],
     queryFn: () => apiFetch('/api/fallback'),
@@ -176,9 +161,10 @@ export function ModelScopeDialog({
   }, [apiKey.models, apiKey.platform, ids, providerCandidates])
   const catalogIds = providerCandidates.map(candidate => candidate.modelId)
   const catalogReady = apiKey.platform === 'custom' || (!catalogLoading && !catalogError)
-  const selectedCatalogIds = !catalogTouched && (apiKey.modelScope === null || apiKey.modelScope === undefined)
-    ? catalogIds
-    : catalogIds.filter(id => ids.includes(id))
+  // Read-only here for catalogue providers: which models a key serves is edited
+  // on the Keys provider panel's per-model switch, the one scope editor with no
+  // bulk wipe. This dialog only shows it, to order rows and mark what is served.
+  const selectedCatalogIds = apiKey.modelScope == null ? catalogIds : catalogIds.filter(id => ids.includes(id))
 
   // The tick state as it stood when the dialog opened. Both the order and the
   // hide filter read this, not the live selection: re-sorting or vanishing a row
@@ -196,28 +182,14 @@ export function ModelScopeDialog({
     () => orderScopeCandidates(providerCandidates, wasEnabled),
     [providerCandidates, wasEnabled],
   )
-  // Display-only: the saved scope is computed from `catalogIds`, so a hidden row
-  // keeps whatever it had. Only models that were already off when the dialog
-  // opened are hidden, which is why unticking one never makes it disappear.
-  const visibleCandidates = hideDisabled
-    ? orderedCandidates.filter(candidate => wasEnabled(candidate.modelId))
-    : orderedCandidates
-  const hiddenDisabledCount = orderedCandidates.length - visibleCandidates.length
-  // What the filter WOULD hide, which is not the same number as what it is
-  // hiding: `hiddenDisabledCount` is derived after the filter runs and so reads
-  // zero whenever the filter is off. Disabling the box on that would have
-  // wedged it off permanently.
-  const hideableCount = orderedCandidates.filter(candidate => !wasEnabled(candidate.modelId)).length
-  // Search narrows what the list shows and, with it, what the bulk buttons act
-  // on. Matching the id as well as the name because a provider's display names
+  // Search narrows the list. Matching the id as well as the name because a provider's display names
   // are often near-identical while the ids are what `modelScope` stores.
   const modelQueryText = modelQuery.trim().toLowerCase()
   const shownCandidates = modelQueryText
-    ? visibleCandidates.filter(candidate =>
+    ? orderedCandidates.filter(candidate =>
       candidate.modelId.toLowerCase().includes(modelQueryText)
       || candidate.displayName.toLowerCase().includes(modelQueryText))
-    : visibleCandidates
-  const shownSelectedCount = shownCandidates.filter(candidate => selectedCatalogIds.includes(candidate.modelId)).length
+    : orderedCandidates
 
   // Built on demand per scope inside the copy click, so unsaved limit edits in
   // this dialog are included at copy time.
@@ -296,9 +268,10 @@ export function ModelScopeDialog({
     // classic chip-input paper cut.
     const pending = draft.trim()
     const next = pending && !ids.includes(pending) ? [...ids, pending] : ids
-    const modelScope = apiKey.platform === 'custom'
-      ? (next.length > 0 ? next : null)
-      : (selectedCatalogIds.length === catalogIds.length ? null : selectedCatalogIds)
+    // Custom endpoints have no catalogue rows for the Keys panel to switch, so
+    // their chip list stays the scope editor. Catalogue providers send no
+    // scope at all: an absent field leaves the saved scope untouched.
+    const scopePatch = apiKey.platform === 'custom' ? { modelScope: next.length > 0 ? next : null } : {}
     const changedModelLimits = providerModelRows.flatMap(model => {
       const draft = modelLimitDrafts[model.modelDbId] ?? toDraft({
         rpmLimit: model.rpmLimit,
@@ -317,7 +290,7 @@ export function ModelScopeDialog({
       return [{ modelDbId: model.modelDbId, ...next }]
     })
     save.mutate({
-      modelScope,
+      ...scopePatch,
       providerRpmLimit: providerRpmLimit === '' ? null : Number(providerRpmLimit),
       providerRpdLimit: providerRpdLimit === '' ? null : Number(providerRpdLimit),
       providerTpdLimit: providerTpdLimit === '' ? null : Number(providerTpdLimit),
@@ -325,34 +298,11 @@ export function ModelScopeDialog({
     })
   }
 
-  const toggleCatalogModel = (modelId: string) => {
-    const selected = new Set(selectedCatalogIds)
-    if (selected.has(modelId)) selected.delete(modelId)
-    else selected.add(modelId)
-    setCatalogTouched(true)
-    setIds([...selected])
-  }
-
-  /**
-   * Tick or untick everything currently on screen — the search and the hide
-   * filter both narrow what that means, so the button acts on exactly the rows
-   * the operator can see and the count in its label says how many.
-   */
-  const setBulkSelection = (selected: boolean) => {
-    const next = new Set(selectedCatalogIds)
-    for (const candidate of shownCandidates) {
-      if (selected) next.add(candidate.modelId)
-      else next.delete(candidate.modelId)
-    }
-    setCatalogTouched(true)
-    setIds([...next])
-  }
-
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogPopup maxWidth="max-w-6xl">
         <div className="flex items-center justify-between gap-3">
-          <DialogTitle>{t('keys.modelScope')}</DialogTitle>
+          <DialogTitle>{t('keys.modelLimitsTitle')}</DialogTitle>
           <ProviderModelDetailsCopyAction
             buildText={buildProviderDetailsText}
             disabled={!catalogReady || exportCandidates.length === 0}
@@ -373,25 +323,7 @@ export function ModelScopeDialog({
               <p className="text-[11px] text-muted-foreground">{t('keys.liveModelsFallback')}</p>
             )}
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[11px] text-muted-foreground">Model limits below apply to all keys for this provider. Account limits remain specific to this key.</p>
-              <label className="flex items-center gap-1.5 whitespace-nowrap text-[11px] text-muted-foreground">
-                {/* Nothing off in this key's scope means nothing to hide: the
-                    box says so instead of taking a press that does nothing.
-                    Stays live while ON so it can always be turned back off. */}
-                <input
-                  type="checkbox"
-                  checked={hideDisabled}
-                  disabled={!hideControlPressable(hideableCount, hideDisabled)}
-                  title={hideControlPressable(hideableCount, hideDisabled) ? undefined : t('keys.panelHideNothing')}
-                  onChange={event => {
-                    setHideDisabled(event.target.checked)
-                    try { localStorage.setItem(SCOPE_HIDE_DISABLED_KEY, event.target.checked ? '1' : '0') } catch { /* ignore */ }
-                  }}
-                  className="size-3.5 accent-primary disabled:cursor-not-allowed disabled:opacity-40"
-                />
-                Hide disabled models
-                {hideDisabled && hiddenDisabledCount > 0 && <span>({hiddenDisabledCount})</span>}
-              </label>
+              <p className="text-[11px] text-muted-foreground">{t('keys.scopeEditedOnPanel')}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Input
@@ -403,33 +335,6 @@ export function ModelScopeDialog({
                 className="h-7 min-w-[200px] flex-1 text-xs"
                 spellCheck={false}
               />
-              <span className="whitespace-nowrap text-[11px] tabular-nums text-muted-foreground">
-                {shownSelectedCount}/{shownCandidates.length} shown enabled
-              </span>
-              {/* Arming these is the point: one click could retick or wipe a
-                  whole provider's scope, and the confirm step is the dashboard's
-                  existing idiom for an action that big. Nothing reaches the API
-                  until Save either way. */}
-              <ConfirmButton
-                variant="outline"
-                size="xs"
-                confirmLabel={`Enable ${shownCandidates.length}?`}
-                onConfirm={() => setBulkSelection(true)}
-                disabled={shownCandidates.length === 0 || shownSelectedCount === shownCandidates.length}
-                title="Enable every model shown"
-              >
-                Enable shown
-              </ConfirmButton>
-              <ConfirmButton
-                variant="outline"
-                size="xs"
-                confirmLabel={`Disable ${shownCandidates.length}?`}
-                onConfirm={() => setBulkSelection(false)}
-                disabled={shownSelectedCount === 0}
-                title="Disable every model shown"
-              >
-                Disable shown
-              </ConfirmButton>
             </div>
             <div className="max-h-[50vh] overflow-y-auto rounded-2xl border divide-y">
               {shownCandidates.length === 0 && (
@@ -444,39 +349,19 @@ export function ModelScopeDialog({
                     ? (catalogueRowsForProvider > 0
                       ? t('keys.scopeEmptyCatalogueOff', { count: catalogueRowsForProvider })
                       : t('keys.scopeEmptyNoModels'))
-                    : hideDisabled && hiddenDisabledCount === orderedCandidates.length
-                      ? (
-                        <span className="flex flex-wrap items-center gap-2">
-                          {t('keys.scopeEmptyAllDisabled', { count: orderedCandidates.length })}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setHideDisabled(false)
-                              try { localStorage.setItem(SCOPE_HIDE_DISABLED_KEY, '0') } catch { /* ignore */ }
-                            }}
-                            className="underline decoration-dotted hover:text-foreground"
-                          >
-                            {t('keys.scopeEmptyShowDisabled')}
-                          </button>
-                        </span>
-                      )
-                      : t('keys.scopeEmptyNoMatch')}
+                    : t('keys.scopeEmptyNoMatch')}
                 </div>
               )}
               {shownCandidates.map(model => (
                 <div key={model.modelId} className={`px-3 py-2 text-xs ${selectedModelId === model.modelId ? 'bg-muted/40' : 'hover:bg-muted/20'}`}>
                   <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={selectedCatalogIds.includes(model.modelId)}
-                      onChange={() => toggleCatalogModel(model.modelId)}
-                      className="size-4 accent-primary"
-                      aria-label={`Enable ${model.displayName}`}
-                    />
                     <button type="button" onClick={() => setSelectedModelId(model.modelId)} className="min-w-0 flex-1 text-left">
                       <span className="block truncate font-medium" title={model.modelId}>{model.displayName}</span>
                       <code className="block truncate text-[10px] text-muted-foreground">{model.modelId}</code>
                     </button>
+                    {!selectedCatalogIds.includes(model.modelId) && (
+                      <span className="shrink-0 text-[10px] text-muted-foreground">{t('keys.scopeNotServed')}</span>
+                    )}
                   </div>
                   {(() => {
                     const row = providerModelRows.find(candidate => candidate.modelId === model.modelId)
@@ -493,7 +378,7 @@ export function ModelScopeDialog({
                     return (
                       <>
                       {m && (m.rpm != null || m.rpd != null) && (
-                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 pl-6 text-[10px] text-muted-foreground">
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
                           <span title={m.finding}>
                             {t('keys.limitsMeasured', {
                               measured: [
@@ -520,7 +405,7 @@ export function ModelScopeDialog({
                           )}
                         </div>
                       )}
-                      <div className="mt-2 grid grid-cols-4 gap-1.5 pl-6">
+                      <div className="mt-2 grid grid-cols-4 gap-1.5">
                         {(['rpmLimit', 'rpdLimit', 'tpmLimit', 'tpdLimit'] as const).map(field => (
                           <label key={field} className="text-[9px] uppercase tracking-wide text-muted-foreground">
                             {field.replace('Limit', '').toUpperCase()}
@@ -631,7 +516,7 @@ export function ModelScopeDialog({
           )}
 
           <div className="flex items-center justify-end gap-2 pt-1">
-            {(apiKey.modelScope?.length ?? 0) > 0 && (
+            {apiKey.platform === 'custom' && (apiKey.modelScope?.length ?? 0) > 0 && (
               <Button
                 type="button"
                 variant="outline"
@@ -646,7 +531,7 @@ export function ModelScopeDialog({
             <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
               {t('common.cancel')}
             </Button>
-            <Button type="button" size="sm" onClick={submit} disabled={save.isPending || !catalogReady || (apiKey.platform !== 'custom' && catalogIds.length > 0 && selectedCatalogIds.length === 0)}>
+            <Button type="button" size="sm" onClick={submit} disabled={save.isPending || !catalogReady}>
               {save.isPending ? t('common.saving') : t('common.save')}
             </Button>
           </div>

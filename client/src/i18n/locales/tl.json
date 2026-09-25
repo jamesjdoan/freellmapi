@@ -321,7 +321,8 @@
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
     "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
-    "moveToRank": "Tumalon sa ranggo"
+    "moveToRank": "Tumalon sa ranggo",
+    "sortViewOnly": "Sort the view. The chain still routes in # order; click again to reverse, a third time to return to chain order."
   },
   "strategies": {
     "explore": "I-explore ang mga hindi pa nasusukat na modelo",
@@ -800,7 +801,10 @@
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
     "limitsDisclosure": "Provider headroom and declared limits",
-    "checklistSignupLink": "Buksan ang {provider} upang gumawa ng account at kumuha ng key"
+    "checklistSignupLink": "Buksan ang {provider} upang gumawa ng account at kumuha ng key",
+    "modelLimitsTitle": "Models & account limits",
+    "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
+    "scopeNotServed": "not served by this key"
   },
   "backups": {
     "title": "Backups",

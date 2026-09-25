@@ -321,7 +321,8 @@
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
     "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
-    "moveToRank": "跳转到排名"
+    "moveToRank": "跳转到排名",
+    "sortViewOnly": "Sort the view. The chain still routes in # order; click again to reverse, a third time to return to chain order."
   },
   "strategies": {
     "explore": "探索未测模型",
@@ -800,7 +801,10 @@
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
     "limitsDisclosure": "Provider headroom and declared limits",
-    "checklistSignupLink": "打开 {provider} 注册账户并获取密钥"
+    "checklistSignupLink": "打开 {provider} 注册账户并获取密钥",
+    "modelLimitsTitle": "Models & account limits",
+    "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
+    "scopeNotServed": "not served by this key"
   },
   "backups": {
     "title": "备份",

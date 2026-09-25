@@ -41,7 +41,8 @@ import { ConfirmButton } from '@/components/confirm-button'
 import { CustomWeightsPopover } from '@/components/custom-weights-popover'
 import { EmptyState } from '@/components/empty-state'
 import { GettingStarted } from '@/components/getting-started'
-import { GroupHeaderCells, ModelTableHead, SortableGroupRow } from '@/components/model-table'
+import { CHAIN_SORT_COLUMNS, GroupHeaderCells, ModelTableHead, SortableGroupRow, type ChainSortColumn } from '@/components/model-table'
+import { sortRows, useTableSort } from '@/lib/table-sort'
 import { TableSkeleton } from '@/components/ui/skeleton'
 import { TokenUsageBar } from '@/components/token-usage-bar'
 import { PageHeader } from '@/components/page-header'
@@ -391,13 +392,33 @@ export default function FallbackPage() {
     () => orderedGroups.filter(g => !g.members.some(m => m.enabled)).length,
     [orderedGroups],
   )
-  const draggable = isManual && !filtersActive
+  // View-only sort of the chain table. The chain keeps its routing order and
+  // `#` keeps showing it; dragging pauses while a sort is on, for the same
+  // reason it pauses under a filter: a drop position in a re-sorted view has
+  // no unambiguous meaning in the chain.
+  const chainSort = useTableSort<ChainSortColumn>('fallback.chainSort', CHAIN_SORT_COLUMNS)
+  const sortedGroups = useMemo(() => sortRows(visibleGroups, chainSort.sort, (g, column) => {
+    const measured = g.members.filter(m => (m.totalRequests ?? 0) > 0)
+    const max = (values: (number | undefined)[]) => {
+      const known = values.filter((v): v is number => typeof v === 'number')
+      return known.length ? Math.max(...known) : null
+    }
+    switch (column) {
+      case 'rank': return rankByKey.get(g.key) ?? null
+      case 'name': return g.label.toLowerCase()
+      case 'reliability': return max(measured.map(m => m.reliability))
+      case 'speed': return max(measured.map(m => m.speed))
+      case 'intelligence': return max(g.members.map(m => m.intelligence))
+      case 'score': return max(g.members.map(m => m.score))
+    }
+  }), [visibleGroups, chainSort.sort, rankByKey])
+  const draggable = isManual && !filtersActive && chainSort.sort === null
 
   // Progressive rendering: grow the row budget whenever the sentinel below the
   // table scrolls near the viewport (drag autoscroll extends it too).
   const [renderLimit, setRenderLimit] = useState(RENDER_CHUNK)
-  const renderedGroups = visibleGroups.slice(0, renderLimit)
-  const hasMoreRows = visibleGroups.length > renderLimit
+  const renderedGroups = sortedGroups.slice(0, renderLimit)
+  const hasMoreRows = sortedGroups.length > renderLimit
   const sentinelRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!hasMoreRows) return
@@ -784,7 +805,7 @@ export default function FallbackPage() {
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleGroupedDragEnd}>
                 <div className="rounded-2xl border overflow-x-auto">
                   <table className="w-full text-sm">
-                    <ModelTableHead />
+                    <ModelTableHead sort={chainSort.sort} onSort={chainSort.toggle} />
                     <SortableContext items={renderedGroups.map(g => `grp:${g.key}`)} strategy={verticalListSortingStrategy}>
                       <tbody>
                         {renderedGroups.map(g => (
@@ -810,7 +831,7 @@ export default function FallbackPage() {
             ) : (
               <div className="rounded-2xl border overflow-x-auto">
                 <table className="w-full text-sm">
-                  <ModelTableHead />
+                  <ModelTableHead sort={chainSort.sort} onSort={chainSort.toggle} />
                   <tbody>
                     {renderedGroups.map(g => (
                       <tr

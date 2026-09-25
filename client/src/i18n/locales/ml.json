@@ -321,7 +321,8 @@
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
     "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
-    "moveToRank": "റാങ്കിലേക്ക്"
+    "moveToRank": "റാങ്കിലേക്ക്",
+    "sortViewOnly": "Sort the view. The chain still routes in # order; click again to reverse, a third time to return to chain order."
   },
   "strategies": {
     "explore": "അളക്കാത്ത മോഡലുകൾ പര്യവേക്ഷണം ചെയ്യുക",
@@ -800,7 +801,10 @@
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
     "limitsDisclosure": "Provider headroom and declared limits",
-    "checklistSignupLink": "അക്കൗണ്ട് സൃഷ്ടിച്ച് കീ നേടാൻ {provider} തുറക്കുക"
+    "checklistSignupLink": "അക്കൗണ്ട് സൃഷ്ടിച്ച് കീ നേടാൻ {provider} തുറക്കുക",
+    "modelLimitsTitle": "Models & account limits",
+    "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
+    "scopeNotServed": "not served by this key"
   },
   "backups": {
     "title": "Backups",

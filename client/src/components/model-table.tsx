@@ -7,6 +7,7 @@ import { ConfirmButton } from '@/components/confirm-button'
 import { CopyButton } from '@/components/copy-button'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip } from '@/components/tooltip'
+import type { SortState } from '@/lib/table-sort'
 import {
   cleanQuotaLabel,
   formatContext,
@@ -92,22 +93,46 @@ function AxisRangeBar({ values, color }: { values: (number | undefined)[]; color
 
 // The shared table header for the unified model/provider table — used by the
 // Models page and the per-model detail page so their columns line up.
-export function ModelTableHead() {
+/** Columns the chain table can be viewed in. Display order only: routing still
+ *  walks the chain in `#` order, whatever the table is sorted by. */
+export const CHAIN_SORT_COLUMNS = ['rank', 'name', 'reliability', 'speed', 'intelligence', 'score'] as const
+export type ChainSortColumn = typeof CHAIN_SORT_COLUMNS[number]
+
+// Sortable when `onSort` is given (the Fallback chain); a plain header elsewhere,
+// so the model detail page keeps its fixed per-provider layout.
+export function ModelTableHead({ sort, onSort }: { sort?: SortState<ChainSortColumn>; onSort?: (column: ChainSortColumn) => void } = {}) {
   const { t } = useI18n()
+  const label = (column: ChainSortColumn, content: ReactNode, align: 'left' | 'center' | 'right' = 'left') => {
+    if (!onSort) return content
+    const active = sort?.column === column
+    const arrow = active ? (sort!.direction === 'asc' ? '▲' : '▼') : ''
+    return (
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        title={t('models.sortViewOnly')}
+        aria-sort={active ? (sort!.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+        className={`inline-flex items-center gap-1 font-medium hover:text-foreground ${active ? 'text-foreground' : ''} ${align === 'right' ? 'flex-row-reverse' : ''}`}
+      >
+        {content}
+        <span className="w-2 text-[9px]" aria-hidden>{arrow}</span>
+      </button>
+    )
+  }
   return (
     <thead>
       <tr className="text-left text-muted-foreground border-b">
         <th className="py-2 pl-3 pr-1 w-6"></th>
-        <th className="py-2 pr-2 w-6 text-center font-medium">#</th>
-        <th className="py-2 pr-3 font-medium">{t('models.columnModel')}</th>
+        <th className="py-2 pr-2 w-6 text-center font-medium">{label('rank', '#', 'center')}</th>
+        <th className="py-2 pr-3 font-medium">{label('name', t('models.columnModel'))}</th>
         <th className="py-2 pr-3 font-medium">
-          <span className="inline-flex items-center gap-1"><span className="size-2 rounded-sm" style={{ background: '#22c55e' }} />{t('strategies.weightReliability')}</span>
+          {label('reliability', <span className="inline-flex items-center gap-1"><span className="size-2 rounded-sm" style={{ background: '#22c55e' }} />{t('strategies.weightReliability')}</span>)}
         </th>
         <th className="py-2 pr-3 font-medium">
-          <span className="inline-flex items-center gap-1"><span className="size-2 rounded-sm" style={{ background: '#3b82f6' }} />{t('strategies.weightSpeed')}</span>
+          {label('speed', <span className="inline-flex items-center gap-1"><span className="size-2 rounded-sm" style={{ background: '#3b82f6' }} />{t('strategies.weightSpeed')}</span>)}
         </th>
         <th className="py-2 pr-3 font-medium">
-          <span className="inline-flex items-center gap-1"><span className="size-2 rounded-sm" style={{ background: '#a855f7' }} />{t('strategies.weightIntelligence')}</span>
+          {label('intelligence', <span className="inline-flex items-center gap-1"><span className="size-2 rounded-sm" style={{ background: '#a855f7' }} />{t('strategies.weightIntelligence')}</span>)}
         </th>
         <th className="py-2 pr-3 font-medium">
           <Tooltip text={t('strategies.guardrailsTooltip')}>
@@ -115,9 +140,11 @@ export function ModelTableHead() {
           </Tooltip>
         </th>
         <th className="py-2 pr-3 font-medium text-right">
-          <Tooltip text={t('strategies.scoreTooltip')}>
-            <span className="underline decoration-dotted underline-offset-2 cursor-help">{t('strategies.scoreColumn')}</span>
-          </Tooltip>
+          {label('score', (
+            <Tooltip text={t('strategies.scoreTooltip')}>
+              <span className="underline decoration-dotted underline-offset-2 cursor-help">{t('strategies.scoreColumn')}</span>
+            </Tooltip>
+          ), 'right')}
         </th>
         <th className="py-2 pr-3 font-medium text-right">{t('models.columnOn')}</th>
       </tr>

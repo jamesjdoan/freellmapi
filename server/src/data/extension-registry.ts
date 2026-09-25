@@ -257,8 +257,8 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
   {
     id: 'provider-model-access',
     title: 'Provider model access',
-    summary: 'Choose which catalogue models each provider key may serve, with search and confirm-gated bulk enable/disable. Enabled models lead, then the most advanced - tier, rank, then the highest version within a family - and disabled ones are hidden by default.',
-    settingsLocation: 'Keys → provider key row → Models & account limits',
+    summary: 'Choose which catalogue models each provider key may serve, one switch per model on the expanded provider. The Models & account limits dialog shows that scope read-only - models the key serves lead, then the most advanced by tier, rank and version - and edits only limits. There is no bulk scope control: one arm-and-confirm could empty a provider.',
+    settingsLocation: 'Keys → Providers → expand a provider → each model’s switch',
     destinations: [{ kind: 'internal', label: 'Open provider keys', href: '/keys' }],
     category: 'presentation',
     defaultEnabled: true,

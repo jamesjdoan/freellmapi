@@ -321,7 +321,8 @@
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
     "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
-    "moveToRank": "Przejdź do rangi"
+    "moveToRank": "Przejdź do rangi",
+    "sortViewOnly": "Sort the view. The chain still routes in # order; click again to reverse, a third time to return to chain order."
   },
   "strategies": {
     "explore": "Eksploruj niezmierzone modele",
@@ -800,7 +801,10 @@
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
     "limitsDisclosure": "Provider headroom and declared limits",
-    "checklistSignupLink": "Otwórz {provider}, aby utworzyć konto i uzyskać klucz"
+    "checklistSignupLink": "Otwórz {provider}, aby utworzyć konto i uzyskać klucz",
+    "modelLimitsTitle": "Models & account limits",
+    "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
+    "scopeNotServed": "not served by this key"
   },
   "backups": {
     "title": "Backups",

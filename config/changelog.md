@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-09-25 — Chain table sorts the view; key dialog edits limits only
+
+- Fallback chain table: `#`, Model, Reliability, Speed, Intelligence and Score headers sort the
+  view (asc, desc, back to chain order), remembered per browser under `fallback.chainSort`. View
+  only: routing order and the `#` numbers are unchanged, and drag-to-reorder pauses while a sort is
+  on. New key `models.sortViewOnly`. `client/src/components/model-table.tsx`, `client/src/pages/FallbackPage.tsx`.
+- Keys → Models & account limits no longer edits scope for catalogue providers. Checkboxes,
+  Enable/Disable shown, Hide disabled and Clear scope are gone; the scope shows read-only ("not
+  served by this key") and Save sends no `modelScope`, so it cannot change it. Scope is set on the
+  expanded provider's per-model switch. Custom endpoints keep their id chip list. Removed because
+  Disable shown + hide made 9 unsaved models look deleted. `client/src/components/keys/model-scope-dialog.tsx`,
+  registry `provider-model-access`, `docs/IMPERIUM_EXTENSION.md`, keys `keys.modelLimitsTitle`,
+  `keys.scopeEditedOnPanel`, `keys.scopeNotServed`.
+
 ## 2026-09-24 — Offloaded inference card collapsed by default
 
 - The card collapses by default and remembers the choice per browser. Its collapsed header shows
