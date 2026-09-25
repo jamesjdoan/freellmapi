@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-09-26 — The key pencil opens the edit dialog again
+
+- Keys: the pencil (and the label) on a provider's key row flashed the Edit key dialog and closed
+  it. The merged provider row kept its own inline label input on the same `editingKeyId` state as
+  upstream's `EditKeyDialog` (#1163); the input grabbed focus, lost it to the dialog and saved-and-
+  closed both on blur. The inline input is gone: every key's pencil and label open the dialog,
+  which edits the label, base URL and key.
+
 ## 2026-09-26 — Rename a model from its Keys row; Add stays in view
 
 - Keys → expand a provider → click a model's name to rename it (Enter saves, Esc cancels; blank or

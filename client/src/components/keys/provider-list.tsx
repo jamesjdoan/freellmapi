@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -60,7 +60,6 @@ type BulkAction = 'enable' | 'disable' | 'delete'
 interface KeyDetailCtx {
   status: string
   lastChecked: string | null | undefined
-  isEditing: boolean
   hasCustomModels: boolean
   isExpanded: boolean
   isChecking: boolean
@@ -83,7 +82,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
    * 'remove' ends up wired to the wrong one.
    */
   function renderKeyDetails(k: ApiKey, ctx: KeyDetailCtx) {
-    const { status, lastChecked, isEditing, hasCustomModels, isExpanded, isChecking } = ctx
+    const { status, lastChecked, hasCustomModels, isExpanded, isChecking } = ctx
     return (
       <>
             <span className={`size-1.5 rounded-full flex-shrink-0 ${statusDot[status] ?? statusDot.unknown}`} />
@@ -106,21 +105,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
               </Button>
             )}
             <code className={`text-xs font-mono flex-shrink-0 ${k.enabled ? '' : 'opacity-50'}`}>{k.maskedKey}</code>
-            {isEditing ? (
-              <Input
-                ref={editInputRef}
-                value={editingLabel}
-                onChange={e => setEditingLabel(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') saveEditing(k.id)
-                  if (e.key === 'Escape') cancelEditing()
-                }}
-                onBlur={() => saveEditing(k.id)}
-                className="h-6 w-[160px] text-xs"
-                disabled={updateKey.isPending}
-              />
-            ) : (
-              <>
+            <>
                 {/* The label is the edit affordance itself (#705): the pencil
                     only appears on hover, so clicking the name is the move
                     everyone tries first. An unlabelled key still needs
@@ -128,10 +113,10 @@ export function ProviderList({ onAddKey, initialSearch }: {
                 <button
                   type="button"
                   onClick={() => startEditing(k)}
-                  title={t('keys.editLabel')}
+                  title={t('keys.editKey')}
                   className={`rounded text-xs hover:text-foreground hover:underline underline-offset-2 ${k.label ? 'text-muted-foreground' : 'text-muted-foreground/50'} ${k.enabled ? '' : 'opacity-50'}`}
                 >
-                  {k.label || t('keys.editLabel')}
+                  {k.label || t('keys.editKey')}
                 </button>
                 {k.baseUrl && (editingBaseUrl?.id === k.id ? (
                   <span className="inline-flex items-center gap-1">
@@ -159,8 +144,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                     {k.baseUrl}
                   </button>
                 ))}
-              </>
-            )}
+            </>
             <span className={`text-xs text-muted-foreground ${k.enabled ? '' : 'opacity-50'}`}>{statusLabelKey[status] ? t(statusLabelKey[status]) : status}</span>
             {/* No per-key scope badge: the header beside it already reads
                 "N/M in key scope", which is the same count against the
@@ -177,17 +161,15 @@ export function ProviderList({ onAddKey, initialSearch }: {
               </span>
             )}
             <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/krow:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
-              {!isEditing && (
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => startEditing(k)}
-                  aria-label={t('keys.editLabel')}
-                  title={t('keys.editLabel')}
-                >
-                  <Pencil className="size-3" />
-                </Button>
-              )}
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => startEditing(k)}
+                aria-label={t('keys.editKey')}
+                title={t('keys.editKey')}
+              >
+                <Pencil className="size-3" />
+              </Button>
               {!k.keyless && (
                 <Tooltip text={t('keys.copyFullKey')}>
                   <Button
@@ -285,7 +267,6 @@ export function ProviderList({ onAddKey, initialSearch }: {
   const queryClient = useQueryClient()
 
   const [editingKeyId, setEditingKeyId] = useState<number | null>(null)
-  const [editingLabel, setEditingLabel] = useState('')
   const [expandedKeyIds, setExpandedKeyIds] = useState<Set<number>>(new Set())
   // Separate from expandedKeyIds: the custom-model strip and the catalogue-churn
   // strip are different disclosures on the same row and must open independently.
@@ -340,7 +321,6 @@ export function ProviderList({ onAddKey, initialSearch }: {
   const [modelEditorKeyId, setModelEditorKeyId] = useState<number | null>(null)
   // #787: keys selected for bulk enable/disable/delete within a group.
   const [selectedKeyIds, setSelectedKeyIds] = useState<Set<number>>(new Set())
-  const editInputRef = useRef<HTMLInputElement>(null)
   // Provider (or, for a custom endpoint, key) whose models are being test-fired,
   // and the target a hand-typed model is being added to. Both came over from
   // the retired Providers page; everything else that page did already lived here.
@@ -504,18 +484,6 @@ export function ProviderList({ onAddKey, initialSearch }: {
     },
   })
 
-  const updateKey = useMutation({
-    mutationFn: ({ id, label }: { id: number; label: string }) =>
-      apiFetch(`/api/keys/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ label }),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['keys'] })
-      setEditingKeyId(null)
-      setEditingLabel('')
-    },
-  })
 
   // The inline churn switches write the key's model scope - the same field the
   // model-scope dialog saves, and the same one the row's scope summary
@@ -541,20 +509,11 @@ export function ProviderList({ onAddKey, initialSearch }: {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['proxy-url'] }),
   })
 
+  // One editor for a key: the dialog (#1163). The merged provider row used to
+  // open an inline label input on this same state, which took focus, lost it
+  // to the dialog and saved-and-closed both on blur.
   function startEditing(key: ApiKey) {
     setEditingKeyId(key.id)
-    setEditingLabel(key.label)
-  }
-
-  function cancelEditing() {
-    setEditingKeyId(null)
-    setEditingLabel('')
-  }
-
-  function saveEditing(id: number) {
-    if (editingLabel !== undefined) {
-      updateKey.mutate({ id, label: editingLabel })
-    }
   }
 
   function toggleChurnOpen(id: number) {
@@ -575,11 +534,6 @@ export function ProviderList({ onAddKey, initialSearch }: {
     })
   }
 
-  useEffect(() => {
-    if (editingKeyId !== null && editInputRef.current) {
-      editInputRef.current.focus()
-    }
-  }, [editingKeyId])
 
   const healthKeyMap = new Map<number, { status: string; lastCheckedAt: string | null; lastHealthError: string | null }>()
   for (const k of healthData?.keys ?? []) healthKeyMap.set(k.id, k)
@@ -815,7 +769,6 @@ export function ProviderList({ onAddKey, initialSearch }: {
                     return renderKeyDetails(k, {
                       status: statusOf(k),
                       lastChecked: health?.lastCheckedAt ?? k.lastCheckedAt,
-                      isEditing: editingKeyId === k.id,
                       hasCustomModels: (k.models ?? []).length > 0,
                       isExpanded: expandedKeyIds.has(k.id),
                       isChecking: checkKey.isPending && checkKey.variables === k.id,
