@@ -109,6 +109,10 @@ interface Row {
   supportsTools: boolean
   supportsVision: boolean
   keyScope: 'none' | 'disabled' | 'unscoped' | 'in' | 'out'
+  /** Why a switched-off row is off (server/src/services/analysis.ts). */
+  offReason: null | { kind: 'override'; since: string } | { kind: 'upstream' } | { kind: 'switched' }
+  /** Benched right now by the provider, not failing: when it can serve again. */
+  pause: { source: 'credit' | 'tier' | 'authoritative' | 'heuristic'; untilMs: number } | null
   /** Chains currently routing to this model. Empty means it can serve and
    *  nothing asks it to. */
   chains: string[]
@@ -645,12 +649,26 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
                       that is switched off looks like the router ignoring it. */}
                   {(() => {
                     const why = blockedReason(r)
-                    return why && (
+                    // "Switched off" alone hid three different situations with
+                    // three different fixes. Name the one this row is in.
+                    const text = why !== 'panelWhyCatalogueOff' || !r.offReason ? (why && t(`keys.${why}`))
+                      : r.offReason.kind === 'override' ? t('keys.offOverride', { date: r.offReason.since.slice(0, 10) })
+                      : r.offReason.kind === 'upstream' ? t('keys.offUpstream')
+                      : t('keys.offSwitched')
+                    return text && (
                       <span className="mt-0.5 inline-block rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                        {t(`keys.${why}`)}
+                        {text}
                       </span>
                     )
                   })()}
+                  {/* Benched, not broken: the provider said wait. Shown only on
+                      rows that could otherwise serve, where "why is nothing
+                      coming from this" is the live question. */}
+                  {routable(r) && r.pause && r.pause.untilMs > Date.now() && (
+                    <span className="mt-0.5 ml-1 inline-block rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] text-sky-800 dark:text-sky-300">
+                      {t(`keys.pause_${r.pause.source}`)} · {t('keys.pauseBackIn', { time: formatCountdown(Math.round((r.pause.untilMs - Date.now()) / 1000)) })}
+                    </span>
+                  )}
                   {/* The verdict sits ON the name, where the decision to enable
                       is made — not in a column that can be scrolled past. Only
                       failures are marked: a working route needs no badge, and

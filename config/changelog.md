@@ -2,6 +2,14 @@
 
 ## 2026-09-25 — Chain table sorts the view; key dialog edits limits only
 
+- Keys panel: a switched-off row now says why - `held by a saved override since <date>`, `marked
+  unavailable upstream` (applied catalogue ships it disabled) or `switched off here` - and an
+  enabled row the provider has benched says `paused · out of credit|not on this plan|rate-limited|
+  cooling down · back in <time>`. `offReason`/`pause` on `/api/analysis/compare` rows.
+- Fix: `PATCH /api/models/:id` with `enabled` now drops a stored `enabled` override. Overrides
+  re-apply after every sync to user rows too, so a script-written `{"enabled":0}` switched b.ai's
+  hy3/mimo-v2.5 back off after every re-enable since 2026-09-16. Regression test in
+  `models-management.test.ts`. b.ai itself is out of credit (`balance=0`).
 - Keys: catalogue arrivals from the last 14 days that have not been seen get an amber `N new ×` tag
   on the key row and an amber row with a `new` badge in the expanded provider. `Hide can't route`
   turns amber with `· N new hidden` when it is what hides one. `×` or `Mark N new seen` records

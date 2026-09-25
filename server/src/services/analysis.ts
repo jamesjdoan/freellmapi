@@ -364,6 +364,16 @@ export interface CompareRow {
   /** Whether the platform's key scope is what stands in the way, and so whether
    *  widening it is an available move. */
   keyScope: 'none' | 'disabled' | 'unscoped' | 'in' | 'out';
+  /** Why a switched-off row is off, so "off" names its cause instead of
+   *  looking identical whether a person, an old override or upstream did it.
+   *  Null when the row is on. */
+  offReason: null
+    | { kind: 'override'; since: string }
+    | { kind: 'upstream' }
+    | { kind: 'switched' };
+  /** An enabled route benched right now, and until when. Not an error: the
+   *  route is fine, the provider has told us to wait. Null when not benched. */
+  pause: { source: 'credit' | 'tier' | 'authoritative' | 'heuristic'; untilMs: number } | null;
   supportsTools: boolean;
   supportsVision: boolean;
   /** Our own ordering numbers, kept alongside deliberately: seeing a
@@ -485,6 +495,44 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
     return scopes.some(sc => scopeAllows(sc, modelId)) ? 'in' : 'out';
   };
 
+  const pairKey = (platform: string, modelId: string) => `${platform}\u0000${modelId}`;
+  // A saved override that holds a route off. Written as 0 or false over this
+  // table's life (operator scripts wrote 0, the API a boolean); both mean off.
+  const heldOff = new Map<string, string>();
+  for (const o of db.prepare(`
+    SELECT platform, model_id, updated_at FROM model_overrides
+     WHERE json_extract(overrides_json, '$.enabled') IN (0, 'false')
+        OR json_type(overrides_json, '$.enabled') = 'false'
+  `).all() as { platform: string; model_id: string; updated_at: string }[]) {
+    heldOff.set(pairKey(o.platform, o.model_id), o.updated_at);
+  }
+  // A catalogue that ships the model disabled force-disables it on every sync
+  // (catalog-sync applyCatalog), so that off is upstream's call, not ours.
+  const upstreamOff = new Set<string>();
+  try {
+    const applied = JSON.parse(getSetting('catalog_applied_json') ?? '{}') as { models?: { platform: string; modelId: string; enabled?: boolean; modality?: string }[] };
+    for (const m of applied.models ?? []) {
+      if (m.enabled === false && (!m.modality || m.modality === 'text')) upstreamOff.add(pairKey(m.platform, m.modelId));
+    }
+  } catch { /* no applied catalogue: nothing is upstream-off */ }
+  // The latest live bench per route. Per-key rows collapse to the longest,
+  // because the question on this table is "when can this model serve again".
+  const paused = new Map<string, NonNullable<CompareRow['pause']>>();
+  for (const c of db.prepare(`
+    SELECT platform, model_id, source, expires_at_ms FROM rate_limit_cooldowns WHERE expires_at_ms > ?
+  `).all(Date.now()) as { platform: string; model_id: string; source: string; expires_at_ms: number }[]) {
+    const k = pairKey(c.platform, c.model_id);
+    const source = (['credit', 'tier', 'authoritative'] as const).find(x => x === c.source) ?? 'heuristic';
+    if ((paused.get(k)?.untilMs ?? 0) < c.expires_at_ms) paused.set(k, { source, untilMs: c.expires_at_ms });
+  }
+  const offReasonOf = (enabled: boolean, platform: string, modelId: string): CompareRow['offReason'] => {
+    if (enabled) return null;
+    const k = pairKey(platform, modelId);
+    const since = heldOff.get(k);
+    if (since) return { kind: 'override', since };
+    return upstreamOff.has(k) ? { kind: 'upstream' } : { kind: 'switched' };
+  };
+
   const catalogue = db.prepare(`
     SELECT slug, name, creator, intelligence_index
       FROM aa_model
@@ -501,6 +549,8 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
       contextWindow: r.context_window == null ? null : Number(r.context_window),
       hasKey: hasUsableKey(String(r.platform), String(r.model_id)),
       keyScope: keyScopeOf(String(r.platform), String(r.model_id)),
+      offReason: offReasonOf(r.enabled === 1, String(r.platform), String(r.model_id)),
+      pause: paused.get(pairKey(String(r.platform), String(r.model_id))) ?? null,
       supportsTools: r.supports_tools === 1,
       supportsVision: r.supports_vision === 1,
       intelligenceRank: Number(r.intelligence_rank ?? 0),

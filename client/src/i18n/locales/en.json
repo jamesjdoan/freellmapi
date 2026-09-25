@@ -966,7 +966,15 @@
     "newArrivalsDismiss": "Mark these new models as seen. They will not be highlighted again.",
     "newArrivalsHidden": "· {count} new hidden",
     "newArrivalsMarkSeen": "Mark {count} new seen",
-    "newArrivalBadge": "new"
+    "newArrivalBadge": "new",
+    "offOverride": "off · held by a saved override since {date} - switch it on to clear it",
+    "offUpstream": "off · marked unavailable upstream",
+    "offSwitched": "off · switched off here",
+    "pause_credit": "paused · out of credit",
+    "pause_tier": "paused · not on this plan",
+    "pause_authoritative": "paused · rate-limited by the provider",
+    "pause_heuristic": "paused · cooling down after errors",
+    "pauseBackIn": "back in {time}"
   },
   "backups": {
     "title": "Backups",

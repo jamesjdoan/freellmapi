@@ -310,6 +310,32 @@ modelsRouter.patch('/:id', (req: Request, res: Response) => {
         upsertModelOverrides(db, row.platform, row.model_id, overridePatch, { baselineRow: preUpdateRow });
       }
 
+      // The switch is the operator's answer, so a saved `enabled` override must
+      // not outlive it. Overrides re-apply after every catalogue sync to catalog
+      // AND user rows alike (model-state applyAllModelOverrides), and nothing
+      // above ever wrote `enabled` into one - so an old `{"enabled":0}` left by
+      // a script quietly switched the route back off at the next sync, however
+      // many times it was switched on. b.ai's hy3 and mimo-v2.5 did exactly
+      // that from 2026-09-16. Dropping the key hands the flag back to the
+      // switch; every other override field is untouched.
+      if (Object.prototype.hasOwnProperty.call(modelPatch, 'enabled')) {
+        const stored = db.prepare('SELECT overrides_json FROM model_overrides WHERE platform = ? AND model_id = ?')
+          .get(row.platform, row.model_id) as { overrides_json: string } | undefined;
+        if (stored) {
+          let overrides: Record<string, unknown> = {};
+          try { overrides = JSON.parse(stored.overrides_json) as Record<string, unknown> } catch { /* unreadable: leave it */ }
+          if (Object.prototype.hasOwnProperty.call(overrides, 'enabled')) {
+            delete overrides.enabled;
+            if (Object.keys(overrides).length === 0) {
+              db.prepare('DELETE FROM model_overrides WHERE platform = ? AND model_id = ?').run(row.platform, row.model_id);
+            } else {
+              db.prepare("UPDATE model_overrides SET overrides_json = ?, updated_at = datetime('now') WHERE platform = ? AND model_id = ?")
+                .run(JSON.stringify(overrides), row.platform, row.model_id);
+            }
+          }
+        }
+      }
+
       if (disablesModel) {
         db.prepare('UPDATE profile_models SET enabled = 0 WHERE model_db_id = ?').run(id);
         pruneUnavailableSavedFusionConfig();

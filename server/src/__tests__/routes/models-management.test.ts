@@ -184,6 +184,30 @@ describe('Model management API', () => {
     expect(override).toBeUndefined();
   });
 
+  it('switching a model on beats a stale saved enabled override at the next sync', async () => {
+    // b.ai, 2026-09-16 on: a script wrote {"enabled":0} into model_overrides
+    // for two operator-added models. Overrides re-apply after every catalogue
+    // sync, and the switch never touched them, so each time the operator
+    // switched the models on the next sync switched them straight back off.
+    const db = getDb();
+    const id = Number(db.prepare(`
+      INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, size_label, enabled, source)
+      VALUES ('bai', 'stale-override-model', 'Stale Override (Test)', 1, 1, 'Small', 0, 'user')
+    `).run().lastInsertRowid);
+    db.prepare(`INSERT INTO model_overrides (platform, model_id, overrides_json) VALUES ('bai', 'stale-override-model', ?)`)
+      .run(JSON.stringify({ enabled: 0, rpmLimit: 7 }));
+
+    expect((await request(app, 'PATCH', `/api/models/${id}`, { enabled: true })).status).toBe(200);
+    applyAllModelOverrides(db);
+
+    const row = db.prepare('SELECT enabled, rpm_limit FROM models WHERE id = ?').get(id) as { enabled: number; rpm_limit: number | null };
+    // Still on after the re-apply, and the unrelated limit override survived.
+    expect(row).toEqual({ enabled: 1, rpm_limit: 7 });
+    const stored = db.prepare("SELECT overrides_json FROM model_overrides WHERE platform = 'bai' AND model_id = 'stale-override-model'")
+      .get() as { overrides_json: string };
+    expect(JSON.parse(stored.overrides_json)).toEqual({ rpmLimit: 7 });
+  });
+
   it('disabling a model also clears its fallback/profile/fusion selection (#499)', async () => {
     const db = getDb();
     const profile = db.prepare(ACTIVE_PROFILE_SQL).get() as { id: number };
