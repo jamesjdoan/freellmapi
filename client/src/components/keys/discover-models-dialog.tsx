@@ -120,6 +120,13 @@ export function DiscoverModelsDialog({
     })
   }
 
+  // A relay's free tier is named, not priced: AIHubMix lists 416 models with
+  // no pricing field, and marks its free ones only by an id ending in -free
+  // (OpenRouter-style relays use :free). So "free" here means the provider
+  // said so in the id - nothing is inferred from price.
+  const freeSelectable = selectable.filter(m => /[-:]free$/i.test(m.id))
+  const selectFree = () => setSelected(prev => new Set([...prev, ...freeSelectable.map(m => m.id)]))
+
   const newCount = selected.size
 
   return (
@@ -151,6 +158,16 @@ export function DiscoverModelsDialog({
                 className="size-4 accent-primary"
               />
               <span>{t('keys.discoverSelectAll')}</span>
+              {freeSelectable.length > 0 && (
+                <button
+                  type="button"
+                  onClick={e => { e.preventDefault(); selectFree() }}
+                  className="ml-auto rounded-full border px-2 py-0.5 text-[11px] font-normal hover:bg-muted"
+                  title={t('keys.discoverSelectFreeHint')}
+                >
+                  {t('keys.discoverSelectFree', { count: freeSelectable.length })}
+                </button>
+              )}
             </label>
             <div className="mt-2 max-h-[45vh] overflow-y-auto rounded-2xl border divide-y">
               {models.map(model => (

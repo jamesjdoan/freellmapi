@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-09-25 — One row per OpenAI-compatible account; fix a base URL in place; pull all free models
+
+- Keys: every custom (OpenAI-compatible) endpoint is its own provider row, named by its label (or
+  host), with its own switch (that one key) and a model table narrowed to that endpoint
+  (`endpointScope` on `/api/analysis/compare` rows). Platform-wide chips (diagnosis, churn, new
+  arrivals) stay off account rows, where they would describe every custom endpoint at once.
+- Click an account's base URL to correct it (`POST /api/keys/:id/base-url`): normalised, re-checked
+  by the URL guard, refused if another endpoint already uses it, and its model rows, quota policies,
+  capability probes and tombstones move with it in one transaction. AIHubMix had been saved as
+  `https://api.inferera.com`, whose `/models` is the website's HTML; `/v1` lists 416 models.
+- Discovery dialog: **Select all free (N)** ticks every id the endpoint marks free (`-free`/`:free`);
+  AIHubMix publishes no pricing, so the id is the only marker (44 of 416).
+
 ## 2026-09-25 — Monthly credit allowance: a 402 waits for the reset
 
 - Keys → key row → Models & account limits → **Monthly credit allowance**: amount (USD), reset day

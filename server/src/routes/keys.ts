@@ -1670,6 +1670,57 @@ function writeOperatorModelLimits(
   }
 }
 
+/**
+ * Correct a custom endpoint's base URL in place.
+ *
+ * Mistyping it (AIHubMix's `https://api.inferera.com` without `/v1`, whose
+ * `/models` answers the marketing site's HTML) left the endpoint unusable,
+ * and the only fix was to delete it and add it again, losing every model row,
+ * limit and probe recorded against it. Those rows are keyed by the endpoint's
+ * scope (its normalised base URL), so they move with it here, in one
+ * transaction: nothing is left pointing at the old address.
+ */
+const baseUrlSchema = z.object({ baseUrl: z.string().url('baseUrl must be a valid URL') }).strict();
+
+keysRouter.post('/:id/base-url', async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id as string, 10);
+  const parsed = baseUrlSchema.safeParse(req.body);
+  if (isNaN(id) || !parsed.success) {
+    res.status(400).json({ error: { message: parsed.success ? 'Invalid key ID' : parsed.error.issues.map(e => e.message).join(', ') } });
+    return;
+  }
+  const db = getDb();
+  const row = db.prepare('SELECT id, platform, base_url FROM api_keys WHERE id = ?').get(id) as { id: number; platform: string; base_url: string | null } | undefined;
+  if (!row) { res.status(404).json({ error: { message: 'Key not found' } }); return; }
+  if (row.platform !== 'custom') {
+    res.status(400).json({ error: { message: 'Only a custom endpoint has a base URL to change' } });
+    return;
+  }
+  const next = normalizeBaseUrl(parsed.data.baseUrl);
+  if (await rejectUnsafeBaseUrl(next, res)) return;
+  const previous = endpointScopeForBaseUrl(row.base_url);
+  if (previous === next) { res.json({ success: true, baseUrl: next, moved: 0 }); return; }
+  const taken = (db.prepare("SELECT id, base_url FROM api_keys WHERE platform = 'custom' AND id != ?").all(id) as { id: number; base_url: string | null }[])
+    .some(k => endpointScopeForBaseUrl(k.base_url) === next);
+  if (taken) {
+    res.status(409).json({ error: { message: 'Another custom endpoint already uses that base URL' } });
+    return;
+  }
+  let moved = 0;
+  db.transaction(() => {
+    db.prepare('UPDATE api_keys SET base_url = ? WHERE id = ?').run(next, id);
+    moved += Number(db.prepare("UPDATE models SET endpoint_scope = ? WHERE platform = 'custom' AND key_id = ? AND endpoint_scope = ?").run(next, id, previous).changes);
+    // Everything else recorded against the endpoint, found by its scope.
+    for (const table of ['quota_policy', 'model_capability_probe', 'custom_model_tombstones']) {
+      db.prepare(`UPDATE ${table} SET endpoint_scope = ? WHERE endpoint_scope = ?`).run(next, previous);
+    }
+  })();
+  invalidateQuotaPolicyCache('custom');
+  // Benches earned against the wrong address say nothing about the right one.
+  clearCooldownsForKey(id);
+  res.json({ success: true, baseUrl: next, moved });
+});
+
 keysRouter.patch('/:id', (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) {

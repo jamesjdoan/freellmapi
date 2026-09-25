@@ -369,6 +369,9 @@ export interface CompareRow {
   modelDbId: number;
   platform: string;
   modelId: string;
+  /** Which relay a custom row belongs to (its normalised base URL); '' for
+   *  catalogue rows. Lets a per-endpoint view show only that endpoint's models. */
+  endpointScope: string;
   displayName: string;
   enabled: boolean;
   contextWindow: number | null;
@@ -447,7 +450,7 @@ export interface ComparePayload {
  */
 export function getComparePayload(db: Db = getDb()): ComparePayload {
   const rows = db.prepare(`
-    SELECT m.id AS model_db_id, m.platform, m.model_id, m.display_name, m.enabled, m.context_window,
+    SELECT m.id AS model_db_id, m.platform, m.model_id, m.display_name, m.enabled, m.context_window, m.endpoint_scope,
            m.supports_tools, m.supports_vision, m.intelligence_rank, m.speed_rank,
            l.aa_slug, l.source AS link_source, l.match_reason,
            l.proxy_delta_intelligence, l.proxy_delta_coding, l.proxy_delta_agentic, l.proxy_delta_speed,
@@ -558,6 +561,7 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
       modelDbId: Number(r.model_db_id ?? r.id),
       platform: String(r.platform),
       modelId: String(r.model_id),
+      endpointScope: String(r.endpoint_scope ?? ''),
       displayName: String(r.display_name ?? r.model_id),
       enabled: r.enabled === 1,
       contextWindow: r.context_window == null ? null : Number(r.context_window),

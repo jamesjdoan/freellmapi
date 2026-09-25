@@ -133,11 +133,32 @@ export function ProviderList({ onAddKey, initialSearch }: {
                 >
                   {k.label || t('keys.editLabel')}
                 </button>
-                {k.baseUrl && (
-                  <code className={`text-[11px] text-muted-foreground font-mono truncate max-w-[260px] ${k.enabled ? '' : 'opacity-50'}`} title={k.baseUrl}>
+                {k.baseUrl && (editingBaseUrl?.id === k.id ? (
+                  <span className="inline-flex items-center gap-1">
+                    <Input
+                      autoFocus
+                      value={editingBaseUrl.value}
+                      onChange={e => setEditingBaseUrl({ id: k.id, value: e.target.value })}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') saveBaseUrl.mutate({ id: k.id, baseUrl: editingBaseUrl.value.trim() })
+                        if (e.key === 'Escape') { setEditingBaseUrl(null); saveBaseUrl.reset() }
+                      }}
+                      className="h-6 w-[260px] font-mono text-[11px]"
+                      disabled={saveBaseUrl.isPending}
+                      aria-label={t('keys.baseUrlEdit')}
+                    />
+                    {saveBaseUrl.isError && <span className="text-[11px] text-destructive">{(saveBaseUrl.error as Error).message}</span>}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { saveBaseUrl.reset(); setEditingBaseUrl({ id: k.id, value: k.baseUrl ?? '' }) }}
+                    title={t('keys.baseUrlEdit')}
+                    className={`truncate max-w-[260px] rounded font-mono text-[11px] text-muted-foreground hover:text-foreground hover:underline underline-offset-2 ${k.enabled ? '' : 'opacity-50'}`}
+                  >
                     {k.baseUrl}
-                  </code>
-                )}
+                  </button>
+                ))}
               </>
             )}
             <span className={`text-xs text-muted-foreground ${k.enabled ? '' : 'opacity-50'}`}>{statusLabelKey[status] ? t(statusLabelKey[status]) : status}</span>
@@ -291,6 +312,17 @@ export function ProviderList({ onAddKey, initialSearch }: {
   // Custom endpoint whose model list is being fetched (#488) — relays change
   // what they serve constantly, so this is a repeat action, not a one-off.
   const [discoverKeyId, setDiscoverKeyId] = useState<number | null>(null)
+  // Inline base-URL correction for an OpenAI-compatible account, like the
+  // label: click the URL, fix it, Enter. Its models and limits move with it.
+  const [editingBaseUrl, setEditingBaseUrl] = useState<{ id: number; value: string } | null>(null)
+  const saveBaseUrl = useMutation({
+    mutationFn: ({ id, baseUrl }: { id: number; baseUrl: string }) =>
+      apiFetch(`/api/keys/${id}/base-url`, { method: 'POST', body: JSON.stringify({ baseUrl }) }),
+    onSuccess: () => {
+      setEditingBaseUrl(null)
+      for (const key of ['keys', 'health', 'fallback', 'models', 'analysis', 'quota']) queryClient.invalidateQueries({ queryKey: [key] })
+    },
+  })
   // Custom endpoint taking another credential (#702). Keyed by base URL, since
   // a key joins the pool of an endpoint rather than of the row it was opened
   // from, and every key of that endpoint offers the same action.
@@ -549,10 +581,23 @@ export function ProviderList({ onAddKey, initialSearch }: {
   for (const k of healthData?.keys ?? []) healthKeyMap.set(k.id, k)
   const statusOf = (k: ApiKey) => healthKeyMap.get(k.id)?.status ?? k.status
 
-  const grouped = [...PLATFORMS, CUSTOM_GROUP].map(p => ({
-    ...p,
-    keys: keys.filter(k => k.platform === p.value),
-  })).filter(p => p.keys.length > 0)
+  // One row per catalogue provider, and one row per OpenAI-compatible
+  // ACCOUNT. Custom endpoints all share platform 'custom', but each is its own
+  // service (AIHubMix, a local vLLM, a relay) with its own URL, key, models and
+  // switch, so bunching them under one "Custom" header hid which was which.
+  // `value` is the row's identity; `platform` is what platform-wide actions
+  // (switch, scope, bypass) act on.
+  const grouped = [
+    ...PLATFORMS.map(p => ({ ...p, platform: p.value, endpointScope: undefined as string | undefined, keys: keys.filter(k => k.platform === p.value) })),
+    ...keys.filter(k => k.platform === CUSTOM_GROUP.value).map(k => ({
+      ...CUSTOM_GROUP,
+      value: `custom:${k.id}`,
+      label: k.label?.trim() || endpointHost(k.baseUrl) || CUSTOM_GROUP.label,
+      platform: CUSTOM_GROUP.value,
+      endpointScope: normalizeScope(k.baseUrl),
+      keys: [k],
+    })),
+  ].filter(p => p.keys.length > 0)
 
   // What each provider's catalogue gained and lost lately (#F2 follow-up).
   // Shares one query with the chain page's panel; this narrows it to a
@@ -687,7 +732,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
             // disclosure control. `single` now means just "this group's scope
             // edits have one unambiguous target", not "hide the header".
             const single = group.keys.length === 1
-            const models = enabledModelCount(fallback, group.value, scopeAccess.get(group.value))
+            const models = enabledModelCount(fallback, group.platform, scopeAccess.get(group.platform))
             return (
               <div key={group.value}>
                 {/* Shown for single-key groups too, unlike before: it carries
@@ -697,9 +742,13 @@ export function ProviderList({ onAddKey, initialSearch }: {
                   <Switch
                     checked={group.keys.some(k => k.enabled)}
                     onCheckedChange={(checked) =>
-                      togglePlatform.mutate({ platform: group.value, enabled: checked })
+                      // An account row switches its one key; a provider row
+                      // switches every key of the platform, as before.
+                      group.platform === CUSTOM_GROUP.value
+                        ? setKeyEnabled.mutate({ id: group.keys[0].id, enabled: checked })
+                        : togglePlatform.mutate({ platform: group.platform, enabled: checked })
                     }
-                    disabled={togglePlatform.isPending}
+                    disabled={togglePlatform.isPending || setKeyEnabled.isPending}
                   />
                   <button
                     type="button"
@@ -741,13 +790,13 @@ export function ProviderList({ onAddKey, initialSearch }: {
                   {/* What is happening with this credential, beside what its
                       catalogue has been doing. Silent unless it needs a
                       decision. */}
-                  <ProviderDiagnosisChip diagnosis={diagnosisByPlatform.get(group.value)} />
+                  <ProviderDiagnosisChip diagnosis={group.endpointScope === undefined ? diagnosisByPlatform.get(group.platform) : undefined} />
                   <ProviderChurnChip
-                    churn={churn.get(group.value)}
+                    churn={group.endpointScope === undefined ? churn.get(group.platform) : undefined}
                     expanded={single ? churnOpenKeyIds.has(group.keys[0].id) : undefined}
                     onToggle={single ? () => toggleChurnOpen(group.keys[0].id) : undefined}
                   />
-                  <NewArrivalsTag churn={churn.get(group.value)} />
+                  <NewArrivalsTag churn={group.endpointScope === undefined ? churn.get(group.platform) : undefined} />
                   {/* The single key, inline. It used to sit in its own bordered
                       box below, which repeated the provider it belongs to and
                       carried a second copy of the provider menu. One provider,
@@ -778,13 +827,13 @@ export function ProviderList({ onAddKey, initialSearch }: {
                       <DropdownMenuContent align="end" className="w-52">
                         {/* Test every model this provider serves, one real ping each
                             (custom endpoints test per key from the row instead). */}
-                        {group.value !== 'custom' && (
-                          <DropdownMenuItem onClick={() => setTestTarget({ platform: group.value, label: group.label })}>
+                        {group.platform !== 'custom' && (
+                          <DropdownMenuItem onClick={() => setTestTarget({ platform: group.platform, label: group.label })}>
                             {t('keys.testModels')}
                             <FlaskConical className="ml-auto size-3.5" />
                           </DropdownMenuItem>
                         )}
-                        <DropdownMenuItem onClick={() => setAddModelTarget({ platform: group.value })}>
+                        <DropdownMenuItem onClick={() => setAddModelTarget({ platform: group.platform })}>
                           {t('keys.addCustomModel')}
                           <Sparkles className="ml-auto size-3.5" />
                         </DropdownMenuItem>
@@ -796,8 +845,8 @@ export function ProviderList({ onAddKey, initialSearch }: {
                         )}
                         {proxyEnabled && (
                           <DropdownMenuCheckboxItem
-                            checked={!bypassPlatforms.includes(group.value)}
-                            onCheckedChange={() => toggleBypass.mutate(group.value)}
+                            checked={!bypassPlatforms.includes(group.platform)}
+                            onCheckedChange={() => toggleBypass.mutate(group.platform)}
                             closeOnClick={false}
                           >
                             {t('keys.routeViaProxy')}
@@ -826,13 +875,13 @@ export function ProviderList({ onAddKey, initialSearch }: {
                     the unambiguous target of every scope edit below. */}
                 {single && churnOpenKeyIds.has(group.keys[0].id) && (() => {
                   const k = group.keys[0]
-                  const catalogIds = catalogIdsByPlatform.get(group.value) ?? []
+                  const catalogIds = catalogIdsByPlatform.get(group.platform) ?? []
                   // A NULL or empty scope serves the whole catalogue.
                   const serveAll = k.modelScope == null || k.modelScope.length === 0
                   const servedNow = new Set(serveAll ? catalogIds : k.modelScope!)
                   return (
                     <ProviderChurnPanel
-                      churn={churn.get(group.value)}
+                      churn={churn.get(group.platform)}
                       pending={setKeyScope.isPending && setKeyScope.variables?.id === k.id}
                       isServed={modelId => servedNow.has(modelId)}
                       disabledReason={modelId => {
@@ -1223,7 +1272,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                       that decide routing. Comparing models within one provider
                       is the decision this screen exists for; it used to need
                       the Compare page and the scope dialog side by side. */}
-                  <ProviderModelsPanel platform={group.value} />
+                  <ProviderModelsPanel platform={group.platform} endpointScope={group.endpointScope} />
                   </>
                 )}
               </div>
@@ -1305,4 +1354,16 @@ export function ProviderList({ onAddKey, initialSearch }: {
       })()}
     </div>
   )
+}
+
+/** An endpoint's host, for naming an unlabelled OpenAI-compatible account. */
+function endpointHost(baseUrl: string | null | undefined): string | null {
+  if (!baseUrl) return null
+  try { return new URL(baseUrl).host } catch { return null }
+}
+
+/** Mirrors server/src/lib/endpoint-scope.ts normalizeBaseUrl: the identity a
+ *  custom endpoint's model rows carry. */
+function normalizeScope(baseUrl: string | null | undefined): string {
+  return baseUrl ? baseUrl.trim().replace(/\/+$/, '') : ''
 }

@@ -105,6 +105,8 @@ interface Row {
   modelDbId: number
   platform: string
   modelId: string
+  /** Relay a custom row belongs to (normalised base URL); '' for catalogue rows. */
+  endpointScope?: string
   displayName: string
   enabled: boolean
   contextWindow: number | null
@@ -233,7 +235,12 @@ function AllowanceCell({ probe, usage }: { probe?: QuotaProbe; usage?: RateUsage
   )
 }
 
-export function ProviderModelsPanel({ platform }: { platform: string }) {
+export function ProviderModelsPanel({ platform, endpointScope }: {
+  platform: string
+  /** One OpenAI-compatible account's rows only; every custom endpoint shares
+   *  platform 'custom'. Undefined = the whole platform. */
+  endpointScope?: string
+}) {
   // `provider-models-panel` off: the panel is hidden and upstream's provider view is used; saved scope is untouched.
   if (!useExtensionEnabled('provider-models-panel')) return null
   const { t } = useI18n()
@@ -422,7 +429,7 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
   }
 
   const rows = useMemo(() => {
-    const mine = (data?.rows ?? []).filter(r => r.platform === platform)
+    const mine = (data?.rows ?? []).filter(r => r.platform === platform && (endpointScope === undefined || r.endpointScope === endpointScope))
     const value = (r: Row) =>
       sort === 'name' ? null
       : sort === 'speed' ? r.analysis?.medianOutputTokensPerSecond ?? null
@@ -443,7 +450,7 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
         if (y == null) return -1
         return y - x || a.displayName.localeCompare(b.displayName)
       })
-  }, [data?.rows, platform, sort, hideDisabled])
+  }, [data?.rows, platform, endpointScope, sort, hideDisabled])
 
 
   // Only what this key can actually reach: probing a model outside the key's
@@ -466,8 +473,8 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
   const unroutableCount = useMemo(
     // THIS provider's rows. The payload carries every platform, so counting it
     // whole reported 42 hidden on a panel that had four.
-    () => (data?.rows ?? []).filter(r => r.platform === platform && !routable(r)).length,
-    [data?.rows, platform],
+    () => (data?.rows ?? []).filter(r => r.platform === platform && (endpointScope === undefined || r.endpointScope === endpointScope) && !routable(r)).length,
+    [data?.rows, platform, endpointScope],
   )
 
   // Arrivals on this provider not yet seen (same window and store as the key
@@ -478,10 +485,13 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
   const { data: catalogueChanges } = useCatalogueChanges()
   const unseenArrivals = useUnseenArrivals(churnEnabled ? churnByPlatform(catalogueChanges).get(platform)?.arrived : undefined)
   const newModelIds = new Set(unseenArrivals.map(m => m.modelId))
+  // This panel's rows: the platform, narrowed to one endpoint for an
+  // OpenAI-compatible account row.
+  const ours = (r: Row) => r.platform === platform && (endpointScope === undefined || r.endpointScope === endpointScope)
   // Highlights scores against the chain picked in the chain-minimums panel.
   const tone = useScoreTone()
   const hiddenNewCount = hideDisabled
-    ? (data?.rows ?? []).filter(r => r.platform === platform && newModelIds.has(r.modelId) && !routable(r)).length
+    ? (data?.rows ?? []).filter(r => ours(r) && newModelIds.has(r.modelId) && !routable(r)).length
     : 0
 
   // The soonest reset among this platform's quota pools, from the same payload
@@ -512,7 +522,7 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
   // the catalogue, and took the filter chip with it — the one control that
   // could undo the filter, gone, with the preference persisted. The filtered
   // case falls through and is handled under the table, chip intact.
-  const provider = (data?.rows ?? []).filter(r => r.platform === platform)
+  const provider = (data?.rows ?? []).filter(ours)
   if (provider.length === 0) return <p className="px-3 py-2 text-xs text-muted-foreground">{t('keys.panelNoModels')}</p>
 
   const scoped = rows.filter(routable).length
