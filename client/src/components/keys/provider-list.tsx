@@ -34,7 +34,7 @@ import {
   statusLabelKey,
 } from './shared'
 import type { HealthData } from './shared'
-import { ProviderChurnChip, ProviderChurnPanel } from './provider-churn'
+import { NewArrivalsTag, ProviderChurnChip, ProviderChurnPanel } from './provider-churn'
 import { ProviderDiagnosisChip, useProviderDiagnosis } from './provider-diagnosis'
 import { churnByPlatform, useCatalogueChanges } from '@/lib/catalogue-changes'
 import { ProviderModelsPanel } from '@/components/keys/provider-models-panel'
@@ -731,6 +731,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                     expanded={single ? churnOpenKeyIds.has(group.keys[0].id) : undefined}
                     onToggle={single ? () => toggleChurnOpen(group.keys[0].id) : undefined}
                   />
+                  <NewArrivalsTag churn={churn.get(group.value)} />
                   {/* The single key, inline. It used to sit in its own bordered
                       box below, which repeated the provider it belongs to and
                       carried a second copy of the provider menu. One provider,

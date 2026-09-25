@@ -2,6 +2,12 @@
 
 ## 2026-09-25 — Chain table sorts the view; key dialog edits limits only
 
+- Keys: catalogue arrivals from the last 14 days that have not been seen get an amber `N new ×` tag
+  on the key row and an amber row with a `new` badge in the expanded provider. `Hide can't route`
+  turns amber with `· N new hidden` when it is what hides one. `×` or `Mark N new seen` records
+  them per browser (`imperium.keys.seenArrivals`); an arrival re-flags only if it leaves and
+  returns. Gated by `provider-churn`. `client/src/lib/seen-arrivals.ts`,
+  `client/src/components/keys/provider-churn.tsx`, `provider-models-panel.tsx`, `provider-list.tsx`.
 - Fallback chain table: `#`, Model, Reliability, Speed, Intelligence and Score headers sort the
   view (asc, desc, back to chain order), remembered per browser under `fallback.chainSort`. View
   only: routing order and the `#` numbers are unchanged, and drag-to-reorder pauses while a sort is

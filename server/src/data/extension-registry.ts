@@ -383,14 +383,14 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
   {
     id: 'provider-churn',
     title: 'Per-provider catalogue churn',
-    summary: 'What each provider gained and lost lately, on its key row, expanding into per-model scope switches. A retirement names what it cost - the chains that model was serving.',
+    summary: 'What each provider gained and lost lately, on its key row, expanding into per-model scope switches. A retirement names what it cost - the chains that model was serving. Arrivals not yet seen get an amber N new tag on the key row and a highlighted row in the expanded provider; Hide can\'t route lights up when it is hiding one. Marking them seen (× on the tag, or Mark seen in the panel) is remembered per browser and never re-flags that arrival.',
     settingsLocation: 'Keys → provider key row → churn chip',
     destinations: [{ kind: 'internal', label: 'Open provider keys', href: '/keys' }],
     category: 'presentation',
     defaultEnabled: true,
-    offBehaviour: 'The chip and its panel are hidden. Churn history is retained.',
+    offBehaviour: 'The chip, its panel, the new-arrivals tag and the row highlights are hidden. Churn history and what was marked seen are retained.',
     takesEffect: 'Next page load.',
-    codeLocations: ['client/src/components/keys/provider-churn.tsx', 'server/src/services/catalogue-changes.ts'],
+    codeLocations: ['client/src/components/keys/provider-churn.tsx', 'client/src/lib/seen-arrivals.ts', 'client/src/components/keys/provider-models-panel.tsx', 'server/src/services/catalogue-changes.ts'],
     disableConfirmation: 'none',
   },
   {

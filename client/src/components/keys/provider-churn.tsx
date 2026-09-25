@@ -5,6 +5,7 @@ import { PROVIDER_CHURN_DAYS } from '@/lib/catalogue-changes'
 import { formatStamp } from '@/lib/stamp'
 import type { ProviderChurn } from '@/lib/catalogue-changes'
 import { useExtensionEnabled } from '@/lib/use-extension'
+import { markArrivalsSeen, useUnseenArrivals } from '@/lib/seen-arrivals'
 
 // What this provider's catalogue has done lately, on the provider row itself.
 //
@@ -75,6 +76,38 @@ export function ProviderChurnChip({ churn, expanded, onToggle }: {
     <Tooltip text={lines.join('\n')} focusable className="inline-flex flex-shrink-0 rounded-full focus-visible:outline focus-visible:outline-1">
       <span className={shape} aria-label={label}>{counts}</span>
     </Tooltip>
+  )
+}
+
+/**
+ * Arrivals on this provider nobody has looked at yet, on the key row.
+ *
+ * Separate from the +N chip because they answer different questions: +N is
+ * "what did this provider do lately" and stays for its whole window, while
+ * this is "is there anything here you have not seen" and goes away once you
+ * say so. Dismissing is per browser and permanent for those arrivals.
+ */
+export function NewArrivalsTag({ churn }: { churn: ProviderChurn | undefined }) {
+  const enabled = useExtensionEnabled('provider-churn')
+  const unseen = useUnseenArrivals(churn?.arrived)
+  const { t } = useI18n()
+  if (!enabled || unseen.length === 0) return null
+  return (
+    <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-amber-500/50 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:text-amber-300">
+      <span className="size-1.5 rounded-full bg-amber-500" aria-hidden />
+      <Tooltip text={unseen.map(m => m.displayName || m.modelId).join('\n')}>
+        <span className="tabular-nums">{t('keys.newArrivals', { count: unseen.length })}</span>
+      </Tooltip>
+      <button
+        type="button"
+        onClick={() => markArrivalsSeen(unseen)}
+        title={t('keys.newArrivalsDismiss')}
+        aria-label={t('keys.newArrivalsDismiss')}
+        className="ml-0.5 rounded-full px-0.5 leading-none hover:bg-amber-500/25"
+      >
+        ×
+      </button>
+    </span>
   )
 }
 

@@ -13,6 +13,8 @@ import { useI18n } from '@/i18n'
 import { ModelCombobox } from '@/components/model-combobox'
 import { ModelName } from '@/components/model-name'
 import { useExtensionEnabled } from '@/lib/use-extension'
+import { churnByPlatform, useCatalogueChanges } from '@/lib/catalogue-changes'
+import { markArrivalsSeen, useUnseenArrivals } from '@/lib/seen-arrivals'
 
 // Every model this provider serves, with the measured scores beside the two
 // switches that decide whether it can route. Lives inside the expanded provider
@@ -462,6 +464,18 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
     [data?.rows, platform],
   )
 
+  // Arrivals on this provider not yet seen (same window and store as the key
+  // row's tag). New models usually land outside the key's scope, which is
+  // exactly what "Hide can't route" hides - so the chip lights up whenever it
+  // is the reason a new model is not on screen.
+  const churnEnabled = useExtensionEnabled('provider-churn')
+  const { data: catalogueChanges } = useCatalogueChanges()
+  const unseenArrivals = useUnseenArrivals(churnEnabled ? churnByPlatform(catalogueChanges).get(platform)?.arrived : undefined)
+  const newModelIds = new Set(unseenArrivals.map(m => m.modelId))
+  const hiddenNewCount = hideDisabled
+    ? (data?.rows ?? []).filter(r => r.platform === platform && newModelIds.has(r.modelId) && !routable(r)).length
+    : 0
+
   // The soonest reset among this platform's quota pools, from the same payload
   // the Quota page reads — including a window folded behind a binding one,
   // which is where OpenRouter's daily reset lives. Null when every window is
@@ -572,13 +586,25 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
           aria-pressed={hideDisabled}
           disabled={!hideControlPressable(unroutableCount, hideDisabled)}
           title={hideControlPressable(unroutableCount, hideDisabled) ? undefined : t('keys.panelHideNothing')}
-          className={`rounded-full border px-2 py-0.5 text-[10px] ${hideDisabled ? 'bg-muted' : 'hover:bg-muted/50'} disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent`}
+          className={`rounded-full border px-2 py-0.5 text-[10px] ${hiddenNewCount > 0 ? 'border-amber-500 bg-amber-500/15 ring-1 ring-amber-500/60 text-amber-800 dark:text-amber-300' : hideDisabled ? 'bg-muted' : 'hover:bg-muted/50'} disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent`}
         >
           {t('keys.panelHideUnroutable')}
           {unroutableCount > 0 && (
             <span className="ml-1 text-muted-foreground tabular-nums">{unroutableCount}</span>
           )}
+          {hiddenNewCount > 0 && (
+            <span className="ml-1 font-medium tabular-nums">{t('keys.newArrivalsHidden', { count: hiddenNewCount })}</span>
+          )}
         </button>
+        {unseenArrivals.length > 0 && (
+          <button
+            type="button"
+            onClick={() => markArrivalsSeen(unseenArrivals)}
+            className="rounded-full border border-amber-500/50 px-2 py-0.5 text-[10px] text-amber-800 hover:bg-amber-500/15 dark:text-amber-300"
+          >
+            {t('keys.newArrivalsMarkSeen', { count: unseenArrivals.length })}
+          </button>
+        )}
       </div>
 
       <table className="w-full text-xs">
@@ -605,10 +631,15 @@ export function ProviderModelsPanel({ platform }: { platform: string }) {
               // contrast so it is still obviously operable.
               <tr
                 key={r.modelDbId}
-                className={`border-t ${verdictEdge(healthByModel.get(r.modelId))} ${routable(r) ? '' : 'opacity-45'}`}
+                className={`border-t ${verdictEdge(healthByModel.get(r.modelId))} ${newModelIds.has(r.modelId) ? 'bg-amber-500/10' : routable(r) ? '' : 'opacity-45'}`}
               >
                 <td className="py-1 pr-2">
-                  <span className="block max-w-[260px] truncate font-medium" title={r.displayName}>{r.displayName}</span>
+                  <span className="flex max-w-[260px] items-center gap-1">
+                    <span className="truncate font-medium" title={r.displayName}>{r.displayName}</span>
+                    {newModelIds.has(r.modelId) && (
+                      <span className="shrink-0 rounded-full bg-amber-500 px-1.5 text-[9px] font-semibold uppercase tracking-wide text-white">{t('keys.newArrivalBadge')}</span>
+                    )}
+                  </span>
                   <code className="block max-w-[260px] truncate text-[10px] text-muted-foreground" title={r.modelId}>{r.modelId}</code>
                   {/* Why the row is greyed. Without this a tested-good route
                       that is switched off looks like the router ignoring it. */}
