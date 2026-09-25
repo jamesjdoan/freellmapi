@@ -47,6 +47,9 @@ const PolicyBody = z.object({
   // would let a typed number outrank a measured one in the resolver.
   confidence: z.number().min(0).max(1).default(0.8),
   notes: z.string().max(500).nullable().default(null),
+  /** Denomination of `limit` where the metric does not say: 'usd_cents' for a
+   *  dollar credit allowance. */
+  unit: z.enum(['usd_cents']).nullable().default(null),
 }).strict();
 
 quotaRouter.get('/policies', (req: Request, res: Response) => {

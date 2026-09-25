@@ -819,7 +819,14 @@
     "pause_heuristic": "paused · cooling down after errors",
     "pauseBackIn": "back in {time}",
     "expandAll": "Expand all",
-    "collapseAll": "Collapse all"
+    "collapseAll": "Collapse all",
+    "creditAllowance": "Monthly credit allowance",
+    "creditAllowanceHint": "For providers that give a fixed amount of paid usage each month (Mistral: $10, reset on the 1st). Leave the amount empty for none.",
+    "creditAllowanceAmount": "Amount (USD)",
+    "creditAllowanceDay": "Resets on day",
+    "creditAllowanceTimezone": "Timezone",
+    "creditAllowanceInvalid": "Enter an amount above 0, or leave it empty.",
+    "creditAllowanceEffect": "{amount} a month. When it runs out (402), this provider is paused until the next reset, around {date} ({timezone}), instead of being retried every day."
   },
   "backups": {
     "title": "Backups",

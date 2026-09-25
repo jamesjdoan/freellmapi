@@ -105,6 +105,8 @@ interface PolicyRow {
   periodMs: number | null;
   source: string;
   confidence: string | number;
+  /** Denomination of `limit` where the metric does not say ('usd_cents'). */
+  unit?: string | null;
 }
 
 // Helper to format seconds to human readable
@@ -954,7 +956,7 @@ export function QuotaLimitsSection() {
                   <TableCell className="text-muted-foreground">{p.modelId ?? t('quota.allModels')}</TableCell>
                   <TableCell>{p.metric}</TableCell>
                   <TableCell>{p.scope}</TableCell>
-                  <TableCell className="text-right tabular-nums">{p.limit ?? '—'}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatAmount(p.limit, p.unit === 'usd_cents' ? 'cents' : null)}</TableCell>
                   <TableCell className="text-muted-foreground">{policyPeriodLabel(p)}</TableCell>
                   <TableCell className="text-muted-foreground">{p.source}</TableCell>
                   <TableCell className="text-right">

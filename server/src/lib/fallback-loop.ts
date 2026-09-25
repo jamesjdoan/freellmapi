@@ -60,7 +60,7 @@ import { noteModelRetirementSignal } from '../services/model-retirement.js';
 import { getDb, getSetting } from '../db/index.js';
 import type { Platform } from '@freellmapi/shared/types.js';
 import { recordLearnedCeiling, resolveQuotaPolicy } from '../services/provider-quota.js';
-import { resolveEffectiveQuotas } from '../services/quota-policy.js';
+import { creditAllowanceResetAt, resolveEffectiveQuotas } from '../services/quota-policy.js';
 import { DAY_MS } from '../services/quota-clock.js';
 import { countRequestsInWindow, countPlatformUsageInWindow } from '../services/ratelimit.js';
 import { newBreaker, recordBreakerFailure } from './guardrails.js';
@@ -296,7 +296,15 @@ export function cooldownForError(route: RouteResult, err: any): number {
  * Retry-After actually determined the expiry.
  */
 export function cooldownDecisionForError(route: RouteResult, err: any): CooldownDecision {
-  if (isPaymentRequiredError(err)) return { durationMs: getPaymentRequiredCooldownMs(), source: 'credit' };
+  if (isPaymentRequiredError(err)) {
+    // A declared monthly credit allowance (Keys → Models & account limits)
+    // says exactly when the balance comes back, so the bench lasts until then
+    // and is not re-tried daily against the same empty wallet. Uncapped on
+    // purpose: the ceiling bounds OUR guesses, and this is the operator's
+    // stated reset. Credit benches are never probed early (cooldown-probe).
+    const resetAt = creditAllowanceResetAt(route.platform);
+    return { durationMs: resetAt != null ? resetAt - Date.now() : getPaymentRequiredCooldownMs(), source: 'credit' };
+  }
   // Before the model-forbidden check: a suspended account is a 403 too, but
   // it is the KEY that is out, for as long as an empty balance would be — and
   // under the same operator ceiling (#952).

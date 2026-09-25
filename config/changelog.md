@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-09-25 — Monthly credit allowance: a 402 waits for the reset
+
+- Keys → key row → Models & account limits → **Monthly credit allowance**: amount (USD), reset day
+  (1 = calendar month, else a billing-cycle anchor) and timezone. Stored in the quota ledger as a
+  `provider_account` `credits` policy with the new `quota_policy.unit = 'usd_cents'` (migration
+  `20260925_000002`), so $10 is `1000` and can no longer be read as ten credits.
+- With one declared, a 402 benches the account's key until the next reset (`creditAllowanceResetAt`,
+  uncapped - it is the operator's stated reset, not a heuristic) instead of 24h and a re-trip each
+  day. Credit benches are never probed early. Regression test
+  `fallback-loop-credit-allowance.test.ts`. Mistral: $10/month, reset 1 Oct.
+- FreeLLM still cannot see Mistral's remaining balance (no headers, no usage API), so the allowance
+  records the reset, not a live counter.
+
 ## 2026-09-25 — Chain minimums: set AA floors per chain, see where every model fits
 
 - **Chain minimums** side panel (Compare or Keys → Chain minimums): minimum AA General, Coding and

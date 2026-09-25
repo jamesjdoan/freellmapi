@@ -52,6 +52,7 @@ async function mount(fallback: unknown[], catalogue: unknown[]) {
     if (path.startsWith('/api/fallback')) return Promise.resolve(fallback)
     if (path === '/api/models') return Promise.resolve(catalogue)
     if (path.includes('probe')) return Promise.resolve({ probes: [] })
+    if (path.startsWith('/api/quota/policies')) return Promise.resolve({ policies: [] })
     if (path.includes('quota')) return Promise.resolve({ providers: [], models: [] })
     return Promise.resolve([])
   })

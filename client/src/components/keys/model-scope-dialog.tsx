@@ -66,6 +66,10 @@ export function ModelScopeDialog({
   const [providerRpmLimit, setProviderRpmLimit] = useState(apiKey.providerRpmLimit?.toString() ?? '')
   const [providerRpdLimit, setProviderRpdLimit] = useState(apiKey.providerRpdLimit?.toString() ?? '')
   const [providerTpdLimit, setProviderTpdLimit] = useState(apiKey.providerTpdLimit?.toString() ?? '')
+  // A monthly credit allowance ("$10 of usage, resets on the 1st"), declared
+  // in the quota ledger like every other operator limit. Null until edited, so
+  // the saved policy shows through until the operator changes something.
+  const [allowanceDraft, setAllowanceDraft] = useState<{ amount: string; day: string; timezone: string } | null>(null)
   const [modelLimitDrafts, setModelLimitDrafts] = useState<Record<number, ModelLimitDraft>>({})
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null)
   const { data: fallback = [], isLoading: catalogLoading, isError: catalogError } = useQuery<FallbackEntry[]>({
@@ -244,10 +248,50 @@ export function ModelScopeDialog({
     .filter(m => m.kind === 'chat' && !ids.includes(m.modelId))
     .map(m => m.modelId)
 
+  const { data: policyData } = useQuery<{ policies: CreditPolicy[] }>({
+    queryKey: ['quota', 'policies', apiKey.platform],
+    queryFn: () => apiFetch(`/api/quota/policies?platform=${encodeURIComponent(apiKey.platform)}`),
+    enabled: apiKey.platform !== 'custom',
+  })
+  const allowancePolicy = policyData?.policies.find(p =>
+    p.scope === 'provider_account' && p.metric === 'credits' && (p.periodKind === 'calendar_month' || p.periodKind === 'billing_cycle'))
+  const allowance = allowanceDraft ?? {
+    amount: allowancePolicy ? String(allowancePolicy.unit === 'usd_cents' ? allowancePolicy.limit / 100 : allowancePolicy.limit) : '',
+    day: String(allowancePolicy?.periodKind === 'billing_cycle' ? allowancePolicy.anchorDay ?? 1 : 1),
+    timezone: allowancePolicy?.timezone ?? 'UTC',
+  }
+  const allowanceDay = Math.min(31, Math.max(1, Math.trunc(Number(allowance.day) || 1)))
+  const allowanceAmount = Number(allowance.amount)
+  const allowanceInvalid = allowance.amount.trim() !== '' && !(allowanceAmount > 0)
+
+  const saveAllowance = async () => {
+    if (!allowanceDraft) return
+    const clearing = allowance.amount.trim() === ''
+    const periodKind = allowanceDay === 1 ? 'calendar_month' : 'billing_cycle'
+    // The ledger keys a policy by its period kind too, so moving between "the
+    // 1st" and another day must replace the old row rather than sit beside it.
+    if (allowancePolicy && (clearing || allowancePolicy.periodKind !== periodKind)) {
+      await apiFetch(`/api/quota/policies/${allowancePolicy.id}`, { method: 'DELETE' })
+    }
+    if (clearing) return
+    await apiFetch('/api/quota/policies', {
+      method: 'PUT',
+      body: JSON.stringify({
+        platform: apiKey.platform, modelId: null, endpointScope: null, scope: 'provider_account', metric: 'credits',
+        limit: Math.round(allowanceAmount * 100), unit: 'usd_cents', periodKind,
+        anchorDay: periodKind === 'billing_cycle' ? allowanceDay : null,
+        timezone: allowance.timezone.trim() || 'UTC', notes: 'Monthly credit allowance (USD)',
+      }),
+    })
+  }
+
   const save = useMutation({
-    mutationFn: (payload: Record<string, unknown>) =>
-      apiFetch(`/api/keys/${apiKey.id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+    mutationFn: async (payload: Record<string, unknown>) => {
+      await apiFetch(`/api/keys/${apiKey.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+      await saveAllowance()
+    },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quota'] })
       queryClient.invalidateQueries({ queryKey: ['keys'] })
       queryClient.invalidateQueries({ queryKey: ['fallback'] })
       queryClient.invalidateQueries({ queryKey: ['models'] })
@@ -511,6 +555,37 @@ export function ModelScopeDialog({
             </div>
           </div>
 
+          {apiKey.platform !== 'custom' && (
+            <div className="rounded-xl border p-3">
+              <p className="text-xs font-medium">{t('keys.creditAllowance')}</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">{t('keys.creditAllowanceHint')}</p>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <label className="text-[11px] text-muted-foreground">
+                  {t('keys.creditAllowanceAmount')}
+                  <Input type="number" min="0" step="0.01" placeholder="10.00" value={allowance.amount}
+                    onChange={e => setAllowanceDraft({ ...allowance, amount: e.target.value })} className="mt-1 h-8 text-xs" />
+                </label>
+                <label className="text-[11px] text-muted-foreground">
+                  {t('keys.creditAllowanceDay')}
+                  <Input type="number" min="1" max="31" step="1" value={allowance.day}
+                    onChange={e => setAllowanceDraft({ ...allowance, day: e.target.value })} className="mt-1 h-8 text-xs" />
+                </label>
+                <label className="text-[11px] text-muted-foreground">
+                  {t('keys.creditAllowanceTimezone')}
+                  <Input value={allowance.timezone} spellCheck={false}
+                    onChange={e => setAllowanceDraft({ ...allowance, timezone: e.target.value })} className="mt-1 h-8 text-xs" />
+                </label>
+              </div>
+              {allowanceInvalid
+                ? <p className="mt-2 text-[11px] text-destructive">{t('keys.creditAllowanceInvalid')}</p>
+                : allowance.amount.trim() !== '' && (
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    {t('keys.creditAllowanceEffect', { amount: `$${allowanceAmount.toFixed(2)}`, date: nextMonthlyReset(allowanceDay).toISOString().slice(0, 10), timezone: allowance.timezone || 'UTC' })}
+                  </p>
+                )}
+            </div>
+          )}
+
           {save.isError && (
             <p className="text-xs text-destructive">{(save.error as Error).message}</p>
           )}
@@ -531,7 +606,7 @@ export function ModelScopeDialog({
             <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
               {t('common.cancel')}
             </Button>
-            <Button type="button" size="sm" onClick={submit} disabled={save.isPending || !catalogReady}>
+            <Button type="button" size="sm" onClick={submit} disabled={save.isPending || !catalogReady || allowanceInvalid}>
               {save.isPending ? t('common.saving') : t('common.save')}
             </Button>
           </div>
@@ -584,4 +659,24 @@ export function ModelScopeDialog({
       </DialogPopup>
     </Dialog>
   )
+}
+
+interface CreditPolicy {
+  id: number
+  scope: string
+  metric: string
+  limit: number
+  periodKind: string
+  anchorDay: number | null
+  timezone: string | null
+  unit: string | null
+}
+
+/** The next occurrence of day `day` of the month at 00:00 UTC, clamped to the
+ *  month's length like the server's billing anchor. Display only: the server's
+ *  quota clock decides the real reset, in the declared timezone. */
+function nextMonthlyReset(day: number, now = new Date()): Date {
+  const at = (y: number, m: number) => new Date(Date.UTC(y, m, Math.min(day, new Date(Date.UTC(y, m + 1, 0)).getUTCDate())))
+  const thisMonth = at(now.getUTCFullYear(), now.getUTCMonth())
+  return thisMonth > now ? thisMonth : at(now.getUTCFullYear(), now.getUTCMonth() + 1)
 }

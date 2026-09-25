@@ -74,10 +74,16 @@ export interface QuotaPolicy {
   source: QuotaPolicySource;
   confidence: number;
   notes: string | null;
+  /** What `limit` is counted in, where the metric alone does not say. Only
+   *  'usd_cents' today (a dollar allowance, stored in whole cents because the
+   *  limit is an integer). Null = the bare count the metric names. */
+  unit: QuotaPolicyUnit | null;
 }
 
-export type QuotaPolicyInput = Omit<QuotaPolicy, 'id' | 'enabled' | 'priority' | 'source' | 'confidence' | 'notes'>
-  & Partial<Pick<QuotaPolicy, 'enabled' | 'priority' | 'source' | 'confidence' | 'notes'>>;
+export type QuotaPolicyUnit = 'usd_cents';
+
+export type QuotaPolicyInput = Omit<QuotaPolicy, 'id' | 'enabled' | 'priority' | 'source' | 'confidence' | 'notes' | 'unit'>
+  & Partial<Pick<QuotaPolicy, 'enabled' | 'priority' | 'source' | 'confidence' | 'notes' | 'unit'>>;
 
 export interface EffectiveQuota {
   platform: string;
@@ -130,6 +136,7 @@ interface PolicyRow {
   source: QuotaPolicySource;
   confidence: number;
   notes: string | null;
+  unit: QuotaPolicyUnit | null;
 }
 
 function toPolicy(row: PolicyRow): QuotaPolicy {
@@ -150,6 +157,7 @@ function toPolicy(row: PolicyRow): QuotaPolicy {
     source: row.source,
     confidence: row.confidence,
     notes: row.notes,
+    unit: row.unit ?? null,
   };
 }
 
@@ -227,8 +235,8 @@ export function upsertQuotaPolicy(input: QuotaPolicyInput): QuotaPolicy {
   db.prepare(`
     INSERT INTO quota_policy (
       platform, model_id, endpoint_scope, scope, metric, limit_value, period_kind, period_ms,
-      timezone, anchor_day, priority, enabled, source, confidence, notes, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      timezone, anchor_day, priority, enabled, source, confidence, notes, unit, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     ON CONFLICT(platform, IFNULL(model_id, ''), IFNULL(endpoint_scope, ''), scope, metric, period_kind) DO UPDATE SET
       limit_value = excluded.limit_value,
       period_kind = excluded.period_kind,
@@ -240,12 +248,13 @@ export function upsertQuotaPolicy(input: QuotaPolicyInput): QuotaPolicy {
       source      = excluded.source,
       confidence  = excluded.confidence,
       notes       = excluded.notes,
+      unit        = excluded.unit,
       updated_at  = datetime('now')
   `).run(
     input.platform, input.modelId, input.endpointScope ?? null, input.scope, input.metric, input.limit,
     input.periodKind, input.periodMs, input.timezone, input.anchorDay,
     input.priority ?? 0, input.enabled === false ? 0 : 1,
-    input.source ?? 'operator', input.confidence ?? 0.8, input.notes ?? null,
+    input.source ?? 'operator', input.confidence ?? 0.8, input.notes ?? null, input.unit ?? null,
   );
   const row = db.prepare(`
     SELECT * FROM quota_policy
@@ -254,6 +263,25 @@ export function upsertQuotaPolicy(input: QuotaPolicyInput): QuotaPolicy {
   `).get(input.platform, input.modelId, input.endpointScope ?? null, input.scope, input.metric) as PolicyRow;
   invalidateQuotaPolicyCache(input.platform);
   return toPolicy(row);
+}
+
+/**
+ * When a provider's declared credit allowance next refills, or null when none
+ * is declared.
+ *
+ * Only a whole-account credits allowance on a calendar month or billing cycle
+ * counts - Mistral's "$10 of usage a month, resetting on the 1st". That is the
+ * one case where the reset is a known date rather than a guess, so a 402 can
+ * bench the account until then instead of re-trying every 24 hours and
+ * re-tripping the same empty balance.
+ */
+export function creditAllowanceResetAt(platform: string, now = Date.now()): number | null {
+  const policy = listQuotaPolicies(platform).find(p =>
+    p.enabled && p.scope === 'provider_account' && p.metric === 'credits'
+    && (p.periodKind === 'calendar_month' || p.periodKind === 'billing_cycle'));
+  if (!policy) return null;
+  const { resetAtMs } = resolveQuotaWindow(periodForPolicy(policy), now);
+  return resetAtMs != null && resetAtMs > now ? resetAtMs : null;
 }
 
 export function deleteQuotaPolicy(id: number): boolean {

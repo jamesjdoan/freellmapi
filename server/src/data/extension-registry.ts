@@ -149,7 +149,7 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
   {
     id: 'provider-account-limits',
     title: 'Provider account limits',
-    summary: 'Set credential-wide RPM, RPD and TPD gates independently from model-specific catalogue limits.',
+    summary: 'Set credential-wide RPM, RPD and TPD gates independently from model-specific catalogue limits, and a monthly credit allowance ("$10 of usage, resets on the 1st"): once it runs out, a 402 pauses the provider until the stated reset instead of re-trying it every 24 hours.',
     settingsLocation: 'Keys → provider key row → Models & account limits',
     destinations: [{ kind: 'internal', label: 'Open account limits', href: '/keys' }],
     category: 'routing',
