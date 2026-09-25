@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "Перейти к рангу"
   },
   "strategies": {
     "explore": "Исследовать неизмеренные модели",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "Откройте {provider}, чтобы создать аккаунт и получить ключ"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "Фактически вы сэкономили ${actual} за последний {range}. Именно столько стоили бы те же токены для платных API, по цене за модель. Показанное число отображает ваш темп от последнего {span} данных до полных 30 дней.",
+    "savingsHintExact": "Фактически вы сэкономили ${actual} за последний {range}. Именно столько стоили бы те же токены для платных API, по цене за модель. Показанное число — это ваш реальный итог за 30 дней.",
+    "requestsByAgent": "Запросы по агентам"
   },
   "logs": {
     "title": "Журнал",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Создать пустой",
     "startEmptyHint": "Создаёт цепочку без моделей и не добавляет в неё новые модели каталога. Без флажка она начинается как копия цепочки по умолчанию.",
     "curated": "Ручная",
-    "curatedHint": "Новые модели каталога не добавляются в эту цепочку автоматически."
+    "curatedHint": "Новые модели каталога не добавляются в эту цепочку автоматически.",
+    "renameHint": "Переименовать эту цепочку",
+    "renameConfirm": "Переименовать цепочку \"{oldName}\" в \"{name}\"? Клиенты, обращающиеся к auto:{oldName}, должны перейти на auto:{name}.",
+    "renamePlaceholder": "Новое имя цепочки",
+    "renameFailed": "Не удалось переименовать цепочку."
   },
   "log": {
     "history": "Full history",

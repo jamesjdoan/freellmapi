@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "র‍্যাংকে যান"
   },
   "strategies": {
     "explore": "অপরিমাপিত মডেল অন্বেষণ করুন",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "অ্যাকাউন্ট তৈরি করতে এবং কী পেতে {provider} খুলুন"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "আপনি আসলে শেষ {range} থেকে ${actual} সংরক্ষণ করেছেন। একই টোকেনগুলির দাম প্রতি মডেলের দামের জন্য প্রদত্ত এপিআই-এ খরচ হবে৷ দেখানো সংখ্যাটি শেষ {span} ডেটা থেকে সম্পূর্ণ 30 দিন পর্যন্ত আপনার গতি প্রজেক্ট করে।",
+    "savingsHintExact": "আপনি আসলে শেষ {range} থেকে ${actual} সংরক্ষণ করেছেন। একই টোকেনগুলির দাম প্রতি মডেলের দামের জন্য প্রদত্ত এপিআই-এ খরচ হবে৷ দেখানো সংখ্যাটি আপনার প্রকৃত 30-দিনের মোট।",
+    "requestsByAgent": "এজেন্ট অনুযায়ী অনুরোধ"
   },
   "logs": {
     "title": "লগ",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Start empty",
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
-    "curatedHint": "New catalog models are not added to this chain automatically."
+    "curatedHint": "New catalog models are not added to this chain automatically.",
+    "renameHint": "এই চেইনের নাম পরিবর্তন করুন",
+    "renameConfirm": "চেইন \"{oldName}\" এর নাম \"{name}\" করবেন? auto:{oldName} কল করা ক্লায়েন্টদের auto:{name} এ যেতে হবে।",
+    "renamePlaceholder": "নতুন চেইন নাম",
+    "renameFailed": "চেইনের নাম পরিবর্তন করা যায়নি।"
   },
   "log": {
     "history": "Full history",

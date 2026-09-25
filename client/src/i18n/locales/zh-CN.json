@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "跳转到排名"
   },
   "strategies": {
     "explore": "探索未测模型",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "打开 {provider} 注册账户并获取密钥"
   },
   "backups": {
     "title": "备份",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "过去 {range} 您实际节省了 ${actual}。这是同样词元在按模型计费的付费 API 上的花费。显示的数字是基于过去 {span} 的数据推算出的完整 30 天金额。",
+    "savingsHintExact": "在过去 {range}，您实际节省了 ${actual}。这是同样词元在按模型计费的付费 API 上的花费。显示的数字是您最近 30 天的实际总额。",
+    "requestsByAgent": "按智能体统计的请求"
   },
   "logs": {
     "title": "日志",
@@ -1346,7 +1351,11 @@
     "startEmpty": "从空链开始",
     "startEmptyHint": "创建时不放入任何模型，之后新增的目录模型也不会自动加入。不勾选则复制默认链。",
     "curated": "手动维护",
-    "curatedHint": "新的目录模型不会自动加入这条链。"
+    "curatedHint": "新的目录模型不会自动加入这条链。",
+    "renameHint": "重命名此链",
+    "renameConfirm": "将链“{oldName}”重命名为“{name}”？调用 auto:{oldName} 的客户端必须改用 auto:{name}。",
+    "renamePlaceholder": "新链名称",
+    "renameFailed": "无法重命名该链。"
   },
   "log": {
     "history": "Full history",

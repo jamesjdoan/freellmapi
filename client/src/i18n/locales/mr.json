@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "क्रमांकावर जा"
   },
   "strategies": {
     "explore": "न मोजलेले मॉडेल्स एक्सप्लोर करा",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "खाते तयार करण्यासाठी आणि की मिळवण्यासाठी {provider} उघडा"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "मागील {range} पेक्षा तुम्ही खरोखर ${actual} वाचवले. प्रत्येक मॉडेलच्या किंमतीनुसार, सशुल्क API वर समान टोकनची किंमत असेल. दाखवलेली संख्या तुमची गती शेवटच्या {span} डेटापासून पूर्ण 30 दिवसांपर्यंत दर्शवते.",
+    "savingsHintExact": "मागील {range} पेक्षा तुम्ही खरोखर ${actual} वाचवले. प्रत्येक मॉडेलच्या किंमतीनुसार, सशुल्क API वर समान टोकनची किंमत असेल. दाखवलेली संख्या तुमची वास्तविक 30-दिवसांची एकूण संख्या आहे.",
+    "requestsByAgent": "एजंटनुसार विनंत्या"
   },
   "logs": {
     "title": "लॉग",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Start empty",
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
-    "curatedHint": "New catalog models are not added to this chain automatically."
+    "curatedHint": "New catalog models are not added to this chain automatically.",
+    "renameHint": "या साखळीचे नाव बदला",
+    "renameConfirm": "साखळी \"{oldName}\" चे नाव \"{name}\" करावे? auto:{oldName} हा कॉल करणारे क्लायंट्स auto:{name} वर जावे लागेल.",
+    "renamePlaceholder": "नवीन साखळी नाव",
+    "renameFailed": "साखळीचे नाव बदलता आले नाही."
   },
   "log": {
     "history": "Full history",

@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "Перейти до рангу"
   },
   "strategies": {
     "explore": "Досліджувати невиміряні моделі",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "Відкрийте {provider}, щоб створити обліковий запис і отримати ключ"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "Ви фактично заощадили ${actual} за останній {range}. Саме стільки коштували б ті самі токени для платних API, за ціною за модель. Показане число показує ваш темп від останніх {span} даних до повних 30 днів.",
+    "savingsHintExact": "Ви фактично заощадили ${actual} за останній {range}. Саме стільки коштували б ті самі токени для платних API, за ціною за модель. Відображена цифра є вашою реальною сумою за 30 днів.",
+    "requestsByAgent": "Запити за агентами"
   },
   "logs": {
     "title": "Журнал",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Почати з порожнього",
     "startEmptyHint": "Створює ланцюжок без моделей і не додає до нього нові моделі каталогу. Без позначки він починається як копія типового ланцюжка.",
     "curated": "Ручний",
-    "curatedHint": "Нові моделі каталогу не додаються до цього ланцюжка автоматично."
+    "curatedHint": "Нові моделі каталогу не додаються до цього ланцюжка автоматично.",
+    "renameHint": "Перейменувати цей ланцюг",
+    "renameConfirm": "Перейменувати ланцюг \"{oldName}\" на \"{name}\"? Клієнти, що викликають auto:{oldName}, мають перейти на auto:{name}.",
+    "renamePlaceholder": "Нова назва ланцюга",
+    "renameFailed": "Не вдалося перейменувати ланцюг."
   },
   "log": {
     "history": "Full history",

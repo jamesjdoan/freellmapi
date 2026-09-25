@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "အဆင့်သို့ သွားရန်"
   },
   "strategies": {
     "explore": "မတိုင်းတာရသေးသော မော်ဒယ်များကို စူးစမ်းရန်",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "အကောင့်ဖွင့်၍ သော့့ရရန် {provider} ကိုဖွင့်ပါ"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "နောက်ဆုံး ${actual} ကို {range} လောက် သိမ်းထားတယ်။ ဒါဟာ မော်ဒယ်အလိုက် စျေးနှုန်းဖြင့် ပေးသွင်းထားသော API များတွင် တူညီသော token များ၏ ကုန်ကျစရိတ်ဖြစ်သည်။ ပြသထားသော နံပါတ်သည် နောက်ဆုံး ဒေတာ {span} မှ ၃၀ ရက်အထိ သင့်အမြန်နှုန်းကို ခန့်မှန်းသည်။",
+    "savingsHintExact": "နောက်ဆုံး ${actual} ကို {range} လောက် သိမ်းထားတယ်။ ဒါဟာ မော်ဒယ်အလိုက် စျေးနှုန်းဖြင့် ပေးသွင်းထားသော API များတွင် တူညီသော token များ၏ ကုန်ကျစရိတ်ဖြစ်သည်။ ပြထားတဲ့နံပါတ်က သင့်ရဲ့ တကယ့် ၃၀ ရက်စုစုပေါင်းပါ။",
+    "requestsByAgent": "အေးဂျင့်အလိုက် တောင်းဆိုမှုများ"
   },
   "logs": {
     "title": "မှတ်တမ်းများ",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Start empty",
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
-    "curatedHint": "New catalog models are not added to this chain automatically."
+    "curatedHint": "New catalog models are not added to this chain automatically.",
+    "renameHint": "ဤချိန်း၏ အမည်ကို ပြောင်းရန်",
+    "renameConfirm": "ချိန်း \"{oldName}\" ကို \"{name}\" အမည်ပြောင်းမလား? auto:{oldName} ကိုခေါ်ဆိုသော client များသည် auto:{name} သို့ ပြောင်းရမည်။",
+    "renamePlaceholder": "ချိန်းအမည်အသစ်",
+    "renameFailed": "ချိန်းအမည်ကို မပြောင်းနိုင်ပါ။"
   },
   "log": {
     "history": "Full history",

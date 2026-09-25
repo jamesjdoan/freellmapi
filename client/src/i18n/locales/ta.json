@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "வரிசைக்குச் செல்"
   },
   "strategies": {
     "explore": "அளவிடப்படாத மாதிரிகளை ஆராயுங்கள்",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "கணக்கை உருவாக்கி விசை பெற {provider} ஐத் திறக்கவும்"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "நீங்கள் உண்மையில் கடந்த {range} இல் ${actual} சேமித்துள்ளீர்கள். அதே டோக்கன்கள் ஒரு மாதிரியின் விலையில் செலுத்தப்பட்ட APIகளில் செலவாகும். காட்டப்பட்ட எண் உங்கள் வேகத்தை கடைசி {span} தரவிலிருந்து முழு 30 நாட்களுக்குக் காட்டுகிறது.",
+    "savingsHintExact": "நீங்கள் உண்மையில் கடந்த {range} இல் ${actual} சேமித்துள்ளீர்கள். அதே டோக்கன்கள் ஒரு மாதிரியின் விலையில் செலுத்தப்பட்ட APIகளில் செலவாகும். காட்டப்பட்டுள்ள எண் உங்களின் உண்மையான 30 நாள் மொத்தமாகும்.",
+    "requestsByAgent": "முகவர் வாரியாக கோரிக்கைகள்"
   },
   "logs": {
     "title": "பதிவுகள்",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Start empty",
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
-    "curatedHint": "New catalog models are not added to this chain automatically."
+    "curatedHint": "New catalog models are not added to this chain automatically.",
+    "renameHint": "இந்த சங்கிலியின் பெயரிடவும்",
+    "renameConfirm": "\"{oldName}\" சங்கிலியை \"{name}\" என மறுபெயரிடவா? auto:{oldName} அழைக்கும் கிளையண்டுகள் auto:{name} க்கு மாற வேண்டும்.",
+    "renamePlaceholder": "புதிய சங்கிலி பெயர்",
+    "renameFailed": "சங்கிலிக்கு மறுபெயரிட முடியவில்லை."
   },
   "log": {
     "history": "Full history",

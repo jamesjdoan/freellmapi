@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "Nhảy đến hạng"
   },
   "strategies": {
     "explore": "Khám phá các mô hình chưa được đo",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "Mở {provider} để tạo tài khoản và lấy khóa"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "Bạn thực sự đã tiết kiệm được ${actual} trong {range} vừa qua. Đó là giá của các mã thông báo tương tự đối với các API trả phí, được định giá cho mỗi mô hình. Con số được hiển thị phản ánh tốc độ của bạn từ dữ liệu {span} cuối cùng đến đủ 30 ngày.",
+    "savingsHintExact": "Bạn thực sự đã tiết kiệm được ${actual} trong {range} vừa qua. Đó là giá của các mã thông báo tương tự đối với các API trả phí, được định giá cho mỗi mô hình. Con số hiển thị là tổng thời gian thực trong 30 ngày của bạn.",
+    "requestsByAgent": "Yêu cầu theo tác nhân"
   },
   "logs": {
     "title": "Nhật ký",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Bắt đầu rỗng",
     "startEmptyHint": "Tạo chuỗi không có mô hình nào và không tự thêm mô hình mới từ danh mục. Bỏ chọn thì chuỗi bắt đầu như bản sao của chuỗi mặc định.",
     "curated": "Tự chọn",
-    "curatedHint": "Mô hình mới trong danh mục không được thêm tự động vào chuỗi này."
+    "curatedHint": "Mô hình mới trong danh mục không được thêm tự động vào chuỗi này.",
+    "renameHint": "Đổi tên chuỗi này",
+    "renameConfirm": "Đổi tên chuỗi \"{oldName}\" thành \"{name}\"? Các client gọi auto:{oldName} phải chuyển sang auto:{name}.",
+    "renamePlaceholder": "Tên chuỗi mới",
+    "renameFailed": "Không thể đổi tên chuỗi."
   },
   "log": {
     "history": "Full history",

@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "શ્રેણીક્રમે જાઓ"
   },
   "strategies": {
     "explore": "માપ્યા વગરના મોડલ્સ એક્સપ્લોર કરો",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "ખાતું બનાવવા અને કી મેળવવા {provider} ખોલો"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "તમે ખરેખર છેલ્લા {range} કરતાં ${actual} બચાવ્યા. પેઇડ APIs પર સમાન ટોકન્સનો ખર્ચ મોડલ દીઠ ભાવ હશે. બતાવેલ નંબર ડેટાના છેલ્લા {span} થી સંપૂર્ણ 30 દિવસ સુધી તમારી ગતિને પ્રોજેક્ટ કરે છે.",
+    "savingsHintExact": "તમે ખરેખર છેલ્લા {range} કરતાં ${actual} બચાવ્યા. પેઇડ APIs પર સમાન ટોકન્સનો ખર્ચ મોડલ દીઠ ભાવ હશે. દર્શાવેલ સંખ્યા તમારી વાસ્તવિક 30-દિવસની કુલ સંખ્યા છે.",
+    "requestsByAgent": "એજન્ટ પ્રમાણે વિનંતીઓ"
   },
   "logs": {
     "title": "લોગ",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Start empty",
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
-    "curatedHint": "New catalog models are not added to this chain automatically."
+    "curatedHint": "New catalog models are not added to this chain automatically.",
+    "renameHint": "આ ચેનનું નામ બદલો",
+    "renameConfirm": "ચેન \"{oldName}\" નું નામ \"{name}\" કરવું? auto:{oldName} કૉલ કરતા ક્લાયન્ટ્સે auto:{name} પર જવું પડશે.",
+    "renamePlaceholder": "નવું ચેન નામ",
+    "renameFailed": "ચેનનું નામ બદલી શકાયું નહીં."
   },
   "log": {
     "history": "Full history",

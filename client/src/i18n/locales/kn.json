@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "ರೆಂಕ್‌ಗೆ ಹೋಗಿ"
   },
   "strategies": {
     "explore": "ಅಳೆಯದ ಮಾದರಿಗಳನ್ನು ಅನ್ವೇಷಿಸಿ",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "ಖಾತೆ ರಚಿಸಿ ಕೀ ಪಡೆಯಲು {provider} ತೆರೆಯಿರಿ"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "ನೀವು ನಿಜವಾಗಿಯೂ ಕಳೆದ {range} ನಲ್ಲಿ ${actual} ಅನ್ನು ಉಳಿಸಿದ್ದೀರಿ. ಅದೇ ಟೋಕನ್‌ಗಳು ಪಾವತಿಸಿದ API ಗಳಲ್ಲಿ ಬೆಲೆಯನ್ನು ಹೊಂದಿದ್ದು, ಪ್ರತಿ ಮಾದರಿಗೆ ಬೆಲೆಯಾಗಿರುತ್ತದೆ. ತೋರಿಸಲಾದ ಸಂಖ್ಯೆಯು ಕೊನೆಯ {span} ಡೇಟಾದಿಂದ ಪೂರ್ಣ 30 ದಿನಗಳವರೆಗೆ ನಿಮ್ಮ ವೇಗವನ್ನು ಯೋಜಿಸುತ್ತದೆ.",
+    "savingsHintExact": "ನೀವು ನಿಜವಾಗಿಯೂ ಕಳೆದ {range} ನಲ್ಲಿ ${actual} ಅನ್ನು ಉಳಿಸಿದ್ದೀರಿ. ಅದೇ ಟೋಕನ್‌ಗಳು ಪಾವತಿಸಿದ API ಗಳಲ್ಲಿ ಬೆಲೆಯನ್ನು ಹೊಂದಿದ್ದು, ಪ್ರತಿ ಮಾದರಿಗೆ ಬೆಲೆಯಾಗಿರುತ್ತದೆ. ತೋರಿಸಿರುವ ಸಂಖ್ಯೆಯು ನಿಮ್ಮ ನಿಜವಾದ 30-ದಿನಗಳ ಒಟ್ಟು ಮೊತ್ತವಾಗಿದೆ.",
+    "requestsByAgent": "ಏಜೆಂಟ್ ಪ್ರಕಾರ ವಿನಂತಿಗಳು"
   },
   "logs": {
     "title": "ಲಾಗ್‌ಗಳು",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Start empty",
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
-    "curatedHint": "New catalog models are not added to this chain automatically."
+    "curatedHint": "New catalog models are not added to this chain automatically.",
+    "renameHint": "ಈ ಚೈನ್ ಹೆಸರನ್ನು ಮಾರ್ಪಡಿಸಿ",
+    "renameConfirm": "ಚೈನ್ \"{oldName}\" ಹೆಸರನ್ನು \"{name}\" ಗೆ ಬದಲಾಯಿಸುವುದೇ? auto:{oldName} ಕರೆ ಮಾಡುವ ಕ್ಲೈಂಟ್‌ಗಳು auto:{name} ಗೆ ಬದಲಾಗಬೇಕು.",
+    "renamePlaceholder": "ಹೊಸ ಚೈನ್ ಹೆಸರು",
+    "renameFailed": "ಚೈನ್ ಹೆಸರನ್ನು ಮರುಹೆಸರಿಸಲಾಗಲಿಲ್ಲ."
   },
   "log": {
     "history": "Full history",

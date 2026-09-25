@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "ర్్యాంక్‌కు వెళ్లండి"
   },
   "strategies": {
     "explore": "కొలవని మోడల్స్‌ను అన్వేషించండి",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "ఖాతా సృష్టించి కీ పొందడానికి {provider} తెరవండి"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "మీరు నిజానికి గత {range}లో ${actual}ని సేవ్ చేసారు. అదే టోకెన్‌లు చెల్లించిన APIలలో ఒక్కో మోడల్‌కు ధర ఉండేవి. చూపబడిన సంఖ్య చివరి {span} డేటా నుండి పూర్తి 30 రోజుల వరకు మీ వేగాన్ని అంచనా వేస్తుంది.",
+    "savingsHintExact": "మీరు నిజానికి గత {range}లో ${actual}ని సేవ్ చేసారు. అదే టోకెన్‌లు చెల్లించిన APIలలో ఒక్కో మోడల్‌కు ధర ఉండేవి. చూపబడిన సంఖ్య మీ నిజమైన 30-రోజుల మొత్తం.",
+    "requestsByAgent": "ఏజెంట్ వారీగా అభ్యర్థనలు"
   },
   "logs": {
     "title": "లాగ్‌లు",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Start empty",
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
-    "curatedHint": "New catalog models are not added to this chain automatically."
+    "curatedHint": "New catalog models are not added to this chain automatically.",
+    "renameHint": "ఈ చైన్ పేరును మార్చండి",
+    "renameConfirm": "చైన్ \"{oldName}\" పేరును \"{name}\" గా మార్చాలా? auto:{oldName} ని కాల్ చేసే క్లయింట్లు auto:{name} కి మారాలి.",
+    "renamePlaceholder": "కొత్త చైన్ పేరు",
+    "renameFailed": "చైన్ పేరును మార్చడం సాధ్యం కాలేదు."
   },
   "log": {
     "history": "Full history",

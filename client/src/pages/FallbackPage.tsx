@@ -21,6 +21,7 @@ import { useI18n } from '@/i18n'
 import { apiFetch } from '@/lib/api'
 import {
   buildGroups,
+  clampRankToIndex,
   isGroupDepleted,
   groupMatchesQuery,
   applyStagedEdits,
@@ -448,6 +449,19 @@ export default function FallbackPage() {
     setLocalEntries(allEntries.map(e => ({ ...e, priority: prio.get(e.modelDbId) ?? e.priority })))
   }
 
+  // Jump-to-rank (#1317): type a target rank instead of dragging a model across
+  // a long chain. Same staging path as drag — persistGroupOrder serializes the
+  // new display order into localEntries and Save commits it. The typed rank is
+  // clamped to the chain, so 1 means "front of the queue" and an over-the-end
+  // number means "last" without needing a validation error.
+  function handleMoveGroupRank(key: string, toRank: number) {
+    const oldI = orderedGroups.findIndex(g => g.key === key)
+    if (oldI < 0) return
+    const newI = clampRankToIndex(toRank, orderedGroups.length)
+    if (newI === oldI) return
+    persistGroupOrder(arrayMove(orderedGroups, oldI, newI))
+  }
+
   // Reorder models (the failover priority order). Providers within a model are
   // ordered by the active strategy and managed on the model's own page.
   function handleGroupedDragEnd(event: DragEndEvent) {
@@ -778,6 +792,8 @@ export default function FallbackPage() {
                             key={g.key}
                             group={g}
                             rank={rankByKey.get(g.key) ?? 0}
+                            editableRank
+                            onMoveRank={r => handleMoveGroupRank(g.key, r)}
                             onToggleGroup={handleGroupToggle}
                             allRows={rows}
                             rateUsage={rateUsageByModel}

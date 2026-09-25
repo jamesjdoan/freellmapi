@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "Ga naar positie"
   },
   "strategies": {
     "explore": "Ongemeten modellen verkennen",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "Open {provider} om een account aan te maken en een sleutel te krijgen"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "Je hebt ${actual} de afgelopen {range} daadwerkelijk opgeslagen. Dat is wat dezelfde tokens zouden kosten op betaalde API's, geprijsd per model. Het getoonde aantal projecteert je tempo van de laatste {span} data tot een volle 30 dagen.",
+    "savingsHintExact": "Je hebt ${actual} de afgelopen {range} daadwerkelijk opgeslagen. Dat is wat dezelfde tokens zouden kosten op betaalde API's, geprijsd per model. Het getoonde aantal is je echte totaal van 30 dagen.",
+    "requestsByAgent": "Verzoeken per agent"
   },
   "logs": {
     "title": "Logs",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Leeg beginnen",
     "startEmptyHint": "Maakt de keten zonder modellen aan en houdt nieuwe catalogusmodellen erbuiten. Niet aangevinkt begint hij als kopie van de standaardketen.",
     "curated": "Handmatig",
-    "curatedHint": "Nieuwe catalogusmodellen worden niet automatisch aan deze keten toegevoegd."
+    "curatedHint": "Nieuwe catalogusmodellen worden niet automatisch aan deze keten toegevoegd.",
+    "renameHint": "Deze keten hernoemen",
+    "renameConfirm": "Keten \"{oldName}\" hernoemen naar \"{name}\"? Clients die auto:{oldName} aanroepen moeten overstappen op auto:{name}.",
+    "renamePlaceholder": "Nieuwe ketennaam",
+    "renameFailed": "Kan de naam van die keten niet wijzigen."
   },
   "log": {
     "history": "Full history",

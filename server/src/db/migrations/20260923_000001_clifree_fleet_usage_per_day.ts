@@ -25,6 +25,10 @@
 import type { Db } from '../types.js';
 
 export function up(db: Db): void {
+  // Idempotent like upstream's migrations: a second pass over a database that
+  // already has the per-day table would otherwise rename it onto the archive.
+  const columns = db.prepare('PRAGMA table_info(clifree_fleet_usage)').all() as { name: string }[];
+  if (columns.some(c => c.name === 'day')) return;
   db.exec(`
     DROP INDEX IF EXISTS idx_clifree_fleet_usage_provider;
     ALTER TABLE clifree_fleet_usage RENAME TO clifree_fleet_usage_lifetime_archive;

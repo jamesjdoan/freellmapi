@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "순위이동"
   },
   "strategies": {
     "explore": "미측정 모델 탐색",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "{provider}를(를) 열어 계정을 만들고 키를 받으세요"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "실제로 지난 {range}에 비해 ${actual}를 절약했습니다. 이는 동일한 토큰이 모델별로 가격이 책정되는 유료 API에 대한 비용입니다. 표시된 숫자는 마지막 {span} 데이터부터 전체 30일까지의 속도를 나타냅니다.",
+    "savingsHintExact": "실제로 지난 {range}에 비해 ${actual}를 절약했습니다. 이는 동일한 토큰이 모델별로 가격이 책정되는 유료 API에 대한 비용입니다. 표시된 숫자는 실제 30일 합계입니다.",
+    "requestsByAgent": "에이전트별 요청"
   },
   "logs": {
     "title": "로그",
@@ -1346,7 +1351,11 @@
     "startEmpty": "비어 있는 상태로 만들기",
     "startEmptyHint": "모델 없이 체인을 만들고, 새로 추가되는 카탈로그 모델도 넣지 않습니다. 해제하면 기본 체인의 복사본으로 시작합니다.",
     "curated": "직접 관리",
-    "curatedHint": "새 카탈로그 모델이 이 체인에 자동으로 추가되지 않습니다."
+    "curatedHint": "새 카탈로그 모델이 이 체인에 자동으로 추가되지 않습니다.",
+    "renameHint": "이 체인의 이름 변경",
+    "renameConfirm": "체인 \"{oldName}\"의 이름을 \"{name}\"(으)로 변경하시겠습니까? auto:{oldName}을(를) 호출하는 클라이언트는 auto:{name}(으)로 전환해야 합니다.",
+    "renamePlaceholder": "새 체인 이름",
+    "renameFailed": "체인 이름을 변경하지 못했습니다."
   },
   "log": {
     "history": "Full history",

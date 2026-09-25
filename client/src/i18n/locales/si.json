@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "රැන්ක් එකට යන්න"
   },
   "strategies": {
     "explore": "නොමැනූ ආකෘති ගවේෂණය කරන්න",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "ගණනයක් සාදා යතුරක් ලබා ගැනීමට {provider} විවෘත කරන්න"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "ඔබ ඇත්තටම පසුගිය {range} පුරා ${actual} ඉතිරි කර ඇත. ගෙවූ API වල එකම ටෝකන සඳහා වැය වන මුදල එයයි, මාදිලියකට මිල. පෙන්වා ඇති අංකය අවසන් {span} දත්තවල සිට සම්පූර්ණ දින 30ක් දක්වා ඔබේ වේගය ප්‍රක්ෂේපණය කරයි.",
+    "savingsHintExact": "ඔබ ඇත්තටම පසුගිය {range} පුරා ${actual} ඉතිරි කර ඇත. ගෙවූ API වල එකම ටෝකන සඳහා වැය වන මුදල එයයි, මාදිලියකට මිල. පෙන්වා ඇති අංකය ඔබේ සැබෑ දින 30 එකතුවයි.",
+    "requestsByAgent": "නියෝජිතයා අනුව ඉල්ලීම්"
   },
   "logs": {
     "title": "ලොග",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Start empty",
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
-    "curatedHint": "New catalog models are not added to this chain automatically."
+    "curatedHint": "New catalog models are not added to this chain automatically.",
+    "renameHint": "මෙම දාමයේ නම වෙනස් කරන්න",
+    "renameConfirm": "දාමය \"{oldName}\" හි නම \"{name}\" ලෙස වෙනස් කරන්නද? auto:{oldName} අමතන සේවාදායකයින් auto:{name} වෙත යා යුතුය.",
+    "renamePlaceholder": "නව දාම නම",
+    "renameFailed": "එම දාමයේ නම වෙනස් කළ නොහැකි විය."
   },
   "log": {
     "history": "Full history",

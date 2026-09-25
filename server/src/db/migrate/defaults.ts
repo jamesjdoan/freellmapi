@@ -65,6 +65,7 @@ import * as clifreeFleetSnapshot from '../migrations/20260922_000001_clifree_fle
 import * as clifreeFleetBenchmarkSlug from '../migrations/20260922_000002_clifree_fleet_benchmark_slug.js';
 import * as clifreeFleetUsage from '../migrations/20260922_000003_clifree_fleet_usage.js';
 import * as clifreeFleetUsagePerDay from '../migrations/20260923_000001_clifree_fleet_usage_per_day.js';
+import * as requestModelAttribution from '../migrations/20260913_000001_request_model_attribution.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -120,6 +121,7 @@ export const ANALYTICS_LATENCY_PERCENTILE_INDEX_FILENAME = '20260902_000001_anal
 export const PROVIDER_ACCOUNT_LIMITS_FILENAME = '20260902_000002_provider_account_limits.ts';
 export const MCP_ENABLED_DEFAULT_FILENAME = '20260903_000001_mcp_enabled_default.ts';
 export const RESPONSE_CACHE_FILENAME = '20260903_000002_response_cache.ts';
+export const KEY_MONTHLY_BUDGET_FILENAME = '20260904_000001_key_monthly_budget.ts';
 export const QUOTA_POLICY_FILENAME = '20260905_000001_quota_policy.ts';
 export const ROUTING_DECISION_FILENAME = '20260905_000002_routing_decision.ts';
 export const ROUTING_DECISION_ENDPOINT_FILENAME = '20260905_000003_routing_decision_endpoint.ts';
@@ -139,6 +141,9 @@ export const QUOTA_PROBE_RUN_FILENAME = '20260911_000007_quota_probe_run.ts';
 export const QUOTA_POLICY_PERIOD_KEY_FILENAME = '20260911_000008_quota_policy_period_key.ts';
 export const QUOTA_POLICY_BUCKET_FILENAME = '20260912_000001_quota_policy_bucket.ts';
 export const AA_COST_PER_TASK_FILENAME = '20260913_000001_aa_cost_per_task.ts';
+export const REQUEST_MODEL_ATTRIBUTION_FILENAME = '20260913_000001_request_model_attribution.ts';
+export const KEY_MONTHLY_USAGE_FILENAME = '20260914_000001_key_monthly_usage.ts';
+export const QUOTA_SNAPSHOT_FRESHNESS_FILENAME = '20260915_000001_quota_snapshot_freshness.ts';
 
 export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: LEGACY_BASELINE_FILENAME, module: legacyBaseline },
@@ -176,7 +181,7 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: PROVIDER_ACCOUNT_LIMITS_FILENAME, module: providerAccountLimits },
   { filename: MCP_ENABLED_DEFAULT_FILENAME, module: mcpEnabledDefault },
   { filename: RESPONSE_CACHE_FILENAME, module: responseCache },
-  { filename: '20260904_000001_key_monthly_budget.ts', module: keyMonthlyBudget },
+  { filename: KEY_MONTHLY_BUDGET_FILENAME, module: keyMonthlyBudget },
   { filename: QUOTA_POLICY_FILENAME, module: quotaPolicy },
   { filename: ROUTING_DECISION_FILENAME, module: routingDecision },
   { filename: ROUTING_DECISION_ENDPOINT_FILENAME, module: routingDecisionEndpoint },
@@ -196,9 +201,10 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: QUOTA_POLICY_PERIOD_KEY_FILENAME, module: quotaPolicyPeriodKey },
   { filename: QUOTA_POLICY_BUCKET_FILENAME, module: quotaPolicyBucket },
   { filename: AA_COST_PER_TASK_FILENAME, module: aaCostPerTask },
-  { filename: '20260914_000001_key_monthly_usage.ts', module: keyMonthlyUsage },
+  { filename: REQUEST_MODEL_ATTRIBUTION_FILENAME, module: requestModelAttribution },
+  { filename: KEY_MONTHLY_USAGE_FILENAME, module: keyMonthlyUsage },
   { filename: '20260914_999999_preserve_quota_state.ts', module: preserveQuotaState },
-  { filename: '20260915_000001_quota_snapshot_freshness.ts', module: quotaSnapshotFreshness },
+  { filename: QUOTA_SNAPSHOT_FRESHNESS_FILENAME, module: quotaSnapshotFreshness },
   { filename: '20260919_000001_drop_routing_decision.ts', module: dropRoutingDecision },
   { filename: '20260919_000002_provider_diagnosis_history.ts', module: providerDiagnosisHistory },
   { filename: '20260919_000003_model_capability_probe.ts', module: modelCapabilityProbe },

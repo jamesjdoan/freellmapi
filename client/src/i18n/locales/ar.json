@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "الانتقال إلى الترتيب"
   },
   "strategies": {
     "explore": "استكشاف النماذج غير المقيسة",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "افتح {provider} لإنشاء حساب والحصول على مفتاح"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "لقد قمت بالفعل بتوفير {actual} دولارًا خلال {range} الأخير. هذا هو ما ستكلفه نفس الرموز المميزة على واجهات برمجة التطبيقات المدفوعة، بسعر كل نموذج. يعرض الرقم الموضح سرعتك من آخر {span} من البيانات إلى 30 يومًا كاملة.",
+    "savingsHintExact": "لقد قمت بالفعل بتوفير {actual} دولارًا خلال {range} الأخير. هذا هو ما ستكلفه نفس الرموز المميزة على واجهات برمجة التطبيقات المدفوعة، بسعر كل نموذج. الرقم الموضح هو الإجمالي الحقيقي لمدة 30 يومًا.",
+    "requestsByAgent": "الطلبات حسب الوكيل"
   },
   "logs": {
     "title": "السجلات",
@@ -1346,7 +1351,11 @@
     "startEmpty": "ابدأ فارغة",
     "startEmptyHint": "ينشئ السلسلة بلا أي نماذج، ولا يضيف إليها نماذج الفهرس الجديدة. عند إلغاء التحديد تبدأ كنسخة من السلسلة الافتراضية.",
     "curated": "مُنسّقة يدويًا",
-    "curatedHint": "لا تُضاف نماذج الفهرس الجديدة إلى هذه السلسلة تلقائيًا."
+    "curatedHint": "لا تُضاف نماذج الفهرس الجديدة إلى هذه السلسلة تلقائيًا.",
+    "renameHint": "إعادة تسمية هذه السلسلة",
+    "renameConfirm": "إعادة تسمية السلسلة \"{oldName}\" إلى \"{name}\"؟ يجب على العملاء الذين يستدعون auto:{oldName} التحول إلى auto:{name}.",
+    "renamePlaceholder": "الاسم الجديد للسلسلة",
+    "renameFailed": "تعذّرت إعادة تسمية السلسلة."
   },
   "log": {
     "history": "Full history",

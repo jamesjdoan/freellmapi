@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "پرش به رتبه"
   },
   "strategies": {
     "explore": "کاوش مدل‌های اندازه‌گیری‌نشده",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "{provider} را باز کنید تا حساب بسازید و کلید بگیرید"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "شما در واقع {actual} دلار را نسبت به آخرین {range} پس انداز کرده اید. این همان چیزی است که همان توکن‌ها در APIهای پولی با قیمت هر مدل هزینه خواهند داشت. عدد نشان داده شده سرعت شما را از آخرین {span} داده تا 30 روز کامل نشان می دهد.",
+    "savingsHintExact": "شما در واقع {actual} دلار را نسبت به آخرین {range} پس انداز کرده اید. این همان چیزی است که همان توکن‌ها در APIهای پولی با قیمت هر مدل هزینه خواهند داشت. عدد نشان داده شده کل 30 روزه واقعی شماست.",
+    "requestsByAgent": "درخواستها بر اساس عامل"
   },
   "logs": {
     "title": "لاگ‌ها",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Start empty",
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
-    "curatedHint": "New catalog models are not added to this chain automatically."
+    "curatedHint": "New catalog models are not added to this chain automatically.",
+    "renameHint": "تغییر نام این زنجیره",
+    "renameConfirm": "نام زنجیره \"{oldName}\" به \"{name}\" تغییر کند؟ کلاینت‌هایی که auto:{oldName} را صدا می‌زنند باید به auto:{name} بروند.",
+    "renamePlaceholder": "نام جدید زنجیره",
+    "renameFailed": "تغییر نام زنجیره انجام نشد."
   },
   "log": {
     "history": "Full history",

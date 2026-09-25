@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "Lompat ke peringkat"
   },
   "strategies": {
     "explore": "Jelajahi model yang belum terukur",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "Buka {provider} untuk membuat akun dan mendapatkan kunci"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "Anda sebenarnya menghemat ${actual} selama {range} terakhir. Itulah harga token yang sama pada API berbayar, dengan harga per model. Angka yang ditampilkan memproyeksikan kecepatan Anda dari data {span} terakhir hingga 30 hari penuh.",
+    "savingsHintExact": "Anda sebenarnya menghemat ${actual} selama {range} terakhir. Itulah harga token yang sama pada API berbayar, dengan harga per model. Angka yang ditampilkan adalah total 30 hari Anda yang sebenarnya.",
+    "requestsByAgent": "Permintaan per agen"
   },
   "logs": {
     "title": "Log",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Mulai kosong",
     "startEmptyHint": "Membuat rantai tanpa model dan menjauhkan model katalog baru darinya. Jika tidak dicentang, rantai dimulai sebagai salinan rantai bawaan.",
     "curated": "Dikurasi",
-    "curatedHint": "Model katalog baru tidak ditambahkan ke rantai ini secara otomatis."
+    "curatedHint": "Model katalog baru tidak ditambahkan ke rantai ini secara otomatis.",
+    "renameHint": "Ganti nama rantai ini",
+    "renameConfirm": "Ganti nama rantai \"{oldName}\" menjadi \"{name}\"? Klien yang memanggil auto:{oldName} harus beralih ke auto:{name}.",
+    "renamePlaceholder": "Nama rantai baru",
+    "renameFailed": "Tidak dapat mengganti nama rantai."
   },
   "log": {
     "history": "Full history",

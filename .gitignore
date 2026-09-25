@@ -18,6 +18,7 @@ backups/
 .encryption-key
 .env
 .env.local
+/tunnel-client.yaml
 .DS_Store
 
 # TypeScript incremental build cache

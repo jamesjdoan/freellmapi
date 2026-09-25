@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "Fò sí ipò"
   },
   "strategies": {
     "explore": "Ṣawari awọn awoṣe ti a ko ti wọn",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "Ṣí {provider} láti ṣẹ́ àkàwo àti láti gba kọ́kọ́rọ́"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "O ti fipamọ ${actual} gangan lori {range} ti o kẹhin. Iyẹn ni awọn ami-ami kanna yoo ni idiyele lori awọn API ti o san, ti idiyele fun awoṣe. Nọmba ti o han ṣe iṣẹ akanṣe iyara rẹ lati {span} ti data to kẹhin si ọjọ 30 ni kikun.",
+    "savingsHintExact": "O ti fipamọ ${actual} gangan lori {range} ti o kẹhin. Iyẹn ni awọn ami-ami kanna yoo ni idiyele lori awọn API ti o san, ti idiyele fun awoṣe. Nọmba ti o han jẹ apapọ 30-ọjọ gidi rẹ.",
+    "requestsByAgent": "Awọn ibeere nipasẹ aṣoju"
   },
   "logs": {
     "title": "Àkọọlẹ",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Start empty",
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
-    "curatedHint": "New catalog models are not added to this chain automatically."
+    "curatedHint": "New catalog models are not added to this chain automatically.",
+    "renameHint": "Tún orúkọ ẹwẹ̀ yìí sí i",
+    "renameConfirm": "Tún orúkọ ẹwẹ̀ \"{oldName}\" sí \"{name}\"? Àwọn oníbàárà̀ tó ̀ pè auto:{oldName} gbọ́dọ̀ yí padà sí auto:{name}.",
+    "renamePlaceholder": "Orúkọ ẹwẹ̀ tuntun",
+    "renameFailed": "A kò lè tún orúkọ ẹwẹ̀ yẹn sọ."
   },
   "log": {
     "history": "Full history",

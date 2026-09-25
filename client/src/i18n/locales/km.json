@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "ទៅកាន់ចំណាត់"
   },
   "strategies": {
     "explore": "ស្វែងរកម៉ូដែលដែលមិនទាន់វាស់វែង",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "បើក {provider} ដើម្បីបង្កើតគណនី និងទទួលយកគ្រាប់ចុច"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "អ្នកបានសង្គ្រោះ ${actual} ក្នុងរយៈពេល {range} ចុងក្រោយ។ នោះជាតម្លៃដែល token ដូចគ្នានឹងមានតម្លៃលើ API ដែលត្រូវបង់ប្រាក់ ដោយកំណត់តម្លៃតាមម៉ូឌែល។ ចំនួនដែលបង្ហាញបង្ហាញពីល្បឿនរបស់អ្នកចាប់ពី {span} ចុងក្រោយនៃទិន្នន័យរហូតដល់ 30 ថ្ងៃពេញ។",
+    "savingsHintExact": "អ្នកបានសង្គ្រោះ ${actual} ក្នុងរយៈពេល {range} ចុងក្រោយ។ នោះជាតម្លៃដែល token ដូចគ្នានឹងមានតម្លៃលើ API ដែលត្រូវបង់ប្រាក់ ដោយកំណត់តម្លៃតាមម៉ូឌែល។ ចំនួនដែលបង្ហាញគឺជាចំនួនសរុបពិតប្រាកដ ៣០ ថ្ងៃរបស់អ្នក។",
+    "requestsByAgent": "សំណើតាមភ្នាក់ងារ"
   },
   "logs": {
     "title": "កំណត់ហេតុ",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Start empty",
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
-    "curatedHint": "New catalog models are not added to this chain automatically."
+    "curatedHint": "New catalog models are not added to this chain automatically.",
+    "renameHint": "ប្តូរឈ្មោះខ្សែសង្វាក់នេះ",
+    "renameConfirm": "ប្តូរឈ្មោះខ្សែសង្វាក់ \"{oldName}\" ទៅ \"{name}\"? កម្មវិធីដែលហៅ auto:{oldName} ត្រូវផ្លាស់ប្តូរទៅ auto:{name} ។",
+    "renamePlaceholder": "ឈ្មោះខ្សែសង្វាក់ថ្មី",
+    "renameFailed": "មិនអាចប្តូរឈ្មោះខ្សែសង្វាក់បានទេ។"
   },
   "log": {
     "history": "Full history",

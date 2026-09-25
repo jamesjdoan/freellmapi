@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "Přejít na pozici"
   },
   "strategies": {
     "explore": "Prozkoumávat nezměřené modely",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "Otevřete {provider} pro vytvoření účtu a získání klíče"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "Ve skutečnosti jsi za poslední {range} ušetřil ${actual}. To je cena, kterou by stejné tokeny stály na placených API, oceněné podle modelu. Zobrazené číslo promítá vaše tempo od posledního {span} dat na plných 30 dní.",
+    "savingsHintExact": "Ve skutečnosti jsi za poslední {range} ušetřil ${actual}. To je cena, kterou by stejné tokeny stály na placených API, oceněné podle modelu. Zobrazené číslo je váš skutečný 30denní součet.",
+    "requestsByAgent": "Požadavky podle agenta"
   },
   "logs": {
     "title": "Logy",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Start empty",
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
-    "curatedHint": "New catalog models are not added to this chain automatically."
+    "curatedHint": "New catalog models are not added to this chain automatically.",
+    "renameHint": "Přejmenovat tento řetězec",
+    "renameConfirm": "Přejmenovat řetězec \"{oldName}\" na \"{name}\"? Klienti volající auto:{oldName} musí přejít na auto:{name}.",
+    "renamePlaceholder": "Nový název řetězce",
+    "renameFailed": "Řetězec se nepodařilo přejmenovat."
   },
   "log": {
     "history": "Full history",

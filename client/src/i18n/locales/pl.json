@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "Przejdź do rangi"
   },
   "strategies": {
     "explore": "Eksploruj niezmierzone modele",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "Otwórz {provider}, aby utworzyć konto i uzyskać klucz"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "Faktycznie zaoszczędziłeś ${actual} w ciągu ostatniego {range}. Tyle kosztowałyby te same tokeny w płatnych interfejsach API, wycenione według modelu. Wyświetlana liczba odzwierciedla Twoje tempo od ostatniego {span} danych do pełnych 30 dni.",
+    "savingsHintExact": "Faktycznie zaoszczędziłeś ${actual} w ciągu ostatniego {range}. Tyle kosztowałyby te same tokeny w płatnych interfejsach API, wycenione według modelu. Wyświetlana liczba to rzeczywista suma 30 dni.",
+    "requestsByAgent": "Żądania według agenta"
   },
   "logs": {
     "title": "Logi",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Zacznij pusty",
     "startEmptyHint": "Tworzy łańcuch bez modeli i nie dodaje do niego nowych modeli z katalogu. Bez zaznaczenia zaczyna jako kopia łańcucha domyślnego.",
     "curated": "Ręczny",
-    "curatedHint": "Nowe modele z katalogu nie są automatycznie dodawane do tego łańcucha."
+    "curatedHint": "Nowe modele z katalogu nie są automatycznie dodawane do tego łańcucha.",
+    "renameHint": "Zmień nazwę tego łańcucha",
+    "renameConfirm": "Zmienić nazwę łańcucha \"{oldName}\" na \"{name}\"? Klienci wywołujący auto:{oldName} muszą przejść na auto:{name}.",
+    "renamePlaceholder": "Nowa nazwa łańcucha",
+    "renameFailed": "Nie udało się zmienić nazwy łańcucha."
   },
   "log": {
     "history": "Full history",

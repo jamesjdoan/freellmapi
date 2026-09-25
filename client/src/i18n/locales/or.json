@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "ର୍ୟାଙ୍କକୁ ଯାଆନ୍ତୁ"
   },
   "strategies": {
     "explore": "ମପାଯାଇନଥିବା ମଡେଲଗୁଡ଼ିକୁ ଅନୁସନ୍ଧାନ କରନ୍ତୁ",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "ଆକାଉଣ୍ଟ ତିଆରି କରି କି ପାଇବା ପାଇଁ {provider} ଖୋଲନ୍ତୁ"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "ଆପଣ ପ୍ରକୃତରେ ଗତ {range} ରେ ${actual} ସଞ୍ଚୟ କରିଛନ୍ତି। ସମାନ ଟୋକେନ୍ ପେଡ୍ ଏପିଆଇ ଉପରେ ମୂଲ୍ୟବାନ ହୋଇଥାନ୍ତା, ଯାହା ମଡେଲ୍ ପିଛା ମୂଲ୍ୟ ରହିଥାନ୍ତା । ଦେଖାଯାଇଥିବା ନମ୍ବର ଶେଷ {span} ଡାଟାରୁ ପୂର୍ଣ୍ଣ 30 ଦିନ ପର୍ଯ୍ୟନ୍ତ ଆପଣଙ୍କ ଗତି ପ୍ରୋଜେକ୍ଟ କରେ।",
+    "savingsHintExact": "ଆପଣ ପ୍ରକୃତରେ ଗତ {range} ରେ ${actual} ସଞ୍ଚୟ କରିଛନ୍ତି। ସମାନ ଟୋକେନ୍ ପେଡ୍ ଏପିଆଇ ଉପରେ ମୂଲ୍ୟବାନ ହୋଇଥାନ୍ତା, ଯାହା ମଡେଲ୍ ପିଛା ମୂଲ୍ୟ ରହିଥାନ୍ତା । ଦେଖାଯାଉଥିବା ସଂଖ୍ୟା ହେଉଛି ଆପଣଙ୍କ ପ୍ରକୃତ 30-ଦିନର ମୋଟ।",
+    "requestsByAgent": "ଏଜେଣ୍ଟ ଦ୍ୱାରା ଅନୁରୋଧଗୁଡିକ"
   },
   "logs": {
     "title": "ଲଗ",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Start empty",
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
-    "curatedHint": "New catalog models are not added to this chain automatically."
+    "curatedHint": "New catalog models are not added to this chain automatically.",
+    "renameHint": "ଏହି ଚେନ୍‌ର ନାମ ବଦଳାନ୍ତୁ",
+    "renameConfirm": "ଚେନ୍ \"{oldName}\" ର ନାମ \"{name}\" କରନ୍ତୁ? auto:{oldName} କଲ୍ କରୁଥିବା କ୍ଲାଏଣ୍ଟମାନେ auto:{name} କୁ ଯିବା ଉଚିତ୍‌।",
+    "renamePlaceholder": "ନୂଆ ଚେନ୍ ନାମ",
+    "renameFailed": "ଚେନ୍‌ର ନାମ ବଦଳାଯାଇପାରିଲା ନାହିଁ।"
   },
   "log": {
     "history": "Full history",

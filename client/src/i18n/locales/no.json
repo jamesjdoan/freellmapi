@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "Hopp til rang"
   },
   "strategies": {
     "explore": "Utforsk umålte modeller",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "Åpne {provider} for å opprette en konto og få en nøkkel"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "Du har faktisk lagret ${actual} de siste {range}. Det er det de samme tokenene ville kostet på betalte API-er, priset per modell. Tallet som vises projiserer tempoet ditt fra siste {span} data til hele 30 dager.",
+    "savingsHintExact": "Du har faktisk lagret ${actual} de siste {range}. Det er det de samme tokenene ville kostet på betalte API-er, priset per modell. Tallet som vises er din reelle 30-dagers total.",
+    "requestsByAgent": "Forespørsler per agent"
   },
   "logs": {
     "title": "Logg",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Start empty",
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
-    "curatedHint": "New catalog models are not added to this chain automatically."
+    "curatedHint": "New catalog models are not added to this chain automatically.",
+    "renameHint": "Gi denne kjeden nytt navn",
+    "renameConfirm": "Gi kjeden \"{oldName}\" navnet \"{name}\"? Klienter som kaller auto:{oldName} må bytte til auto:{name}.",
+    "renamePlaceholder": "Nytt kjedenavn",
+    "renameFailed": "Kunne ikke gi den kjeden nytt navn."
   },
   "log": {
     "history": "Full history",

@@ -41,6 +41,7 @@ import { getActiveProfileId } from './profile-models.js';
 import { customEndpointKeyIds } from './custom-endpoint.js';
 import { isDegraded } from './degradation.js';
 import { modelStatsKey, endpointScopeForBaseUrl } from '../lib/endpoint-scope.js';
+import { isToolBenched } from '../lib/tool-capability.js';
 import { parseModelScope, scopeAllows } from '../lib/model-scope.js';
 import { isExtensionEnabled } from './extension-state.js';
 import { PAID_BALANCE_GUARD_ID } from '../data/extension-registry.js';
@@ -214,6 +215,7 @@ export interface RouteResult {
   keyLabel: string | null;
   platform: string;
   displayName: string;
+  contextWindow: number | null;
   /**
    * The custom endpoint this route belongs to, '' for catalog platforms (#651).
    * Carried on the route so the failure path can attribute a retirement signal
@@ -1888,6 +1890,7 @@ function selectKeyForModel(entry: ChainRow, estimatedTokens: number, skipKeys?: 
       proxyUrl,
       platform: entry.platform,
       displayName: entry.display_name,
+      contextWindow: entry.context_window,
       endpointScope: entry.endpoint_scope ?? '',
       providerBaseUrl: entry.platform === 'custom' ? (key.base_url ?? '') : '',
       rpdLimit: limits.rpd,
@@ -2401,6 +2404,9 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
       if (skipPlatforms?.has(e.platform)) return false;
       if (requireVision && !e.supports_vision) return false;
       if (requireTools && !e.supports_tools) return false;
+      // Never spend the exploration slot on a model that keeps rejecting tool
+      // requests (#1230); it stays reachable at the back of the main walk.
+      if (requireTools && isToolBenched(e.platform, e.model_id, e.endpoint_scope)) return false;
       if (requireStructured && platformDropsResponseFormat(e.platform)) return false;
       if (!fitsContextWindow(e.platform, e.context_window, estimatedTokens, exactOutputReserve)) return false;
       if (e.tpm_limit != null && estimatedTokens > e.tpm_limit) return false;
@@ -2484,12 +2490,22 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
   // sweep margin-fitting models first; ones that only fit the advertised window
   // stay eligible behind them. Worst case is one classified context_too_large
   // hop instead of no route at all.
+  //
+  // Same soft treatment for models that keep answering tool requests with a 400
+  // (#1230, lib/tool-capability.ts): on a tool request they go to the very back
+  // instead of being excluded, so the worst case is the old order, never an
+  // empty pool. An explicit pin keeps its place: the client named that model.
   const servingChain: ChainRow[] = [];
   const marginDeferred: ChainRow[] = [];
+  const toolDeferred: ChainRow[] = [];
   for (const e of routableChain) {
+    if (requireTools && e.model_db_id !== preferredModelDbId && isToolBenched(e.platform, e.model_id, e.endpoint_scope)) {
+      toolDeferred.push(e);
+      continue;
+    }
     (fitsContextWindow(e.platform, e.context_window, estimatedTokens, exactOutputReserve) ? servingChain : marginDeferred).push(e);
   }
-  servingChain.push(...marginDeferred);
+  servingChain.push(...marginDeferred, ...toolDeferred);
 
   // 1-based position in the walk, counting every candidate looked at — so a
   // route reached third says so even when the two before it were rejected by

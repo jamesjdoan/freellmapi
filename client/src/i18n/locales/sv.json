@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "Hoppa till rang"
   },
   "strategies": {
     "explore": "Utforska omätta modeller",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "Öppna {provider} för att skapa ett konto och få en nyckel"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "Du sparade faktiskt ${actual} under de senaste {range}. Det är vad samma tokens skulle ha kostat på betalda API:er, prissatt per modell. Siffran som visas visar din takt från senaste {span} data till hela 30 dagar.",
+    "savingsHintExact": "Du sparade faktiskt ${actual} under de senaste {range}. Det är vad samma tokens skulle ha kostat på betalda API:er, prissatt per modell. Siffran som visas är din verkliga 30-dagarssumma.",
+    "requestsByAgent": "Begäranden per agent"
   },
   "logs": {
     "title": "Loggar",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Start empty",
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
-    "curatedHint": "New catalog models are not added to this chain automatically."
+    "curatedHint": "New catalog models are not added to this chain automatically.",
+    "renameHint": "Byt namn på denna kedja",
+    "renameConfirm": "Byt namn på kedjan \"{oldName}\" till \"{name}\"? Klients som anropar auto:{oldName} måste byta till auto:{name}.",
+    "renamePlaceholder": "Nytt kedjenamn",
+    "renameFailed": "Det gick inte att byta namn på kedjan."
   },
   "log": {
     "history": "Full history",

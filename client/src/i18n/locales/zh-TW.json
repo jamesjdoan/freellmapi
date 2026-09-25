@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "跳轉到排名"
   },
   "strategies": {
     "explore": "探索未測模型",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "開啟 {provider} 註冊帳號並取得金鑰"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "過去 {range} 實際節省了 ${actual}。這是相同的 Token 在按模型計費的付費 API 上的花費。顯示的數字是根據過去 {span} 的資料按比例推算至 30 天。",
+    "savingsHintExact": "在過去 {range}，您實際節省了 ${actual}。這是相同的 Token 在按模型計費的付費 API 上的花費。顯示的數字是真實經過的 30 天總額。",
+    "requestsByAgent": "按代理程式統計的請求"
   },
   "logs": {
     "title": "日誌",
@@ -1346,7 +1351,11 @@
     "startEmpty": "從空鏈開始",
     "startEmptyHint": "建立時不放入任何模型，之後新增的目錄模型也不會自動加入。不勾選則複製預設鏈。",
     "curated": "手動維護",
-    "curatedHint": "新的目錄模型不會自動加入這條鏈。"
+    "curatedHint": "新的目錄模型不會自動加入這條鏈。",
+    "renameHint": "重新命名此鏈",
+    "renameConfirm": "將鏈「{oldName}」重新命名為「{name}」？呼叫 auto:{oldName} 的客戶端必須改用 auto:{name}。",
+    "renamePlaceholder": "新鏈名稱",
+    "renameFailed": "無法重新命名該鏈。"
   },
   "log": {
     "history": "Full history",

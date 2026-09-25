@@ -49,8 +49,8 @@
     "newEmail": "New email",
     "resetCode": "Reset code",
     "resetCodePlaceholder": "code from the server logs",
-    "resetCodeHint": "Check the server logs for the password-reset code.",
-    "forgotPasswordDescription": "Click the button below to generate a reset code. The code will appear in the server logs — enter it here to set a new password.",
+    "resetCodeHint": "The code is in the server log. It is never sent by email.",
+    "forgotPasswordDescription": "Click the button below to generate a reset code. The code is written to the server log, never emailed. Enter it here to set a new password.",
     "requestResetCode": "Send reset code",
     "requestingResetCode": "Sending…",
     "resetPassword": "Reset password",
@@ -320,7 +320,8 @@
     "providerRouting": "Provider routing",
     "providerRoutingDescription": "Automatic uses live routing scores. Preferred order tries your list first while retaining health, quota, cooldown and failover protections.",
     "providerRoutingAutomatic": "Automatic",
-    "providerRoutingPreferred": "Preferred order"
+    "providerRoutingPreferred": "Preferred order",
+    "moveToRank": "Jump to rank"
   },
   "strategies": {
     "explore": "Explore unmeasured models",
@@ -955,7 +956,8 @@
     "diagnosisCounts": "{ok} serving, {failing} failing",
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
-    "verdict_access_denied": "Access denied"
+    "verdict_access_denied": "Access denied",
+    "checklistSignupLink": "Open {provider} to create an account and get a key"
   },
   "backups": {
     "title": "Backups",
@@ -1146,7 +1148,10 @@
       "class": "Class",
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days."
-    }
+    },
+    "requestsByAgent": "Requests by agent",
+    "savingsHint": "You actually saved ${actual} over the last {range}. That is what the same tokens would have cost on paid APIs, priced per model. The number shown projects your pace from the last {span} of data to a full 30 days.",
+    "savingsHintExact": "You actually saved ${actual} over the last {range}. That is what the same tokens would have cost on paid APIs, priced per model. The number shown is your real 30-day total."
   },
   "catalogue": {
     "changesTitle": "Catalogue changes",
@@ -1717,7 +1722,11 @@
     "startEmpty": "Start empty",
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
-    "curatedHint": "New catalog models are not added to this chain automatically."
+    "curatedHint": "New catalog models are not added to this chain automatically.",
+    "renameHint": "Rename this chain",
+    "renameConfirm": "Rename chain \"{oldName}\" to \"{name}\"? Clients calling auto:{oldName} must switch to auto:{name}.",
+    "renamePlaceholder": "New chain name",
+    "renameFailed": "Couldn't rename the chain."
   },
   "extensions": {
     "reading": "Reading extension state…",

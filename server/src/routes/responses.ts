@@ -866,6 +866,8 @@ responsesRouter.post('/responses', async (req: Request, res: Response) => {
 
   const responseId = newId('resp');
   const state = newFallbackState();
+  // Lets the failover loop learn which models reject tool calls (#1230).
+  state.wantsTools = wantsTools;
   const attemptLog: AttemptRecord[] = [];
   // Client-disconnect fan-out: the flag stops the loop before the NEXT
   // attempt; the AbortController (threaded to the provider as
@@ -1140,6 +1142,8 @@ responsesRouter.post('/responses', async (req: Request, res: Response) => {
       return routeRequest(routingTotal, state.skipKeys.size > 0 ? state.skipKeys : undefined, preferredModel, hasImage, wantsTools, state.skipModels.size > 0 ? state.skipModels : undefined, groupChain ?? resolvedChain?.chain, completionOpts.response_format !== undefined, state.skipPlatforms.size > 0 ? state.skipPlatforms : undefined, outputReserve, taskType);
     },
     dispatch: async (route, attempt, ctx) => {
+      const contextBudget = route.contextWindow != null ? route.contextWindow - estimatedInputTokens : undefined;
+      const routeOpts = contextBudget != null ? { ...dispatchOpts, contextBudget } : dispatchOpts;
       traceRouteEvent('Responses', {
         event: attempt === 0 ? 'start' : 'next',
         requestId: requestGroupId,
@@ -1234,7 +1238,7 @@ responsesRouter.post('/responses', async (req: Request, res: Response) => {
             route.apiKey,
             messages,
             route.modelId,
-            dispatchOpts,
+            routeOpts,
             quotaContextForRoute(route, 'responses'),
           );
 
@@ -1424,7 +1428,7 @@ responsesRouter.post('/responses', async (req: Request, res: Response) => {
           sse('response.completed', { response: finalResponse });
           res.end();
 
-          recordUpstreamSuccess(route, estimatedInputTokens + totalOutputTokens);
+          recordUpstreamSuccess(route, estimatedInputTokens + totalOutputTokens, state);
           setStickyModel(messages, route.modelDbId, sessionIdHeader, stickyStrategyKey);
           traceRouteEvent('Responses', {
             event: 'ok',
@@ -1472,7 +1476,7 @@ responsesRouter.post('/responses', async (req: Request, res: Response) => {
         route.apiKey,
         messages,
         route.modelId,
-        dispatchOpts,
+        routeOpts,
         quotaContextForRoute(route, 'responses'),
       );
 
@@ -1549,7 +1553,7 @@ responsesRouter.post('/responses', async (req: Request, res: Response) => {
       // Usage fallback: a missing provider `usage` block used to record 0
       // tokens against the rate-limit ledger; promptTokens/completionTokens
       // above already carry the chars/4 estimate.
-      recordUpstreamSuccess(route, result.usage?.total_tokens ?? (promptTokens + completionTokens));
+      recordUpstreamSuccess(route, result.usage?.total_tokens ?? (promptTokens + completionTokens), state);
       setStickyModel(messages, route.modelDbId, sessionIdHeader, stickyStrategyKey);
 
       res.setHeader('X-Routed-Via', routedViaValue(route.platform, route.modelId));

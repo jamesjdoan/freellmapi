@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "रैंक पर जाएँ"
   },
   "strategies": {
     "explore": "बिना मापे गए मॉडल एक्सप्लोर करें",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "खाता बनाने और कुंजी पाने के लिए {provider} खोलें"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "आपने वास्तव में पिछले {range} की तुलना में ${actual} बचाया है। प्रति मॉडल की कीमत पर भुगतान किए गए एपीआई पर समान टोकन की कीमत यही होगी। दिखाई गई संख्या डेटा के अंतिम {span} से लेकर पूरे 30 दिनों तक आपकी गति दर्शाती है।",
+    "savingsHintExact": "आपने वास्तव में पिछले {range} की तुलना में ${actual} बचाया है। प्रति मॉडल की कीमत पर भुगतान किए गए एपीआई पर समान टोकन की कीमत यही होगी। दिखाई गई संख्या आपके वास्तविक 30-दिनों का योग है।",
+    "requestsByAgent": "एजेंट के अनुसार अनुरोध"
   },
   "logs": {
     "title": "लॉग",
@@ -1346,7 +1351,11 @@
     "startEmpty": "खाली शुरू करें",
     "startEmptyHint": "चेन को बिना किसी मॉडल के बनाएँ और नए कैटलॉग मॉडल भी इसमें न जोड़ें। अनचेक करने पर यह डिफ़ॉल्ट चेन की नकल से शुरू होती है।",
     "curated": "हस्तचयनित",
-    "curatedHint": "नए कैटलॉग मॉडल इस चेन में अपने आप नहीं जुड़ते।"
+    "curatedHint": "नए कैटलॉग मॉडल इस चेन में अपने आप नहीं जुड़ते।",
+    "renameHint": "इस चेन का नाम बदलें",
+    "renameConfirm": "चेन \"{oldName}\" का नाम \"{name}\" करें? auto:{oldName} कॉल करने वाले क्लाइंट्स को auto:{name} पर जाना होगा।",
+    "renamePlaceholder": "नया चेन नाम",
+    "renameFailed": "चेन का नाम नहीं बदला जा सका।"
   },
   "log": {
     "history": "Full history",

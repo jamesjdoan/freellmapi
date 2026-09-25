@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "Lompat ke pangkat"
   },
   "strategies": {
     "explore": "Teroka model yang belum diukur",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "Buka {provider} untuk membuat akaun dan mendapatkan kunci"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "Anda sebenarnya telah menyimpan ${actual} dalam {range} lepas. Itulah kos token yang sama pada API berbayar, dinilai mengikut model. Nombor yang dipaparkan meramalkan kadar anda dari {span} data terakhir hingga 30 hari penuh.",
+    "savingsHintExact": "Anda sebenarnya telah menyimpan ${actual} dalam {range} lepas. Itulah kos token yang sama pada API berbayar, dinilai mengikut model. Nombor yang ditunjukkan adalah jumlah sebenar 30 hari anda.",
+    "requestsByAgent": "Permintaan mengikut ejen"
   },
   "logs": {
     "title": "Log",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Start empty",
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
-    "curatedHint": "New catalog models are not added to this chain automatically."
+    "curatedHint": "New catalog models are not added to this chain automatically.",
+    "renameHint": "Tukar nama rantaian ini",
+    "renameConfirm": "Tukar nama rantaian \"{oldName}\" kepada \"{name}\"? Klien yang memanggil auto:{oldName} perlu bertukar ke auto:{name}.",
+    "renamePlaceholder": "Nama rantaian baharu",
+    "renameFailed": "Tidak dapat menukar nama rantaian."
   },
   "log": {
     "history": "Full history",

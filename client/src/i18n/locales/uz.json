@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "Rangga o‘tish"
   },
   "strategies": {
     "explore": "O'lchanmagan modellarni o'rganish",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "Hisob yaratish va kalit olish uchun {provider} ni oching"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "Oxirgi {range} davomida siz aslida ${actual} saqladingiz. Xuddi shu tokenlar har bir model uchun narxlangan pulli API-larda shunday turadi. Ko'rsatilgan raqam oxirgi {span} ma'lumotlardan to'liq 30 kungacha bo'lgan tezlikni prognoz qiladi.",
+    "savingsHintExact": "Oxirgi {range} davomida siz aslida ${actual} saqladingiz. Xuddi shu tokenlar har bir model uchun narxlangan pulli API-larda shunday turadi. Ko'rsatilgan raqam sizning haqiqiy 30 kunlik jami hisoblanadi.",
+    "requestsByAgent": "Agent bo'yicha so'rovlar"
   },
   "logs": {
     "title": "Jurnal",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Start empty",
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
-    "curatedHint": "New catalog models are not added to this chain automatically."
+    "curatedHint": "New catalog models are not added to this chain automatically.",
+    "renameHint": "Ushbu zanjir nomini o'zgartirish",
+    "renameConfirm": "\"{oldName}\" zanjir nomini \"{name}\" ga o'zgartirilsinmi? auto:{oldName} ga murojaat qiladigan mijozlar auto:{name} ga o'tishi kerak.",
+    "renamePlaceholder": "Yangi zanjir nomi",
+    "renameFailed": "Zanjir nomini o'zgartirib bo'lmadi."
   },
   "log": {
     "history": "Full history",

@@ -541,11 +541,26 @@ export function isContextTooLargeError(err: any): boolean {
 // A 402 Payment Required / out-of-credits error. Distinct from a transient 429:
 // it won't recover on the next window, so the caller benches the model+key with
 // PAYMENT_REQUIRED_COOLDOWN_MS (a full day) rather than the 90s transient cooldown.
+//
+// The digits 402 only count as the STATUS. A bare `includes('402')` also
+// matched token counts and request ids ("Limit 30000, Requested 34026",
+// "14023 tokens used"), and since the 402 bench covers the key on every model
+// of the platform for a day (#1239), one unlucky number took a whole provider
+// out. So: an error that states another status is never a 402 by its digits,
+// and otherwise 402 has to stand alone rather than sit inside a longer number.
+const STATED_STATUS = /\bapi error (\d{3})\b|\(http (\d{3})\)/;
+const STANDALONE_402 = /(?<![\w.])402(?![\w.])/;
+
 export function isPaymentRequiredError(err: any): boolean {
-  const msg = (err.message ?? '').toLowerCase();
-  return msg.includes('402') || msg.includes('payment required')
+  const msg = String(err?.message ?? '').toLowerCase();
+  if (msg.includes('payment required')
     || msg.includes('insufficient_quota') || msg.includes('insufficient credit')
-    || msg.includes('insufficient balance');
+    || msg.includes('insufficient balance')) return true;
+
+  const stated = msg.match(STATED_STATUS);
+  const status = typeof err?.status === 'number' ? err.status : Number(stated?.[1] ?? stated?.[2]);
+  if (Number.isFinite(status)) return status === 402;
+  return STANDALONE_402.test(msg);
 }
 
 // "model 'x' does not exist" / "model \"x\" does not exist" / "model x does not
@@ -707,4 +722,29 @@ export function modelRetirementSignal(err: any): ModelRetirementConfidence | nul
   if (gone || (isModelNotFoundError(err) && END_OF_LIFE_PHRASES.some(phrase => msg.includes(phrase)))) return 'definitive';
   if (!isModelNotFoundError(err)) return null;
   return MODEL_GONE_PHRASES.some(phrase => msg.includes(phrase)) ? 'probable' : null;
+}
+
+// A stream that ended without its terminal marker (`[DONE]` and/or a
+// finish_reason): the upstream connection was reset or the response truncated
+// mid-generation. Observed live on Kilo Gateway (5 attempts in one session,
+// #1218): the gateway answers 200, streams content, then dies without
+// `data: [DONE]` — `readSseStream` throws
+// "…stream ended unexpectedly (no [DONE], no finish_reason)".
+//
+// The truncation is UPSTREAM transport, not request shape, so the plain
+// retryable path (a fresh attempt on a sibling key, or even the same key
+// later) is the right response — but a stream that dies with zero content
+// deltas is usually the ROUTE (platform+model+key edge) that is sick, not
+// bad luck: three empty-ended truncations in a row on the same route
+// reliably precede another one. Callers use this signal to bench the route
+// after a short streak instead of re-paying the round trip every request.
+export function isStreamTruncatedError(err: any): boolean {
+  const msg = (err?.message ?? '').toLowerCase();
+  return msg.includes('stream ended unexpectedly')
+    || msg.includes('no [done], no finish_reason')
+    // undici surfaces an abrupt RST as "terminated" on the body read; with
+    // our SSE reader the top-level message is "terminated" and the real
+    // cause is buried in err.cause (see isTransportError). Count it too:
+    // a terminated mid-stream body is the same dead route either way.
+    || msg === 'terminated';
 }

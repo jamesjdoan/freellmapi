@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "קפיצה לדירוג"
   },
   "strategies": {
     "explore": "חקירת דגמים שטרם נמדדו",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "פתח את {provider} ליצירת חשבון וקבלת מפתח"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "בעצם שמרת ${actual} במהלך {range} האחרון. זה מה שאותם טוקנים היו עולים על APIs בתשלום, לפי דגם. המספר המוצג מעריך את הקצב שלך מ {span} הנתונים האחרון ל-30 יום מלאים.",
+    "savingsHintExact": "בעצם שמרת ${actual} במהלך {range} האחרון. זה מה שאותם טוקנים היו עולים על APIs בתשלום, לפי דגם. המספר המוצג הוא סך 30 הימים האמיתי שלך.",
+    "requestsByAgent": "בקשות לפי סוכן"
   },
   "logs": {
     "title": "יומן",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Start empty",
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
-    "curatedHint": "New catalog models are not added to this chain automatically."
+    "curatedHint": "New catalog models are not added to this chain automatically.",
+    "renameHint": "שנה שם של שרשרת זו",
+    "renameConfirm": "לשנות שם השרשרת \"{oldName}\" ל‑\"{name}\"? לקוחות שקוראים ל‑auto:{oldName} יצטרכו לעבור ל‑auto:{name}.",
+    "renamePlaceholder": "שם שרשרת חדש",
+    "renameFailed": "לא ניתן לשנות את שם השרשרת."
   },
   "log": {
     "history": "Full history",

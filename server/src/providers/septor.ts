@@ -17,14 +17,18 @@ function checkModel(requested: string, returned: string): void {
 
 export class SeptorProvider extends OpenAICompatProvider {
   constructor() {
-    // /models rejects missing and invalid credentials (401), unlike Router9.
-    super({ platform: 'septor', name: 'Septor Labs', baseUrl: SEPTOR_BASE_URL });
+    // Cloudflare in front challenges tool User-Agents (Node's default "node",
+    // curl) from datacenter IPs with a 403 HTML page, which read as a bad key
+    // on self-hosted VPS installs (#1298). A product UA passes.
+    super({ platform: 'septor', name: 'Septor Labs', baseUrl: 'https://api.septorlabs.com/v1', extraHeaders: { 'User-Agent': 'FreeLLMAPI/1.0' } });
   }
 
   override async validateKey(apiKey: string, quotaContext?: QuotaObservationContext): Promise<KeyValidationResult> {
     const response = await this.fetchWithTimeout(`${SEPTOR_BASE_URL}/models`, {
       method: 'GET',
-      headers: { Authorization: `Bearer ${apiKey}` },
+      // Same product UA as inference: the key check is what Cloudflare's
+      // challenge was misreading as a dead key (#1298).
+      headers: { Authorization: `Bearer ${apiKey}`, 'User-Agent': 'FreeLLMAPI/1.0' },
     });
 
     if (response.status === 401 || response.status === 403) {

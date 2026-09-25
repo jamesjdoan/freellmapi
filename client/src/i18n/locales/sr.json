@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "Скочи на ранг"
   },
   "strategies": {
     "explore": "Истражи неизмерене моделе",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "Отворите {provider} да бисте направили налог и добили кључ"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "Заправо сте уштедели ${actual} током последњег {range}. То је оно што би исти токени коштали на плаћеним АПИ-јима, по цени по моделу. Приказани број пројектује ваш темпо од последњег {span} података до пуних 30 дана.",
+    "savingsHintExact": "Заправо сте уштедели ${actual} током последњег {range}. То је оно што би исти токени коштали на плаћеним АПИ-јима, по цени по моделу. Приказани број је ваш стварни укупан број од 30 дана.",
+    "requestsByAgent": "Захтеви по агенту"
   },
   "logs": {
     "title": "Логови",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Start empty",
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
-    "curatedHint": "New catalog models are not added to this chain automatically."
+    "curatedHint": "New catalog models are not added to this chain automatically.",
+    "renameHint": "Преименуј овај ланац",
+    "renameConfirm": "Преименовати ланац „{oldName}“ у „{name}“? Клијенти који зову auto:{oldName} морају прећи на auto:{name}.",
+    "renamePlaceholder": "Нови назив ланца",
+    "renameFailed": "Није могуће преименовати тај ланац."
   },
   "log": {
     "history": "Full history",

@@ -256,6 +256,13 @@ export function resolveQuotaPolicy(
   if (platform === 'dreamprompting') return policy('dreamprompting::daily-free', 'shared_pool', 'unknown', [], 'unknown');
   if (platform === 'waterfall') return policy('waterfall::community-free', 'shared_pool', 'unknown', [], 'unknown');
   if (platform === 'logfare') return policy('logfare::fair-use', 'shared_pool', 'unknown', [], 'unknown');
+  // Providers added by upstream v0.12.0 (#1323 Speka, Aclide). Pool NAMES are
+  // upstream's; nothing readable reports their allowance yet, so accounting
+  // stays unknown rather than asserted. Moondream is vision-only and keeps the
+  // per-platform default until measured.
+  if (platform === 'aclide') return policy('aclide::monthly-credit', 'shared_pool', 'unknown', [], 'unknown');
+  if (platform === 'speka') return policy('speka::monthly-credit', 'shared_pool', 'unknown', [], 'unknown');
+
   // AI Horde: anonymous requests share one queue priority (the 0000000000 key),
   // so they pool together; a registered key has its own kudos priority but we
   // still bucket per-platform here.

@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "ไปที่อันดับ"
   },
   "strategies": {
     "explore": "สำรวจโมเดลที่ยังไม่ได้วัดผล",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "เปิด {provider} เพื่อสร้างบัญชีและรับคีย์"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "จริงๆ แล้วคุณประหยัดเงินได้ ${actual} จาก {range} ล่าสุด นั่นคือสิ่งที่โทเค็นเดียวกันจะมีราคาสำหรับ API แบบชำระเงินซึ่งมีราคาต่อรุ่น ตัวเลขที่แสดงจะคาดการณ์อัตราการก้าวของคุณจากข้อมูล {span} ล่าสุดไปจนถึง 30 วันเต็ม",
+    "savingsHintExact": "จริงๆ แล้วคุณประหยัดเงินได้ ${actual} จาก {range} ล่าสุด นั่นคือสิ่งที่โทเค็นเดียวกันจะมีราคาสำหรับ API แบบชำระเงินซึ่งมีราคาต่อรุ่น ตัวเลขที่แสดงคือยอดรวมจริงใน 30 วันของคุณ",
+    "requestsByAgent": "คำขอตามเอเจนต์"
   },
   "logs": {
     "title": "บันทึก",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Start empty",
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
-    "curatedHint": "New catalog models are not added to this chain automatically."
+    "curatedHint": "New catalog models are not added to this chain automatically.",
+    "renameHint": "เปลี่ยนชื่อเชนนี้",
+    "renameConfirm": "เปลี่ยนชื่อเชน \"{oldName}\" เป็น \"{name}\"? ไคลเอนต์ที่เรียก auto:{oldName} ต้องเปลี่ยนไปใช้ auto:{name} แทน",
+    "renamePlaceholder": "ชื่อเชนใหม่",
+    "renameFailed": "ไม่สามารถเปลี่ยนชื่อเชนได้"
   },
   "log": {
     "history": "Full history",

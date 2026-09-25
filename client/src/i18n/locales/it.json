@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "Vai alla posizione"
   },
   "strategies": {
     "explore": "Esplora i modelli non misurati",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "Apri {provider} per creare un account e ottenere una chiave"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "Hai effettivamente risparmiato ${actual} negli ultimi {range}. Questo è quanto gli stessi token sarebbero costati su API a pagamento, prezzate per modello. Il numero mostrato proietta il tuo ritmo dagli ultimi {span} di dati a 30 giorni interi.",
+    "savingsHintExact": "Hai effettivamente risparmiato ${actual} negli ultimi {range}. Questo è quanto gli stessi token sarebbero costati su API a pagamento, prezzate per modello. Il numero mostrato è il tuo totale reale di 30 giorni.",
+    "requestsByAgent": "Richieste per agente"
   },
   "logs": {
     "title": "Log",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Inizia vuota",
     "startEmptyHint": "Crea la catena senza modelli e tiene fuori i nuovi modelli del catalogo. Se non selezionato, parte come copia della catena predefinita.",
     "curated": "Curata",
-    "curatedHint": "I nuovi modelli del catalogo non vengono aggiunti automaticamente a questa catena."
+    "curatedHint": "I nuovi modelli del catalogo non vengono aggiunti automaticamente a questa catena.",
+    "renameHint": "Rinomina questa catena",
+    "renameConfirm": "Rinominare la catena \"{oldName}\" in \"{name}\"? I client che chiamano auto:{oldName} devono passare a auto:{name}.",
+    "renamePlaceholder": "Nuovo nome della catena",
+    "renameFailed": "Impossibile rinominare la catena."
   },
   "log": {
     "history": "Full history",

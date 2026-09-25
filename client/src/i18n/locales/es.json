@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "Ir a la posición"
   },
   "strategies": {
     "explore": "Explorar modelos sin mediciones",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "Abre {provider} para crear una cuenta y obtener una clave"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "Realmente ahorraste {actual} $ en los últimos {range}. Eso es lo que los mismos tokens habrían costado en APIs de pago, con precio por modelo. La cifra mostrada proyecta tu ritmo de los {span} de datos más recientes a 30 días completos.",
+    "savingsHintExact": "Realmente ahorraste {actual} $ en los últimos {range}. Eso es lo que los mismos tokens habrían costado en APIs de pago, con precio por modelo. La cifra mostrada es tu total real de 30 días.",
+    "requestsByAgent": "Solicitudes por agente"
   },
   "logs": {
     "title": "Registros",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Empezar vacía",
     "startEmptyHint": "Crea la cadena sin modelos y mantén fuera los modelos nuevos del catálogo. Sin marcar, empieza como una copia de la cadena predeterminada.",
     "curated": "Curada",
-    "curatedHint": "Los modelos nuevos del catálogo no se añaden a esta cadena automáticamente."
+    "curatedHint": "Los modelos nuevos del catálogo no se añaden a esta cadena automáticamente.",
+    "renameHint": "Cambiar el nombre de esta cadena",
+    "renameConfirm": "¿Cambiar el nombre de la cadena \"{oldName}\" a \"{name}\"? Los clientes que llamen a auto:{oldName} deben pasar a auto:{name}.",
+    "renamePlaceholder": "Nuevo nombre de la cadena",
+    "renameFailed": "No se pudo cambiar el nombre de la cadena."
   },
   "log": {
     "history": "Full history",

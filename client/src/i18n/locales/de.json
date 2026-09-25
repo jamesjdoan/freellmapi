@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "Zu Rang springen"
   },
   "strategies": {
     "explore": "Unvermessene Modelle erkunden",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "{provider} öffnen, um ein Konto zu erstellen und einen Schlüssel zu erhalten"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "Sie haben gegenüber dem letzten {range} tatsächlich ${actual} gespart. Das ist der Preis, den die gleichen Token bei kostenpflichtigen APIs pro Modell gekostet hätten. Die angezeigte Zahl projiziert Ihr Tempo von den letzten {span} Daten auf volle 30 Tage.",
+    "savingsHintExact": "Sie haben gegenüber dem letzten {range} tatsächlich ${actual} gespart. Das ist der Preis, den die gleichen Token bei kostenpflichtigen APIs pro Modell gekostet hätten. Die angezeigte Zahl ist Ihr tatsächlicher 30-Tage-Gesamtbetrag.",
+    "requestsByAgent": "Anfragen nach Agent"
   },
   "logs": {
     "title": "Protokoll",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Leer beginnen",
     "startEmptyHint": "Legt die Kette ohne Modelle an und hält neue Katalogmodelle heraus. Ohne Haken startet sie als Kopie der Standardkette.",
     "curated": "Kuratiert",
-    "curatedHint": "Neue Katalogmodelle werden dieser Kette nicht automatisch hinzugefügt."
+    "curatedHint": "Neue Katalogmodelle werden dieser Kette nicht automatisch hinzugefügt.",
+    "renameHint": "Diese Kette umbenennen",
+    "renameConfirm": "Kette \"{oldName}\" in \"{name}\" umbenennen? Clients, die auto:{oldName} aufrufen, müssen auf auto:{name} wechseln.",
+    "renamePlaceholder": "Neuer Kettenname",
+    "renameFailed": "Die Kette konnte nicht umbenannt werden."
   },
   "log": {
     "history": "Full history",

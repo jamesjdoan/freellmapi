@@ -320,7 +320,8 @@
     "providerRoutingAutomatic": "Automatic",
     "providerRoutingPreferred": "Preferred order",
     "referenceOnly": "reference",
-    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead."
+    "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
+    "moveToRank": "Към позиция"
   },
   "strategies": {
     "explore": "Изследване на неизмерени модели",
@@ -798,7 +799,8 @@
     "diagnosisCooldowns": "{count} route(s) on cooldown now",
     "diagnosisSince": "In this state since {since}",
     "verdict_access_denied": "Access denied",
-    "limitsDisclosure": "Provider headroom and declared limits"
+    "limitsDisclosure": "Provider headroom and declared limits",
+    "checklistSignupLink": "Отворете {provider}, за да създадете акаунт и да получите ключ"
   },
   "backups": {
     "title": "Backups",
@@ -953,7 +955,10 @@
       "aa": "AA score",
       "notCallable": "CLI-fleet routes are observed here, never callable through FreeLLM: their free tiers refuse callers outside the vendor's own CLI. Fleet windows are whole UTC days.",
       "fleet": "Free CLI fleet"
-    }
+    },
+    "savingsHint": "Всъщност запази ${actual} през последната {range}. Това е, което биха стрували същите токени при платени API-та, според цената на модел. Показаното число проектира темпото ви от последната {span} данни до пълни 30 дни.",
+    "savingsHintExact": "Всъщност запази ${actual} през последната {range}. Това е, което биха стрували същите токени при платени API-та, според цената на модел. Показаното число е реалният ти общ резултат за 30 дни.",
+    "requestsByAgent": "Заявки по агент"
   },
   "logs": {
     "title": "Логове",
@@ -1346,7 +1351,11 @@
     "startEmpty": "Start empty",
     "startEmptyHint": "Create the chain with no models in it, and keep new catalog models out of it. Unchecked, it starts as a copy of the default chain.",
     "curated": "Curated",
-    "curatedHint": "New catalog models are not added to this chain automatically."
+    "curatedHint": "New catalog models are not added to this chain automatically.",
+    "renameHint": "Преименувай тази верига",
+    "renameConfirm": "Преименуване на верига \"{oldName}\" на \"{name}\"? Клиенти, извикващи auto:{oldName}, трябва да преминат към auto:{name}.",
+    "renamePlaceholder": "Ново име на веригата",
+    "renameFailed": "Веригата не можа да бъде преименувана."
   },
   "log": {
     "history": "Full history",
