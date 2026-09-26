@@ -118,15 +118,21 @@ export const TONE_CLASS: Record<'meets' | 'near' | 'below', string> = {
 // whether the panel is open. One store so Compare, every Keys provider and the
 // panel re-render together as a stepper moves.
 
-interface ViewState { draft: ChainMinimumsDoc | null; compareAgainst: GradedChain | null; open: boolean }
+/** minimums: the steppers. members: each chain's current members, read-only. */
+export type PanelTab = 'minimums' | 'members'
+interface ViewState { draft: ChainMinimumsDoc | null; compareAgainst: GradedChain | null; open: boolean; tab: PanelTab }
 const COMPARE_KEY = 'imperium.chainMinimums.compareAgainst'
+const TAB_KEY = 'imperium.chainMinimums.tab'
+function readTab(): PanelTab {
+  try { return localStorage.getItem(TAB_KEY) === 'members' ? 'members' : 'minimums' } catch { return 'minimums' }
+}
 function readCompare(): GradedChain | null {
   try {
     const v = localStorage.getItem(COMPARE_KEY)
     return (GRADED_CHAINS as readonly string[]).includes(v ?? '') ? v as GradedChain : null
   } catch { return null }
 }
-let state: ViewState = { draft: null, compareAgainst: readCompare(), open: false }
+let state: ViewState = { draft: null, compareAgainst: readCompare(), open: false, tab: readTab() }
 const listeners = new Set<() => void>()
 function set(next: Partial<ViewState>) {
   state = { ...state, ...next }
@@ -140,6 +146,10 @@ export function useChainMinimumsView(): ViewState {
 }
 export function setDraft(draft: ChainMinimumsDoc | null) { set({ draft }) }
 export function setPanelOpen(open: boolean) { set(open ? { open } : { open, draft: null }) }
+export function setPanelTab(tab: PanelTab) {
+  try { localStorage.setItem(TAB_KEY, tab) } catch { /* view state only */ }
+  set({ tab })
+}
 export function setCompareAgainst(chain: GradedChain | null) {
   try { if (chain) localStorage.setItem(COMPARE_KEY, chain); else localStorage.removeItem(COMPARE_KEY) } catch { /* view state only */ }
   set({ compareAgainst: chain })

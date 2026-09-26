@@ -1805,7 +1805,19 @@
     "off": "off - set a minimum",
     "shiftHint": "Shift-click for ±5",
     "turnOff": "Remove this minimum",
-    "turnOffShort": "off"
+    "turnOffShort": "off",
+    "tabs": "Panel view",
+    "tabMinimums": "Minimums",
+    "tabMembers": "Members",
+    "membersTitle": "Chain members",
+    "membersHint": "Enabled members in the order the router tries them: unlimited first, then chain priority. Health, cooldowns and quota can still skip one.",
+    "membersCount": "{count} on · {fits} fit",
+    "membersEmpty": "No enabled members.",
+    "fitBelow": "below min",
+    "fitUnknown": "unscored",
+    "fitNoTools": "no tools",
+    "fitNoVision": "no vision",
+    "fitEstimated": "estimate"
   },
   "chainFit": {
     "fits": "fits: {chains}",

@@ -409,15 +409,15 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
   {
     id: 'chain-minimums',
     title: 'Chain minimums and fit recommendations',
-    summary: 'Set minimum Artificial Analysis scores per chain (General, Coding, Agentic) in a docked side panel and see, on every Compare and Keys row, which chains a model fits and where a current member falls short. Scores that clear the chosen chain are highlighted as the steppers move. Recommendation only: chains and routing are never changed. Unmeasured is shown as unknown, never as a fail; proxy estimates count only where a chain opts in; Fast-Lane is system reserved and not graded. Every save is a numbered revision, and every AA sync is kept, so a past recommendation can be reconstructed.',
-    settingsLocation: 'Compare or Keys → Chain minimums',
+    summary: 'Set minimum Artificial Analysis scores per chain (General, Coding, Agentic) in a docked side panel and see, on every Compare and Keys row, which chains a model fits and where a current member falls short. Scores that clear the chosen chain are highlighted as the steppers move. Recommendation only: chains and routing are never changed. Unmeasured is shown as unknown, never as a fail; proxy estimates count only where a chain opts in; Fast-Lane is system reserved and not graded. Every save is a numbered revision, and every AA sync is kept, so a past recommendation can be reconstructed. The panel swaps to a Members view: each chain\'s enabled members in the order the router tries them (unlimited first, then priority), with provider, General score, fit against the minimums and why a member cannot route.',
+    settingsLocation: 'Compare or Keys → Chain minimums (Minimums | Members)',
     destinations: [
       { kind: 'internal', label: 'Open Compare models', href: '/analytics/compare' },
       { kind: 'internal', label: 'Open provider keys', href: '/keys' },
     ],
     category: 'presentation',
     defaultEnabled: true,
-    offBehaviour: 'The panel, fit chips and score highlighting are hidden. Saved revisions and the AA measurement history are retained and keep recording.',
+    offBehaviour: 'The panel (both views), fit chips and score highlighting are hidden. Saved revisions and the AA measurement history are retained and keep recording.',
     takesEffect: 'Next page load.',
     codeLocations: [
       'server/src/services/chain-minimums.ts',

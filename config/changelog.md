@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-09-26 — Chain minimums panel: a Members view
+
+- The docked Chain minimums panel (Compare, Keys) now swaps between **Minimums** and **Members**.
+  Members lists every chain's enabled members, Fast-Lane included, in the order the router tries
+  them: an effective unlimited model first, then chain priority. Each row shows provider, AA General
+  score, fit against the chain's minimums (✓ / below min / estimate / unscored / no tools / no
+  vision) and, greyed, why it cannot route. The chosen view is remembered; the minimums draft
+  survives the swap. Read-only, from `GET /api/analysis/compare`.
+
 ## 2026-09-26 — The key pencil opens the edit dialog again
 
 - Keys: the pencil (and the label) on a provider's key row flashed the Edit key dialog and closed

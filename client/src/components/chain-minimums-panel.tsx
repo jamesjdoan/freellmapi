@@ -6,22 +6,30 @@ import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import { useExtensionEnabled } from '@/lib/use-extension'
 import {
-  GRADED_CHAINS, METRICS, evaluate, scoreRowOf, setCompareAgainst, setDraft, setPanelOpen,
+  GRADED_CHAINS, METRICS, evaluate, scoreRowOf, setCompareAgainst, setDraft, setPanelOpen, setPanelTab,
   useChainMinimums, useChainMinimumsView,
-  type ChainMinimums, type ChainMinimumsDoc, type GradedChain, type Metric,
+  type ChainMinimums, type ChainMinimumsDoc, type ChainRequirement, type Evaluation, type GradedChain, type Metric,
 } from '@/lib/chain-minimums'
+import { blockedReason } from '@/lib/route-blockers'
 
 // The one place chain minimums are set. Docked, not modal: the point is to
 // watch the Compare and Keys numbers re-grade while a stepper moves, so the
 // page underneath has to stay visible and scrollable.
 
 interface CompareRow {
+  modelDbId: number
   platform: string
   modelId: string
   displayName: string
+  enabled: boolean
+  keyScope: 'none' | 'disabled' | 'unscoped' | 'in' | 'out'
+  endpointScope?: string
+  unlimited?: { flagged: boolean; effective: boolean }
   supportsTools: boolean
   supportsVision: boolean
   chains: string[]
+  /** Priority in each of `chains`, same order. */
+  chainRanks: number[]
   analysis: { slug: string; name: string; intelligenceIndex: number | null; codingIndex: number | null; agenticIndex: number | null } | null
   link: { source: 'auto' | 'manual' | 'proxy' } | null
 }
@@ -103,17 +111,41 @@ function PanelBody() {
     >
       <header className="flex items-start justify-between gap-2 border-b p-3">
         <div>
-          <h2 className="text-sm font-semibold">{t('chainMinimums.title')}</h2>
+          <h2 className="text-sm font-semibold">{t(view.tab === 'members' ? 'chainMinimums.membersTitle' : 'chainMinimums.title')}</h2>
           <p className="text-[11px] text-muted-foreground">
-            {draft.revision === 0
-              ? t('chainMinimums.neverSaved')
-              : t('chainMinimums.revision', { revision: draft.revision, when: new Date(draft.savedAt ?? '').toLocaleString() })}
+            {view.tab === 'members'
+              ? t('chainMinimums.membersHint')
+              : draft.revision === 0
+                ? t('chainMinimums.neverSaved')
+                : t('chainMinimums.revision', { revision: draft.revision, when: new Date(draft.savedAt ?? '').toLocaleString() })}
           </p>
         </div>
-        <button type="button" onClick={() => setPanelOpen(false)} aria-label={t('chainMinimums.close')} className="rounded-md p-1 hover:bg-muted">
-          <X className="size-4" />
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          {/* Swaps the panel's body; the minimums draft survives the swap. */}
+          <div role="tablist" aria-label={t('chainMinimums.tabs')} className="flex rounded-md border p-0.5 text-[11px]">
+            {(['minimums', 'members'] as const).map(tab => (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={view.tab === tab}
+                onClick={() => setPanelTab(tab)}
+                className={`rounded px-2 py-0.5 ${view.tab === tab ? 'bg-muted font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                {t(tab === 'members' ? 'chainMinimums.tabMembers' : 'chainMinimums.tabMinimums')}
+              </button>
+            ))}
+          </div>
+          <button type="button" onClick={() => setPanelOpen(false)} aria-label={t('chainMinimums.close')} className="rounded-md p-1 hover:bg-muted">
+            <X className="size-4" />
+          </button>
+        </div>
       </header>
+
+      {view.tab === 'members' ? (
+        <MembersView rows={compare?.rows ?? []} draft={draft} requirement={req} />
+      ) : (
+      <>
 
       <div className="border-b px-3 py-2 text-[11px] text-muted-foreground">
         <label className="flex items-center gap-2">
@@ -207,7 +239,87 @@ function PanelBody() {
           </Button>
         </div>
       </footer>
+      </>
+      )}
     </aside>
+  )
+}
+
+// The chains as they stand: enabled members in the order the router tries
+// them. An effective unlimited model goes first in every chain it is in
+// (router.ts unlimitedFirst), then chain priority. Health, cooldowns and quota
+// can still skip a member at request time; this is the order, not a promise.
+const MEMBER_CHAINS = [...GRADED_CHAINS, 'Fast-Lane'] as const
+const FIT_CLASS: Record<Evaluation['status'], string> = {
+  fits: 'text-emerald-700 dark:text-emerald-400',
+  below: 'text-rose-700 dark:text-rose-400',
+  unknown: 'text-muted-foreground',
+  structural: 'text-amber-700 dark:text-amber-400',
+}
+
+function providerOf(r: CompareRow): string {
+  if (r.platform !== 'custom' || !r.endpointScope) return r.platform
+  try { return new URL(r.endpointScope).host } catch { return r.endpointScope }
+}
+
+function MembersView({ rows, draft, requirement }: {
+  rows: CompareRow[]
+  draft: ChainMinimumsDoc
+  requirement: (chain: GradedChain) => ChainRequirement | undefined
+}) {
+  const { t } = useI18n()
+  // "unknown" covers two cases: no AA score at all, or a proxy estimate the
+  // chain does not accept. A row showing a number must not read "unscored".
+  const fitLabel = (e: Evaluation, estimated: boolean) =>
+    e.status === 'fits' ? '✓'
+    : e.status === 'below' ? t('chainMinimums.fitBelow')
+    : e.status === 'unknown' ? t(estimated ? 'chainMinimums.fitEstimated' : 'chainMinimums.fitUnknown')
+    : e.missing.includes('tools') ? t('chainMinimums.fitNoTools') : t('chainMinimums.fitNoVision')
+
+  return (
+    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+      {MEMBER_CHAINS.map(chain => {
+        const graded = (GRADED_CHAINS as readonly string[]).includes(chain) ? chain as GradedChain : null
+        const members = rows
+          .filter(r => r.chains.includes(chain))
+          .map(r => ({ r, rank: r.chainRanks[r.chains.indexOf(chain)] ?? 0 }))
+          .sort((a, b) => Number(!a.r.unlimited?.effective) - Number(!b.r.unlimited?.effective) || a.rank - b.rank)
+        const rated = members.map(m => ({ ...m, e: graded ? evaluate(scoreRowOf(m.r), draft.chains[graded], requirement(graded)) : null }))
+        const fits = rated.filter(m => m.e?.status === 'fits').length
+        return (
+          <section key={chain} className="rounded-xl border p-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold">{chain}</span>
+              <span className="text-[10px] tabular-nums text-muted-foreground">
+                {graded ? t('chainMinimums.membersCount', { count: members.length, fits }) : t('chainMinimums.fastLaneReserved')}
+              </span>
+            </div>
+            {members.length === 0 ? (
+              <p className="mt-1.5 text-[11px] text-muted-foreground">{t('chainMinimums.membersEmpty')}</p>
+            ) : (
+              <ol className="mt-1.5 space-y-0.5">
+                {rated.map(({ r, e }, i) => {
+                  const why = blockedReason(r)
+                  return (
+                    <li key={r.modelDbId} className={`flex items-baseline gap-1.5 text-[11px] ${why ? 'opacity-50' : ''}`}>
+                      <span className="w-4 shrink-0 text-right tabular-nums text-muted-foreground">{i + 1}</span>
+                      <span className="min-w-0 flex-1 truncate" title={`${r.displayName} · ${r.modelId}`}>
+                        {r.unlimited?.effective && <span className="mr-0.5 text-emerald-700 dark:text-emerald-400" title={t('keys.unlimitedEffective')}>∞</span>}
+                        {r.displayName}
+                        <span className="ml-1 text-muted-foreground">{providerOf(r)}</span>
+                      </span>
+                      {why && <span className="shrink-0 text-[10px] text-muted-foreground">{t(`keys.${why}`)}</span>}
+                      <span className="shrink-0 tabular-nums text-muted-foreground">{r.analysis?.intelligenceIndex?.toFixed(1) ?? '–'}</span>
+                      {e && <span className={`w-14 shrink-0 text-right text-[10px] ${FIT_CLASS[e.status]}`}>{fitLabel(e, scoreRowOf(r).estimated)}</span>}
+                    </li>
+                  )
+                })}
+              </ol>
+            )}
+          </section>
+        )
+      })}
+    </div>
   )
 }
 
