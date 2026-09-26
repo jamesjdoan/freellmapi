@@ -1,5 +1,5 @@
 import { blockedReason, hideControlPressable, verdictEdge } from '@/lib/route-blockers'
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { readHideDisabled, writeHideDisabled } from '@/lib/hide-disabled-pref'
@@ -124,6 +124,8 @@ interface Row {
   /** Chains currently routing to this model. Empty means it can serve and
    *  nothing asks it to. */
   chains: string[]
+  /** The operator's note (model_note): why it is parked, when to look again. */
+  note?: { text: string; recheckAt: string | null; updatedAt: string } | null
   /** Position within each chain above, same order — the server pairs them in
    *  one concat so they cannot drift apart. */
   chainRanks: number[]
@@ -315,6 +317,17 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
     rename.mutate({ id: r.modelDbId, displayName: value })
   }
 
+  // The operator's note on a model: why it is parked and when to look again.
+  // Saved by button or Enter, never on blur: a blur-save is how the key
+  // pencil's dialog used to close itself.
+  const [noteEdit, setNoteEdit] = useState<{ id: number; text: string; recheckAt: string } | null>(null)
+  const saveNote = useMutation({
+    mutationFn: ({ id, text, recheckAt }: { id: number; text: string; recheckAt: string }) =>
+      apiFetch(`/api/models/${id}`, { method: 'PATCH', body: JSON.stringify({ note: text.trim() || null, recheckAt: recheckAt || null }) }),
+    onSuccess: () => { setNoteEdit(null); invalidate() },
+  })
+  const today = new Date().toISOString().slice(0, 10)
+
   const unlimitedOn = useExtensionEnabled('unlimited-models')
   const setUnlimited = useMutation({
     mutationFn: ({ row, on }: { row: Row; on: boolean }) =>
@@ -462,7 +475,7 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
       : sort === 'coding' ? r.analysis?.codingIndex ?? null
       : sort === 'agentic' ? r.analysis?.agenticIndex ?? null
       : r.analysis?.intelligenceIndex ?? null
-    return [...mine]
+    const sorted = [...mine]
       // The filter now asks whether the row can serve a request at all, which
       // is the union of the two old tests: switched on in the catalogue AND
       // reachable by a key we hold.
@@ -476,6 +489,9 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
         if (y == null) return -1
         return y - x || a.displayName.localeCompare(b.displayName)
       })
+    // Working rows first, then the Parked section: what can serve is what the
+    // operator is here to look at, and a parked row keeps its note beside it.
+    return [...sorted.filter(routable), ...sorted.filter(r => !routable(r))]
   }, [data?.rows, platform, endpointScope, sort, hideDisabled])
 
 
@@ -667,14 +683,23 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
           </tr>
         </thead>
         <tbody>
-          {rows.map(r => {
+          {rows.map((r, i) => {
+            const parkedStart = !routable(r) && (i === 0 || routable(rows[i - 1]))
             return (
-              // Faded when it cannot route — switched off, or outside the
-              // key's scope. The row stays readable and stops competing with
-              // the models that are actually in play. The switch keeps full
-              // contrast so it is still obviously operable.
+              <Fragment key={r.modelDbId}>
+              {parkedStart && (
+                <tr className="border-t-2">
+                  <td colSpan={10} className="bg-muted/40 px-2 py-1.5 text-[11px]">
+                    <span className="font-semibold">{t('keys.parkedTitle', { count: rows.length - i })}</span>
+                    <span className="ml-2 text-muted-foreground">{t('keys.parkedHint')}</span>
+                  </td>
+                </tr>
+              )}
+              {/* Faded when it cannot route — switched off, or outside the
+                  key's scope. The row stays readable and stops competing with
+                  the models that are actually in play. The switch keeps full
+                  contrast so it is still obviously operable. */}
               <tr
-                key={r.modelDbId}
                 className={`group/row border-t ${verdictEdge(healthByModel.get(r.modelId))} ${newModelIds.has(r.modelId) ? 'bg-amber-500/10' : routable(r) ? '' : 'opacity-45'}`}
               >
                 <td className="py-1 pr-2">
@@ -756,6 +781,56 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
                     </button>
                   )}
                   <span className="mt-0.5 block"><ChainFit score={scoreRowOf(r)} chains={r.chains} /></span>
+                  {noteEdit?.id === r.modelDbId ? (
+                    <span className="mt-1 flex max-w-[300px] flex-wrap items-center gap-1">
+                      <Input
+                        autoFocus
+                        value={noteEdit.text}
+                        maxLength={500}
+                        placeholder={t('keys.notePlaceholder')}
+                        onChange={e => setNoteEdit({ ...noteEdit, text: e.target.value })}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') saveNote.mutate(noteEdit)
+                          if (e.key === 'Escape') setNoteEdit(null)
+                        }}
+                        aria-label={t('keys.noteLabel')}
+                        className="h-6 min-w-0 flex-1 text-[11px]"
+                      />
+                      <input
+                        type="date"
+                        value={noteEdit.recheckAt}
+                        onChange={e => setNoteEdit({ ...noteEdit, recheckAt: e.target.value })}
+                        aria-label={t('keys.noteRecheck')}
+                        title={t('keys.noteRecheck')}
+                        className="h-6 rounded-md border bg-background px-1 text-[10px]"
+                      />
+                      <Button size="xs" disabled={saveNote.isPending} onClick={() => saveNote.mutate(noteEdit)}>{t('common.save')}</Button>
+                      <Button size="xs" variant="ghost" onClick={() => setNoteEdit(null)}>{t('common.cancel')}</Button>
+                      {saveNote.isError && <span className="w-full text-[10px] text-destructive">{(saveNote.error as Error).message}</span>}
+                    </span>
+                  ) : r.note ? (
+                    <button
+                      type="button"
+                      onClick={() => { saveNote.reset(); setNoteEdit({ id: r.modelDbId, text: r.note!.text, recheckAt: r.note!.recheckAt ?? '' }) }}
+                      title={t('keys.noteEditHint', { date: r.note.updatedAt.slice(0, 10) })}
+                      className="mt-0.5 block max-w-[300px] text-left text-[10px] text-muted-foreground hover:text-foreground"
+                    >
+                      <span className="font-medium">{t('keys.noteLabel')}:</span> {r.note.text}
+                      {r.note.recheckAt && (
+                        <span className={r.note.recheckAt <= today ? ' font-medium text-amber-700 dark:text-amber-400' : ''}>
+                          {' · '}{t(r.note.recheckAt <= today ? 'keys.noteRecheckDue' : 'keys.noteRecheckOn', { date: r.note.recheckAt })}
+                        </span>
+                      )}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => { saveNote.reset(); setNoteEdit({ id: r.modelDbId, text: '', recheckAt: '' }) }}
+                      className="mt-0.5 block text-[10px] text-muted-foreground/70 opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/row:opacity-100"
+                    >
+                      {t('keys.noteAdd')}
+                    </button>
+                  )}
                 </td>
                 <Num v={r.analysis?.intelligenceIndex} row={r} metric="intelligence" onNudge={nudge.mutate} busy={busy} tone={tone('general', r.analysis?.intelligenceIndex)} />
                 <Num v={r.analysis?.codingIndex} row={r} metric="coding" onNudge={nudge.mutate} busy={busy} tone={tone('coding', r.analysis?.codingIndex)} />
@@ -841,8 +916,20 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
                     )}
                 </td>
               </tr>
+              </Fragment>
             )
           })}
+          {/* Hidden, the Parked section still says it exists and how big it is. */}
+          {hideDisabled && unroutableCount > 0 && (
+            <tr className="border-t-2">
+              <td colSpan={10} className="bg-muted/40 px-2 py-1.5 text-[11px]">
+                <span className="font-semibold">{t('keys.parkedTitle', { count: unroutableCount })}</span>
+                <button type="button" onClick={toggleHideDisabled} className="ml-2 text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
+                  {t('keys.parkedShow')}
+                </button>
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
       {/* Every row filtered out. Said here rather than in place of the panel,

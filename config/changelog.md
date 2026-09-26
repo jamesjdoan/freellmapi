@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-09-26 — Keys: a Parked section and model notes
+
+- Each provider's model table lists the working models first, then a **Parked · N** divider and the
+  models that cannot route (switched off, key off, outside the key's scope). "Hide can't route"
+  collapses the section to its divider, with a Show link.
+- Any model can carry an operator note and a recheck-by date: `+ note` on the row, Enter or Save to
+  keep it, Esc to cancel, clear the text to remove it. A date on or before today reads "recheck
+  due". Stored in `model_note` keyed by platform and model id (migration `20260926_000001`), so it
+  survives the catalogue re-inserting the row; written through `PATCH /api/models/:id` `note` /
+  `recheckAt`, returned on `/api/analysis/compare` rows. Nothing routes on it.
+
 ## 2026-09-26 — Chain minimums panel: a Members view
 
 - The docked Chain minimums panel (Compare, Keys) now swaps between **Minimums** and **Members**.

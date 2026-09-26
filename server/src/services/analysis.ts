@@ -407,6 +407,8 @@ export interface CompareRow {
   chains: string[];
   /** Priority within each chain named above, same order. Lower runs first. */
   chainRanks: number[];
+  /** The operator's note on this model (model_note), e.g. why it is parked. */
+  note: { text: string; recheckAt: string | null; updatedAt: string } | null;
   /** Null when unlinked, or linked to a slug the last sync no longer returned. */
   analysis: {
     slug: string;
@@ -461,6 +463,7 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
            a.slug AS aa_present, a.name AS aa_name, a.creator, a.intelligence_index,
            a.coding_index, a.agentic_index, a.price_1m_input, a.price_1m_output, a.index_cost_per_task,
            a.median_output_tokens_per_second, a.median_time_to_first_token_seconds,
+           n.note, n.recheck_at AS note_recheck_at, n.updated_at AS note_updated_at,
            -- Name AND position in one concat. Two separate GROUP_CONCATs would
            -- not be guaranteed to agree on row order, so the ranks could line
            -- up against the wrong chains — "in Coding" and "FIRST in Coding"
@@ -471,6 +474,7 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
       FROM models m
       LEFT JOIN aa_model_link l ON l.platform = m.platform AND l.model_id = m.model_id
       LEFT JOIN aa_model a ON a.slug = l.aa_slug
+      LEFT JOIN model_note n ON n.platform = m.platform AND n.model_id = m.model_id
      ORDER BY m.platform, m.model_id
   `).all() as Record<string, unknown>[];
 
@@ -581,6 +585,11 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
       chains: r.chains ? String(r.chains).split('|').map(pair => pair.slice(0, pair.lastIndexOf(':'))) : [],
       // lastIndexOf, because a chain name may itself contain a colon.
       chainRanks: r.chains ? String(r.chains).split('|').map(pair => Number(pair.slice(pair.lastIndexOf(':') + 1))) : [],
+      note: r.note == null ? null : {
+        text: String(r.note),
+        recheckAt: r.note_recheck_at == null ? null : String(r.note_recheck_at),
+        updatedAt: String(r.note_updated_at),
+      },
       analysis: r.aa_present
         ? {
           slug: String(r.aa_slug),

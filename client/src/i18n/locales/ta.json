@@ -837,7 +837,17 @@
     "unlimitedOnHint": "Free with no meter: skip every limit, count toward none, try first in its chains. On OpenRouter it only takes effect while OpenRouter prices it at $0.",
     "unlimitedOffHint": "Remove unlimited: limits and the paid-balance guard apply again.",
     "renameModel": "Rename model",
-    "renameModelHint": "Click to rename. Enter saves, Esc cancels. The model ID is unchanged."
+    "renameModelHint": "Click to rename. Enter saves, Esc cancels. The model ID is unchanged.",
+    "parkedTitle": "Parked · {count}",
+    "parkedHint": "Can't route: switched off, key off or outside the key's scope. The note says why and when to look again.",
+    "parkedShow": "Show",
+    "noteLabel": "Note",
+    "noteAdd": "+ note",
+    "notePlaceholder": "Why parked, what to try, e.g. 410 end of life",
+    "noteRecheck": "Recheck on",
+    "noteRecheckOn": "recheck {date}",
+    "noteRecheckDue": "recheck due ({date})",
+    "noteEditHint": "Edited {date}. Click to edit; Enter saves, Esc cancels, clear the text to remove."
   },
   "backups": {
     "title": "Backups",

@@ -55,6 +55,10 @@ const modelUpdateSchema = z.object({
   /** Free with no meter (services/unlimited-models.ts). Not a catalogue
    *  override: it is the operator's own call and survives every sync. */
   unlimited: z.boolean().optional(),
+  /** Operator note (model_note). '' or null deletes it together with its date. */
+  note: z.string().max(500).nullable().optional(),
+  /** When to look at this model again, YYYY-MM-DD. Only stored with a note. */
+  recheckAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'recheckAt must be YYYY-MM-DD').nullable().optional(),
 }).strict();
 
 const MODEL_FIELD_COLUMNS: Record<keyof ModelOverridePatch | 'enabled', string> = {
@@ -274,7 +278,30 @@ modelsRouter.patch('/:id', async (req: Request, res: Response) => {
   const modelPatch: Partial<typeof parsed.data> = { ...parsed.data };
   delete modelPatch.fallbackEnabled;
   delete modelPatch.unlimited;
+  delete modelPatch.note;
+  delete modelPatch.recheckAt;
   const modelKeys = Object.keys(modelPatch) as Array<keyof typeof modelPatch>;
+  const noteOnly = modelKeys.length === 0 && parsed.data.fallbackEnabled === undefined && parsed.data.unlimited === undefined;
+  if (parsed.data.note !== undefined || parsed.data.recheckAt !== undefined) {
+    const text = parsed.data.note === undefined
+      ? (db.prepare('SELECT note FROM model_note WHERE platform = ? AND model_id = ?').get(row.platform, row.model_id) as { note: string } | undefined)?.note ?? null
+      : parsed.data.note?.trim() || null;
+    if (text == null) {
+      db.prepare('DELETE FROM model_note WHERE platform = ? AND model_id = ?').run(row.platform, row.model_id);
+    } else {
+      db.prepare(`
+        INSERT INTO model_note (platform, model_id, note, recheck_at, updated_at) VALUES (?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(platform, model_id) DO UPDATE SET
+          note = excluded.note,
+          recheck_at = CASE WHEN ? THEN excluded.recheck_at ELSE model_note.recheck_at END,
+          updated_at = excluded.updated_at
+      `).run(row.platform, row.model_id, text, parsed.data.recheckAt ?? null, parsed.data.recheckAt !== undefined ? 1 : 0);
+    }
+    if (noteOnly) {
+      res.json({ success: true, id });
+      return;
+    }
+  }
   if (parsed.data.unlimited !== undefined) {
     db.prepare('UPDATE models SET unlimited = ? WHERE id = ?').run(parsed.data.unlimited ? 1 : 0, id);
     invalidateUnlimitedCache();

@@ -68,6 +68,7 @@ import * as clifreeFleetUsagePerDay from '../migrations/20260923_000001_clifree_
 import * as chainMinimumsAndAaHistory from '../migrations/20260925_000001_chain_minimums_and_aa_history.js';
 import * as quotaPolicyUnit from '../migrations/20260925_000002_quota_policy_unit.js';
 import * as unlimitedModels from '../migrations/20260925_000003_unlimited_models.js';
+import * as modelNotes from '../migrations/20260926_000001_model_notes.js';
 import * as requestModelAttribution from '../migrations/20260913_000001_request_model_attribution.js';
 
 export interface MigrationModule {
@@ -219,4 +220,5 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: '20260925_000001_chain_minimums_and_aa_history.ts', module: chainMinimumsAndAaHistory },
   { filename: '20260925_000002_quota_policy_unit.ts', module: quotaPolicyUnit },
   { filename: '20260925_000003_unlimited_models.ts', module: unlimitedModels },
+  { filename: '20260926_000001_model_notes.ts', module: modelNotes },
 ];

@@ -494,14 +494,18 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
   {
     id: 'provider-models-panel',
     title: 'Provider model comparison on Keys',
-    summary: 'Expanding a provider lists every model it serves with its measured scores, the chains routing to it, and one switch for whether this key routes it at all. One provider open at a time; rows that cannot route are faded.',
+    summary: 'Expanding a provider lists every model it serves with its measured scores, the chains routing to it, and one switch for whether this key routes it at all. One provider open at a time; rows that cannot route are faded. Models that cannot route sit in a separate Parked section below the working ones; any model can carry an operator note with a recheck-by date (model_note), flagged when due.',
     settingsLocation: 'Keys → Providers → expand a provider',
     destinations: [{ kind: 'internal', label: 'Open provider keys', href: '/keys' }],
     category: 'presentation',
     defaultEnabled: true,
     offBehaviour: 'The panel is hidden and upstream’s provider view is used. Saved per-model scope is untouched.',
     takesEffect: 'Next page load.',
-    codeLocations: ['client/src/components/keys/provider-models-panel.tsx'],
+    codeLocations: [
+      'client/src/components/keys/provider-models-panel.tsx',
+      'server/src/db/migrations/20260926_000001_model_notes.ts',
+      'server/src/routes/models.ts (note, recheckAt)',
+    ],
     disableConfirmation: 'none',
   },
   {
