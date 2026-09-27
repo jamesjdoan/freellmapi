@@ -499,7 +499,7 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
     destinations: [{ kind: 'internal', label: 'Open provider keys', href: '/keys' }],
     category: 'presentation',
     defaultEnabled: true,
-    offBehaviour: 'The panel is hidden and upstream’s provider view is used. Saved per-model scope is untouched.',
+    offBehaviour: 'The panel is hidden and upstream’s provider view is used. Saved per-model scope is untouched. A removed provider (server/src/services/provider-removals.ts) keeps its models out of the catalogue and its row off this list; the removal log still shows it, with a reason and a Restore.',
     takesEffect: 'Next page load.',
     codeLocations: [
       'client/src/components/keys/provider-models-panel.tsx',

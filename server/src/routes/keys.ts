@@ -4,6 +4,7 @@ import { z } from 'zod';
 import multer from 'multer';
 import path from 'path';
 import { diagnoseProviders, adviceFor, recordDiagnosisTransitions, listDiagnosisHistory } from '../services/provider-diagnosis.js';
+import { getProviderRemoval, listProviderRemovals, removeProvider, restoreProvider } from '../services/provider-removals.js';
 import { getDb } from '../db/index.js';
 import { resolveProvider, getAllProviders } from '../providers/index.js';
 import { encrypt, decrypt, maskKey } from '../lib/crypto.js';
@@ -1603,6 +1604,20 @@ keysRouter.delete('/:id', (req: Request, res: Response) => {
   });
   remove();
 
+  // Deleting the last credential is how a provider is usually abandoned, and
+  // this is the only place that can see it happen. The models are already gone
+  // (custom cascade above, or a scope-limited key for a catalogue provider),
+  // so the row this writes is the log and the reason.
+  if (row.platform !== 'custom') {
+    const left = db.prepare('SELECT COUNT(*) AS n FROM api_keys WHERE platform = ?').get(row.platform) as { n: number };
+    if (left.n === 0 && !getProviderRemoval(row.platform, db)) {
+      db.prepare(`
+        INSERT INTO provider_removal (platform, reason, note, removed_by, models_removed, key_ids_json, restored_at)
+        VALUES (?, ?, NULL, 'key', 0, ?, NULL)
+      `).run(row.platform, 'Last key removed', JSON.stringify([id]));
+    }
+  }
+
   res.json({ success: true });
 });
 
@@ -1879,4 +1894,58 @@ keysRouter.patch('/:id', (req: Request, res: Response) => {
   if (monthlyTokenCap !== undefined) response.monthlyTokenCap = monthlyTokenCap;
   if (modelLimits !== undefined) response.modelLimits = modelLimits;
   res.json(response);
+});
+
+// ── Provider removals ────────────────────────────────────────────────────────
+//
+// A provider the operator has given up on. Its models are out of the catalogue
+// (each tombstoned, so neither catalog sync nor the custom-model sync can put
+// them back), the reason is recorded once, and the row leaves the Keys list.
+// The credential is NOT deleted: restoring the provider is then a click, not a
+// re-entry, and a removed provider whose key still works is one the operator
+// may want back.
+
+const removeProviderSchema = z.object({
+  reason: z.string().trim().min(1).max(200).nullable(),
+  note: z.string().trim().max(500).nullable().optional(),
+  deleteKeys: z.boolean().optional(),
+});
+
+keysRouter.get('/provider-removals', (_req: Request, res: Response) => {
+  res.json({ removals: listProviderRemovals(getDb()) });
+});
+
+keysRouter.post('/provider-removals/:platform', (req: Request, res: Response) => {
+  const platform = String(req.params.platform ?? '').toLowerCase();
+  if (!platform) {
+    res.status(400).json({ error: { message: 'Platform is required' } });
+    return;
+  }
+  const parsed = removeProviderSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
+    return;
+  }
+  // A removal without a reason is a removal nobody can understand later, so
+  // it is refused rather than recorded blank.
+  if (!parsed.data.reason) {
+    res.status(400).json({ error: { message: 'A reason is required to remove a provider' } });
+    return;
+  }
+  res.json(removeProvider(platform, {
+    reason: parsed.data.reason,
+    note: parsed.data.note ?? null,
+    removedBy: 'provider',
+    deleteKeys: parsed.data.deleteKeys === true,
+  }, getDb()));
+});
+
+keysRouter.post('/provider-removals/:platform/restore', (req: Request, res: Response) => {
+  const platform = String(req.params.platform ?? '').toLowerCase();
+  const restored = restoreProvider(platform, getDb());
+  if (!restored || !restored.restoredAt) {
+    res.status(404).json({ error: { message: `No active removal for ${platform}` } });
+    return;
+  }
+  res.json({ restored });
 });

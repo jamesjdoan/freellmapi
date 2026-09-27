@@ -38,6 +38,8 @@ import { NewArrivalsTag, ProviderChurnChip, ProviderChurnPanel } from './provide
 import { ProviderDiagnosisChip, useProviderDiagnosis } from './provider-diagnosis'
 import { churnByPlatform, useCatalogueChanges } from '@/lib/catalogue-changes'
 import { ProviderModelsPanel } from '@/components/keys/provider-models-panel'
+import { ProviderRemovalsLog, RemoveProviderDialog } from './provider-removals'
+import { useRemovedPlatforms } from '@/lib/provider-removals'
 import { DiscoverModelsDialog } from './discover-models-dialog'
 import { AddEndpointKeyDialog } from './add-endpoint-key-dialog'
 import { CopyKeyDialog } from './copy-key-dialog'
@@ -297,6 +299,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
   // inline field: the menu hands focus back to its trigger as it closes, which
   // would blur (and so save and close) an inline input the instant it opened.
   const [renameKeyId, setRenameKeyId] = useState<number | null>(null)
+  const [removeTarget, setRemoveTarget] = useState<{ platform: string; label: string } | null>(null)
   // Inline base-URL correction for an OpenAI-compatible account, like the
   // label: click the URL, fix it, Enter. Its models and limits move with it.
   const [editingBaseUrl, setEditingBaseUrl] = useState<{ id: number; value: string } | null>(null)
@@ -557,6 +560,11 @@ export function ProviderList({ onAddKey, initialSearch }: {
     })),
   ].filter(p => p.keys.length > 0)
 
+  // A provider the operator has removed: its models were tombstoned, so a
+  // catalogue refresh cannot bring it back, and its row here would only be
+  // noise. The log below says it was removed and why.
+  const removedPlatforms = useRemovedPlatforms()
+
   // What each provider's catalogue gained and lost lately (#F2 follow-up).
   // Shares one query with the chain page's panel; this narrows it to a
   // fortnight, because a retirement from months back is not news about the
@@ -578,7 +586,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
     return out
   }, [fallback])
 
-  const totalProviders = grouped.length
+  const totalProviders = grouped.filter(g => !removedPlatforms.has(g.platform)).length
   const totalKeys = grouped.reduce((n, g) => n + g.keys.length, 0)
 
   const q = search.trim().toLowerCase()
@@ -607,6 +615,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
       return { ...group, keys: matchingKeys }
     })
     .filter(group => group.keys.length > 0 && matchStatus(group))
+    .filter(group => !removedPlatforms.has(group.platform))
 
   // Closed on arrival, one open at a time. Each expanded provider renders its
   // whole scored model table, so several at once is a wall rather than a
@@ -674,6 +683,10 @@ export function ProviderList({ onAddKey, initialSearch }: {
           {t('keys.providerCountSummary', { providers: totalProviders, keys: totalKeys })}
         </span>
       </div>
+
+      {/* What was removed and why, and the way back. Sits with the list it
+          refers to rather than with the dialogs. */}
+      <ProviderRemovalsLog />
 
       {visibleGroups.length === 0 ? (
         <EmptyState title={t('keys.noFilterMatch')} />
@@ -807,6 +820,14 @@ export function ProviderList({ onAddKey, initialSearch }: {
                           <DropdownMenuItem onClick={() => window.open(group.url, '_blank', 'noopener,noreferrer')}>
                             {t('keys.getApiKey')}
                             <ExternalLink className="ml-auto size-3.5" />
+                          </DropdownMenuItem>
+                        )}
+                        {/* Giving up on a provider: its models leave the
+                            catalogue for good and the reason is recorded. */}
+                        {group.platform !== 'custom' && (
+                          <DropdownMenuItem onClick={() => setRemoveTarget({ platform: group.platform, label: group.label })}>
+                            {t('keys.removeProvider')}
+                            <Trash2 className="ml-auto size-3.5" />
                           </DropdownMenuItem>
                         )}
                         {proxyEnabled && (
@@ -1287,6 +1308,16 @@ export function ProviderList({ onAddKey, initialSearch }: {
           onOpenChange={(open) => { if (!open) setAddModelTarget(null) }}
         />
       )}
+
+      {removeTarget && (
+        <RemoveProviderDialog
+          platform={removeTarget.platform}
+          label={removeTarget.label}
+          onOpenChange={open => { if (!open) setRemoveTarget(null) }}
+        />
+      )}
+
+      <ProviderRemovalsLog />
 
       {copyKey !== null && (
         <CopyKeyDialog

@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-09-28 — Keys: remove a provider, with a reason and a log
+
+- Keys → a provider's ⋯ menu → **Remove provider**. Requires a reason, takes an optional note and
+  whether to delete the key too. The provider's models are removed and each tombstoned with the
+  reason, so a catalogue refresh cannot bring them back; chain memberships and the auto chain are
+  cleared. The credential is kept unless the box is ticked, so restoring needs no re-entry.
+- Keys shows a **Removed providers** section with each provider's reason, when, and **Restore**.
+  Restoring clears it from the list and the log; the models come back on the next catalogue sync.
+  Deleting a provider's last key by hand records the same entry.
+- `GET /api/keys/provider-removals`, `POST /api/keys/provider-removals/:platform`,
+  `POST /api/keys/provider-removals/:platform/restore`. Migration `20260928_000001`; test
+  `provider-removals.test.ts` (tombstones, chain rows gone, key kept, blank reason refused, restore).
+
 ## 2026-09-28 — Catalogue changes fold like the catalogue log
 
 - Models → Catalogue changes: Arrived and Retired each show the 10 newest, then "Show N more

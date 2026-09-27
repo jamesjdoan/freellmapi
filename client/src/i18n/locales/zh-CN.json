@@ -847,7 +847,21 @@
     "noteRecheck": "Recheck on",
     "noteRecheckOn": "recheck {date}",
     "noteRecheckDue": "recheck due ({date})",
-    "noteEditHint": "Edited {date}. Click to edit; Enter saves, Esc cancels, clear the text to remove."
+    "noteEditHint": "Edited {date}. Click to edit; Enter saves, Esc cancels, clear the text to remove.",
+    "removeProvider": "Remove provider",
+    "removeProviderTitle": "Remove {provider}",
+    "removeProviderReason": "Reason (required)",
+    "removeProviderReasonPlaceholder": "e.g. Credit card dropped; replaced by Groq",
+    "removeProviderNote": "Note (optional)",
+    "removeProviderNotePlaceholder": "Anything a later reader would want to know",
+    "removeProviderDeleteKeys": "Also delete the API key(s) and models for this provider",
+    "removeProviderEffect": "Its models are removed from the catalogue and will not come back on a refresh. The key is kept unless you tick the box above.",
+    "removeProviderConfirm": "Remove",
+    "removedProviders": "Removed providers ({count})",
+    "removedModels": "{count} models",
+    "removedByKey": "last key removed",
+    "removedRestored": "restored {when}",
+    "restoreProvider": "Restore"
   },
   "backups": {
     "title": "备份",
