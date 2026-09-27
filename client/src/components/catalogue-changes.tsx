@@ -7,6 +7,9 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useCatalogueChanges } from '@/lib/catalogue-changes'
 import { formatStamp } from '@/lib/stamp'
+import { parseSqliteUtc } from '@/lib/time-tree'
+import { TimeTreeLog } from '@/components/time-tree-log'
+import type { ArrivedModel, DepartedModel } from '@/lib/catalogue-changes'
 import { partitionByActivated, useActivatedPlatforms } from '@/lib/activated-platforms'
 
 // What the catalogue gained and lost since the last time anyone looked.
@@ -98,9 +101,27 @@ export function CatalogueChangesPanel() {
             <PackagePlus className="size-3.5" />
             {t('catalogue.arrived', { count: arrived.length })}
           </h3>
-          <ul className="mt-1.5 space-y-1">
-            {arrived.map(m => (
-              <li key={`${m.platform}:${m.modelId}`} className="flex flex-wrap items-center gap-2 text-xs">
+          {/* Same three steps as the log below: the 10 newest, the rest of the
+              month, then Year > Month > Week > Day. A sync can land dozens at
+              once, and a flat list of them pushed everything else off screen. */}
+          <div className="mt-1.5">
+          <TimeTreeLog<ArrivedModel>
+            unit="month"
+            recentLabel={t('catalogue.latest')}
+            items={arrived}
+            at={arrivedAt}
+            itemKey={arrivedKey}
+            summary={items => {
+              const routed = items.filter(m => m.routed).length
+              return (
+                <span className="tabular-nums">
+                  {t('catalogue.arrived', { count: items.length })}
+                  {routed > 0 && <span className="text-rose-600 dark:text-rose-400">{' · '}{t('catalogue.changesSummaryUrgent', { count: routed })}</span>}
+                </span>
+              )
+            }}
+            row={m => (
+              <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="text-muted-foreground">{m.platform}</span>
                 <span className="font-mono">{m.modelId}</span>
                 {/* A model that arrived AND is already serving is the urgent
@@ -110,9 +131,10 @@ export function CatalogueChangesPanel() {
                   ? <Badge variant="destructive">{t('catalogue.autoRouted', { chains: m.chains.join(', ') })}</Badge>
                   : <Badge variant="outline">{t('catalogue.notRouted')}</Badge>}
                 <span className="ml-auto text-muted-foreground tabular-nums">{formatStamp(m.firstSeenAt, { time: true })}</span>
-              </li>
-            ))}
-          </ul>
+              </div>
+            )}
+          />
+          </div>
         </div>
       )}
 
@@ -122,9 +144,24 @@ export function CatalogueChangesPanel() {
             <PackageMinus className="size-3.5" />
             {t('catalogue.departed', { count: departed.length })}
           </h3>
-          <ul className="mt-1.5 space-y-2">
-            {departed.map(m => (
-              <li key={`${m.platform}:${m.modelId}`} className="text-xs">
+          <div className="mt-1.5">
+          <TimeTreeLog<DepartedModel>
+            unit="month"
+            recentLabel={t('catalogue.latest')}
+            items={departed}
+            at={departedAt}
+            itemKey={departedKey}
+            summary={items => {
+              const lost = items.filter(m => m.lostFrom.length > 0).length
+              return (
+                <span className="tabular-nums">
+                  {t('catalogue.departed', { count: items.length })}
+                  {lost > 0 && <span className="text-rose-600 dark:text-rose-400">{' · '}{t('catalogue.lostChains', { count: lost })}</span>}
+                </span>
+              )
+            }}
+            row={m => (
+              <div className="text-xs">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-muted-foreground">{m.platform}</span>
                   <span className="font-mono">{m.modelId}</span>
@@ -150,9 +187,10 @@ export function CatalogueChangesPanel() {
                 {m.reason && (
                   <p className="mt-0.5 text-[11px] text-muted-foreground break-words">{m.reason}</p>
                 )}
-              </li>
-            ))}
-          </ul>
+              </div>
+            )}
+          />
+          </div>
         </div>
       )}
 
@@ -168,3 +206,9 @@ export function CatalogueChangesPanel() {
     </section>
   )
 }
+
+// Module-level so the tree's memo keys stay stable across renders.
+const arrivedAt = (m: ArrivedModel) => parseSqliteUtc(m.firstSeenAt)
+const arrivedKey = (m: ArrivedModel) => `${m.platform}:${m.modelId}`
+const departedAt = (m: DepartedModel) => parseSqliteUtc(m.retiredAt)
+const departedKey = (m: DepartedModel) => `${m.platform}:${m.modelId}`

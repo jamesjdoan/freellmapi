@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-09-28 — Catalogue changes fold like the catalogue log
+
+- Models → Catalogue changes: Arrived and Retired each show the 10 newest, then "Show N more
+  from this month", then Full history folded Year › Month › Week › Day, with a count on every
+  fold (and how many already route / left a chain). Same `TimeTreeLog` the Catalogue log uses,
+  so both panels read the same way. Acknowledge still works on each retired row.
+
 ## 2026-09-26 — Keys: a Parked section and model notes
 
 - Each provider's model table lists the working models first, then a **Parked · N** divider and the
