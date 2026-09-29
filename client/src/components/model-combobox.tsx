@@ -81,7 +81,10 @@ export function ModelCombobox({
   const filtered = q
     ? options.filter(o => `${o.label} ${o.sub ?? ''} ${o.value} ${(o.platforms ?? []).join(' ')}`.toLowerCase().includes(q))
     : options
-  const triggerLabel = options.find(o => o.value === value)?.label ?? value
+  const selectedOption = options.find(o => o.value === value)
+  const triggerLabel = selectedOption?.label ?? value
+  const isSelectedFiltered =
+    q && !filtered.some(o => o.value === value) && options.some(o => o.value === value)
 
   function pick(v: string) {
     onSelect(v)
@@ -153,6 +156,20 @@ export function ModelCombobox({
         </div>
         {header}
         <div className="max-h-72 overflow-y-auto p-1">
+          {isSelectedFiltered && selectedOption && (
+            <div className="flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-accent">
+              <div className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
+                <Check className="size-3" />
+              </div>
+              <div className="flex flex-col">
+                <div className="font-medium">{renderLabel ? renderLabel(selectedOption.label) : selectedOption.label}</div>
+                {selectedOption.sub && (
+                  <div className="text-xs text-muted-foreground">{selectedOption.sub}</div>
+                )}
+              </div>
+              <div className="ml-auto text-xs text-primary">{t('models.comboboxSelected')}</div>
+            </div>
+          )}
           {filtered.length === 0 ? (
             <div className="px-2 py-6 text-center text-xs text-muted-foreground">{emptyText}</div>
           ) : (

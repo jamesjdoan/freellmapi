@@ -322,6 +322,7 @@
     "referenceOnly": "reference",
     "referenceOnlyHint": "Listed for comparison only. OpenCode's free tier refuses any call from outside OpenCode, so this model cannot be routed — use it through the opencode CLI instead.",
     "moveToRank": "ランクへ移動",
+    "comboboxSelected": "Selected",
     "sortViewOnly": "Sort the view. The chain still routes in # order; click again to reverse, a third time to return to chain order."
   },
   "strategies": {
@@ -1573,7 +1574,8 @@
     "costBasisTask": "USD Artificial Analysis measured to run one task of its Intelligence Index, cheapest first. Covers only the models AA has run it on.",
     "priceBasisAria": "Price basis",
     "priceBasisTask": "Per task",
-    "priceBasisTokens": "Per 1M tokens"
+    "priceBasisTokens": "Per 1M tokens",
+    "chainNoRoutable": "No models in this group have a usable key for this provider. Add a key or enable an existing one first."
   },
   "catalogue": {
     "changesTitle": "Catalogue changes",

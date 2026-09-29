@@ -151,6 +151,17 @@
   registry `provider-model-access`, `docs/IMPERIUM_EXTENSION.md`, keys `keys.modelLimitsTitle`,
   `keys.scopeEditedOnPanel`, `keys.scopeNotServed`.
 
+## 2026-09-25 — Compare chain apply no longer 409s on merged rows; picker keeps the selection visible
+
+- Adding a merged Compare row to a chain sent every provider's copy, and `POST /api/fallback/membership`
+  refuses the whole batch if one copy has no usable key. It now sends only reachable copies
+  (enabled, key scope `in`/`unscoped`); with none, it says so (`compare.chainNoRoutable`). Removal
+  still sends all. `client/src/pages/CompareModelsPage.tsx`.
+- `ModelCombobox`: when the search filters out the selected option, a pinned row shows it
+  (`models.comboboxSelected`). `client/src/components/model-combobox.tsx`.
+- Incident: an agent reset the dashboard password and replaced the live DB file while the server
+  held it open. Recovered from the open file descriptors; copies in `backups/incident-20260925/`.
+
 ## 2026-09-24 — Offloaded inference card collapsed by default
 
 - The card collapses by default and remembers the choice per browser. Its collapsed header shows

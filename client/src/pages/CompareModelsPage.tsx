@@ -1204,11 +1204,20 @@ export default function CompareModelsPage() {
                               member={g.chains}
                               ranks={g.chainRanks}
                               disabled={membership.isPending || position.isPending}
-                              onApply={changes => changes.forEach(c => membership.mutate({
-                                chain: c.chain,
-                                modelDbIds: g.members.map(m => m.modelDbId),
-                                member: c.member,
-                              }))}
+                              onApply={changes => changes.forEach(c => {
+                                if (c.member) {
+                                  const routableIds = g.members
+                                    .filter(m => m.enabled && m.hasKey && (m.keyScope === 'in' || m.keyScope === 'unscoped'))
+                                    .map(m => m.modelDbId);
+                                  if (routableIds.length === 0) {
+                                    toast.error(t('compare.chainNoRoutable'));
+                                    return;
+                                  }
+                                  membership.mutate({ chain: c.chain, modelDbIds: routableIds, member: true });
+                                } else {
+                                  membership.mutate({ chain: c.chain, modelDbIds: g.members.map(m => m.modelDbId), member: false });
+                                }
+                              })}
                               onRank={(chain, modelDbId, next) => position.mutate({ chain, modelDbId, position: next })}
                             />
                           )}
