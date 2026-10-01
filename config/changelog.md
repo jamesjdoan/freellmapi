@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-10-01 — Catalogue changes is a worklist you can empty
+
+- Models → Catalogue changes is now an unread worklist. One **Mark N read** button clears
+  every change on the panel and collapses it. Nothing is deleted: the arrival, the tombstone
+  and the event log all survive, so **Show all** still renders what is really there.
+- **All read** means collapsed. Expanding then shows the 10 most recent changes of either
+  kind as one list, with **Show all** beside it.
+- The mark is permanent and lives in the database, so it agrees across browsers and machines.
+  Migration `20261001_000001_catalogue_ack`, one table of `(platform, model_id)`, no
+  timestamps. Arrivals only: a departure is marked on its tombstone, and relisting deletes
+  that, so a second retirement of the same model reads as new again.
+- `POST /api/models/changes/acknowledge-bulk`. `getCatalogueChanges` returns every row in
+  its window with an `acknowledged` flag rather than filtering, because the Keys page's
+  provider chips read the same payload and must keep counting acknowledged rows. The
+  filtering is `unreadSelection()` in the client, tested against that invariant.
+- ADR `docs/adr/ARCH-20260930-catalogue-panel-unread-worklist.md`.
+
 ## 2026-10-01 — Upstream v0.13.0–v0.13.3 merged into the extension
 
 - Four upstream releases taken in one `--no-ff` merge of the `v0.13.3` tag (24 commits, 149

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getCatalogueChanges, acknowledgeDeparture } from '../services/catalogue-changes.js';
+import { getCatalogueChanges, acknowledgeDeparture, acknowledgeArrivals, acknowledgeDepartures } from '../services/catalogue-changes.js';
 import { listCatalogueEvents } from '../services/catalogue-log.js';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
@@ -640,4 +640,41 @@ modelsRouter.post('/changes/acknowledge', (req: Request, res: Response) => {
     return;
   }
   res.json({ success: true });
+});
+
+const bulkAcknowledgeSchema = z.object({
+  // Both lists, because the panel's one button covers both. An absent or empty
+  // list is normal: a day with arrivals but no retirements sends arrivals
+  // alone, and acknowledging nothing at all is a no-op rather than an error.
+  arrived: z.array(z.object({
+    platform: z.string().min(1),
+    modelId: z.string().min(1),
+  })).default([]),
+  departed: z.array(z.object({
+    platform: z.string().min(1),
+    modelId: z.string().min(1),
+  })).default([]),
+});
+
+/**
+ * Acknowledge a batch of catalogue changes: the panel's one OK button.
+ *
+ * Arrivals land in `catalogue_ack` and departures on their own tombstone, so
+ * this is the only place that writes both stores in one gesture. It marks, it
+ * does not delete: every arrival, tombstone and event row survives, and the
+ * full log below the panel is unchanged.
+ *
+ * Returns the rows it actually marked, which is not the number sent: an arrival
+ * already marked counts as nothing, and a departure that is not a recorded
+ * upstream retirement cannot be marked at all.
+ */
+modelsRouter.post('/changes/acknowledge-bulk', (req: Request, res: Response) => {
+  const parsed = bulkAcknowledgeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
+    return;
+  }
+  const acknowledgedArrivals = acknowledgeArrivals(parsed.data.arrived);
+  const acknowledgedDepartures = acknowledgeDepartures(parsed.data.departed);
+  res.json({ acknowledgedArrivals, acknowledgedDepartures });
 });

@@ -71,6 +71,7 @@ import * as unlimitedModels from '../migrations/20260925_000003_unlimited_models
 import * as modelNotes from '../migrations/20260926_000001_model_notes.js';
 import * as providerRemovals from '../migrations/20260928_000001_provider_removals.js';
 import * as requestModelAttribution from '../migrations/20260913_000001_request_model_attribution.js';
+import * as catalogueAck from '../migrations/20261001_000001_catalogue_ack.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -149,6 +150,7 @@ export const AA_COST_PER_TASK_FILENAME = '20260913_000001_aa_cost_per_task.ts';
 export const REQUEST_MODEL_ATTRIBUTION_FILENAME = '20260913_000001_request_model_attribution.ts';
 export const KEY_MONTHLY_USAGE_FILENAME = '20260914_000001_key_monthly_usage.ts';
 export const QUOTA_SNAPSHOT_FRESHNESS_FILENAME = '20260915_000001_quota_snapshot_freshness.ts';
+export const CATALOGUE_ACK_FILENAME = '20261001_000001_catalogue_ack.ts';
 
 export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: LEGACY_BASELINE_FILENAME, module: legacyBaseline },
@@ -223,4 +225,5 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: '20260925_000003_unlimited_models.ts', module: unlimitedModels },
   { filename: '20260926_000001_model_notes.ts', module: modelNotes },
   { filename: '20260928_000001_provider_removals.ts', module: providerRemovals },
+  { filename: CATALOGUE_ACK_FILENAME, module: catalogueAck },
 ];

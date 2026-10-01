@@ -1,15 +1,16 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { PackagePlus, PackageMinus, ChevronRight, ChevronDown } from 'lucide-react'
+import { PackagePlus, PackageMinus, ChevronRight, ChevronDown, History, Clock } from 'lucide-react'
 import { useI18n } from '@/i18n'
 import { apiFetch } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { useCatalogueChanges } from '@/lib/catalogue-changes'
+import { useCatalogueChanges, unreadSelection, RECENT_HEAD } from '@/lib/catalogue-changes'
 import { formatStamp } from '@/lib/stamp'
 import { parseSqliteUtc } from '@/lib/time-tree'
 import { TimeTreeLog } from '@/components/time-tree-log'
 import type { ArrivedModel, DepartedModel } from '@/lib/catalogue-changes'
+import { ConfirmButton } from '@/components/confirm-button'
 import { partitionByActivated, useActivatedPlatforms } from '@/lib/activated-platforms'
 
 // What the catalogue gained and lost since the last time anyone looked.
@@ -18,10 +19,19 @@ import { partitionByActivated, useActivatedPlatforms } from '@/lib/activated-pla
 // appeared in a sync, the Default profile auto-included them, and they served
 // traffic before anyone knew they existed. They were found by accident.
 //
-// It reports and does not act. Chain membership lives in a reviewed source file
-// (server/src/data/routing-curation.ts); an "add to chain" button here would
-// recreate `auto_include_new_models` behind a different control, which is the
-// drift this panel exists to expose.
+// It reports and it does not ROUTE. Chain membership lives in a reviewed
+// source file (server/src/data/routing-curation.ts); an "add to chain" button
+// here would recreate `auto_include_new_models` behind a different control,
+// which is the drift this panel exists to expose.
+//
+// The one thing it does write is an ACKNOWLEDGEMENT, and that is not routing:
+// it records that a change has been read so it stops repeating, and it moves
+// nothing. Rows are never deleted — the arrival, the tombstone and the event
+// log all survive — so "show all" is always able to render what is really
+// there. See docs/adr/ARCH-20260930-catalogue-panel-unread-worklist.md.
+
+/** One button for every change on screen, arrivals and departures alike. */
+const BULK_ACK_PATH = '/api/models/changes/acknowledge-bulk'
 
 export function CatalogueChangesPanel() {
   const { t } = useI18n()
@@ -29,11 +39,15 @@ export function CatalogueChangesPanel() {
   // Same default as the log: this is a worklist, and a row for a provider with
   // no key is not work. Opt back in with the footer control.
   const [onlyActivated, setOnlyActivated] = useState(true)
-  // Collapsed by default. This panel and the log below it both opened fully
-  // expanded, which put two long lists at the top of the page before anything
-  // that needed reading. The counts are the part you scan; the rows are the
-  // part you open when a count is surprising.
+  // Collapsed by default, and this panel and the log below it both opened
+ // fully expanded, which put two long lists at the top of the page before
+  // anything that needed reading.
   const [expanded, setExpanded] = useState(false)
+  // Once everything is read the panel still answers "what changed lately", so
+  // the expanded state has to be able to show more than the worklist. Only
+  // meaningful when there is nothing unread, which is the only time `recent`
+  // is non-null.
+  const [showAll, setShowAll] = useState(false)
   const { activated, ready } = useActivatedPlatforms()
 
   const { data } = useCatalogueChanges()
@@ -44,21 +58,62 @@ export function CatalogueChangesPanel() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['catalogue-changes'] }),
   })
 
-  // Acknowledged departures stay in the payload — the record is permanent — but
-  // drop out of the panel, which is a worklist rather than a history.
-  const filtering = onlyActivated && ready
-  const allDeparted = (data?.departed ?? []).filter(d => !d.acknowledgedAt)
-  const allArrived = data?.arrived ?? []
-  const arrivedSplit = partitionByActivated(allArrived, activated)
-  const departedSplit = partitionByActivated(allDeparted, activated)
-  const arrived = filtering ? arrivedSplit.shown : allArrived
-  const departed = filtering ? departedSplit.shown : allDeparted
-  const hidden = arrivedSplit.hidden.length + departedSplit.hidden.length
+  // One gesture for both lists. The body carries what is ON SCREEN, not
+  // everything unread: the activated-provider filter is a view choice, and
+  // marking a hidden provider's arrivals read would silence news nobody was
+  // shown. Collapsing is part of the same act — the panel is a worklist, and
+  // an emptied one that stays open is just the same list with more space.
+  const acknowledgeAll = useMutation({
+    mutationFn: (body: { arrived: { platform: string; modelId: string }[]; departed: { platform: string; modelId: string }[] }) =>
+      apiFetch(BULK_ACK_PATH, { method: 'POST', body: JSON.stringify(body) }),
+    onSuccess: () => {
+      setExpanded(false)
+      setShowAll(false)
+      queryClient.invalidateQueries({ queryKey: ['catalogue-changes'] })
+    },
+  })
 
-  // Every row is on a deactivated provider: the panel still has something to
-  // say, so it says how much and offers the way in rather than vanishing.
-  if (allArrived.length === 0 && allDeparted.length === 0) return null
+  const filtering = onlyActivated && ready
+  const arrivedAll = data?.arrived ?? []
+  const departedAll = data?.departed ?? []
+  // Read/unread is decided in the lib, on the WHOLE payload, then the provider
+  // filter is applied to the worklist. Doing it the other way round would let a
+  // hidden row decide whether the panel is quiet.
+  const selection = unreadSelection({ arrived: arrivedAll, departed: departedAll })
+  const arrivedSplit = partitionByActivated(selection.arrived, activated)
+  const departedSplit = partitionByActivated(selection.departed, activated)
+  const arrived = filtering ? arrivedSplit.shown : selection.arrived
+  const departed = filtering ? departedSplit.shown : selection.departed
+  const hidden = arrivedSplit.hidden.length + departedSplit.hidden.length
+  // "Show all" honours the same provider filter as everything else in the
+  // panel, so widening the list cannot leak rows the panel is otherwise hiding
+  // and make the count disagree with what is on screen.
+  const allRecent = (showAll ? [
+    ...(filtering ? arrivedSplit.shown : arrivedAll).map(m => ({ kind: 'arrived' as const, at: m.firstSeenAt, model: m })),
+    ...(filtering ? departedSplit.shown : departedAll).map(m => ({ kind: 'departed' as const, at: m.retiredAt, model: m })),
+  ] : selection.recent ?? [])
+    .sort((a, b) => (stampOf(b.at) < stampOf(a.at) ? -1 : stampOf(b.at) > stampOf(a.at) ? 1 : 0))
+
+  // Nothing at all in the window: the catalogue has not moved, and an empty
+  // shell would read as a broken panel.
+  if (arrivedAll.length === 0 && departedAll.length === 0) return null
+
+  // The header counts what a person can act on, which is the worklist, not the
+  // window. Once everything is read it says so, and the count that remains
+  // meaningful is how much history is behind it.
   const routedArrivals = arrived.filter(m => m.routed).length
+  const quiet = !selection.hasUnread
+  // The header states the real number, never the cap: three changes in the
+  // window must not read as ten.
+  const totalInView = (filtering ? arrivedSplit.shown.length : arrivedAll.length)
+    + (filtering ? departedSplit.shown.length : departedAll.length)
+  const head = quiet ? (showAll ? totalInView : Math.min(RECENT_HEAD, totalInView)) : arrived.length + departed.length
+  const canShowAll = quiet && !showAll && totalInView > RECENT_HEAD
+
+  const markAllRead = () => acknowledgeAll.mutate({
+    arrived: arrived.map(m => ({ platform: m.platform, modelId: m.modelId })),
+    departed: departed.map(m => ({ platform: m.platform, modelId: m.modelId })),
+  })
 
   return (
     <section className="rounded-xl border p-4">
@@ -73,9 +128,13 @@ export function CatalogueChangesPanel() {
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-2">
             <h2 className="text-sm font-medium">{t('catalogue.changesTitle')}</h2>
-            <Badge variant="secondary" className="tabular-nums">
-              {t('catalogue.changesSummary', { arrived: arrived.length, departed: departed.length })}
-            </Badge>
+            {quiet ? (
+              <Badge variant="outline" className="tabular-nums">{t('catalogue.changesAllRead')}</Badge>
+            ) : (
+              <Badge variant="secondary" className="tabular-nums">
+                {t('catalogue.changesSummary', { arrived: arrived.length, departed: departed.length })}
+              </Badge>
+            )}
             {/* An arrival already serving traffic is the row that cannot wait
                 for someone to expand a panel, so its count sits in the
                 summary. */}
@@ -86,7 +145,9 @@ export function CatalogueChangesPanel() {
             )}
           </span>
           <span className="mt-0.5 block text-xs text-muted-foreground">
-            {t('catalogue.changesHint', { since: formatStamp(data?.since ?? '', { time: true }) })}
+            {quiet
+              ? t('catalogue.changesAllReadHint', { count: head })
+              : t('catalogue.changesHint', { since: formatStamp(data?.since ?? '', { time: true }) })}
             {data && data.untrackedArrivals > 0
               ? ` ${t('catalogue.untracked', { count: data.untrackedArrivals })}`
               : ''}
@@ -95,7 +156,57 @@ export function CatalogueChangesPanel() {
         <span className="sr-only">{expanded ? t('catalogue.hideDetail') : t('catalogue.showDetail')}</span>
       </button>
 
-      {expanded && arrived.length > 0 && (
+      {/* The worklist and the quiet head are different questions, so they render
+          through different branches rather than one list that happens to be
+          empty. A quiet panel gets the newest few as a plain list — handing ten
+          rows to TimeTreeLog would show all ten expanded and hide the history
+          folds it only offers past `foldAbove`. */}
+      {expanded && quiet && (
+        <div className="mt-3">
+          <h3 className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            {showAll ? <History className="size-3.5" /> : <Clock className="size-3.5" />}
+            {showAll ? t('catalogue.changesAll', { count: head }) : t('catalogue.changesRecent', { count: head })}
+          </h3>
+          <ul className="mt-1.5 divide-y divide-border">
+            {(showAll ? allRecent : selection.recent ?? []).map(change => (
+              <li key={`${change.kind}:${change.model.platform}:${change.model.modelId}`} className="flex flex-wrap items-center gap-2 py-1 text-xs">
+                {change.kind === 'arrived'
+                  ? <PackagePlus className="size-3.5 flex-shrink-0 text-muted-foreground" />
+                  : <PackageMinus className="size-3.5 flex-shrink-0 text-muted-foreground" />}
+                <span className="text-muted-foreground">{change.model.platform}</span>
+                <span className="font-mono">{change.model.modelId}</span>
+                <span className="ml-auto text-muted-foreground tabular-nums">{formatStamp(change.at, { time: true })}</span>
+              </li>
+            ))}
+          </ul>
+          {(canShowAll || showAll) && (
+            <button
+              type="button"
+              onClick={() => setShowAll(v => !v)}
+              className="mt-2 text-[11px] text-muted-foreground underline decoration-dotted hover:text-foreground"
+            >
+              {showAll ? t('catalogue.changesShowRecent') : t('catalogue.changesShowAll')}
+            </button>
+          )}
+        </div>
+      )}
+
+      {!quiet && !expanded && (arrived.length > 0 || departed.length > 0) && (
+        <div className="mt-3 flex justify-end">
+          <ConfirmButton
+            size="xs"
+            variant="outline"
+            onConfirm={markAllRead}
+            confirmLabel={t('catalogue.changesMarkReadConfirm')}
+            disabled={acknowledgeAll.isPending}
+            title={t('catalogue.changesMarkReadHint')}
+          >
+            {t('catalogue.changesMarkRead', { count: arrived.length + departed.length })}
+          </ConfirmButton>
+        </div>
+      )}
+
+      {expanded && !quiet && arrived.length > 0 && (
         <div className="mt-3">
           <h3 className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
             <PackagePlus className="size-3.5" />
@@ -138,7 +249,7 @@ export function CatalogueChangesPanel() {
         </div>
       )}
 
-      {expanded && departed.length > 0 && (
+      {expanded && !quiet && departed.length > 0 && (
         <div className="mt-4">
           <h3 className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
             <PackageMinus className="size-3.5" />
@@ -206,6 +317,11 @@ export function CatalogueChangesPanel() {
     </section>
   )
 }
+
+// SQLite UTC to a comparable string, for ordering a mixed arrival/departure
+// list. Both lists are already `YYYY-MM-DD HH:MM:SS`, so a space replaced with
+// a `T` sorts correctly without inventing a Date.
+const stampOf = (iso: string) => iso.replace(' ', 'T')
 
 // Module-level so the tree's memo keys stay stable across renders.
 const arrivedAt = (m: ArrivedModel) => parseSqliteUtc(m.firstSeenAt)

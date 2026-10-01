@@ -37,11 +37,13 @@ function render(churn: ProviderChurn | undefined) {
 
 const arrival = (modelId: string, displayName: string, firstSeenAt: string, chains: string[] = []) => ({
   platform: 'groq', modelId, displayName, firstSeenAt,
-  routed: chains.length > 0, chains, supportsTools: true, supportsVision: false, contextWindow: null,
+  routed: chains.length > 0, chains, acknowledged: false,
+  supportsTools: true, supportsVision: false, contextWindow: null,
 })
 
 const departure = (modelId: string, retiredAt: string) => ({
   platform: 'groq', modelId, retiredAt, reason: null, lostFrom: [], acknowledgedAt: null,
+  acknowledged: false,
 })
 
 /** What `formatStamp` should render for a SQLite UTC stamp: locale-proof, and

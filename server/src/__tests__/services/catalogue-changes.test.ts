@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initDb, getDb } from '../../db/index.js';
-import { getCatalogueChanges, acknowledgeDeparture } from '../../services/catalogue-changes.js';
-import { retireCatalogModelUpstream } from '../../services/model-state.js';
+import { retireCatalogModelUpstream, reinstateUpstreamRetiredCatalogModel } from '../../services/model-state.js';
+import { getCatalogueChanges, acknowledgeDeparture, acknowledgeArrivals, acknowledgeDepartures } from '../../services/catalogue-changes.js';
 
 // The catalogue's two halves used to be tracked very differently: departures
 // had a table, arrivals had nothing. That asymmetry cost real routing — two
@@ -151,5 +151,75 @@ describe('acknowledgement', () => {
 
   it('reports a miss rather than silently succeeding', () => {
     expect(acknowledgeDeparture('google', 'never-retired')).toBe(false);
+  });
+});
+
+describe('the unread worklist', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+  });
+
+  it('reports an acknowledged arrival as still present, only flagged', () => {
+    // The response is shared with the Keys page's churn chips, which count
+    // these rows whether or not anyone has read them. Filtering server-side
+    // would empty those counts; so the flag rides along and the client decides.
+    addModel('groq', 'read-one', daysAgo(1));
+    expect(getCatalogueChanges(30).arrived[0]!.acknowledged).toBe(false);
+
+    expect(acknowledgeArrivals([{ platform: 'groq', modelId: 'read-one' }])).toBe(1);
+    const after = getCatalogueChanges(30);
+    expect(after.arrived).toHaveLength(1);
+    expect(after.arrived[0]!.acknowledged).toBe(true);
+  });
+
+  it('counts a repeat acknowledgement as nothing, so a double click is harmless', () => {
+    // The table has no timestamp, so there is nothing for a second write to
+    // update — the primary key has to make it a no-op instead of an overwrite.
+    addModel('groq', 'read-one', daysAgo(1));
+    expect(acknowledgeArrivals([{ platform: 'groq', modelId: 'read-one' }])).toBe(1);
+    expect(acknowledgeArrivals([{ platform: 'groq', modelId: 'read-one' }])).toBe(0);
+  });
+
+  it('reports a re-retirement as unread again, because relisting deletes the tombstone', () => {
+    // The reason departures are NOT stored in catalogue_ack: an identity-only
+    // mark would survive the relist and hide a second loss of routing forever.
+    const id = addModel('google', 'twice-gone', daysAgo(5));
+    retireCatalogModelUpstream(getDb(), id, 'google', 'twice-gone', 'first');
+    acknowledgeArrivals([{ platform: 'google', modelId: 'twice-gone' }]);
+    acknowledgeDepartures([{ platform: 'google', modelId: 'twice-gone' }]);
+    expect(getCatalogueChanges(30).departed[0]!.acknowledged).toBe(true);
+
+    // Relist through the real path — it deletes the tombstone and restores the
+    // model row — then the provider drops it a second time.
+    reinstateUpstreamRetiredCatalogModel(getDb(), 'google', 'twice-gone');
+    const row = getDb().prepare('SELECT id FROM models WHERE platform = ? AND model_id = ?')
+      .get('google', 'twice-gone') as { id: number } | undefined;
+    expect(row).toBeDefined();
+    retireCatalogModelUpstream(getDb(), row!.id, 'google', 'twice-gone', 'second');
+    expect(getCatalogueChanges(30).departed[0]!.acknowledged).toBe(false);
+  });
+
+  it('marks a whole batch of both kinds in one call', () => {
+    // The panel's one button, which is the only place both stores are written.
+    addModel('groq', 'a1', daysAgo(1));
+    addModel('groq', 'a2', daysAgo(2));
+    const gone = addModel('google', 'd1', daysAgo(40));
+    retireCatalogModelUpstream(getDb(), gone, 'google', 'd1', 'gone');
+
+    expect(acknowledgeArrivals([{ platform: 'groq', modelId: 'a1' }, { platform: 'groq', modelId: 'a2' }])).toBe(2);
+    expect(acknowledgeDepartures([{ platform: 'google', modelId: 'd1' }])).toBe(1);
+
+    const after = getCatalogueChanges(30);
+    expect(after.arrived.every(a => a.acknowledged)).toBe(true);
+    expect(after.departed.every(d => d.acknowledged)).toBe(true);
+    // Marked, not deleted: the rows are still there for the log and the chips.
+    expect(after.arrived).toHaveLength(2);
+    expect(after.departed).toHaveLength(1);
+  });
+
+  it('acknowledges nothing without complaint', () => {
+    expect(acknowledgeArrivals([])).toBe(0);
+    expect(acknowledgeDepartures([])).toBe(0);
   });
 });

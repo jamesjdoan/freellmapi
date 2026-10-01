@@ -10,24 +10,29 @@ import type { RetiredChainMembership } from './model-state.js';
 // arrived in a sync, the Default profile auto-included them, and they served
 // traffic before anyone knew they existed. They were found by accident.
 //
-// This is the "before it routes" view. `scripts/apply-routing-curation.ts`
-// already answers the same question afterwards — it reports anything routed
-// that the curated spec does not name — but by then the requests have gone.
-//
 // Deliberately read-only and deliberately NOT a reassignment tool. Chain
 // membership belongs to a reviewed source file; a panel that edited it would
 // recreate `auto_include_new_models` in a new place, which is the exact failure
 // this exists to make visible.
+//
+// The one write is an ACKNOWLEDGEMENT: recording that the operator has read a
+// change, so it stops repeating. It moves nothing, routes nothing and deletes
+// nothing — every row here survives it, and the full record is still in
+// `catalogue_event`. What it changes is whether this panel lists the row, and
+// that filtering happens in the CLIENT, because this response is shared with
+// the Keys page's provider chips and must keep counting acknowledged rows.
 
 export interface ArrivedModel {
   platform: string;
   modelId: string;
   displayName: string;
   firstSeenAt: string;
-  /** Whether it is already serving. A new model that auto-entered a chain is
-   *  the urgent row on this panel; one sitting in the catalogue is not. */
   routed: boolean;
   chains: string[];
+  /** The operator has read this arrival. Read from `catalogue_ack`, which is
+   *  arrivals only: a departure's marker lives on its tombstone, so a
+   *  re-retirement after a relist is unread again. */
+  acknowledged: boolean;
   supportsTools: boolean;
   supportsVision: boolean;
   contextWindow: number | null;
@@ -43,6 +48,9 @@ export interface DepartedModel {
    *  when it was routed nowhere, or when it retired before this was captured. */
   lostFrom: RetiredChainMembership[];
   acknowledgedAt: string | null;
+  /** The same field the panel filters on, under the name arrivals use, so the
+   *  client can treat both lists with one rule. */
+  acknowledged: boolean;
 }
 // `relisted_at` / `relist_count` are deliberately absent. Those columns exist in
 // some deployed databases, carried in from a sibling EOL branch, but nothing on
@@ -77,6 +85,7 @@ interface ArrivedRow {
   platform: string; model_id: string; display_name: string; first_seen_at: string;
   supports_tools: number; supports_vision: number; context_window: number | null;
   chains: string | null;
+  acknowledged: 0 | 1;
 }
 
 interface DepartedRow {
@@ -92,14 +101,21 @@ interface DepartedRow {
 export function getCatalogueChanges(sinceDays = 30, db: Db = getDb()): CatalogueChanges {
   const since = new Date(Date.now() - sinceDays * 86_400_000).toISOString().replace('T', ' ').slice(0, 19);
 
+  // LEFT JOIN, never an inner one and never a WHERE: an acknowledged arrival is
+  // still an arrival, and the Keys page's churn chips count these rows
+  // independently of whether anyone has read them. Filtering belongs to the
+  // panel, in the client.
   const arrivedRows = db.prepare(`
     SELECT m.platform, m.model_id, m.display_name, m.first_seen_at,
            m.supports_tools, m.supports_vision, m.context_window,
+           (a.model_id IS NOT NULL) AS acknowledged,
            (SELECT GROUP_CONCAT(p.name, '\u0001')
               FROM profile_models pm
               JOIN profiles p ON p.id = pm.profile_id
              WHERE pm.model_db_id = m.id AND pm.enabled = 1) AS chains
       FROM models m
+      LEFT JOIN catalogue_ack a
+             ON a.platform = m.platform AND a.model_id = m.model_id
      WHERE m.first_seen_at IS NOT NULL AND m.first_seen_at >= ?
      ORDER BY m.first_seen_at DESC, m.platform, m.model_id
   `).all(since) as ArrivedRow[];
@@ -127,6 +143,7 @@ export function getCatalogueChanges(sinceDays = 30, db: Db = getDb()): Catalogue
         firstSeenAt: r.first_seen_at,
         routed: chains.length > 0,
         chains,
+        acknowledged: r.acknowledged === 1,
         supportsTools: r.supports_tools === 1,
         supportsVision: r.supports_vision === 1,
         contextWindow: r.context_window,
@@ -139,6 +156,7 @@ export function getCatalogueChanges(sinceDays = 30, db: Db = getDb()): Catalogue
       reason: r.reason,
       lostFrom: parseChains(r.chains_json),
       acknowledgedAt: r.acknowledged_at,
+      acknowledged: r.acknowledged_at !== null,
     })),
     untrackedArrivals: untracked.c,
   };
@@ -159,4 +177,54 @@ export function acknowledgeDeparture(platform: string, modelId: string, db: Db =
      WHERE kind = 'chat' AND platform = ? AND model_id = ? AND source = 'upstream_eol'
   `).run(platform, modelId);
   return Number(info.changes) > 0;
+}
+
+/**
+ * Mark a batch of retirements as dealt with, for the panel's one OK button.
+ *
+ * Same column, same predicate as the single-row path, which is the point: this
+ * is the same acknowledgement, written many at a time. It is deliberately NOT
+ * `catalogue_ack`, because relisting deletes the tombstone and that marker
+ * lives on it — a second retirement of the same model is a new incident and
+ * must read as unread again.
+ */
+export function acknowledgeDepartures(
+  models: readonly { platform: string; modelId: string }[],
+  db: Db = getDb(),
+): number {
+  if (models.length === 0) return 0;
+  const update = db.prepare(`
+    UPDATE catalog_model_tombstones SET acknowledged_at = datetime('now')
+     WHERE kind = 'chat' AND platform = ? AND model_id = ? AND source = 'upstream_eol'
+  `);
+  const run = db.transaction(() => {
+    let changed = 0;
+    for (const m of models) changed += Number(update.run(m.platform, m.modelId).changes);
+    return changed;
+  });
+  return run();
+}
+
+/**
+ * Mark a batch of arrivals as read.
+ *
+ * `INSERT OR IGNORE` rather than an upsert: the table has no timestamp, so a
+ * second acknowledgement of the same arrival has nothing to update and must
+ * not overwrite the first. The primary key makes the repeat a no-op, which is
+ * what keeps a double-clicked OK button harmless.
+ */
+export function acknowledgeArrivals(
+  models: readonly { platform: string; modelId: string }[],
+  db: Db = getDb(),
+): number {
+  if (models.length === 0) return 0;
+  const insert = db.prepare(
+    'INSERT OR IGNORE INTO catalogue_ack (platform, model_id) VALUES (?, ?)',
+  );
+  const run = db.transaction(() => {
+    let changed = 0;
+    for (const m of models) changed += Number(insert.run(m.platform, m.modelId).changes);
+    return changed;
+  });
+  return run();
 }

@@ -1616,7 +1616,16 @@
     "logLoadMore": "Load more history",
     "logLoadedAll": "Whole log loaded",
     "latest": "Latest",
-    "lostChains": "{count} left a chain"
+    "lostChains": "{count} left a chain",
+    "changesAllRead": "All read",
+    "changesAllReadHint": "{count} changes in the last month, none unread.",
+    "changesRecent": "The {count} most recent changes",
+    "changesAll": "All {count} changes",
+    "changesShowAll": "Show all {count}",
+    "changesShowRecent": "Show only the recent ones",
+    "changesMarkRead": "Mark {count} read",
+    "changesMarkReadConfirm": "Mark as read",
+    "changesMarkReadHint": "Marks every change on this panel as read. Nothing is deleted — the catalogue log keeps the full record."
   },
   "quota": {
     "title": "Quota",

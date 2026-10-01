@@ -13,6 +13,9 @@ export interface ArrivedModel {
   firstSeenAt: string
   routed: boolean
   chains: string[]
+  /** The operator has read this one. Server-side and permanent, so two
+   *  machines agree; see docs/adr/ARCH-20260930-catalogue-panel-unread-worklist.md. */
+  acknowledged: boolean
   supportsTools: boolean
   supportsVision: boolean
   contextWindow: number | null
@@ -25,6 +28,10 @@ export interface DepartedModel {
   reason: string | null
   lostFrom: { chain: string; priority: number }[]
   acknowledgedAt: string | null
+  /** Same field the arrivals carry, so one rule covers both lists. Set from
+   *  the tombstone's `acknowledged_at`, which a relist deletes along with the
+   *  tombstone — so a second retirement reads as new again. */
+  acknowledged: boolean
 }
 
 export interface CatalogueChanges {
@@ -32,6 +39,56 @@ export interface CatalogueChanges {
   arrived: ArrivedModel[]
   departed: DepartedModel[]
   untrackedArrivals: number
+}
+/** How many recent changes the panel shows when nothing is unread. */
+export const RECENT_HEAD = 10;
+
+/** One row in the panel's recent head, whichever list it came from. */
+export type RecentChange =
+  | { kind: 'arrived'; at: string; model: ArrivedModel }
+  | { kind: 'departed'; at: string; model: DepartedModel };
+
+export interface UnreadSelection {
+  arrived: ArrivedModel[];
+  departed: DepartedModel[];
+  /** False when there is nothing new, which is the panel's collapsed state. */
+  hasUnread: boolean;
+  /** Newest-first across BOTH kinds, for the quiet-panel head. `null` when
+   *  there is unread, because the head is only what you see once everything is
+   *  read. */
+  recent: RecentChange[] | null;
+}
+
+const stamp = (iso: string) => iso.replace(' ', 'T');
+
+/**
+ * What the catalogue panel shows, given everything in the window.
+ *
+ * Pure, and deliberately in this module rather than the component: the server
+ * returns every row unfiltered (the Keys page's churn chips read the same
+ * payload and must keep counting acknowledged ones), so the read/unread
+ * decision happens here, once, where it can be tested.
+ *
+ * With something unread it is a worklist — only unread rows, in both lists.
+ * With nothing unread it is a quiet panel: collapsed, and on expansion the
+ * {@link RECENT_HEAD} newest changes of either kind as one list, because
+ * "nothing new" should still answer "what changed lately" rather than showing
+ * nothing at all.
+ */
+export function unreadSelection(
+  data: Pick<CatalogueChanges, 'arrived' | 'departed'>,
+): UnreadSelection {
+  const arrived = data.arrived.filter(a => !a.acknowledged);
+  const departed = data.departed.filter(d => !d.acknowledged);
+  const hasUnread = arrived.length > 0 || departed.length > 0;
+  if (hasUnread) return { arrived, departed, hasUnread, recent: null };
+  const recent: RecentChange[] = [
+    ...data.arrived.map(m => ({ kind: 'arrived' as const, at: m.firstSeenAt, model: m })),
+    ...data.departed.map(m => ({ kind: 'departed' as const, at: m.retiredAt, model: m })),
+  ]
+    .sort((a, b) => (stamp(b.at) < stamp(a.at) ? -1 : stamp(b.at) > stamp(a.at) ? 1 : 0))
+    .slice(0, RECENT_HEAD);
+  return { arrived, departed, hasUnread, recent };
 }
 
 /** The panel's window. The chip's is narrower and applied client-side. */
