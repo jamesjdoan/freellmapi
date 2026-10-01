@@ -190,7 +190,7 @@ export function CatalogueChangesPanel() {
               onClick={() => setShowAll(v => !v)}
               className="mt-2 text-[11px] text-muted-foreground underline decoration-dotted hover:text-foreground"
             >
-              {showAll ? t('catalogue.changesShowRecent') : t('catalogue.changesShowAll')}
+              {showAll ? t('catalogue.changesShowRecent') : t('catalogue.changesShowAll', { count: totalInView })}
             </button>
           )}
         </div>
