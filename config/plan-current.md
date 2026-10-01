@@ -1,8 +1,7 @@
-Plan: see ADR at docs/adr/ARCH-20260922-clifree-fleet-telemetry.md
+Plan: see ADR at docs/adr/ARCH-20260930-catalogue-panel-unread-worklist.md
 
-Status APPROVED 2026-09-22. O1 (FreeLLM panel) shipped in 8688c534 over SSH delivery;
-Tailscale exposure was rejected, so O1 is no longer gated. O3 (CLI surface) is unblocked.
-
-Uncommitted as of 2026-09-23: migration 20260922_000003_clifree_fleet_usage, guarded
-000002 ALTER, quota sections moved into the Keys page. Passes the image-build gate;
-awaiting approval to commit and deploy via scripts/deploy.sh.
+Status APPROVED 2026-09-30 — Pass 1 complete. Supersedes the clifree-fleet-telemetry
+plan, whose uncommitted work shipped in ac7daf70 on 2026-09-29. The catalogue panel
+becomes an unread worklist: a permanent bulk mark-off in a new `catalogue_ack` table
+(keyed `(kind, platform, model_id)`, no history), a collapsed-when-quiet default, and
+a 10-row recent head on expansion.
