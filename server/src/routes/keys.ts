@@ -7,12 +7,14 @@ import { diagnoseProviders, adviceFor, recordDiagnosisTransitions, listDiagnosis
 import { getProviderRemoval, listProviderRemovals, removeProvider, restoreProvider } from '../services/provider-removals.js';
 import { getDb } from '../db/index.js';
 import { resolveProvider, getAllProviders } from '../providers/index.js';
+import { OpenAICompatProvider, isAnonymousCredential } from '../providers/openai-compat.js';
+import { getSyncState } from '../services/catalog-sync.js';
 import { encrypt, decrypt, maskKey } from '../lib/crypto.js';
 import { parseKeysFromFile, stripJsoncComments, stripTrailingCommas } from '../lib/key-parser.js';
 import { assessProviderUrl } from '../lib/url-guard.js';
 import { verifyCredentials } from '../services/auth.js';
 import { getActiveCooldownsForKeys, clearCooldownsForKey } from '../services/ratelimit.js';
-import { getMonthlyBudgetCaps } from '../services/key-budget.js';
+import { getMonthlyBudgetCaps, getMonthlyUsage, nextMonthResetAt } from '../services/key-budget.js';
 import { resolveCustomEndpointKey, customEndpointKeyIds, siblingEndpointKeyId, endpointHasCredential } from '../services/custom-endpoint.js';
 import { registerCustomModels, registerCustomChatModels } from '../services/custom-model-register.js';
 import { registerCustomMediaModel } from '../services/custom-media-register.js';
@@ -21,6 +23,16 @@ import { probeEmbeddingDimensions, registerCustomEmbeddingModel } from '../servi
 import { listModelHealth, probeModel } from '../services/model-health.js';
 import { endpointScopeForBaseUrl, normalizeBaseUrl } from '../lib/endpoint-scope.js';
 import { recordCustomModelTombstone } from '../services/custom-model-tombstone.js';
+import {
+  builtinDiscoveryEligibility,
+  builtinDiscoveryMode,
+  discoverBuiltinModels,
+  ineligibleMessage,
+  isBuiltinDiscoveryEligible,
+  registerDiscoveredModels,
+  registeredModelIds,
+  triggerBuiltinModelDiscovery,
+} from '../services/builtin-model-discovery.js';
 import type { Db } from '../db/types.js';
 import type { Platform } from '@freellmapi/shared/types.js';
 import { parseModelScope } from '../lib/model-scope.js';
@@ -39,6 +51,7 @@ export const keysRouter = Router();
 const PLATFORMS = [
   'aclide',
   'speka',
+  'llmtr',
   'moondream',
   'google', 'groq', 'cerebras', 'sail', 'electronhub', 'experiential', 'router9', 'septor', 'clod', 'speechify', 'blaze', 'lucidity', 'airforce', 'dreamprompting', 'waterfall', 'logfare', 'bai', 'radeon', 'nvidia', 'mistral',
   'openrouter', 'github', 'cohere', 'cloudflare', 'zhipu', 'ollama',
@@ -259,24 +272,67 @@ export function isExportableKey(row: { platform: string; baseUrl: string | null;
   return v.length > 0 && v !== 'no-key';
 }
 
+// Every model a platform's key can serve: chat rows, plus embedding and
+// generative-media rows. Media-only providers (Speechify is TTS-only) never
+// have a chat row, so counting `models` alone reported "no models" — and fired
+// the no-catalog notice — for them even on a fully synced Premium install
+// (#1327).
 function enabledModelCount(platform: string): number {
   const db = getDb();
-  const row = db.prepare(
-    'SELECT COUNT(*) AS c FROM models WHERE platform = ? AND enabled = 1',
-  ).get(platform) as { c: number };
+  const row = db.prepare(`
+    SELECT (SELECT COUNT(*) FROM models           WHERE platform = ? AND enabled = 1)
+         + (SELECT COUNT(*) FROM embedding_models WHERE platform = ? AND enabled = 1)
+         + (SELECT COUNT(*) FROM media_models     WHERE platform = ? AND enabled = 1) AS c
+  `).get(platform, platform, platform) as { c: number };
   return row.c;
+}
+
+// The public API root the custom-provider workaround needs, or null when the
+// platform does not speak the OpenAI-compatible protocol that path speaks
+// (e.g. Speechify's own TTS API), in which case that advice is a dead end.
+function openAICompatBaseUrl(platform: string): string | null {
+  const provider = resolveProvider(platform as Platform);
+  if (!(provider instanceof OpenAICompatProvider)) return null;
+  return provider.modelsUrl.replace(/\/models\/?$/, '');
 }
 
 // Non-null when the just-added key has no usable models yet, so the client can
 // explain the silence instead of leaving the user staring at an empty list.
+//
+// #1327: the old copy told a Premium user to "add a Premium license key", and
+// told everyone to add the provider as a custom OpenAI-compatible endpoint
+// "with its base URL" without naming it — even for providers with no such
+// endpoint. The notice now matches the install's actual catalog tier, names
+// the base URL, and only offers the custom-provider route where it works.
 function noModelsNotice(platform: string): string | undefined {
   if (enabledModelCount(platform) > 0) return undefined;
+  // #1348: a built-in provider the catalog does not carry fills its model list
+  // from its own /models, so the Premium and custom-provider advice below
+  // would send the operator the wrong way.
+  if (isBuiltinDiscoveryEligible(getDb(), platform)) {
+    return builtinDiscoveryMode() === 'auto'
+      ? `Key saved. The catalog does not list ${platform} models, so they are being fetched from ${platform}'s own model list. ` +
+        `Use Fetch models on the key to review them or add more.`
+      : `Key saved. The catalog does not list ${platform} models. Use Fetch models on the key to pick which ones to use.`;
+  }
+  const baseUrl = openAICompatBaseUrl(platform);
+  const customRoute = baseUrl
+    ? `add ${platform} as a custom OpenAI-compatible provider with base URL ${baseUrl}`
+    : null;
+  const premium = getSyncState().appliedTier === 'live';
+  if (premium) {
+    return (
+      `Key saved, but your Premium catalog does not list any ${platform} models yet. ` +
+      `Try Check for updates on the Premium page to pull the latest catalog` +
+      (customRoute ? `, or ${customRoute}.` : '.')
+    );
+  }
   return (
     `Key saved, but no ${platform} models are in your current catalog yet. ` +
     `Newer providers are published to the premium catalog first and appear ` +
-    `for free-tier installs once they age into the monthly catalog. Add a ` +
-    `Premium license key to use them now, or add ${platform} as a custom ` +
-    `OpenAI-compatible provider with its base URL.`
+    `for free-tier installs once they age into the monthly catalog. ` +
+    `Add a Premium license key to use them now` +
+    (customRoute ? `, or ${customRoute}.` : '.')
   );
 }
 
@@ -381,6 +437,15 @@ keysRouter.get('/', (_req: Request, res: Response) => {
   // so surface the cooldowns that explain the idleness. (#P0-7)
   const cooldownsByKeyId = getActiveCooldownsForKeys(rows.map(row => Number(row.id)));
 
+  // #1348: which built-in platforms may fill their model list from their own
+  // /models, so the dashboard offers Fetch models on those key rows only.
+  const discoverable = new Map<string, boolean>();
+  const canDiscover = (platform: string) => {
+    if (platform === 'custom') return false;
+    if (!discoverable.has(platform)) discoverable.set(platform, isBuiltinDiscoveryEligible(db, platform));
+    return discoverable.get(platform)!;
+  };
+
   const keys = rows.map(row => {
     let maskedKey = '****';
     let realKey = '';
@@ -393,6 +458,10 @@ keysRouter.get('/', (_req: Request, res: Response) => {
     const cooldowns = cooldownsByKeyId.get(Number(row.id)) ?? [];
     const scope = parseModelScope(row.model_scope_json);
     const budgetCaps = getMonthlyBudgetCaps(Number(row.id));
+    // Usage alongside the caps so the dashboard can show "342 of 1,000 this
+    // month" instead of only the cap (OpenRouter's GET /api/v1/key returns
+    // limit_remaining for the same reason).
+    const monthlyUsage = getMonthlyUsage(Number(row.id));
     return {
       id: row.id,
       platform: row.platform,
@@ -401,9 +470,19 @@ keysRouter.get('/', (_req: Request, res: Response) => {
       baseUrl: row.base_url ?? null,
       monthlyRequestCap: budgetCaps.requestCap,
       monthlyTokenCap: budgetCaps.tokenCap,
+      monthlyUsage: {
+        requests: monthlyUsage.requests,
+        tokens: monthlyUsage.tokens,
+        resetsAt: nextMonthResetAt(),
+      },
       status: row.status,
       enabled: row.enabled === 1,
-      keyless: resolveProvider(row.platform)?.keyless === true,
+      // `keyOptional`: the platform works with or without a key (Kilo, OVH,
+      // AI Horde). `keyless`: THIS row is the anonymous sentinel, so there is
+      // no credential to copy, scope or reveal. A real key saved on a
+      // key-optional platform is an ordinary key row (#1331).
+      keyOptional: resolveProvider(row.platform)?.keyless === true,
+      keyless: resolveProvider(row.platform)?.keyless === true && isAnonymousCredential(realKey),
       // Lets the export dialog count exactly what the export will write.
       exportable: isExportableKey({ platform: row.platform, baseUrl: row.base_url ?? null, key: realKey }),
       createdAt: row.created_at,
@@ -419,6 +498,7 @@ keysRouter.get('/', (_req: Request, res: Response) => {
       // its own exit, without handing the proxy credentials back out.
       maskedProxyUrl: maskProxyUrl(decryptProxyUrl(row)),
       models: row.platform === 'custom' ? (modelsByEndpoint.get(endpointOf(Number(row.id))) ?? []) : undefined,
+      modelDiscovery: canDiscover(row.platform),
       cooldowns: cooldowns.map(c => ({
         modelId: c.modelId,
         expiresAtMs: c.expiresAtMs,
@@ -689,28 +769,57 @@ keysRouter.post('/', (req: Request, res: Response) => {
     return;
   }
 
-  // Keyless providers (Kilo anon) store a sentinel so routing sees the platform
-  // as configured; the provider omits the auth header on outgoing calls.
+  // Key-optional providers (Kilo, OVH, AI Horde) store a sentinel when no key
+  // is given so routing sees the platform as configured; the provider then
+  // calls upstream anonymously. A real key is stored encrypted like any other
+  // and sent as the bearer (#1331).
   const keyToStore = isKeyless ? (rawKey || 'no-key') : rawKey;
+  const proxyUrl = parsed.data.proxyUrl?.trim() ?? '';
 
   const db = getDb();
 
-  // A keyless provider needs only one sentinel row — re-enable an existing one
-  // instead of piling up duplicates each time the user clicks "Add".
   if (isKeyless) {
-    const existing = db.prepare('SELECT id FROM api_keys WHERE platform = ? LIMIT 1').get(platform) as { id: number } | undefined;
-    if (existing) {
-      db.prepare("UPDATE api_keys SET enabled = 1, status = 'unknown' WHERE id = ?").run(existing.id);
-      res.status(200).json({
-        id: existing.id,
-        platform,
-        label: label ?? '',
-        maskedKey: maskKey(keyToStore),
-        status: 'unknown',
-        enabled: true,
-        modelsAvailable: enabledModelCount(platform),
-        notice: noModelsNotice(platform),
-      });
+    const rows = db.prepare('SELECT id, encrypted_key, iv, auth_tag FROM api_keys WHERE platform = ? ORDER BY id')
+      .all(platform) as { id: number; encrypted_key: string; iv: string; auth_tag: string }[];
+    const plaintext = (r: typeof rows[number]): string | null => {
+      try { return decrypt(r.encrypted_key, r.iv, r.auth_tag); } catch { return null; }
+    };
+    const sentinel = rows.find(r => isAnonymousCredential(plaintext(r)));
+    const respond = (id: number, maskedKey: string) => res.status(200).json({
+      id,
+      platform,
+      label: label ?? '',
+      maskedKey,
+      status: 'unknown',
+      enabled: true,
+      modelsAvailable: enabledModelCount(platform),
+      notice: noModelsNotice(platform),
+    });
+
+    if (!rawKey) {
+      // Only one sentinel row is needed: re-enable an existing row instead of
+      // piling up duplicates each time the user clicks "Enable".
+      const existing = sentinel ?? rows[0];
+      if (existing) {
+        db.prepare("UPDATE api_keys SET enabled = 1, status = 'unknown' WHERE id = ?").run(existing.id);
+        respond(existing.id, maskKey(plaintext(existing) ?? keyToStore));
+        return;
+      }
+    } else if (sentinel) {
+      // A real key upgrades the anonymous row in place rather than leaving a
+      // second, anonymous row competing with it in the pool.
+      const { encrypted, iv, authTag } = encrypt(rawKey);
+      const updates = ['encrypted_key = ?', 'iv = ?', 'auth_tag = ?', 'enabled = 1', "status = 'unknown'", 'last_checked_at = NULL', 'last_health_error = NULL'];
+      const values: (string | number | null)[] = [encrypted, iv, authTag];
+      if (label !== undefined) { updates.push('label = ?'); values.push(label); }
+      if (parsed.data.proxyUrl !== undefined) {
+        const proxy = encryptProxyUrl(proxyUrl);
+        updates.push('proxy_encrypted = ?', 'proxy_iv = ?', 'proxy_auth_tag = ?');
+        values.push(proxy.encrypted, proxy.iv, proxy.authTag);
+      }
+      db.prepare(`UPDATE api_keys SET ${updates.join(', ')} WHERE id = ?`).run(...values, sentinel.id);
+      clearCooldownsForKey(sentinel.id);
+      respond(sentinel.id, maskKey(rawKey));
       return;
     }
   }
@@ -718,12 +827,15 @@ keysRouter.post('/', (req: Request, res: Response) => {
   const { encrypted, iv, authTag } = encrypt(keyToStore);
   // #590: the proxy URL is encrypted like the key itself — it usually embeds
   // `user:pass@` credentials. Absent/'' stores NULLs = no override.
-  const proxyUrl = parsed.data.proxyUrl?.trim() ?? '';
   const proxy = encryptProxyUrl(proxyUrl);
   const result = db.prepare(`
     INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, status, enabled, proxy_encrypted, proxy_iv, proxy_auth_tag)
     VALUES (?, ?, ?, ?, ?, 'unknown', 1, ?, ?, ?)
   `).run(platform, label ?? '', encrypted, iv, authTag, proxy.encrypted, proxy.iv, proxy.authTag);
+
+  // #1348: fetch the provider's models in the background when the catalog
+  // carries none for it. No-op for every other platform.
+  triggerBuiltinModelDiscovery(db, platform, 'key_added');
 
   res.status(201).json({
     id: result.lastInsertRowid,
@@ -959,6 +1071,16 @@ keysRouter.post('/custom/discover-models', async (req: Request, res: Response) =
     return;
   }
 
+  // #1348: a keyId naming a BUILT-IN key asks that provider's own /models,
+  // through its registered adapter, for platforms the catalog does not carry.
+  if (parsed.data.keyId !== undefined && parsed.data.baseUrl === undefined) {
+    const builtin = builtinKeyRow(parsed.data.keyId);
+    if (builtin) {
+      await discoverForBuiltinKey(builtin, parsed.data.apiKey, res);
+      return;
+    }
+  }
+
   let endpoint: CustomEndpointRef;
   try {
     endpoint = resolveEndpointRef(parsed.data);
@@ -1008,6 +1130,100 @@ keysRouter.post('/custom/discover-models', async (req: Request, res: Response) =
     }
     res.status(502).json({ error: { message: `Model discovery failed: ${err?.message ?? 'unknown error'}` } });
   }
+});
+
+// ── Built-in provider discovery (#1348) ─────────────────────────────────────
+// The same Fetch models flow as a custom endpoint, for built-in platforms the
+// catalog carries no models for (see services/builtin-model-discovery.ts for
+// the eligibility rules). The catalog stays authoritative: an ineligible
+// platform is refused, and registered rows are marked source='discovered' so
+// a later catalog adopts or retires them.
+
+interface BuiltinKeyRow {
+  id: number;
+  platform: string;
+  encrypted_key: string;
+  iv: string;
+  auth_tag: string;
+  proxy_encrypted?: string | null;
+  proxy_iv?: string | null;
+  proxy_auth_tag?: string | null;
+}
+
+function builtinKeyRow(keyId: number): BuiltinKeyRow | undefined {
+  const row = getDb().prepare(`
+    SELECT id, platform, encrypted_key, iv, auth_tag, proxy_encrypted, proxy_iv, proxy_auth_tag
+      FROM api_keys WHERE id = ?
+  `).get(keyId) as BuiltinKeyRow | undefined;
+  return row && row.platform !== 'custom' ? row : undefined;
+}
+
+async function discoverForBuiltinKey(key: BuiltinKeyRow, apiKey: string | undefined, res: Response): Promise<void> {
+  const db = getDb();
+  const eligibility = builtinDiscoveryEligibility(db, key.platform);
+  if (!eligibility.eligible || !eligibility.provider) {
+    res.status(400).json({ error: { message: ineligibleMessage(key.platform, eligibility.reason) } });
+    return;
+  }
+  try {
+    const discovered = await discoverBuiltinModels(eligibility.provider, key, apiKey);
+    const registeredIds = registeredModelIds(db, key.platform);
+    const models = discovered.map(m => ({ ...m, registered: registeredIds.has(m.id) }));
+    res.json({
+      platform: key.platform,
+      baseUrl: eligibility.provider.modelsUrl.replace(/\/models\/?$/, ''),
+      keyId: key.id,
+      models,
+      total: models.length,
+      registeredCount: models.filter(m => m.registered).length,
+    });
+  } catch (err: any) {
+    if (err instanceof ModelDiscoveryError) {
+      // upstream_error, never authentication_error: see the custom route.
+      res.status(err.status).json({ error: { message: err.message, type: 'upstream_error' } });
+      return;
+    }
+    res.status(502).json({ error: { message: `Model discovery failed: ${err?.message ?? 'unknown error'}` } });
+  }
+}
+
+const registerDiscoveredSchema = z.object({
+  keyId: z.number().int().positive(),
+  models: z.array(z.string().trim().min(1).max(256)).min(1).max(500),
+});
+
+// Register the models the operator ticked in Fetch models for a built-in key.
+// Chat models only: the built-in adapters route media and embeddings through
+// the catalog's own tables, so a non-chat id is reported back, not stored.
+keysRouter.post('/discovered-models', (req: Request, res: Response) => {
+  const parsed = registerDiscoveredSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
+    return;
+  }
+  const key = builtinKeyRow(parsed.data.keyId);
+  if (!key) {
+    res.status(400).json({ error: { message: 'keyId does not name a built-in provider key' } });
+    return;
+  }
+  const db = getDb();
+  const eligibility = builtinDiscoveryEligibility(db, key.platform);
+  if (!eligibility.eligible) {
+    res.status(400).json({ error: { message: ineligibleMessage(key.platform, eligibility.reason) } });
+    return;
+  }
+
+  const ids = [...new Set(parsed.data.models)];
+  const nonChat = ids.filter(id => classifyModelId(id) !== undefined);
+  const chat = ids.filter(id => classifyModelId(id) === undefined);
+  const result = registerDiscoveredModels(db, key.platform, chat.map(modelId => ({ modelId })), { explicit: true });
+  res.json({
+    platform: key.platform,
+    created: result.created.length,
+    registered: result.created,
+    existing: result.existing,
+    skippedNonChat: nonChat,
+  });
 });
 
 // POST /custom/probe — fire one minimal real chat request at the endpoint so an
@@ -1767,10 +1983,8 @@ keysRouter.patch('/:id', (req: Request, res: Response) => {
       res.status(404).json({ error: { message: 'Key not found' } });
       return;
     }
-    if (resolveProvider(stored.platform as Platform)?.keyless === true) {
-      res.status(400).json({ error: { message: 'Keyless providers cannot store a credential' } });
-      return;
-    }
+    // Key-optional platforms (Kilo, OVH, AI Horde) accept a real key here like
+    // any other provider: it replaces the anonymous sentinel (#1331).
     if (stored.platform === 'cloudflare') {
       const separator = key.indexOf(':');
       if (separator < 1 || !key.slice(0, separator).trim() || !key.slice(separator + 1).trim()) {

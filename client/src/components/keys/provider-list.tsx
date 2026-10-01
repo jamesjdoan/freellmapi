@@ -24,6 +24,7 @@ import type { FallbackEntry } from '@/lib/routing'
 import { enabledModelCount, providerKeyAccess, scopeAfterToggle, scopeCandidates } from '@/lib/model-scope-selection'
 import { useI18n } from '@/i18n'
 import { toast } from '@/lib/toast'
+import { keyMatchesQuery } from '@/lib/key-search'
 import {
   PLATFORMS,
   CUSTOM_GROUP,
@@ -200,7 +201,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                     <Button
                       variant="ghost"
                       size="icon-xs"
-                      onClick={() => setDiscoverKeyId(k.id)}
+                      onClick={() => setDiscoverTarget({ keyId: k.id, builtin: false })}
                       aria-label={t('keys.discoverModels')}
                     >
                       <ListPlus className="size-3" />
@@ -294,7 +295,9 @@ export function ProviderList({ onAddKey, initialSearch }: {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   // Custom endpoint whose model list is being fetched (#488) — relays change
   // what they serve constantly, so this is a repeat action, not a one-off.
-  const [discoverKeyId, setDiscoverKeyId] = useState<number | null>(null)
+  // `builtin`: a built-in provider key the catalog has no models for (#1348),
+  // whose picks register as discovered rows instead of custom-endpoint models.
+  const [discoverTarget, setDiscoverTarget] = useState<{ keyId: number; builtin: boolean } | null>(null)
   // Rename from an account row's menu opens the edit dialog rather than the
   // inline field: the menu hands focus back to its trigger as it closes, which
   // would blur (and so save and close) an inline input the instant it opened.
@@ -603,15 +606,15 @@ export function ProviderList({ onAddKey, initialSearch }: {
   }
 
   // Search narrows either whole groups (label match) or the keys within them
-  // (label / masked-key match); the status filter then trims the result set.
+  // (label / masked-key / endpoint-URL match); the status filter then trims
+  // the result set. The baseUrl term is #1056's lesson applied here: a custom
+  // row renders "api.unorouter.com" on screen, so searching that host must
+  // find the row the same way the fallback table's search does.
   const visibleGroups = grouped
     .map(group => {
       if (!q) return group
       if (group.label.toLowerCase().includes(q)) return group
-      const matchingKeys = group.keys.filter(k =>
-        (k.label ?? '').toLowerCase().includes(q) ||
-        (k.maskedKey ?? '').toLowerCase().includes(q),
-      )
+      const matchingKeys = group.keys.filter(k => keyMatchesQuery(k, q))
       return { ...group, keys: matchingKeys }
     })
     .filter(group => group.keys.length > 0 && matchStatus(group))
@@ -1074,6 +1077,18 @@ export function ProviderList({ onAddKey, initialSearch }: {
                                   </Button>
                                 </Tooltip>
                               )}
+                              {k.platform !== 'custom' && k.modelDiscovery && (
+                                <Tooltip text={t('keys.discoverModels')}>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon-xs"
+                                    onClick={() => setDiscoverTarget({ keyId: k.id, builtin: true })}
+                                    aria-label={t('keys.discoverModels')}
+                                  >
+                                    <ListPlus className="size-3" />
+                                  </Button>
+                                </Tooltip>
+                              )}
                               {k.platform === 'custom' && k.baseUrl && (
                                 <>
                                   <Tooltip text={t('keys.addKey')}>
@@ -1090,7 +1105,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                                     <Button
                                       variant="ghost"
                                       size="icon-xs"
-                                      onClick={() => setDiscoverKeyId(k.id)}
+                                      onClick={() => setDiscoverTarget({ keyId: k.id, builtin: false })}
                                       aria-label={t('keys.discoverModels')}
                                     >
                                       <ListPlus className="size-3" />
@@ -1275,11 +1290,12 @@ export function ProviderList({ onAddKey, initialSearch }: {
         ) : null
       })()}
 
-      {discoverKeyId !== null && (
+      {discoverTarget !== null && (
         <DiscoverModelsDialog
           open
-          onOpenChange={(open) => { if (!open) setDiscoverKeyId(null) }}
-          endpoint={{ keyId: discoverKeyId }}
+          onOpenChange={(open) => { if (!open) setDiscoverTarget(null) }}
+          endpoint={{ keyId: discoverTarget.keyId }}
+          builtin={discoverTarget.builtin}
         />
       )}
 

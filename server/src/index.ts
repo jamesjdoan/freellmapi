@@ -11,6 +11,7 @@ import { startCooldownProbe } from './services/cooldown-probe.js';
 import { startBurnRecoveryPoller } from './services/quota-burn.js';
 import { startProviderUsagePolling } from './services/provider-usage-api.js';
 import { startCustomModelSync } from './services/custom-model-sync.js';
+import { startBuiltinModelDiscovery } from './services/builtin-model-discovery.js';
 import { installProcessSafetyNet } from './lib/process-safety-net.js';
 import { NodeScheduler } from './lib/scheduler.js';
 import { loadConfig } from './lib/config.js';
@@ -97,6 +98,7 @@ async function main() {
     startBackupScheduler(scheduler);
     startCustomModelSync(getDb(), scheduler);
     startUnlimitedPriceCheck();
+    startBuiltinModelDiscovery(getDb(), scheduler);
 
     // Post-sleep recovery: while the host was suspended (laptop lid, VM
     // pause) timers and keep-alive sockets froze, so the first requests after
