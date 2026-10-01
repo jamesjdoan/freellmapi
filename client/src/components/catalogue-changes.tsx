@@ -76,39 +76,44 @@ export function CatalogueChangesPanel() {
   const filtering = onlyActivated && ready
   const arrivedAll = data?.arrived ?? []
   const departedAll = data?.departed ?? []
-  // Read/unread is decided in the lib, on the WHOLE payload, then the provider
-  // filter is applied to the worklist. Doing it the other way round would let a
-  // hidden row decide whether the panel is quiet.
-  const selection = unreadSelection({ arrived: arrivedAll, departed: departedAll })
-  const arrivedSplit = partitionByActivated(selection.arrived, activated)
-  const departedSplit = partitionByActivated(selection.departed, activated)
-  const arrived = filtering ? arrivedSplit.shown : selection.arrived
-  const departed = filtering ? departedSplit.shown : selection.departed
-  const hidden = arrivedSplit.hidden.length + departedSplit.hidden.length
-  // "Show all" honours the same provider filter as everything else in the
-  // panel, so widening the list cannot leak rows the panel is otherwise hiding
-  // and make the count disagree with what is on screen.
-  const allRecent = (showAll ? [
-    ...(filtering ? arrivedSplit.shown : arrivedAll).map(m => ({ kind: 'arrived' as const, at: m.firstSeenAt, model: m })),
-    ...(filtering ? departedSplit.shown : departedAll).map(m => ({ kind: 'departed' as const, at: m.retiredAt, model: m })),
-  ] : selection.recent ?? [])
-    .sort((a, b) => (stampOf(b.at) < stampOf(a.at) ? -1 : stampOf(b.at) > stampOf(a.at) ? 1 : 0))
+  // Order matters: the provider filter FIRST, then the read/unread decision.
+  // The other way round, a hidden unread row would keep the panel claiming to
+  // be a worklist while showing nothing — "0 arrived" beside an urgent-looking
+  // summary, and no recent list either.
+  const arrivedPool = filtering
+    ? partitionByActivated(arrivedAll, activated).shown
+    : arrivedAll
+  const departedPool = filtering
+    ? partitionByActivated(departedAll, activated).shown
+    : departedAll
+  const hidden = filtering
+    ? partitionByActivated(arrivedAll, activated).hidden.length + partitionByActivated(departedAll, activated).hidden.length
+    : 0
+  const selection = unreadSelection({ arrived: arrivedPool, departed: departedPool })
+  const arrived = selection.arrived
+  const departed = selection.departed
 
   // Nothing at all in the window: the catalogue has not moved, and an empty
   // shell would read as a broken panel.
   if (arrivedAll.length === 0 && departedAll.length === 0) return null
 
-  // The header counts what a person can act on, which is the worklist, not the
-  // window. Once everything is read it says so, and the count that remains
-  // meaningful is how much history is behind it.
   const routedArrivals = arrived.filter(m => m.routed).length
   const quiet = !selection.hasUnread
-  // The header states the real number, never the cap: three changes in the
-  // window must not read as ten.
-  const totalInView = (filtering ? arrivedSplit.shown.length : arrivedAll.length)
-    + (filtering ? departedSplit.shown.length : departedAll.length)
+  // The header states the real number, never the cap: three changes in view
+  // must not read as ten.
+  const totalInView = arrivedPool.length + departedPool.length
   const head = quiet ? (showAll ? totalInView : Math.min(RECENT_HEAD, totalInView)) : arrived.length + departed.length
   const canShowAll = quiet && !showAll && totalInView > RECENT_HEAD
+
+  // "Show all" honours the same provider filter as everything else here, so
+  // widening the list cannot leak rows the panel is otherwise hiding and make
+  // the count disagree with what is on screen.
+  const rowsShown = showAll
+    ? [
+      ...arrivedPool.map(m => ({ kind: 'arrived' as const, at: m.firstSeenAt, model: m })),
+      ...departedPool.map(m => ({ kind: 'departed' as const, at: m.retiredAt, model: m })),
+    ].sort((a, b) => (stampOf(b.at) < stampOf(a.at) ? -1 : stampOf(b.at) > stampOf(a.at) ? 1 : 0))
+    : selection.recent ?? []
 
   const markAllRead = () => acknowledgeAll.mutate({
     arrived: arrived.map(m => ({ platform: m.platform, modelId: m.modelId })),
@@ -168,7 +173,7 @@ export function CatalogueChangesPanel() {
             {showAll ? t('catalogue.changesAll', { count: head }) : t('catalogue.changesRecent', { count: head })}
           </h3>
           <ul className="mt-1.5 divide-y divide-border">
-            {(showAll ? allRecent : selection.recent ?? []).map(change => (
+            {rowsShown.map(change => (
               <li key={`${change.kind}:${change.model.platform}:${change.model.modelId}`} className="flex flex-wrap items-center gap-2 py-1 text-xs">
                 {change.kind === 'arrived'
                   ? <PackagePlus className="size-3.5 flex-shrink-0 text-muted-foreground" />
