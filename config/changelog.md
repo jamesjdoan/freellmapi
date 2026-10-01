@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-10-01 — Upstream v0.13.0–v0.13.3 merged into the extension
+
+- Four upstream releases taken in one `--no-ff` merge of the `v0.13.3` tag (24 commits, 149
+  files). No migrations in any of the four. Upstream's own changes: output-limit learning from
+  every provider's wording (#1367), Keys search matching a custom endpoint's URL (#1368),
+  key-optional providers (Kilo, OVH, AI Horde) accepting a real key (#1331), built-in provider
+  model discovery (#1348), per-key monthly request/token caps (#1158), Gemini daily quotas
+  benched to Pacific midnight (#1343), a Requesty daily cap.
+- 65 conflicted files: 60 locales resolved by a per-key three-way merge (neither side changed the
+  same key; `keys.noKeyNeededPlaceholder` and `keys.keylessHint` dropped because upstream deleted
+  them and nothing references them), and 5 source files. `keys.ts` takes upstream's removal of the
+  keyless-credential rejection, which #1331 replaced. `provider-list.tsx` adopts upstream's
+  `discoverTarget` rename, including the extension's own account-row caller.
+- Two semantic collisions a clean text merge did not show: `anthropic.ts` had an extension caller
+  of `estimateTokens`, which upstream deleted — it now reads `ctx.estimatedInputTokens`, the same
+  estimate every other surface uses. Two upstream tests assumed upstream behaviour the extension
+  changes on purpose and were updated to their intent: `keyless-bearer-1331.test.ts` captures the
+  credentialed health request rather than the extension's unauthenticated control probe after it,
+  and `fallback-loop.test.ts` expects a Gemini per-minute 429 to honour its stated 17s (e18d2c92)
+  rather than the 90s default.
+- Known dead code, left for a follow-up: the extension's `isUnsatisfiableRequestSizeError` branch
+  in `cooldownDecisionForError` is now unreachable in production, because upstream's earlier
+  `isContextTooLargeError` return in `recordRetryableFailure` matches every message it does. The
+  outcome is identical (no bench).
+- `AGENTS.md` and `docs/en/deployment/03-imperium-extension-branch.md` now say releases are taken
+  by merge, not rebase, and record the pre-flight trap: `git merge-tree <old base> HEAD` is
+  trivially clean; measure against the new tag.
+
 ## 2026-09-28 — Keys: remove a provider, with a reason and a log
 
 - Keys → a provider's ⋯ menu → **Remove provider**. Requires a reason, takes an optional note and
