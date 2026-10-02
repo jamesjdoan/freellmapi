@@ -105,6 +105,67 @@ describe('GET /api/analytics/by-client', () => {
     expect(response.body.map((r: any) => r.clientAgent)).toContain('curl/8.7.1');
   });
 
+  // Before the MacBook ever tagged itself, only one machine was in use. The
+  // operator's ruling (2026-10-02): every harness request before the MacBook's
+  // first `omp-mbp/…` row is Studio traffic. It is a statement about history,
+  // not something the data proves — which is why it lives in the query and the
+  // stored rows are left untouched.
+  it('attributes pre-MacBook harness rows to the Studio, whatever the User-Agent', async () => {
+    getDb().prepare('DELETE FROM requests').run();
+    const insert = getDb().prepare(`
+      INSERT INTO requests
+        (platform, model_id, status, input_tokens, output_tokens, latency_ms, created_at, client_user_agent)
+      VALUES ('groq', 'coder', 'success', 1, 1, 50, ?, ?)
+    `);
+    // Before the boundary, and carrying three different agents that all predate
+    // MacBook tagging: the bare versions, a stray, and one that never matched any
+    // rule. All three were the Studio.
+    insert.run('2026-08-27 01:03:46', 'omp/18.1.10');
+    insert.run('2026-09-04 14:45:10', 'omp-auth-postfix-direct-tools36');
+    insert.run('2026-09-15 00:22:19', 'omp/18.1.22');
+
+    const response = await get(app, '/api/analytics/by-client?range=90d', token);
+    const studio = response.body.find((r: any) => r.clientAgent === 'Mac Studio');
+    expect(studio).toBeDefined();
+    expect(studio.requests).toBe(3);
+    // The fold is auditable: the raw agents come back with it.
+    expect(studio.agents).toEqual(expect.arrayContaining([
+      'omp/18.1.10', 'omp-auth-postfix-direct-tools36', 'omp/18.1.22',
+    ]));
+  });
+
+  it('leaves a pre-MacBook non-harness caller as itself', async () => {
+    // The boundary is scoped to `omp%` on purpose: `curl`, `node`, `Bun` and the
+    // rest were never this harness, and folding them into a device would claim
+    // one machine made calls it could not have made.
+    getDb().prepare('DELETE FROM requests').run();
+    getDb().prepare(`
+      INSERT INTO requests
+        (platform, model_id, status, input_tokens, output_tokens, latency_ms, created_at, client_user_agent)
+      VALUES ('groq', 'coder', 'success', 1, 1, 50, '2026-08-27 01:03:46', 'curl/8.7.1')
+    `).run();
+
+    const response = await get(app, '/api/analytics/by-client?range=90d', token);
+    expect(response.body.map((r: any) => r.clientAgent)).toContain('curl/8.7.1');
+    expect(response.body.find((r: any) => r.clientAgent === 'Mac Studio')).toBeUndefined();
+  });
+
+  it('does not reach behind the boundary to reclassify a MacBook row', async () => {
+    // The boundary arm sits ABOVE the `omp-mbp%` test on purpose. A MacBook row
+    // older than its own first tag would otherwise be filed as the Studio.
+    // There are none today, so this costs nothing — and if one ever appears it
+    // is a data problem, not a reason to attribute the MBP's traffic elsewhere.
+    getDb().prepare('DELETE FROM requests').run();
+    getDb().prepare(`
+      INSERT INTO requests
+        (platform, model_id, status, input_tokens, output_tokens, latency_ms, created_at, client_user_agent)
+      VALUES ('groq', 'coder', 'success', 1, 1, 50, '2026-09-01 12:00:00', 'omp-mbp/18.2.6')
+    `).run();
+
+    const response = await get(app, '/api/analytics/by-client?range=90d', token);
+    expect(response.body.map((r: any) => r.clientAgent)).toContain('MacBook Pro');
+  });
+
   // Savings are per-caller so an operator can see what each machine's traffic
   // would have cost. Token counts are deliberately in the millions: at a few
   // tokens every expectation rounds to $0.00 and would hold even if failed

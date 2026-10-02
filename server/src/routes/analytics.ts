@@ -108,10 +108,32 @@ function readLifetimeSettings() {
 // mapping and what it assumes about untagged history are documented at
 // /by-client below; this is the same expression, parameterised by table alias
 // so every endpoint can filter on it.
+// The MacBook Pro started tagging itself `omp-mbp/…` at the boundary below.
+// Every request before it came from the Mac Studio, whatever user-agent it
+// carried: the bare `omp/` versions and the untagged strays alike.
+//
+// Operator ruling (2026-10-02): the MacBook had not been in use, so everything
+// before its first tagged request is Studio traffic. This is a statement about
+// history, not a claim the data can prove — hence a boundary clause rather than
+// a rewrite of `client_user_agent`, so it stays inspectable and reversible by
+// deleting one WHEN.
+//
+// Scoped to `omp%` deliberately. Only our own harness can have been the Studio
+// on this install; `curl`, `node`, `Bun` and the rest are not this harness and
+// keep their own rows (analytics-client.test.ts pins that).
+//
+// The arm sits BELOW the `omp-mbp%` test on purpose. Above it, a MacBook row
+// that predates its own first tag would be filed as the Studio — which is the
+// one way this rule could misattribute the MBP's traffic. There are no such
+// rows, so putting it below costs nothing and removes the trap entirely.
+export const MACBOOK_PRO_FIRST_TAG = '2026-09-19 16:30:46';
+
 export function deviceSql(alias = 'r'): string {
   return `
   CASE
     WHEN ${alias}.client_user_agent LIKE 'omp-mbp%'    THEN 'MacBook Pro'
+    WHEN ${alias}.created_at < '${MACBOOK_PRO_FIRST_TAG}'
+     AND ${alias}.client_user_agent LIKE 'omp%' THEN 'Mac Studio'
     WHEN ${alias}.client_user_agent LIKE 'omp-studio%' THEN 'Mac Studio'
     WHEN ${alias}.client_user_agent LIKE 'omp/%'       THEN 'Mac Studio'
     ELSE COALESCE(${alias}.client_user_agent, 'unknown')
