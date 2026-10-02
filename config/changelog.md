@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-01 — Session wrap
+
+- `docs/GOTCHAS.md`: new 2026-10-01 section (merge-tree pre-flight trap, clean merge that does
+  not compile, upstream tests encoding extension-changed behaviour, the Vite `PORT` proxy loop,
+  two-stage `ConfirmButton`), and a dated addition to the stale-bundle entry.
+- `config/handoff.md`: session block for 2026-09-29 → 2026-10-01. Every code change of the
+  session is logged in the entries below; this list is from the commits, so it is complete.
+
 ## 2026-10-01 — Catalogue changes is a worklist you can empty
 
 - Models → Catalogue changes is now an unread worklist. One **Mark N read** button clears

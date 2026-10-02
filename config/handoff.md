@@ -1,5 +1,53 @@
 # Session Handoff
 
+## Session 2026-10-01 — JD-STUDIO (Mac Studio M2 Max)
+
+Covers 2026-09-29 → 2026-10-01. Branch `docs/freellm-assert-start-on-redeploy`, 10 commits
+`ac7daf70..79a5805b`, all deployed. `ac7daf70` is on `fork`; everything after it is local only.
+Container `Up (healthy)` on `127.0.0.1:3001`, image `jamesjdoan/freellmapi:main-20261001-144945`.
+
+**What was done:**
+
+- **Compare: a merged row adds to a chain without the 409** (`ac7daf70`). The add sends only the
+  reachable copies (enabled, key scope `in`/`unscoped`) and toasts when there are none; removal
+  still sends every copy. Verified on the live build against real groups (`[139]` sent, not
+  `[75,139,874]`). Also `ModelCombobox` pins the selected option when a search filters it out.
+  Found on the way: the deployed bundle did NOT contain this fix although the image post-dated the
+  edit — see the dated note on the stale-bundle gotcha.
+- **Upstream v0.13.0–v0.13.3 merged** (`c00ff8e0`): 4 releases, 24 commits, 149 files, no
+  migrations. 65 conflicted files — 60 locales by a per-key three-way merge, 5 source files.
+  Fixed after the merge: an extension caller of the deleted `estimateTokens` in `anthropic.ts`,
+  and two upstream tests that encoded behaviour the extension changes on purpose.
+  `settings.imperium_extensions` unchanged (33 stored entries, all on); the Extensions panel
+  lists 36 switches, all on; every extension route answered 200 and a real
+  `/v1/chat/completions` returned.
+- **Docs** (`49263d3a`): `AGENTS.md` and the deploy doc now say releases are taken by
+  `--no-ff` merge of the tag, not rebase, and record the `git merge-tree <old base>` trap.
+- **Catalogue panel is an unread worklist** (`75398438`, fixes `bf1b6ba1`, `f0afce36`). Pass 1
+  ADR `docs/adr/ARCH-20260930-catalogue-panel-unread-worklist.md`, amended after an adversarial
+  review found two blockers (shared payload with the Keys chips; identity-only departure marks
+  hiding re-retirements). Migration 74 `20261001_000001_catalogue_ack`, `POST
+  /api/models/changes/acknowledge-bulk`, `unreadSelection()` in the client. Verified live: 53
+  marked read, survives a reload, quiet panel shows 10 then "Show all 54", Keys chip unchanged,
+  862 models and 886 events untouched.
+- Answered "has our code broken catalogue sync?": no — 372 arrivals in the window, newest
+  2026-09-29. The panel looked dead because 322 of them sit on providers with no key.
+- Tests at wrap: server 4216 passed / 5 skipped, client 536, `check:i18n` 60 locales × 1783 keys.
+
+**What's next:**
+
+1. Push to the fork if wanted: `git push fork docs/freellm-assert-start-on-redeploy` (no force).
+2. Dead code, logged in the changelog: `isUnsatisfiableRequestSizeError` in
+   `cooldownDecisionForError` is unreachable since v0.13.3's earlier `isContextTooLargeError`
+   return. Same outcome (no bench); remove when next in that file.
+3. `deploy.sh` does not pass `FREELLMAPI_COMMIT_SHA`, so the dashboard's commit field is blank.
+4. Housekeeping: `stash@{0}` (`user WIP before v0.12.0 ff`) duplicates the combobox change that
+   is now committed — safe to drop once you've confirmed.
+
+**In progress:** —
+
+---
+
 ## Session 2026-09-24 — JD-STUDIO (Mac Studio M2 Max)
 
 **Branch:** `docs/freellm-assert-start-on-redeploy` — nothing committed. Changes are in the
