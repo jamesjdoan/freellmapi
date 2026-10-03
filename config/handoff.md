@@ -1,9 +1,54 @@
 # Session Handoff
 
+## Session 2026-10-04 — JD-STUDIO (Mac Studio M2 Max)
+
+Covers 2026-10-01 → 2026-10-04. Everything from the 2026-10-01 block below is committed
+and pushed (`38e4972c`), not local-only as that block says. No new work since.
+
+**What was done:**
+
+- **Analytics: pre-MacBook harness traffic is the Studio's** (`48479069`, deployed as
+  `main-20261002-230646`). 6,023 rows were filed under raw user-agents and read as
+  separate "devices"; a `created_at < '2026-09-19 16:30:46'` boundary in `deviceSql()`
+  folds them into Mac Studio (now 60,769 across 15 agents). Scoped to `omp%` so `curl`,
+  `node`, `Bun` keep their own rows, per the operator's choice. The clause sits BELOW the
+  `omp-mbp%` test deliberately — above it, a pre-boundary MacBook row would be misfiled as
+  the Studio; a test pins that. 343 files / 4,219 tests pass.
+- **MacBook fleet reporting restored.** `clifree-report.sh` on the MBP had failed 212
+  times, hourly, on `FreeLLM container unreachable on …mac-studio-2.tailf2c2be.ts.net`.
+  Cause was ONE wrong Tailscale hostname: this Studio is `mac-studio.tailf2c2be.ts.net`
+  (its hostname is "Mac Studio (2)", which is where the stray `-2` came from). Fixed by
+  exporting `CLIFREE_REPORT_HOST`/`CLIFREE_BENCH_HOST` and reinstalling the timer — the
+  plist captures those at install time (`clifree-report-timer.sh:83`), which is why the
+  first install kept the old host. Now 25 routes + 3 usage rows from
+  `Jamess-MacBook-Pro`, and it reports hourly.
+- **`code-sync.sh` pushed to the wrong remote.** It hardcoded `origin`, which for
+  freellmapi is the UPSTREAM project (`tashfeenahmed/freellmapi`) while the work lives
+  on `fork`. 33 commits sat unpushed and the tool printed `PUSH-FAIL` with no reason.
+  Diagnosed in custodia; the MBP had already fixed it in `bd570ac` (`repo_remote()`, which
+  also covers the fetch path), so the local `6ff608b` was redundant and was dropped. Pulled
+  instead. Verified: freellmapi now reads `1 in sync` where it reported `1 ahead` forever.
+- **Session wrap pushed** (`38e4972c`): handoff, changelog, `docs/GOTCHAS.md` and the
+  Compressa ledger. The ledger was included at the operator's instruction.
+
+**What's next:**
+
+1. Nothing outstanding in code. The one operational habit worth keeping: if
+   `clifree-report-timer.sh status` shows `last exit code = 1`, read the last log line —
+   it names the unreachable host, and the fix is the hostname, not the timer or network.
+2. Optional cleanup, logged in the 2026-10-01 changelog: `isUnsatisfiableRequestSizeError`
+   in `cooldownDecisionForError` is unreachable since upstream v0.13.3's earlier
+   `isContextTooLargeError` return. Same outcome (no bench); remove when next in that file.
+
+**In progress:** —
+
+---
+
 ## Session 2026-10-01 — JD-STUDIO (Mac Studio M2 Max)
 
 Covers 2026-09-29 → 2026-10-01. Branch `docs/freellm-assert-start-on-redeploy`, 10 commits
-`ac7daf70..79a5805b`, all deployed. `ac7daf70` is on `fork`; everything after it is local only.
+`ac7daf70..79a5805b`, all deployed. ~~`ac7daf70` is on `fork`; everything after it is local
+only.~~ **Superseded 2026-10-04:** everything is pushed, through `38e4972c`.
 Container `Up (healthy)` on `127.0.0.1:3001`, image `jamesjdoan/freellmapi:main-20261001-144945`.
 
 **What was done:**

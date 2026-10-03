@@ -2510,3 +2510,8 @@
 {"event": "read_skip", "extension": ".ts", "est_tokens": 659, "reason": "ext", "source": "pi", "model": "freellmapi/space-bunny", "ts": 1790928393.0110002}
 {"event": "read_skip", "extension": ".ts", "est_tokens": 1457, "reason": "ext", "source": "pi", "model": "freellmapi/space-bunny", "ts": 1790928872.5700102}
 {"event": "read_skip", "extension": ".ts", "est_tokens": 671, "reason": "ext", "source": "pi", "model": "freellmapi/space-bunny", "ts": 1790945343.016625}
+{"event": "read_skip", "extension": ".sh", "est_tokens": 688, "reason": "ext", "source": "pi", "model": "freellmapi/space-bunny", "ts": 1790955132.6319969}
+{"event": "compress", "content_type": "read:md", "strategy": "string:headtail", "original_tokens": 1685, "digest_tokens": 319, "dropped": true, "preview_arm": "v1", "source": "pi", "model": "freellmapi/space-bunny", "stash_hashes": ["3ea5ad949848"], "ts": 1790955289.1068952}
+{"event": "read_skip", "extension": ".md", "est_tokens": 173, "reason": "small", "source": "pi", "model": "freellmapi/space-bunny", "ts": 1791045185.047277}
+{"event": "read_skip", "extension": ".md", "est_tokens": 1117, "reason": "small", "source": "pi", "model": "freellmapi/space-bunny", "ts": 1791045370.4440472}
+{"event": "read_skip", "extension": ".md", "est_tokens": 115, "reason": "small", "source": "pi", "model": "freellmapi/space-bunny", "ts": 1791045616.144468}

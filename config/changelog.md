@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-04 — Session wrap
+
+- `docs/GOTCHAS.md`: new 2026-10-04 section — the MBP's 212 failed hourly reports and their
+  one wrong Tailscale hostname, `code-sync.sh` pushing at the upstream project, a Groq
+  OTPM 429 that is the size fix working, and the `reset --hard` that would have destroyed
+  an unpushed handoff.
+- `config/handoff.md`: session block for 2026-10-01 → 2026-10-04, and the stale "everything
+  after it is local only" line in the 2026-10-01 block struck and marked superseded. No
+  source file changed this wrap; the one code commit (`48479069`, the analytics boundary)
+  is recorded in the handoff block above.
+
 ## 2026-10-01 — Session wrap
 
 - `docs/GOTCHAS.md`: new 2026-10-01 section (merge-tree pre-flight trap, clean merge that does
