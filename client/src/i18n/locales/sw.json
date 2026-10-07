@@ -868,7 +868,8 @@
     "monthlyTokenCapLabel": "Kikomo cha kila mwezi cha tokeni",
     "capUnlimitedPlaceholder": "Bila kikomo",
     "capEditHint": "Vikomo huwekwa upya tarehe 1 saa 00:00 UTC. Acha wazi bila kikomo.",
-    "monthlyUsageLine": "Maombi {requests}, tokeni {tokens} mwezi huu"
+    "monthlyUsageLine": "Maombi {requests}, tokeni {tokens} mwezi huu",
+    "checklistRemoveTip": "Remove {provider} from this list"
   },
   "backups": {
     "title": "Backups",

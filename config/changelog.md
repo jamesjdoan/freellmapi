@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-07 — Keys: remove unwanted providers from the add checklist
+
+- The "N of M providers configured" chips (the add-buttons for providers with no key) now each
+  carry an **×**. It opens the existing Remove provider dialog, which requires a reason; the
+  "also delete keys" box is hidden because there are none. The removal lands in the same
+  `provider_removal` log, and **Restore** there brings the chip back.
+- `GET /api/keys/providers` drops actively removed platforms from both the list and the summary
+  totals, and the Add key provider picker hides them too. Before this, removal only reached
+  configured providers, so a provider never used could not be vetted out of the add surfaces.
+
 ## 2026-10-04 — Analytics: real windows, longer durations, page-wide filters
 
 - **The 30d and 90d views were identical, and it was not a render bug.** Measured on a copy of

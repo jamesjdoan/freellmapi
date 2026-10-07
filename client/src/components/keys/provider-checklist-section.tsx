@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
-import { ChevronDown, ExternalLink, KeyRound, Plus, Unlock } from 'lucide-react'
+import { ChevronDown, ExternalLink, KeyRound, Plus, Unlock, X } from 'lucide-react'
 import { Tooltip } from '@/components/tooltip'
 import { useI18n } from '@/i18n'
 import { PLATFORMS } from './shared'
+import { RemoveProviderDialog } from './provider-removals'
 
 // Shape of GET /api/keys/providers (#543). Declared inline: the backend owns
 // the contract (server/src/routes/keys.ts) and this is the only consumer.
@@ -29,6 +30,10 @@ interface ProvidersChecklist {
 export function ProviderChecklistSection({ onAddKey }: { onAddKey: (platform: string) => void }) {
   const { t } = useI18n()
   const [expanded, setExpanded] = useState(false)
+  // A chip for a provider the operator will never use is noise; removing it
+  // records why (same log as removing a configured provider) and the server
+  // stops listing it here.
+  const [removeTarget, setRemoveTarget] = useState<{ platform: string; label: string } | null>(null)
   const { data } = useQuery<ProvidersChecklist>({
     queryKey: ['keys-providers'],
     queryFn: () => apiFetch('/api/keys/providers'),
@@ -109,10 +114,27 @@ export function ProviderChecklistSection({ onAddKey }: { onAddKey: (platform: st
                     <ExternalLink className="size-3" aria-hidden="true" />
                   </a>
                 )}
+                <button
+                  type="button"
+                  onClick={() => setRemoveTarget({ platform: p.platform, label: p.name })}
+                  title={t('keys.checklistRemoveTip', { provider: p.name })}
+                  aria-label={t('keys.checklistRemoveTip', { provider: p.name })}
+                  className="ml-0.5 inline-flex text-muted-foreground transition-colors hover:text-destructive focus-visible:text-destructive"
+                >
+                  <X className="size-3" aria-hidden="true" />
+                </button>
               </span>
             )
           })}
         </div>
+      )}
+      {removeTarget && (
+        <RemoveProviderDialog
+          platform={removeTarget.platform}
+          label={removeTarget.label}
+          hasKeys={false}
+          onOpenChange={open => { if (!open) setRemoveTarget(null) }}
+        />
       )}
     </div>
   )

@@ -868,7 +868,8 @@
     "monthlyTokenCapLabel": "Límite mensual de tokens",
     "capUnlimitedPlaceholder": "Ilimitado",
     "capEditHint": "Los límites se reinician el día 1 a las 00:00 UTC. Déjelo en blanco para ilimitado.",
-    "monthlyUsageLine": "{requests} solicitudes, {tokens} tokens este mes"
+    "monthlyUsageLine": "{requests} solicitudes, {tokens} tokens este mes",
+    "checklistRemoveTip": "Remove {provider} from this list"
   },
   "backups": {
     "title": "Backups",

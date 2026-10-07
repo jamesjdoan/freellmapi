@@ -868,7 +868,8 @@
     "monthlyTokenCapLabel": "Месечен лимит на токени",
     "capUnlimitedPlaceholder": "Неограничен",
     "capEditHint": "Лимитите се нулират на 1-во число 00:00 UTC. Оставете празно за неограничен.",
-    "monthlyUsageLine": "{requests} заявки, {tokens} токени този месец"
+    "monthlyUsageLine": "{requests} заявки, {tokens} токени този месец",
+    "checklistRemoveTip": "Remove {provider} from this list"
   },
   "backups": {
     "title": "Backups",

@@ -566,6 +566,7 @@
     "checklistKeyless": "no key needed",
     "checklistNoKeyTip": "No key added yet. Click to add one.",
     "checklistSignupLink": "Open {provider} to create an account and get a key",
+    "checklistRemoveTip": "Remove {provider} from this list",
     "modelLimitsTitle": "Models & account limits",
     "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
     "scopeNotServed": "not served by this key",

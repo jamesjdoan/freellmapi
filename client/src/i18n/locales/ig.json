@@ -868,7 +868,8 @@
     "monthlyTokenCapLabel": "Oke token ọnwa",
     "capUnlimitedPlaceholder": "Enweghị oke",
     "capEditHint": "A na-ebugharị oke ụbọchị nke 1, 00:00 UTC. Hapụ oghere maka enweghị oke.",
-    "monthlyUsageLine": "Arịrịọ {requests}, token {tokens} ọnwa a"
+    "monthlyUsageLine": "Arịrịọ {requests}, token {tokens} ọnwa a",
+    "checklistRemoveTip": "Remove {provider} from this list"
   },
   "backups": {
     "title": "Backups",

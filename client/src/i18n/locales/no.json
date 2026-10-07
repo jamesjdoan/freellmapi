@@ -868,7 +868,8 @@
     "monthlyTokenCapLabel": "Månedlig grense for tokens",
     "capUnlimitedPlaceholder": "Ubegrenset",
     "capEditHint": "Grensene nullstilles den 1. kl. 00:00 UTC. La stå tomt for ubegrenset.",
-    "monthlyUsageLine": "{requests} forespørsler, {tokens} tokens denne måneden"
+    "monthlyUsageLine": "{requests} forespørsler, {tokens} tokens denne måneden",
+    "checklistRemoveTip": "Remove {provider} from this list"
   },
   "backups": {
     "title": "Backups",

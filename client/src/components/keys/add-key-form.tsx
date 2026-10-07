@@ -13,6 +13,7 @@ import { toast } from '@/lib/toast'
 import type { FallbackEntry } from '@/lib/routing'
 import { scopeCandidates, shouldOfferModelPicker, type ScopeCandidate } from '@/lib/model-scope-selection'
 import { GetKeyLink, PLATFORMS } from './shared'
+import { useRemovedPlatforms } from '@/lib/provider-removals'
 
 /** A key that just landed, plus the models the picker should offer for it.
  *  Only produced when the picker is actually worth showing (#657) — otherwise
@@ -60,6 +61,9 @@ export function AddKeyForm({ onSuccess, initialPlatform }: { onSuccess: (offer?:
   })
   const addedPlatforms = useMemo(() => new Set(keys.map(k => k.platform)), [keys])
   const [hideAdded, setHideAdded] = useState(false)
+  // A removed provider is one the operator vetted out; offering it here again
+  // would undo that. Restoring it from the removal log brings it back.
+  const removedPlatforms = useRemovedPlatforms()
 
   // #657 post-add scope picker: the platform's model list. This is the same
   // ['fallback'] query the Models page, the fallback chain and the command
@@ -92,13 +96,14 @@ export function AddKeyForm({ onSuccess, initialPlatform }: { onSuccess: (offer?:
     () => PLATFORMS
       // The selected provider always stays listed, so hiding added ones never
       // blanks out the trigger label.
+      .filter(p => p.value === platform || !removedPlatforms.has(p.value))
       .filter(p => !hideAdded || !addedPlatforms.has(p.value) || p.value === platform)
       .map(p => ({
         value: p.value,
         label: p.label,
         sub: addedPlatforms.has(p.value) ? t('keys.discoverAlreadyAdded') : undefined,
       })),
-    [hideAdded, addedPlatforms, platform, t],
+    [hideAdded, addedPlatforms, removedPlatforms, platform, t],
   )
 
   const addKey = useMutation({

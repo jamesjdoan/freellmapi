@@ -21,10 +21,12 @@ import { useProviderRemovals } from '@/lib/provider-removals'
 // Keys owns the dialog; the log below it is the same list, so what was
 // removed and when is readable without opening anything.
 
-export function RemoveProviderDialog({ platform, label, onOpenChange }: {
+export function RemoveProviderDialog({ platform, label, onOpenChange, hasKeys = true }: {
   platform: string
   label: string
   onOpenChange: (open: boolean) => void
+  /** False for a provider with no key yet (a checklist chip): nothing to delete. */
+  hasKeys?: boolean
 }) {
   const { t } = useI18n()
   const queryClient = useQueryClient()
@@ -40,6 +42,7 @@ export function RemoveProviderDialog({ platform, label, onOpenChange }: {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['provider-removals'] })
       queryClient.invalidateQueries({ queryKey: ['keys'] })
+      queryClient.invalidateQueries({ queryKey: ['keys-providers'] })
       queryClient.invalidateQueries({ queryKey: ['analysis'] })
       queryClient.invalidateQueries({ queryKey: ['models'] })
       queryClient.invalidateQueries({ queryKey: ['fallback'] })
@@ -65,13 +68,15 @@ export function RemoveProviderDialog({ platform, label, onOpenChange }: {
             onChange={e => setNote(e.target.value)} className="mt-1 h-8 text-xs" disabled={remove.isPending}
           />
         </label>
-        <label className="mt-3 flex items-start gap-2 text-xs text-muted-foreground">
-          <input
-            type="checkbox" checked={deleteKeys} disabled={remove.isPending} className="mt-0.5 size-3.5 accent-primary"
-            onChange={e => setDeleteKeys(e.target.checked)}
-          />
-          <span>{t('keys.removeProviderDeleteKeys')}</span>
-        </label>
+        {hasKeys && (
+          <label className="mt-3 flex items-start gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox" checked={deleteKeys} disabled={remove.isPending} className="mt-0.5 size-3.5 accent-primary"
+              onChange={e => setDeleteKeys(e.target.checked)}
+            />
+            <span>{t('keys.removeProviderDeleteKeys')}</span>
+          </label>
+        )}
         <p className="mt-2 text-[11px] text-muted-foreground">{t('keys.removeProviderEffect')}</p>
         {remove.isError && <p className="mt-2 text-[11px] text-destructive">{(remove.error as Error).message}</p>}
         <div className="mt-4 flex justify-end gap-2">
@@ -102,6 +107,7 @@ export function ProviderRemovalsLog() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['provider-removals'] })
       queryClient.invalidateQueries({ queryKey: ['keys'] })
+      queryClient.invalidateQueries({ queryKey: ['keys-providers'] })
     },
   })
 

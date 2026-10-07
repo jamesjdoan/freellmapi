@@ -868,7 +868,8 @@
     "monthlyTokenCapLabel": "Òpín token oṣooṣù",
     "capUnlimitedPlaceholder": "Kò ní òpín",
     "capEditHint": "A tún òpín ṣe ní ọjọ́ kìíní ní 00:00 UTC. Fi sílẹ̀ ṣófo fún aláìlópin.",
-    "monthlyUsageLine": "{requests} ìbéèrè, {tokens} token oṣù yìí"
+    "monthlyUsageLine": "{requests} ìbéèrè, {tokens} token oṣù yìí",
+    "checklistRemoveTip": "Remove {provider} from this list"
   },
   "backups": {
     "title": "Backups",

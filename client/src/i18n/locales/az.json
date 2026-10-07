@@ -868,7 +868,8 @@
     "monthlyTokenCapLabel": "Aylıq token limiti",
     "capUnlimitedPlaceholder": "Limitsiz",
     "capEditHint": "Limitlər hər ayın 1-i 00:00 UTC-də sıfırlanır. Limitsiz üçün boş buraxın.",
-    "monthlyUsageLine": "Bu ay {requests} sorğu, {tokens} token"
+    "monthlyUsageLine": "Bu ay {requests} sorğu, {tokens} token",
+    "checklistRemoveTip": "Remove {provider} from this list"
   },
   "backups": {
     "title": "Backups",

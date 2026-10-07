@@ -4,7 +4,7 @@ import { z } from 'zod';
 import multer from 'multer';
 import path from 'path';
 import { diagnoseProviders, adviceFor, recordDiagnosisTransitions, listDiagnosisHistory } from '../services/provider-diagnosis.js';
-import { getProviderRemoval, listProviderRemovals, removeProvider, restoreProvider } from '../services/provider-removals.js';
+import { getProviderRemoval, listProviderRemovals, removeProvider, removedPlatforms, restoreProvider } from '../services/provider-removals.js';
 import { getDb } from '../db/index.js';
 import { resolveProvider, getAllProviders } from '../providers/index.js';
 import { OpenAICompatProvider, isAnonymousCredential } from '../providers/openai-compat.js';
@@ -340,7 +340,9 @@ function noModelsNotice(platform: string): string | undefined {
 // has added at least one key yet, so the dashboard can show what's still
 // missing without enumerating the whole list by hand. `custom` is excluded —
 // it's a per-key user-defined placeholder, not a fixed free-tier provider to
-// "check off".
+// "check off" — and so is any provider the operator removed: the checklist is
+// where unwanted add-buttons were being vetted out, so a removed one must not
+// come back as a chip.
 keysRouter.get('/providers', (_req: Request, res: Response) => {
   const db = getDb();
   const countRows = db.prepare(`
@@ -353,8 +355,9 @@ keysRouter.get('/providers', (_req: Request, res: Response) => {
   `).all() as Array<{ platform: string; total_keys: number; enabled_keys: number }>;
   const countsByPlatform = new Map(countRows.map(r => [r.platform, r]));
 
+  const removed = removedPlatforms(db);
   const providers = getAllProviders()
-    .filter(p => p.platform !== 'custom')
+    .filter(p => p.platform !== 'custom' && !removed.has(p.platform))
     .map(p => {
       const counts = countsByPlatform.get(p.platform);
       const keyCount = counts?.total_keys ?? 0;

@@ -4,6 +4,7 @@ import { createApp } from '../../app.js';
 import { initDb, getDb } from '../../db/index.js';
 import { encrypt } from '../../lib/crypto.js';
 import { mintDashboardToken } from '../helpers/auth.js';
+import { removeProvider, restoreProvider } from '../../services/provider-removals.js';
 
 let dashToken = '';
 
@@ -72,5 +73,20 @@ describe('GET /api/keys/providers — provider checklist (#543)', () => {
     expect(groq).toMatchObject({ configured: true, keyCount: 1, enabledKeyCount: 1 });
     expect(body.summary.configured).toBe(1);
     expect(body.summary.unconfigured).toBe(body.summary.total - 1);
+  });
+
+  it('drops a removed, unconfigured provider from the list and the totals until it is restored', async () => {
+    const before = (await request(app, '/api/keys/providers')).body;
+    removeProvider('speechify', { reason: 'Text-to-speech only; never used', note: null, removedBy: 'provider' });
+
+    const after = (await request(app, '/api/keys/providers')).body;
+    expect(after.providers.some((p: { platform: string }) => p.platform === 'speechify')).toBe(false);
+    expect(after.summary.total).toBe(before.summary.total - 1);
+    expect(after.summary.unconfigured).toBe(before.summary.unconfigured - 1);
+
+    restoreProvider('speechify');
+    const restored = (await request(app, '/api/keys/providers')).body;
+    expect(restored.providers.some((p: { platform: string }) => p.platform === 'speechify')).toBe(true);
+    expect(restored.summary.total).toBe(before.summary.total);
   });
 });
