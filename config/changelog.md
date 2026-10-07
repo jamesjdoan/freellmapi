@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-08 — Space Bunny via OpenCode Zen; AIHubMix free-only; Mistral re-enabled
+
+- Live-data changes only. The detail and the IDs are in `config/handoff.md` (Session 2026-10-08).
+- `space-bunny-free` is a custom endpoint (`https://opencode.ai/zen/v1`), unlimited, and back in
+  its 7 former chain slots. The other Zen ids are tombstoned.
+- AIHubMix's paid models are deleted, and the free-only sync filter is enabled in `.env`.
+- 12 working Mistral models are enabled. Coding, Workhorse and Extra-Tier gained Mistral tails.
+
 ## 2026-10-07 — Keys: remove unwanted providers from the add checklist
 
 - The "N of M providers configured" chips (the add-buttons for providers with no key) now each

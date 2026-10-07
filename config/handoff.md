@@ -1,5 +1,54 @@
 # Session Handoff
 
+## Session 2026-10-08 — JD-STUDIO (Mac Studio M2 Max)
+
+Covers 2026-10-06 → 2026-10-08. Everything is committed, pushed to `fork` (`0808bd4f`) and live,
+`Up (healthy)`. The analytics work in the 2026-10-04 block below is committed as `dbe3513d`.
+
+### Shipped
+
+- **Keys: remove unwanted providers from the add checklist** (`659a79c5`). Each no-key chip has an
+  ×, opening the Remove provider dialog (reason required). `GET /api/keys/providers` and the Add
+  key picker skip removed platforms. Restore in the removal log brings a chip back.
+
+### Routing and catalogue changes (live data, no code)
+
+- **Space Bunny.** The OpenRouter `stealth/space-bunny-alpha` was deleted on 10-06 (`404 No
+  endpoints found`). OpenCode Zen's `space-bunny-free` answers direct API calls, with tools and
+  vision, so it is now a **custom endpoint**: key #35, `https://opencode.ai/zen/v1`, model row
+  1554, **unlimited**. Its chain slots are the old ones: Default 1, Workhorse 1, Extra-Tier 1,
+  Vision 2, Apex 3, Frontier 3, Coding 5. The benchmark is a proxy, `glm-5-3-flash`. The maker
+  is still unannounced; the best lead is MiniMax M3.1 Flash, which Artificial Analysis does not
+  list. The 85 other Zen ids are tombstoned on key #35. The built-in `opencode` key #23 and its
+  7 rows stay off. See GOTCHAS.
+- **AIHubMix free only.** Deleted `claude-sonnet-5-5` and `gpt-6.1-sol`. Neither was in a chain
+  or had served a request. `.env` gained `CUSTOM_MODEL_SYNC_FREE_PATTERNS=*-free,*:free`, which
+  is host-local and untracked. The MBP needs the same line if it runs FreeLLM.
+- **Mistral.** Probed all 21 rows. Enabled the 12 that answer with tool calls: codestral ×2,
+  ministral 3b/8b/14b ×2 each, mistral-code(-fim)-latest, voxtral-small ×2. In chains:
+  `mistral-code-latest` and `codestral-latest` are at the Coding tail, and
+  `ministral-14b-latest` at the Workhorse and Extra-Tier tails. The medium, small and vibe models
+  return 429 on the first call and stay off. `mistral-medium-3-5` is still enabled and also 429s.
+- **NVIDIA.** `glm-5.3` and `kimi-k3` hang for 90 s or more, `deepseek-v4-flash-0731` returns 410,
+  and every `mistralai/*` id returns 404. All stay off.
+
+### Blocked on James
+
+- **OpenRouter key 19 has a $0 limit**: `limit_remaining: 0`, and every call returns `403 Key
+  limit exceeded`. All OpenRouter routing is down, including Ling 3.1 Flash (id 1542, not in any
+  chain) and Fast-Lane's slot-3 Ling. Raise or remove the limit on openrouter.ai.
+- **Vercel AI Gateway needs a card on file.** Every request returns
+  `customer_verification_required`. A `freellmapi` gateway key exists with a $1/month budget; it
+  was saved in `/tmp/vk.out` (mode 0600). Once the card is on, the free models are
+  `inclusionai/ling-3.1-flash(-free)` and `poolside/laguna-s-2.1-free`.
+- **NaraRouter** has 8 enabled rows and no key, so they can never route. Either add a key or
+  disable them.
+
+### Next
+
+1. Watch Space Bunny: `SELECT status, COUNT(*) FROM requests WHERE model_id='space-bunny-free' GROUP BY status`.
+2. When OpenRouter reveals the maker, relink the benchmark with `PUT /api/analysis/link`.
+
 ## Session 2026-10-04 — JD-STUDIO (Mac Studio M2 Max)
 
 Covers 2026-10-01 → 2026-10-04. Everything from the 2026-10-01 block below is committed
