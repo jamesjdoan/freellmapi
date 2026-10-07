@@ -3,7 +3,28 @@
 ## Session 2026-10-04 — JD-STUDIO (Mac Studio M2 Max)
 
 Covers 2026-10-01 → 2026-10-04. Everything from the 2026-10-01 block below is committed
-and pushed (`38e4972c`), not local-only as that block says. No new work since.
+and pushed (`38e4972c`), not local-only as that block says.
+
+### Analytics: real windows, longer durations, page-wide filters (later the same day)
+
+Uncommitted, deployed and `Up (healthy)`.
+
+- **The 30d/90d "charts don't re-render" report was a data bug.** Measured on a copy of the
+  live DB: both windows returned the same 31 daily buckets, because `/timeline` chose its
+  interval with `range === '24h' ? 'hour' : 'day'`, and `HOURLY_RETENTION_DAYS` was 30 while
+  the toggle already offered 90d. Both fixed; presets are now `24h 7d 30d 90d 180d 365d` plus
+  `custom`, and the bucket is chosen from the window's own span.
+- One `resolveWindow()` (range preset OR `from`/`to`) now feeds every endpoint, and one
+  `pageFilters()` is the only place a status/provider/model filter becomes SQL. The status and
+  provider selectors that used to live in the recent-calls **table header** are gone from there
+  — they scope the whole page now.
+- `HOURLY_RETENTION_DAYS` 30 → 365. A test now asserts the aggregate is never pruned shallower
+  than `MAX_ANALYTICS_RANGE_DAYS`, which is the exact drift that caused this.
+- **Two defects only the browser could find**: recharts infers the X-axis type and gets it wrong
+  from two points (fixed with `type="category"`), and `--fill-english` never updates a CHANGED
+  i18n key. Both are in `docs/GOTCHAS.md`.
+- Suite: server 343 files / 4,231 tests, client 64 files / 536 tests, both green.
+- ADR `docs/adr/ARCH-20261004-analytics-windows-and-page-filters.md`.
 
 **What was done:**
 
@@ -33,12 +54,15 @@ and pushed (`38e4972c`), not local-only as that block says. No new work since.
 
 **What's next:**
 
-1. Nothing outstanding in code. The one operational habit worth keeping: if
-   `clifree-report-timer.sh status` shows `last exit code = 1`, read the last log line —
-   it names the unreachable host, and the fix is the hostname, not the timer or network.
-2. Optional cleanup, logged in the 2026-10-01 changelog: `isUnsatisfiableRequestSizeError`
-   in `cooldownDecisionForError` is unreachable since upstream v0.13.3's earlier
-   `isContextTooLargeError` return. Same outcome (no bench); remove when next in that file.
+1. Commit and push the analytics work above (deployed, uncommitted). `git status` should list
+   `server/src/routes/analytics.ts`, `server/src/services/request-retention.ts`,
+   `client/src/pages/AnalyticsPage.tsx`, the two test files, 60 locale files, and the four
+   docs. Push to `fork`, never `origin`.
+2. The operational habit worth keeping: if `clifree-report-timer.sh status` shows
+   `last exit code = 1`, read the last log line — it names the unreachable host, and the fix is
+   the hostname, not the timer or network. Optional cleanup, logged in the 2026-10-01 changelog:
+   `isUnsatisfiableRequestSizeError` in `cooldownDecisionForError` is unreachable since upstream
+   v0.13.3's earlier `isContextTooLargeError` return; same outcome (no bench).
 
 **In progress:** —
 

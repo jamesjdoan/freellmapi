@@ -45,21 +45,128 @@ import { sortRows, useTableSort, type SortValueFn } from '@/lib/table-sort'
 import { categoryAxisProps, verticalCategoryAxisProps } from '@/lib/chart-axis'
 import { useI18n } from '@/i18n'
 
-type TimeRange = '24h' | '7d' | '30d' | '90d'
+// The analytics window, as the page holds it.
+//
+// Two shapes, and they are mutually exclusive:
+//   - `range`: one of the server's presets, counting back from now.
+//   - `from` + `to`: explicit dates for any window the presets don't cover.
+//
+// The presets grew past 90d because a daily line stops being legible there.
+// The server picks the timeline bucket from the window's own span, so 180d and
+// 365d bucket by month instead of drawing 180 unreadable daily ticks.
+type TimeRange = '24h' | '7d' | '30d' | '90d' | '180d' | '365d'
 
-const TIME_RANGES: TimeRange[] = ['24h', '7d', '30d', '90d']
+const TIME_RANGES: TimeRange[] = ['24h', '7d', '30d', '90d', '180d', '365d']
 
-// The range toggle sticks: whichever window you last looked at is the one the
-// tab opens with next time, instead of always snapping back to 7d (#711).
+// The window sticks: whichever one you last looked at is the one the tab
+// opens with next time, instead of always snapping back to 7d (#711).
 const RANGE_KEY = 'analytics.range'
 
-function storedRange(): TimeRange {
+const CUSTOM = 'custom'
+
+// Preset → its i18n keys. One table, read by both the toggle and the savings
+// card, so a window can never be labelled two different ways in two places.
+const RANGE_LABEL_KEY: Record<TimeRange, string> = {
+  '24h': 'analytics.rangeLabel24h',
+  '7d': 'analytics.rangeLabel7d',
+  '30d': 'analytics.rangeLabel30d',
+  '90d': 'analytics.rangeLabel90d',
+  '180d': 'analytics.rangeLabel180d',
+  '365d': 'analytics.rangeLabel365d',
+}
+
+/** A custom span, stored as two 'YYYY-MM-DD' strings. Kept beside the range
+ *  preset so returning to a preset and coming back is lossless. */
+interface CustomWindow {
+  from: string
+  to: string
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+
+/** The date input's own value format, which is also what the server parses. */
+function isoDate(offsetDays: number, from: number): string {
+  return new Date(from + offsetDays * 86_400_000).toISOString().slice(0, 10)
+}
+
+function storedRange(): TimeRange | typeof CUSTOM {
   try {
     const v = localStorage.getItem(RANGE_KEY)
+    if (v === CUSTOM) return CUSTOM
     if (v && (TIME_RANGES as string[]).includes(v)) return v as TimeRange
   } catch { /* ignore */ }
   return '7d'
 }
+
+function storedCustom(): CustomWindow {
+  try {
+    const raw = localStorage.getItem(`${RANGE_KEY}.custom`)
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw)
+      if (
+        parsed && typeof parsed === 'object' && 'from' in parsed && 'to' in parsed &&
+        ISO_DATE.test(String(parsed.from)) && ISO_DATE.test(String(parsed.to))
+      ) {
+        return { from: String(parsed.from), to: String(parsed.to) }
+      }
+    }
+  } catch { /* ignore */ }
+  // A sensible default: the last 14 days, which is a window worth opening.
+  const to = isoDate(0, Date.now())
+  return { from: isoDate(-13, Date.parse(`${to}T00:00:00Z`)), to }
+}
+
+// The query-string tail EVERY analytics request carries. One builder, so the
+// window and the filters cannot drift between panels: before this, the range
+// rode eight hand-built URLs and the status/provider filters existed only on
+// the recent-calls table, so filtering moved one panel and left the other nine
+// describing different traffic.
+function windowParams(range: TimeRange | typeof CUSTOM, custom: CustomWindow, device: string, filters: FilterState): string {
+  const params = new URLSearchParams()
+  if (range === CUSTOM) {
+    params.set('from', custom.from)
+    params.set('to', custom.to)
+  } else {
+    params.set('range', range)
+  }
+  if (device) params.set('device', device)
+  if (filters.status !== 'all') params.set('status', filters.status)
+  if (filters.provider !== 'all') params.set('provider', filters.provider)
+  if (filters.model !== 'all') params.set('model', filters.model)
+  return params.toString()
+}
+
+// The filters the page owns, above every panel. 'all' means no filter at all,
+// so it never appears in the URL.
+interface FilterState {
+  status: StatusFilter
+  provider: string
+  model: string
+}
+
+const FILTERS_KEY = 'analytics.filters'
+
+function storedFilters(): FilterState {
+  try {
+    const raw = localStorage.getItem(FILTERS_KEY)
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') {
+        const p = parsed as Record<string, unknown>
+        const status = typeof p.status === 'string' ? p.status : 'all'
+        return {
+          status: (['all', 'success', 'error', 'canceled'] as string[]).includes(status)
+            ? (status as StatusFilter) : 'all',
+          provider: typeof p.provider === 'string' ? p.provider : 'all',
+          model: typeof p.model === 'string' ? p.model : 'all',
+        }
+      }
+    }
+  } catch { /* ignore */ }
+  return { status: 'all', provider: 'all', model: 'all' }
+}
+
+
 
 // Sortable columns of the three breakdown tables. Sorting is client-side over
 // the rows already loaded and remembered per table (same localStorage idiom as
@@ -142,6 +249,15 @@ interface SummaryResponse {
   pinnedRequests: number
   pinHonoredRequests: number
   firstRequestAt: string | null
+  // The window the server actually read. The UI labels a custom span from this
+  // rather than from its own arithmetic, so a clamped or reordered pair still
+  // reads correctly and the two can never disagree.
+  windowSince: string
+  windowUntil: string
+  // True when the window opens before the oldest surviving raw row, and that
+  // row's date. The notice on the card needs both.
+  rawWindowTruncated: boolean
+  rawWindowOldest: string | null
   lifetimeTotalRequests: number
 }
 
@@ -394,7 +510,11 @@ interface RequestDetail extends Omit<RecentCallRow, 'attemptCount'> {
   attempts: RequestAttempt[]
 }
 
+// The status the page is scoped to. 'canceled' (#752 — the client hung up
+// mid-request) is neither success nor error, and is a first-class choice here
+// rather than folded into 'all'.
 type StatusFilter = 'all' | 'success' | 'error' | 'canceled'
+
 
 // 'canceled' (#752 — the client hung up mid-request) is neither success nor
 // error: neutral amber, not destructive red.
@@ -608,19 +728,35 @@ const tooltipStyle = { backgroundColor: 'var(--popover)', border: '1px solid var
 
 // The timeline endpoint buckets on the viewer's wall clock (the query sends
 // the browser's tzOffset), so its zone-less timestamps ("2026-08-10T14:00:00"
-// hourly, "2026-08-10" daily) are already local time. Parse them as local —
-// re-interpreting them as UTC here would shift every tick a second time.
+// hourly, "2026-08-10" daily, "2026-08-01" monthly) are already local time.
+// Parse them as local — re-interpreting them as UTC here would shift every
+// tick a second time.
+//
+// A monthly bucket is day 01 of its month. It has to render as the MONTH, not
+// as "Aug 1", because on a 365-day chart that is twelve ticks that all read as
+// the first of a month and give no sense of where the year sits.
 function formatTimelineTick(value: string): string {
   if (!value) return ''
   const iso = value.includes('T') ? value : `${value}T00:00:00`
   const date = new Date(iso)
   if (isNaN(date.getTime())) return value
-  return date.toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    ...(value.includes('T') ? { hour: '2-digit', minute: '2-digit' } : {}),
-  })
+  const monthly = /^\d{4}-\d{2}-01$/.test(value)
+  return date.toLocaleString([], monthly
+    ? { month: 'short', year: '2-digit' }
+    : {
+        month: 'short',
+        day: 'numeric',
+        ...(value.includes('T') ? { hour: '2-digit', minute: '2-digit' } : {}),
+      })
 }
+
+// Every timeline XAxis below carries `type="category"` for the same reason:
+// recharts INFERS the axis type from the data, and from two points it infers a
+// numeric one. It then renders two empty tick groups instead of two labelled
+// ones, so a 180d or 365d window over a young install showed an axis with no
+// dates on it at all. Stating the type invents no data — the honest two points
+// stay two points, and they get their labels back.
+
 
 // Two categorical series hues, validated against the app's actual chart
 // surfaces (light card #ffffff, dark card #101010) with the dataviz palette
@@ -660,13 +796,96 @@ const COMPARE_METRICS: { labelKey: string; value: (s: SummaryResponse) => string
   { labelKey: 'analytics.saved', value: s => `$${(s.estimatedCostSavings ?? 0).toFixed(2)}` },
 ]
 
+// ── Filling gaps in the timeline ────────────────────────────────────────────
+//
+// The server emits only buckets where traffic exists. That is right for the
+// data and wrong for the chart: a month with no traffic leaves a hole in the
+// line and no tick, so "September then November" renders as two points with an
+// unexplained gap. This fills every month in between with a zero, so a quiet
+// month reads as a dip rather than as missing data.
+//
+// It does NOT fix a two-bucket chart — September and October are adjacent, so
+// there is no gap to fill and the result is the same two rows. That case is an
+// unlabelled axis, handled by TIMELINE_XAXIS below: two honest points that
+// carry their labels is the correct rendering of a young install, not a defect.
+//
+// Zero is honest for a month that genuinely had no requests. It is NOT used to
+// cover a month we hold no data for at all — the window bounds decide that, and
+// the horizon notice above the charts says so in words.
+//
+// Generic over the row shape so the Compare chart (one key per device, and no
+// index signature) gets the same treatment as the single-series one — a gap is
+// a gap either way, and recharts mis-renders both identically.
+function fillMonthlyGaps<T extends { timestamp: string }>(
+  rows: T[],
+  zero: (timestamp: string) => T,
+): T[] {
+  if (rows.length < 2) return rows;
+  // Only monthly buckets carry a month key. Hourly and daily ones already have
+  // a tick per hour or day and never fall into the two-point problem.
+  if (!rows.every((r) => /^\d{4}-\d{2}-01$/.test(r.timestamp))) return rows;
+
+  const months = rows.map((r) => r.timestamp.slice(0, 7));
+  const [fy, fm] = months[0].split('-').map(Number) as [number, number];
+  const [ly, lm] = (months.at(-1) as string).split('-').map(Number) as [number, number];
+  const span = (ly - fy) * 12 + (lm - fm);
+  // Past ~15 months a monthly line stops carrying information, and materialising
+  // the gaps would be noise rather than shape.
+  if (span < 0 || span > 15) return rows;
+
+  const byMonth = new Map(rows.map((r) => [r.timestamp.slice(0, 7), r]));
+  const out: T[] = [];
+  for (let i = 0; i <= span; i++) {
+    // Absolute month index, so December → January needs no special case.
+    const monthIndex = fy * 12 + (fm - 1) + i;
+    const timestamp = `${Math.floor(monthIndex / 12)}-${String((monthIndex % 12) + 1).padStart(2, '0')}-01`;
+    out.push(byMonth.get(timestamp.slice(0, 7)) ?? zero(timestamp));
+  }
+  return out;
+}
+
+const EMPTY_BUCKET = (timestamp: string): TimelineBucket => ({
+  timestamp,
+  requests: 0,
+  successCount: 0,
+  failureCount: 0,
+  inputTokens: 0,
+  outputTokens: 0,
+})
+
 export default function AnalyticsPage() {
   const { t } = useI18n()
-  const [range, setRange] = useState<TimeRange>(storedRange)
-  const updateRange = (r: TimeRange) => {
+  // The window: either a preset or an explicit date pair, remembered together
+  // so switching to a preset and back does not lose the custom span.
+  const [range, setRange] = useState<TimeRange | typeof CUSTOM>(storedRange)
+  const [custom, setCustom] = useState<CustomWindow>(storedCustom)
+  const updateRange = (r: TimeRange | typeof CUSTOM) => {
     setRange(r)
     try { localStorage.setItem(RANGE_KEY, r) } catch { /* ignore */ }
   }
+  const updateCustom = (next: CustomWindow) => {
+    setCustom(next)
+    setRange(CUSTOM)
+    try {
+      localStorage.setItem(`${RANGE_KEY}.custom`, JSON.stringify(next))
+      localStorage.setItem(RANGE_KEY, CUSTOM)
+    } catch { /* ignore */ }
+  }
+
+  // The filters sit ABOVE the panels, so every card, chart and table answers
+  // for the same slice of traffic. They replace the status/provider pair that
+  // used to live in the recent-calls table header and moved that one table
+  // alone.
+  const [filters, setFilters] = useState<FilterState>(storedFilters)
+  const updateFilter = <K extends keyof FilterState>(key: K, value: FilterState[K]) => {
+    setFilters(prev => {
+      const next = { ...prev, [key]: value }
+      try { localStorage.setItem(FILTERS_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
+  }
+  const filtersActive = filters.status !== 'all' || filters.provider !== 'all' || filters.model !== 'all'
+
   const [device, setDevice] = useState<DeviceScope>(storedDevice)
   const updateDevice = (d: DeviceScope) => {
     setDevice(d)
@@ -677,18 +896,21 @@ export default function AnalyticsPage() {
   const comparing = device === 'compare'
   // What the per-panel queries scope to. Compare and All both mean unfiltered.
   const scope = comparing || device === 'all' ? '' : device
-  // Appended to every analytics URL; empty when the page is unscoped, so the
-  // request is byte-identical to what it was before devices existed.
-  const deviceParam = scope ? `&device=${encodeURIComponent(scope)}` : ''
   // Capture "now" once at mount so the savings extrapolation below stays a pure
   // render (calling Date.now() during render is impure and non-deterministic).
   const [now] = useState(() => Date.now())
 
-  // `scope` rides every query key, so react-query caches each device's view
-  // separately and switching tabs is instant after the first visit.
+  // One query string, shared by every panel. `scope`, the window and all three
+  // filters ride the key as well, so react-query caches each combination on its
+  // own and switching back to a previous view is instant.
+  const params = useMemo(
+    () => windowParams(range, custom, scope, filters),
+    [range, custom.from, custom.to, scope, filters.status, filters.provider, filters.model],
+  )
+
   const { data: summary, isLoading: summaryLoading } = useQuery({
-    queryKey: ['analytics', 'summary', range, scope],
-    queryFn: () => apiFetch<SummaryResponse>(`/api/analytics/summary?range=${range}${deviceParam}`),
+    queryKey: ['analytics', 'summary', params],
+    queryFn: () => apiFetch<SummaryResponse>(`/api/analytics/summary?${params}`),
   })
 
   // Response-cache health: how often identical requests were served from memory
@@ -700,70 +922,87 @@ export default function AnalyticsPage() {
     queryFn: () => apiFetch<CacheStatsResponse>('/api/cache/stats'),
   })
 
+  // The provider filter needs its own option list, and that list must NOT be
+  // the filtered one: filtering to `groq` would leave `openrouter` unselectable,
+  // and the operator could never widen the filter again. Built from the widest
+  // window with no filters, for the same reason the device tabs are (below).
+  const { data: providerOptions = [] } = useQuery({
+    queryKey: ['analytics', 'provider-facets'],
+    queryFn: () => apiFetch<ByPlatformRow[]>('/api/analytics/by-platform?range=365d'),
+  })
+
+  // The provider breakdown itself, scoped to the window and the filters like
+  // every other panel. Selecting a provider narrows it to that one row — which
+  // is the point of a page-level filter — and the dropdown above is the way
+  // back out, so the facet list below stays unfiltered for exactly that reason.
   const { data: byPlatform = [] } = useQuery({
-    queryKey: ['analytics', 'by-platform', range, scope],
-    queryFn: () => apiFetch<ByPlatformRow[]>(`/api/analytics/by-platform?range=${range}${deviceParam}`),
+    queryKey: ['analytics', 'by-platform', params],
+    queryFn: () => apiFetch<ByPlatformRow[]>(`/api/analytics/by-platform?${params}`),
   })
 
   // Friendly display name per providerId: catalog → the platform id, custom →
   // the endpoint host. Used by the filter dropdown so a selected custom relay
   // shows 'relay.example.com', not 'custom:https://relay.example.com' (#889).
-  const providerDisplay = new Map(byPlatform.map((p) => [p.providerId, p.endpoint ?? p.platform]))
+  const providerDisplay = new Map(providerOptions.map((p) => [p.providerId, p.endpoint ?? p.platform]))
 
   // Never device-scoped: this IS the device breakdown, and filtering it to one
   // machine would leave a table with a single row and no tabs to leave by.
   const { data: byClient = [] } = useQuery({
-    queryKey: ['analytics', 'by-client', range],
-    queryFn: () => apiFetch<ByClientRow[]>(`/api/analytics/by-client?range=${range}`),
+    queryKey: ['analytics', 'by-client', params],
+    queryFn: () => apiFetch<ByClientRow[]>(`/api/analytics/by-client?${params}`),
   })
 
   // Browser's offset from UTC in minutes (480 = UTC+8), so the server buckets
-  // timeline hours/days on the viewer's wall clock instead of UTC.
+  // the timeline on the viewer's wall clock instead of UTC.
   const tzOffset = -new Date().getTimezoneOffset()
 
   const { data: timeline = [] } = useQuery({
-    queryKey: ['analytics', 'timeline', range, tzOffset, scope],
-    queryFn: () => apiFetch<TimelineBucket[]>(`/api/analytics/timeline?range=${range}&tzOffset=${tzOffset}${deviceParam}`),
+    queryKey: ['analytics', 'timeline', params, tzOffset],
+    queryFn: () => apiFetch<TimelineBucket[]>(`/api/analytics/timeline?${params}&tzOffset=${tzOffset}`),
   })
 
+  // Gaps filled for the CHARTS only — see fillMonthlyGaps. Every count, table
+  // and total reads the raw buckets, because "that month had no traffic" is a
+  // true zero on a chart and a phantom row in a breakdown.
+  const chartTimeline = useMemo(() => fillMonthlyGaps(timeline, EMPTY_BUCKET), [timeline])
+
   const { data: byModel = [] } = useQuery({
-    queryKey: ['analytics', 'by-model', range, scope],
-    queryFn: () => apiFetch<ByModelRow[]>(`/api/analytics/by-model?range=${range}${deviceParam}`),
+    queryKey: ['analytics', 'by-model', params],
+    queryFn: () => apiFetch<ByModelRow[]>(`/api/analytics/by-model?${params}`),
   })
 
   const { data: byKey = [] } = useQuery({
-    queryKey: ['analytics', 'by-key', range, scope],
-    queryFn: () => apiFetch<ByKeyRow[]>(`/api/analytics/by-key?range=${range}${deviceParam}`),
+    queryKey: ['analytics', 'by-key', params],
+    queryFn: () => apiFetch<ByKeyRow[]>(`/api/analytics/by-key?${params}`),
   })
 
   const { data: errors = [] } = useQuery({
-    queryKey: ['analytics', 'errors', range, scope],
-    queryFn: () => apiFetch<RecentErrorRow[]>(`/api/analytics/errors?range=${range}${deviceParam}`),
+    queryKey: ['analytics', 'errors', params],
+    queryFn: () => apiFetch<RecentErrorRow[]>(`/api/analytics/errors?${params}`),
   })
 
   const { data: errorDist } = useQuery({
-    queryKey: ['analytics', 'error-distribution', range, scope],
-    queryFn: () => apiFetch<ErrorDistribution>(`/api/analytics/error-distribution?range=${range}${deviceParam}`),
+    queryKey: ['analytics', 'error-distribution', params],
+    queryFn: () => apiFetch<ErrorDistribution>(`/api/analytics/error-distribution?${params}`),
   })
 
-  // Recent-calls list filters (status/platform) + the row opened in the
-  // drill-down dialog. Filters ride the query key so react-query refetches
-  // (and caches) each combination on its own.
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
-  const [platformFilter, setPlatformFilter] = useState<string>('all')
+  // The model filter's options come from the widest window too, for the same
+  // reason: a filtered list would drop every model the filter excludes, so
+  // widening it would be impossible.
+  const { data: modelOptions = [] } = useQuery({
+    queryKey: ['analytics', 'model-facets'],
+    queryFn: () => apiFetch<ByModelRow[]>('/api/analytics/by-model?range=365d'),
+  })
+
+  // The model's readable name for the filter dropdown. Keyed by the SERVED
+  // model id, because that is what `?model=` matches on.
+  const modelDisplay = new Map(modelOptions.map((m) => [m.modelId, m.displayName]))
+
   const [detailId, setDetailId] = useState<number | null>(null)
 
   const { data: recentCalls } = useQuery({
-    queryKey: ['analytics', 'requests', range, statusFilter, platformFilter, scope],
-    queryFn: () => {
-      const params = new URLSearchParams({ range, limit: '100' })
-      if (statusFilter !== 'all') params.set('status', statusFilter)
-      // provider (not platform) so a selected custom relay filters to itself
-      // instead of every custom endpoint (#889). Catalog ids equal the platform.
-      if (platformFilter !== 'all') params.set('provider', platformFilter)
-      if (scope) params.set('device', scope)
-      return apiFetch<RecentCallsResponse>(`/api/analytics/requests?${params}`)
-    },
+    queryKey: ['analytics', 'requests', params],
+    queryFn: () => apiFetch<RecentCallsResponse>(`/api/analytics/requests?${params}&limit=100`),
   })
 
   // The devices worth offering as tabs: the rollup rows, never a bare caller
@@ -776,14 +1015,14 @@ export default function AnalyticsPage() {
   // the control that changes it disappears. The tab bar is navigation, so it
   // is built from the widest window and stays put as the range moves.
   const { data: knownDevices = [] } = useQuery({
-    queryKey: ['analytics', 'by-client', '90d'],
-    queryFn: () => apiFetch<ByClientRow[]>('/api/analytics/by-client?range=90d'),
+    queryKey: ['analytics', 'by-client', 'device-facets'],
+    queryFn: () => apiFetch<ByClientRow[]>('/api/analytics/by-client?range=365d'),
   })
   const devices = useMemo(() => {
     const found = knownDevices.filter((c) => c.isDevice).map((c) => c.clientAgent)
     // A device selected earlier stays selectable even if it has since fallen
-    // out of even the 90-day window: the page is filtered to it, so it must
-    // appear in the control that un-filters it.
+    // out of the facet window: the page is filtered to it, so it must appear
+    // in the control that un-filters it.
     return found.includes(device) || device === 'all' || device === 'compare'
       ? found
       : [...found, device]
@@ -792,17 +1031,23 @@ export default function AnalyticsPage() {
   // Compare mode: one summary and one timeline per device, fetched in parallel
   // and only while comparing. `useQueries` rather than a loop of useQuery
   // because the device list is data, and hook order cannot depend on data.
+  //
+  // The WINDOW AND FILTERS ride these too, with only the device swapped per
+  // series — otherwise Compare would answer for a different slice of traffic
+  // than the cards directly below it.
   const compareSummaries = useQueries({
     queries: devices.map((d) => ({
-      queryKey: ['analytics', 'summary', range, d],
-      queryFn: () => apiFetch<SummaryResponse>(`/api/analytics/summary?range=${range}&device=${encodeURIComponent(d)}`),
+      queryKey: ['analytics', 'summary', params, d],
+      queryFn: () => apiFetch<SummaryResponse>(
+        `/api/analytics/summary?${windowParams(range, custom, d, filters)}`),
       enabled: comparing,
     })),
   })
   const compareTimelines = useQueries({
     queries: devices.map((d) => ({
-      queryKey: ['analytics', 'timeline', range, tzOffset, d],
-      queryFn: () => apiFetch<TimelineBucket[]>(`/api/analytics/timeline?range=${range}&tzOffset=${tzOffset}&device=${encodeURIComponent(d)}`),
+      queryKey: ['analytics', 'timeline', params, tzOffset, d],
+      queryFn: () => apiFetch<TimelineBucket[]>(
+        `/api/analytics/timeline?${windowParams(range, custom, d, filters)}&tzOffset=${tzOffset}`),
       enabled: comparing,
     })),
   })
@@ -822,7 +1067,10 @@ export default function AnalyticsPage() {
   // machine was asleep".
   const compareChart = useMemo(() => {
     if (!comparing) return []
-    const byTimestamp = new Map<string, Record<string, string | number>>()
+    // One row per bucket, one key per series — so the row type has to carry both
+    // the axis key and an open set of device names.
+    type CompareRow = { timestamp: string } & Record<string, string | number>
+    const byTimestamp = new Map<string, CompareRow>()
     const put = (name: string, buckets: TimelineBucket[]) => {
       for (const bucket of buckets) {
         const row = byTimestamp.get(bucket.timestamp) ?? { timestamp: bucket.timestamp }
@@ -832,7 +1080,11 @@ export default function AnalyticsPage() {
     }
     put(ALL_SERIES, timeline)
     compareTimelines.forEach((q, i) => put(devices[i], q.data ?? []))
-    return [...byTimestamp.values()].sort((a, b) => String(a.timestamp).localeCompare(String(b.timestamp)))
+    const merged = [...byTimestamp.values()].sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+    // Same gap fill as the single-series chart, with every series missing from a
+    // filled month left undefined rather than zeroed — recharts then breaks the
+    // line there, which is still the honest shape for "this machine was asleep".
+    return fillMonthlyGaps(merged, (timestamp) => ({ timestamp }))
   }, [comparing, compareTimelines, devices, timeline, ALL_SERIES])
 
   // How many buckets each series actually has. A series with a single point
@@ -867,18 +1119,32 @@ export default function AnalyticsPage() {
     ? t('analytics.sortHint', { count: recentCalls.rows.length })
     : null
 
-  // Savings card shows the SELECTED range's actual figure, so the number moves
-  // when the range toggle does. It used to render one 30-day projection at
-  // every setting, which made 24h, 7d, 30d and 90d read identically and looked
-  // like a frozen stat rather than a deliberate choice.
+  // The window's human-readable name, used on the stat card and in the savings
+  // hint. A custom window is named by its dates rather than by a preset, since
+  // there is no preset to name it after — and the server's echoed window bounds
+  // are the authority, so a clamped or reordered pair still reads correctly.
+  const windowLabel = range === CUSTOM ? `${custom.from} → ${custom.to}` : t(RANGE_LABEL_KEY[range])
+  // The window as the SERVER resolved it. Preferred over the local label for a
+  // custom span, because the server clamps and reorders and this is the truth.
+  const resolvedWindowLabel = summary?.windowSince && summary?.windowUntil && range === CUSTOM
+    ? `${summary.windowSince.slice(0, 10)} → ${summary.windowUntil.slice(0, 10)}`
+    : windowLabel
+
+
+  // Savings card shows the SELECTED window's actual figure, so the number moves
+  // when the window changes. It used to render one 30-day projection at every
+  // setting, which made 24h, 7d, 30d and 90d read identically and looked like a
+  // frozen stat rather than a deliberate choice.
   //
   // The 30-day pace still has a place — it is the "what does this save me a
   // month" number — so it moves into the hover hint, where an unchanging value
-  // is not mistaken for a broken one. Querying 30d separately is free:
-  // react-query shares the cache with the 30d tab.
+  // is not mistaken for a broken one. It carries the same device scope and
+  // filters as the window it annotates, so the hint and the figure describe the
+  // same traffic.
   const { data: summary30 } = useQuery({
-    queryKey: ['analytics', 'summary', '30d', scope],
-    queryFn: () => apiFetch<SummaryResponse>(`/api/analytics/summary?range=30d${deviceParam}`),
+    queryKey: ['analytics', 'summary', windowParams('30d', custom, scope, filters)],
+    queryFn: () => apiFetch<SummaryResponse>(
+      `/api/analytics/summary?${windowParams('30d', custom, scope, filters)}`),
   })
   const actualSavings = summary?.estimatedCostSavings ?? 0
   const baseSavings = summary30?.estimatedCostSavings ?? 0
@@ -892,14 +1158,10 @@ export default function AnalyticsPage() {
   })()
   const extrapolated = spanDays < 29.5
   const savings30d = extrapolated ? baseSavings * (30 / spanDays) : baseSavings
-  const rangeLabel = range === '24h' ? t('analytics.rangeLabel24h')
-    : range === '7d' ? t('analytics.rangeLabel7d')
-    : range === '30d' ? t('analytics.rangeLabel30d')
-    : t('analytics.rangeLabel90d')
   const spanLabel = spanDays >= 2 ? t('analytics.spanDays', { count: Math.round(spanDays) }) : t('analytics.spanHours', { count: Math.max(1, Math.round(spanDays * 24)) })
   const savingsHint = extrapolated
-    ? t('analytics.savingsHintRanged', { range: rangeLabel, monthly: savings30d.toFixed(2), span: spanLabel })
-    : t('analytics.savingsHintRangedExact', { range: rangeLabel, monthly: savings30d.toFixed(2) })
+    ? t('analytics.savingsHintWindow', { window: resolvedWindowLabel, monthly: savings30d.toFixed(2), span: spanLabel })
+    : t('analytics.savingsHintWindowExact', { window: resolvedWindowLabel, monthly: savings30d.toFixed(2) })
 
   // Pinned = the client named a specific model instead of auto-routing.
   // Honored = that model actually served it (the rest failed over).
@@ -960,15 +1222,123 @@ export default function AnalyticsPage() {
             <SegmentedControl
               value={range}
               onValueChange={updateRange}
-              options={TIME_RANGES.map(r => ({
+              options={([...TIME_RANGES, CUSTOM] as Array<TimeRange | typeof CUSTOM>).map(r => ({
                 value: r,
-                label: t(r === '24h' ? 'analytics.range24h' : r === '7d' ? 'analytics.range7d' : r === '30d' ? 'analytics.range30d' : 'analytics.range90d'),
+                label: r === CUSTOM ? t('analytics.rangeCustom') : t(RANGE_LABEL_KEY[r]),
               }))}
-              ariaLabel={t('analytics.title')}
+              ariaLabel={t('analytics.rangeLabel')}
             />
-          </div>
+           </div>
         }
       />
+
+      {/* Window + filters. These sit ABOVE every card and chart on purpose: the
+          status, provider and model selectors used to live in the recent-calls
+          table header, where choosing one moved that one table and left the
+          stat cards, the timeline and both breakdowns describing different
+          traffic. One bar, one scope, every panel follows. */}
+      <div className="mb-6 flex flex-wrap items-end gap-2">
+        {range === CUSTOM && (
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            {t('analytics.from')}
+            <input
+              type="date"
+              value={custom.from}
+              max={custom.to}
+              onChange={e => e.target.value && updateCustom({ ...custom, from: e.target.value })}
+              aria-label={t('analytics.from')}
+              className="h-8 rounded-lg border border-input bg-transparent px-2 text-xs md:text-sm"
+            />
+          </label>
+        )}
+        {range === CUSTOM && (
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            {t('analytics.to')}
+            <input
+              type="date"
+              value={custom.to}
+              min={custom.from}
+              onChange={e => e.target.value && updateCustom({ ...custom, to: e.target.value })}
+              aria-label={t('analytics.to')}
+              className="h-8 rounded-lg border border-input bg-transparent px-2 text-xs md:text-sm"
+            />
+          </label>
+        )}
+        <SegmentedControl
+          value={filters.status}
+          onValueChange={v => updateFilter('status', v)}
+          options={[
+            { value: 'all', label: t('analytics.filterAllStatuses') },
+            { value: 'success', label: t('common.success') },
+            { value: 'error', label: t('analytics.errors') },
+            { value: 'canceled', label: t('analytics.filterCanceled') },
+          ]}
+          ariaLabel={t('common.status')}
+        />
+        <Select value={filters.provider} onValueChange={v => updateFilter('provider', v ?? 'all')}>
+          <SelectTrigger size="sm" aria-label={t('common.provider')}>
+            <SelectValue>
+              {(v: string) => (!v || v === 'all' ? t('analytics.allProviders') : providerDisplay.get(v) ?? v)}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t('analytics.allProviders')}</SelectItem>
+            {providerOptions.map((p) => (
+              <SelectItem key={p.providerId} value={p.providerId}>
+                <span className="flex items-center gap-2">
+                  <PlatformDot platform={p.platform} />
+                  <span>{p.endpoint ?? p.platform}</span>
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filters.model} onValueChange={v => updateFilter('model', v ?? 'all')}>
+          <SelectTrigger size="sm" aria-label={t('common.model')}>
+            <SelectValue>
+              {(v: string) => (!v || v === 'all' ? t('analytics.allModels') : modelDisplay.get(v) ?? v)}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t('analytics.allModels')}</SelectItem>
+            {modelOptions.map((m) => (
+              <SelectItem key={`${m.providerId ?? m.platform}:${m.modelId}`} value={m.modelId}>
+                <span className="flex items-center gap-2">
+                  <PlatformDot platform={m.platform} />
+                  <span className="truncate">{m.displayName}</span>
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {/* A visible reset, because every one of these persists: a filter set
+            in a session an hour ago is still applied on return, and a page that
+            quietly shows a subset with no marker reads as the whole. */}
+        {filtersActive && (
+          <button
+            type="button"
+            onClick={() => {
+              setFilters({ status: 'all', provider: 'all', model: 'all' })
+              try { localStorage.removeItem(FILTERS_KEY) } catch { /* ignore */ }
+            }}
+            className="h-8 rounded-lg border px-2.5 text-xs text-muted-foreground hover:bg-muted"
+          >
+            {t('analytics.clearFilters')}
+          </button>
+        )}
+      </div>
+
+      {/* Say so when the window reaches past the oldest surviving raw row. The
+          aggregate-backed totals stay right; latency spread, TTFT, savings and
+          the two breakdowns do not, and a 365-day card that silently covers
+          40 days is worse than one that admits it. The date named is the
+          oldest retained row — where per-request detail stops. */}
+      {summary?.rawWindowTruncated && (
+        <p className="mb-6 rounded-xl border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+          {t('analytics.rawHorizonNotice', { oldest: summary.rawWindowOldest?.slice(0, 10) ?? summary.windowSince.slice(0, 10) })}
+        </p>
+      )}
+
 
       <div className="space-y-6">
         {/* Compare: the machines side by side, and their request volume on one
@@ -1024,7 +1394,7 @@ export default function AnalyticsPage() {
                 <ResponsiveContainer width="100%" height={240}>
                   <LineChart data={compareChart} margin={{ top: 6, right: 6, left: -12, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="2 4" stroke={gridStyle} />
-                    <XAxis dataKey="timestamp" tick={axisStyle} tickLine={false} axisLine={{ stroke: gridStyle }} tickFormatter={formatTimelineTick} />
+                    <XAxis dataKey="timestamp" type="category" tick={axisStyle} tickLine={false} axisLine={{ stroke: gridStyle }} tickFormatter={formatTimelineTick} />
                     <YAxis tick={axisStyle} tickLine={false} axisLine={false} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={(label) => formatTimelineTick(String(label))} />
                     <Legend wrapperStyle={{ fontSize: 12 }} iconType="line" />
@@ -1081,11 +1451,11 @@ export default function AnalyticsPage() {
               <Stat icon={Gauge} label={t('analytics.avgLatency')} value={`${summary?.avgLatencyMs ?? 0} ms`} />
               <Stat icon={Clock} label={t('analytics.p95Latency')} value={p95Value} />
               <Stat icon={Zap} label={t('analytics.avgTtft')} value={ttftValue} />
-              {/* Priced per request at the served model's paid-API equivalent
-                  rate (not a flat frontier-model rate) — see db/model-pricing.ts.
-                  The value follows the range toggle; the hover hint carries the
+              {/* Priced per request at the served model's paid-API equivalent rate,
+                  not a flat frontier-model rate — see db/model-pricing.ts. The value
+                  follows the window and the filters; the hover hint carries the
                   30-day pace and says whether it was extrapolated. */}
-              <Stat icon={CircleDollarSign} label={t('analytics.estSavings')} value={`$${actualSavings.toFixed(2)}`} sub={rangeLabel} hint={savingsHint} />
+              <Stat icon={CircleDollarSign} label={t('analytics.estSavings')} value={`$${actualSavings.toFixed(2)}`} sub={windowLabel} hint={savingsHint} />
               {/* Response-cache impact, as ONE card: hit rate with the tokens
                   it gave back underneath. Rendered only when the cache is on,
                   so installs that opted out neither lose a slot in this row nor
@@ -1103,10 +1473,13 @@ export default function AnalyticsPage() {
           )}
         </div>
 
-        {/* Everything moved off the subscription for this range and device:
-            the proxy's own traffic plus the free CLI fleet, priced alike. */}
+        {/* The fleet's own window is day-granular and bucketed in UTC, so a
+            custom span cannot be expressed on its endpoint. It follows the
+            preset when one is selected, and the WIDEST preset while a custom
+            span is active — the card's own numbers (the proxy half) still come
+            from `summary`, which does honour the custom window. */}
         <OffloadedInference
-          range={range}
+          range={range === CUSTOM ? '365d' : range}
           device={scope}
           now={now}
           proxy={summary && {
@@ -1124,9 +1497,9 @@ export default function AnalyticsPage() {
                 <p className="text-sm text-muted-foreground text-center py-8">{t('common.noData')}</p>
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
-                  <LineChart data={timeline} margin={{ top: 6, right: 6, left: -12, bottom: 0 }}>
+                  <LineChart data={chartTimeline} margin={{ top: 6, right: 6, left: -12, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="2 4" stroke={gridStyle} />
-                    <XAxis dataKey="timestamp" tick={axisStyle} tickLine={false} axisLine={{ stroke: gridStyle }} tickFormatter={formatTimelineTick} />
+                    <XAxis dataKey="timestamp" type="category" tick={axisStyle} tickLine={false} axisLine={{ stroke: gridStyle }} tickFormatter={formatTimelineTick} />
                     <YAxis tick={axisStyle} tickLine={false} axisLine={false} />
                     <Tooltip contentStyle={tooltipStyle} />
                     <Legend wrapperStyle={{ fontSize: 12 }} iconType="line" />
@@ -1145,9 +1518,9 @@ export default function AnalyticsPage() {
                 <p className="text-sm text-muted-foreground text-center py-8">{t('common.noData')}</p>
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
-                  <LineChart data={timeline} margin={{ top: 6, right: 6, left: -12, bottom: 0 }}>
+                  <LineChart data={chartTimeline} margin={{ top: 6, right: 6, left: -12, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="2 4" stroke={gridStyle} />
-                    <XAxis dataKey="timestamp" tick={axisStyle} tickLine={false} axisLine={{ stroke: gridStyle }} tickFormatter={formatTimelineTick} />
+                    <XAxis dataKey="timestamp" type="category" tick={axisStyle} tickLine={false} axisLine={{ stroke: gridStyle }} tickFormatter={formatTimelineTick} />
                     <YAxis tick={axisStyle} tickLine={false} axisLine={false} tickFormatter={(v: number) => formatTokens(v)} />
                     <Tooltip contentStyle={tooltipStyle} formatter={(value) => formatTokens(Number(value))} />
                     <Legend wrapperStyle={{ fontSize: 12 }} iconType="line" />
@@ -1322,46 +1695,15 @@ export default function AnalyticsPage() {
           {/* Recent calls: one line per proxied request with the caller's IP +
               user agent. All local clients share the unified key, so this is
               the only view that answers "who is hitting the router". Rows open
-              the failover-ladder drill-down; the header hosts status/provider
-              filters (server-side, so total reflects the filtered set). */}
+              the failover-ladder drill-down.
+
+              It carries NO filter controls of its own: the status and provider
+              selectors that used to sit here moved to the page-level bar above
+              the cards, where they scope every panel rather than only this
+              table. Two filters in two places was how the list and the charts
+              came to describe different traffic. */}
           <div className="lg:col-span-2">
-            <Panel
-              icon={List}
-              title={t('analytics.recentCalls')}
-              actions={
-                <div className="flex flex-wrap items-center gap-2">
-                  <SegmentedControl
-                    value={statusFilter}
-                    onValueChange={setStatusFilter}
-                    options={[
-                      { value: 'all', label: t('analytics.filterAll') },
-                      { value: 'success', label: t('common.success') },
-                      { value: 'error', label: t('analytics.errors') },
-                      { value: 'canceled', label: t('analytics.filterCanceled') },
-                    ]}
-                    ariaLabel={t('common.status')}
-                  />
-                  <Select value={platformFilter} onValueChange={(v) => setPlatformFilter(v ?? 'all')}>
-                    <SelectTrigger size="sm" aria-label={t('common.provider')}>
-                      <SelectValue>
-                        {(v: string) => (!v || v === 'all' ? t('analytics.allProviders') : providerDisplay.get(v) ?? v)}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{t('analytics.allProviders')}</SelectItem>
-                      {byPlatform.map((p) => (
-                        <SelectItem key={p.providerId} value={p.providerId}>
-                          <span className="flex items-center gap-2">
-                            <PlatformDot platform={p.platform} />
-                            <span>{p.endpoint ?? p.platform}</span>
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              }
-            >
+            <Panel icon={List} title={t('analytics.recentCalls')}>
               {recentCallsSortHint && (
                 <p className="pb-2 text-xs text-muted-foreground">{recentCallsSortHint}</p>
               )}

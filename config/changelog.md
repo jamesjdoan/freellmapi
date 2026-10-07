@@ -1,5 +1,57 @@
 # Changelog
 
+## 2026-10-04 — Analytics: real windows, longer durations, page-wide filters
+
+- **The 30d and 90d views were identical, and it was not a render bug.** Measured on a copy of
+  the live DB: `request_hourly` held 415 rows in a 30d window and 420 in a 90d one, spread over
+  the same 31 daily buckets. Two causes. `/timeline` chose its interval with
+  `range === '24h' ? 'hour' : 'day'`, so every window past a day drew one point per day — the
+  chart was redrawing identical data and reading as frozen. And `HOURLY_RETENTION_DAYS` was 30
+  while the toggle already offered 90d, so the 90d view was reading a 30-day window and
+  labelling it 90 days.
+- `server/src/routes/analytics.ts`: one `resolveWindow()` produces the half-open `[since, until)`
+  every endpoint reads, from a `range` preset **or** a `from`/`to` date pair. Presets are now
+  `24h 7d 30d 90d 180d 365d`. The timeline picks its bucket from the window's own span
+  (`hour` ≤3d, `day` ≤150d, else `month`), so 180d and 365d read as a legible monthly line
+  instead of 180 unreadable ticks. A custom window wider than five years is clamped to its
+  RECENT end, so a fat-fingered `1900→2100` renders recent history rather than nothing.
+- `pageFilters()` is now the one place a status, provider or model filter becomes SQL, and every
+  endpoint composes it. The status and provider selectors used to live only on `/requests`, in
+  the recent-calls **table header** — choosing "errors" moved that one table and left the stat
+  cards, the timeline and both breakdowns describing all traffic. They now sit in a bar above
+  every panel; the table's own controls are gone, not duplicated.
+- `services/request-retention.ts`: `HOURLY_RETENTION_DAYS` 30 → 365, so the aggregate is
+  retained as deep as the widest preset. ~8.8k rows and well under a megabyte.
+- `/summary` now reports `windowSince`, `windowUntil`, `rawWindowTruncated` and
+  `rawWindowOldest`. When a window reaches past the oldest request on record the page says so:
+  the aggregate-backed totals cover everything held, while latency, TTFT, savings and the two
+  breakdowns are raw-row readers and cover only that span.
+- **F5, a real bug found by the probe:** a bucket in `request_hourly` is keyed by its FIRST
+  second, so the aggregate's upper bound must NOT be ceiled to the next hour — doing so pulled
+  in a whole bucket the window excludes, and a custom window ending at midnight counted the
+  following hour. `since` IS floored, because a rolling 24h window opens mid-hour. Measured on
+  the live copy: a one-day custom window read 6,117 requests, 248 of them from the next day.
+- Verification: `analytics.test.ts` 38 → 49 tests, all passing. The ones that matter are
+  `gives a longer preset a strictly wider window` (counts AND monotonic bounds — F2 violated
+  both silently) and `buckets the timeline by the window span` (asserts the 30d and 90d label
+  sets differ — F1 verbatim). A throwaway probe against a COPY of the live DB exercised six
+  presets, four custom windows, all three filters across seven panels (all agreeing on 35,277)
+  and five malformed inputs (four 400s). Not committed.
+- **Two defects the server suite could not have caught, found in the browser.**
+  (1) recharts INFERS the X-axis type, and from two points it infers a numeric
+  one — so a 180d/365d window over a young install rendered an X axis with no
+  dates on it (`2 empty tick groups`; "Sept 26"/"Oct 26" were being drawn as
+  Y-axis ticks). Every timeline axis now states `type="category"`, which invents
+  no data and gives the two honest points their labels back. (2)
+  `apply-translations.mjs --fill-english` never updates a CHANGED key, so the
+  reworded horizon notice had to be overwritten across 59 locales by hand —
+  already documented in `docs/GOTCHAS.md`, and it bit again exactly as written.
+- Verified against the deployed container: each preset moves the Requests card
+  (3,933 / 40,543 / 70,804 / 71,578 …), a custom `2026-09-20 → 2026-09-26` window
+  reads 12,789, and with `provider=nvidia&status=error` every one of the nine
+  analytics endpoints requests `range=30d&status=error&provider=nvidia`.
+- ADR `docs/adr/ARCH-20261004-analytics-windows-and-page-filters.md`.
+
 ## 2026-10-04 — Session wrap
 
 - `docs/GOTCHAS.md`: new 2026-10-04 section — the MBP's 212 failed hourly reports and their

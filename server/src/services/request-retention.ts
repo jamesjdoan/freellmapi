@@ -1,15 +1,31 @@
 import { getDb } from '../db/index.js';
 
+// Raw `requests` retention. 90d / 100k rows is the standing default and is the
+// HORIZON for the raw-row readers (latency percentiles, TTFT, savings, the
+// per-provider and per-model breakdowns, the recent-calls list). Windows and
+// page filters that go past it are answered by the hourly aggregate where it
+// can be, and read as empty — never as zeroed — where the aggregate carries no
+// dimension. See readRawTotals in routes/analytics.ts.
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RETENTION_DAYS = 90;
 const DEFAULT_MAX_ROWS = 100_000;
 const PRUNE_INTERVAL_MS = 60_000;
-// Hourly aggregate table. Pruned once a day on the same 60s tick; bounded at
-// ~720 rows for a 30d max UI range. See db/migrations/.../request_aggregates.ts.
-const HOURLY_RETENTION_DAYS = 30;
+// Hourly aggregate table. Pruned once a day on the same 60s tick.
+//
+// 🛑 This must be at least as deep as the WIDEST window the dashboard offers
+// (routes/analytics.ts ANALYTICS_RANGES tops out at 365d). The table is the
+// source of truth for the unfiltered stat cards and the timeline — it is what
+// makes a window survive the raw-row prune — so pruning it shallower than the
+// UI is silent data loss: the 90d view reads as "90 days" while counting only
+// what is left. It was 30 days while the UI already offered 90d, which is
+// exactly how 30d and 90d came to return identical numbers on this install.
+// The cost is bounded and small: one row per hour per dimension-less bucket,
+// ~8.8k rows and well under a megabyte at 365 days.
+export const HOURLY_RETENTION_DAYS = 365;
 const HOURLY_PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
 // Persisted server_logs (warn/error only — see the migration). Much shorter
-// than the 90d analytics window: a week is well past the point where anyone is
+// than any analytics window: a week is well past the point where anyone is
 // still debugging last Tuesday's provider outage, and unlike `requests` these
 // rows carry no aggregate that would silently change if they were pruned.
 const DEFAULT_SERVER_LOGS_RETENTION_DAYS = 7;
@@ -270,4 +286,27 @@ export function pruneRequestAnalytics(options: {
   }
 
   return { deleted, skipped: false };
+}
+
+// ── The raw horizon ──────────────────────────────────────────────────────────
+
+/** The oldest `created_at` still present in `requests`, as SQLite UTC text, or
+ *  null when the table is empty. One indexed MIN, cheap enough to ask per
+ *  request, and it is the only honest answer to "how far back does this panel
+ *  actually have data". */
+export function readRawHorizon(db: RetentionDb = getDb()): string | null {
+  const row = db.prepare('SELECT MIN(created_at) AS oldest FROM requests').get() as
+    { oldest: string | null } | undefined;
+  return row?.oldest ?? null;
+}
+
+/** True when a window opens before the oldest surviving raw row. The dashboard
+ *  uses it to say so on the panel instead of letting a long window quietly
+ *  render as a short one: aggregate-backed figures stay right past this point
+ *  (request_hourly is pruned far deeper), while the raw-only ones — latency
+ *  spread, TTFT, savings, the per-provider and per-model breakdowns — are not,
+ *  and report null or an empty list rather than a wrong zero. */
+export function windowExceedsRawHorizon(since: string, db: RetentionDb = getDb()): boolean {
+  const oldest = readRawHorizon(db);
+  return oldest !== null && since < oldest;
 }

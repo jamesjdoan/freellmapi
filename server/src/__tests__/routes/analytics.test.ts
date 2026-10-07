@@ -869,4 +869,205 @@ describe('Analytics API', () => {
       }
     });
   });
+
+  // ── The analytics window ───────────────────────────────────────────────────
+  //
+  // 30d and 90d used to return IDENTICAL numbers on this page, which read as a
+  // frozen chart. Two causes, both fixed here: the timeline bucketed by day
+  // for every window past 24h (so 90d's labels were the same 31 days 30d had),
+  // and request_hourly was pruned at 30 days while the UI offered 90.
+  describe('window presets and custom dates', () => {
+    // The outer beforeEach pins the clock to 2026-05-29 12:00:00Z, and the
+    // window bounds are computed from Date.now() — so the preset maths is
+    // deterministic against seeded rows. Fake timers stay ON here; switching
+    // to real ones would read the wall clock (2026 in the future) and every
+    // seeded row would fall outside every window.
+
+    it('gives a longer preset a strictly wider window', async () => {
+      // 'now' is 2026-05-29 12:00:00. Rows sit at 1, 6, 20, 45 and 100 days
+      // back — every preset's cutoff (7/30/90d) falls strictly BETWEEN two of
+      // them, so no count is ambiguous at a boundary.
+      insertRequest('2026-05-28 12:00:00'); // 1 day back
+      insertRequest('2026-05-23 12:00:00'); // 6 days back
+      insertRequest('2026-05-09 12:00:00'); // 20 days back
+      insertRequest('2026-04-14 12:00:00'); // 45 days back
+      insertRequest('2026-02-18 12:00:00'); // 100 days back
+
+      const d7 = await request(app, '/api/analytics/summary?range=7d');
+      const d30 = await request(app, '/api/analytics/summary?range=30d');
+      const d90 = await request(app, '/api/analytics/summary?range=90d');
+
+      expect(d7.body.totalRequests).toBe(2);
+      expect(d30.body.totalRequests).toBe(3);
+      expect(d90.body.totalRequests).toBe(4);
+      // Monotonic, and in the direction that matters: a longer window opens
+      // EARLIER and closes at the same place. This is what 30d-vs-90d rests on.
+      expect(d30.body.windowSince < d7.body.windowSince).toBe(true);
+      expect(d90.body.windowSince < d30.body.windowSince).toBe(true);
+      expect(d30.body.windowUntil).toBe(d7.body.windowUntil);
+      expect(d90.body.windowUntil).toBe(d7.body.windowUntil);
+    });
+
+    it('reads a custom from/to pair and treats `to` as inclusive', async () => {
+      insertRequest('2026-05-25 23:59:59'); // one second before the window
+      insertRequest('2026-05-26 00:00:00'); // first instant inside
+      insertRequest('2026-05-26 12:00:00'); // mid-window
+      insertRequest('2026-05-27 23:59:59'); // LAST instant inside
+      insertRequest('2026-05-28 00:00:00'); // first instant outside
+
+      const res = await request(app, '/api/analytics/summary?from=2026-05-26&to=2026-05-27');
+      expect(res.status).toBe(200);
+      // Three inside. The `to` day's rows are NOT dropped at 00:00 — the
+      // window's exclusive bound is the NEXT midnight, so 23:59:59 on the
+      // final day still counts and 00:00:00 on the next does not.
+      expect(res.body.totalRequests).toBe(3);
+      expect(res.body.windowSince).toBe('2026-05-26 00:00:00');
+      expect(res.body.windowUntil).toBe('2026-05-28 00:00:00');
+    });
+
+    it('reorders an inverted date pair rather than returning an empty window', async () => {
+      insertRequest('2026-05-26 12:00:00');
+      const res = await request(app, '/api/analytics/summary?from=2026-05-27&to=2026-05-26');
+      expect(res.body.totalRequests).toBe(1);
+      expect(res.body.windowSince).toBe('2026-05-26 00:00:00');
+    });
+
+    it('falls back to the default preset on a half-specified or garbage pair', async () => {
+      insertRequest('2026-05-23 12:00:00'); // 6 days back, inside 7d
+
+      for (const qs of ['from=2026-05-26', 'to=2026-05-27', 'from=nope&to=also-nope', 'range=banana']) {
+        const res = await request(app, `/api/analytics/summary?${qs}`);
+        expect(res.status).toBe(200);
+        expect(res.body.totalRequests).toBe(1);
+      }
+    });
+
+    it('buckets the timeline by the window span, not by a hardcoded range test', async () => {
+      // One row a day for the last 100 days, so the 7d window holds 8 daily
+      // buckets and the 365d window spans four months. The old rule
+      // (`range === '24h' ? hour : day`) gave both the SAME daily labels,
+      // which is exactly why 30d and 90d looked frozen.
+      for (let d = 0; d < 100; d++) {
+        const at = new Date(Date.parse('2026-05-29T12:00:00Z') - d * 86_400_000);
+        insertRequest(at.toISOString().slice(0, 19).replace('T', ' '));
+      }
+
+      const week = await request(app, '/api/analytics/timeline?range=7d&tzOffset=0');
+      expect(week.status).toBe(200);
+      expect(week.body.length).toBeGreaterThan(1);
+      // A daily bucket, never an hourly one, for a 7-day window.
+      expect(week.body.every((b: any) => /^\d{4}-\d{2}-\d{2}$/.test(b.timestamp))).toBe(true);
+
+      const year = await request(app, '/api/analytics/timeline?range=365d&tzOffset=0');
+      expect(year.status).toBe(200);
+      // Monthly, so a year-long window is a legible line rather than 365 ticks.
+      expect(year.body.every((b: any) => /^\d{4}-\d{2}-01$/.test(b.timestamp))).toBe(true);
+
+      // The regression itself: 30d and 90d used to return the SAME labels, so
+      // the chart was byte-identical between them.
+      const d30 = await request(app, '/api/analytics/timeline?range=30d&tzOffset=0');
+      const d90 = await request(app, '/api/analytics/timeline?range=90d&tzOffset=0');
+      expect(d30.body.map((b: any) => b.timestamp)).not.toEqual(d90.body.map((b: any) => b.timestamp));
+      expect(d30.body.length).toBeLessThan(d90.body.length);
+    });
+
+    it('caps an absurd window and keeps its recent end', async () => {
+      insertRequest('2026-05-23 12:00:00');
+      // 1900→2100 must not walk centuries, and must not return an empty window
+      // by clamping to the 1900 end.
+      const res = await request(app, '/api/analytics/summary?from=1900-01-01&to=2100-01-01');
+      expect(res.status).toBe(200);
+      expect(res.body.totalRequests).toBe(1);
+      const since = Date.parse(res.body.windowSince.replace(' ', 'T') + 'Z');
+      const until = Date.parse(res.body.windowUntil.replace(' ', 'T') + 'Z');
+      expect(until - since).toBeLessThanOrEqual(5 * 366 * 86_400_000);
+    });
+  });
+
+  // ── Page-wide filters ──────────────────────────────────────────────────────
+  //
+  // The status/provider selectors used to exist only on /requests, so choosing
+  // one moved that table and left every other panel describing different
+  // traffic. They are now shared, and the point of these tests is that the
+  // panels AGREE — not merely that each one filters.
+  describe('page-wide filters', () => {
+    // Fake timers stay on (the outer beforeEach pins the clock), for the same
+    // reason as above: the seeded rows sit just inside 24h of that pinned now.
+
+    function seedFilterTraffic(): void {
+      insertRaw({ platform: 'groq', modelId: 'groq-a', status: 'success', latencyMs: 10, createdAt: '2026-05-29 10:00:00' });
+      insertRaw({ platform: 'groq', modelId: 'groq-a', status: 'error', latencyMs: 20, createdAt: '2026-05-29 10:01:00' });
+      insertRaw({ platform: 'openrouter', modelId: 'or-b', status: 'success', latencyMs: 30, createdAt: '2026-05-29 10:02:00' });
+      insertRaw({ platform: 'openrouter', modelId: 'or-b', status: 'success', latencyMs: 40, createdAt: '2026-05-29 10:03:00' });
+    }
+
+    it('scopes every panel to the same slice', async () => {
+      seedFilterTraffic();
+      const qs = '/api/analytics?range=24h&status=success&provider=groq';
+
+      const summary = await request(app, `/api/analytics/summary?range=24h&status=success&provider=groq`);
+      const platforms = await request(app, `/api/analytics/by-platform?range=24h&status=success&provider=groq`);
+      const models = await request(app, `/api/analytics/by-model?range=24h&status=success&provider=groq`);
+      const timeline = await request(app, `/api/analytics/timeline?range=24h&status=success&provider=groq`);
+      const calls = await request(app, `/api/analytics/requests?range=24h&status=success&provider=groq&limit=100`);
+
+      expect(summary.body.totalRequests).toBe(1);
+      // Each breakdown narrows to the filtered slice, and its row counts sum to
+      // the SAME number the stat card shows.
+      expect(platforms.body.map((r: any) => r.platform)).toEqual(['groq']);
+      expect(models.body.map((r: any) => r.modelId)).toEqual(['groq-a']);
+      expect(timeline.body.reduce((n: number, b: any) => n + b.requests, 0)).toBe(1);
+      // `total` counts the filtered set, not the whole window — the list and
+      // its count must never describe different populations.
+      expect(calls.body.total).toBe(1);
+      expect(calls.body.rows).toHaveLength(1);
+    });
+
+    it('narrows by the SERVED model, not by everything on that provider', async () => {
+      seedFilterTraffic();
+      const res = await request(app, '/api/analytics/summary?range=24h&provider=openrouter&model=' + encodeURIComponent('or-b'));
+      expect(res.body.totalRequests).toBe(2);
+      // A model the provider never served returns nothing, not the provider's.
+      const absent = await request(app, '/api/analytics/summary?range=24h&provider=openrouter&model=' + encodeURIComponent('groq-a'));
+      expect(absent.body.totalRequests).toBe(0);
+    });
+
+    it('composes a status filter with the error panels rather than contradicting them', async () => {
+      seedFilterTraffic();
+      // "Errors inside the success-only slice" is zero rows — the truth about
+      // that slice, not a 400 and not the provider's real errors.
+      const dist = await request(app, '/api/analytics/error-distribution?range=24h&status=success');
+      expect(dist.status).toBe(200);
+      expect(dist.body.byCategory).toEqual([]);
+      const errors = await request(app, '/api/analytics/errors?range=24h&status=success');
+      expect(errors.body).toEqual([]);
+    });
+
+    it('rejects malformed filter values on every panel, not just /requests', async () => {
+      seedFilterTraffic();
+      for (const path of ['/summary', '/by-platform', '/by-model', '/by-key', '/by-client', '/timeline', '/errors', '/error-distribution', '/requests']) {
+        expect((await request(app, `/api/analytics${path}?range=24h&status=bogus`)).status).toBe(400);
+        expect((await request(app, `/api/analytics${path}?range=24h&model=${'a'.repeat(300)}`)).status).toBe(400);
+      }
+    });
+
+    it('reports the raw horizon so a long window admits what it cannot cover', async () => {
+      // "now" is 2026-05-29 12:00:00, so a 24h window opens at 05-28 12:00 —
+      // two hours BEFORE the oldest row. That is exactly the condition the flag
+      // reports: the window asks for a span we hold no rows for. It is true on
+      // a young install too, which is honest — the window genuinely cannot be
+      // filled, and the notice says so rather than rendering a full-looking bar.
+      insertRaw({ platform: 'groq', modelId: 'groq-a', status: 'success', createdAt: '2026-05-29 10:00:00' });
+      const outside = await request(app, '/api/analytics/summary?range=24h');
+      expect(outside.body.rawWindowTruncated).toBe(true);
+      expect(outside.body.rawWindowOldest).toBe('2026-05-29 10:00:00');
+
+      // A window that opens INSIDE the held span does not raise the notice,
+      // which is the case an operator on an established install sees daily.
+      insertRaw({ platform: 'groq', modelId: 'groq-a', status: 'success', createdAt: '2026-05-20 10:00:00' });
+      const covered = await request(app, '/api/analytics/summary?range=7d');
+      expect(covered.body.rawWindowTruncated).toBe(false);
+      expect(covered.body.rawWindowOldest).toBe('2026-05-20 10:00:00');
+    });
+  });
 });

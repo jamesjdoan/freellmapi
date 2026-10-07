@@ -1,6 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { initDb, getDb } from '../../db/index.js';
-import { getRequestAnalyticsRetentionConfig, pruneRequestAnalytics } from '../../services/request-retention.js';
+import {
+  getRequestAnalyticsRetentionConfig,
+  pruneRequestAnalytics,
+  // Exported for one test only: the drift guard below needs to compare the
+  // aggregate's depth against the widest window the UI offers, and that
+  // constant is private to the retention service.
+  HOURLY_RETENTION_DAYS,
+} from '../../services/request-retention.js';
+import { MAX_ANALYTICS_RANGE_DAYS } from '../../routes/analytics.js';
 
 const ORIGINAL_RETENTION_DAYS = process.env.REQUEST_ANALYTICS_RETENTION_DAYS;
 const ORIGINAL_MAX_ROWS = process.env.REQUEST_ANALYTICS_MAX_ROWS;
@@ -86,7 +94,7 @@ describe('request analytics retention', () => {
     expect(rows.map(row => row.error)).toEqual(['row-3', 'row-4']);
   });
 
-  it('prunes hourly aggregate rows older than 30 days and only when the daily gate has elapsed', () => {
+  it('prunes hourly aggregate rows older than the widest analytics window, and only when the daily gate has elapsed', () => {
     // Hourly buckets never auto-create themselves in this test (logRequest is
     // the only writer), so seed them by hand to exercise the prune path.
     const db = getDb();
@@ -96,31 +104,42 @@ describe('request analytics retention', () => {
     const upsert = db.prepare(`INSERT INTO request_hourly (hour, total_requests) VALUES (?, ?)
       ON CONFLICT(hour) DO UPDATE SET total_requests = excluded.total_requests`);
     // Seed in the same 'YYYY-MM-DD HH:00:00' (space) format production writes,
-    // so the prune cutoff (also space) compares apples-to-apples.
-    upsert.run('2026-05-01 00:00:00', 5);   // outside 30d window from May 31
-    upsert.run('2026-05-15 00:00:00', 3);   // inside
-    upsert.run('2026-05-31 00:00:00', 7);   // boundary hour, kept
+    // so the prune cutoff (also space) compares apples-to-apples. "Now" is
+    // 2026-07-01 01:00, which puts the 365-day cutoff at 2025-07-01 01:00 —
+    // the rows straddle that to the hour, so the boundary is actually tested.
+    upsert.run('2025-06-01 00:00:00', 5);   // well outside 365d — pruned
+    upsert.run('2025-07-01 00:00:00', 3);   // one hour before the cutoff — pruned
+    upsert.run('2025-07-02 00:00:00', 4);   // just inside — kept
+    upsert.run('2026-07-01 00:00:00', 7);   // boundary hour, kept
 
-    // First call (cold gate): should prune the May 1 row and leave the rest.
+    // First call (cold gate): prunes the two rows past the cutoff.
     const first = pruneRequestAnalytics({
       db,
       force: true,
-      now: new Date('2026-05-31T01:00:00Z'),
+      now: new Date('2026-07-01T01:00:00Z'),
     });
-    expect(first.deleted).toBe(1);
+    expect(first.deleted).toBe(2);
     const remaining = db.prepare(`SELECT hour, total_requests FROM request_hourly ORDER BY hour`).all() as Array<{ hour: string; total_requests: number }>;
-    expect(remaining.map(r => r.hour)).toEqual(['2026-05-15 00:00:00', '2026-05-31 00:00:00']);
+    expect(remaining.map(r => r.hour)).toEqual(['2025-07-02 00:00:00', '2026-07-01 00:00:00']);
 
     // Second call inside the 24h gate: hourly prune is skipped (raw prune may
     // still run, but with default config + 0 rows it deletes nothing). The
     // hourly rows are unchanged.
     const second = pruneRequestAnalytics({
       db,
-      now: new Date('2026-05-31T01:05:00Z'),
+      now: new Date('2026-07-01T01:05:00Z'),
     });
     expect(second.skipped).toBe(false);
     expect(second.deleted).toBe(0);
     const remainingAfter = db.prepare(`SELECT hour FROM request_hourly ORDER BY hour`).all() as Array<{ hour: string }>;
-    expect(remainingAfter.map(r => r.hour)).toEqual(['2026-05-15 00:00:00', '2026-05-31 00:00:00']);
+    expect(remainingAfter.map(r => r.hour)).toEqual(['2025-07-02 00:00:00', '2026-07-01 00:00:00']);
+  });
+
+  it('keeps the aggregate at least as deep as the widest window the dashboard offers', () => {
+    // The regression this guards: retention was 30 days while the UI already
+    // offered 90d, so the 90d view read a 30-day window and the 30d and 90d
+    // charts came back byte-identical. The two depths are the same fact stated
+    // twice, and this asserts the aggregate is never the shallower one.
+    expect(HOURLY_RETENTION_DAYS).toBeGreaterThanOrEqual(MAX_ANALYTICS_RANGE_DAYS);
   });
 });

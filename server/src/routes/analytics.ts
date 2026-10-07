@@ -4,6 +4,7 @@ import { getDb } from '../db/index.js';
 import { FALLBACK_INPUT_PER_M, FALLBACK_OUTPUT_PER_M } from '../db/model-pricing.js';
 import { providerIdFor, providerDisplayName } from '../lib/provider-identity.js';
 import { normalizeBaseUrl } from '../lib/endpoint-scope.js';
+import { readRawHorizon, windowExceedsRawHorizon } from '../services/request-retention.js';
 import type { RoutingDecisionTrace } from '../lib/attempt-trace.js';
 
 /** Decode a stored routing trace. A row from before the column existed, or one
@@ -38,28 +39,150 @@ const ENDPOINT_ID_SQL = "COALESCE(rtrim(trim(k.base_url), '/'), '')";
 const toSqliteDateTime = (timestamp: number) =>
     new Date(timestamp).toISOString().slice(0, 19).replace('T', ' ');
 
-// Return the rolling cutoff timestamp (UTC) for the selected analytics range.
-// Exported so the CLI-fleet read windows by exactly the same ranges.
-export function getSinceTimestamp(range: string): string {
-  const now = Date.now();
+// ── The analytics window ─────────────────────────────────────────────────────
+//
+// Every endpoint reads the SAME half-open interval `[since, until)` in SQLite's
+// 'YYYY-MM-DD HH:MM:SS' UTC form. One resolver, so no panel can quietly answer
+// for a different span than its neighbour.
+//
+// Two ways in, and they are mutually exclusive:
+//   - `range`: one of the named presets below, counting back from now.
+//   - `from` + `to`: explicit dates, for any window the presets don't cover.
+//
+// The presets grew because the daily timeline cannot stay legible past ~90
+// buckets. 1d/7d/30d/90d each keep a readable daily line; 180d/365d bucket by
+// MONTH, and a custom window picks its bucket from its own span. Everything
+// else — the stat cards, the breakdowns, the recent-calls list — reads the
+// same window, so nothing answers a different question than the rest.
+export const ANALYTICS_RANGES = ['24h', '7d', '30d', '90d', '180d', '365d'] as const;
 
-  switch (range) {
-    case '24h':
-      return toSqliteDateTime(now - 24 * 60 * 60 * 1000);
-    case '30d':
-      return toSqliteDateTime(now - 30 * 24 * 60 * 60 * 1000);
-    case '90d':
-      return toSqliteDateTime(now - 90 * 24 * 60 * 60 * 1000);
-    case '7d':
-    default:
-      return toSqliteDateTime(now - 7 * 24 * 60 * 60 * 1000);
-  }
+export type AnalyticsRange = typeof ANALYTICS_RANGES[number];
+
+/** Widest preset the UI offers. The hourly aggregate is pruned at this depth,
+ *  so a range past it would silently read a short window (see
+ *  services/request-retention.ts). */
+export const MAX_ANALYTICS_RANGE = '365d';
+
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+
+/** A preset in milliseconds, or null for anything not on the list. */
+function presetMs(range: string): number | null {
+  if (range === '24h') return 24 * HOUR_MS;
+  const days = /^(\d{1,4})d$/.exec(range);
+  if (!days) return null;
+  const n = Number(days[1]);
+  if (n < 1 || n > 3650) return null;
+  return n * DAY_MS;
 }
 
-// Range-based window read from the durable `request_hourly` aggregate. The raw
+/** True for the presets, so a caller can tell "the user picked 365d" from
+ *  "the user typed 90d into the custom field" — both resolve the same window. */
+export function isAnalyticsRange(value: string): value is AnalyticsRange {
+  return (ANALYTICS_RANGES as readonly string[]).includes(value);
+}
+
+export interface AnalyticsWindow {
+  /** Inclusive lower bound, SQLite UTC text. */
+  since: string;
+  /** Exclusive upper bound, SQLite UTC text. Equals now+1s for a rolling
+ *  window, so "now" itself is inside it rather than excluded by a strict `<`. */
+  until: string;
+  /** Window length in ms, for picking a timeline bucket size. */
+  spanMs: number;
+}
+
+// The safety clamp on CUSTOM spans, so one request cannot ask the server to
+// walk decades of history. A window past it is clamped to the cap measured
+// BACK FROM ITS OWN RECENT END — a fat-fingered 1900→2100 means "as much as
+// you have", and keeping the 1900 end would return an empty chart. This is NOT
+// the widest offered window; that is MAX_ANALYTICS_RANGE above.
+const MAX_WINDOW_SPAN_MS = 5 * 365 * DAY_MS;
+
+/** The widest window the UI OFFERS, in days — derived from the preset list so
+ *  adding a preset cannot drift. The retention service imports this, and its
+ *  test asserts the aggregate is never pruned shallower than it, because that
+ *  exact drift is what made 90d read a 30-day window. Distinct from
+ *  MAX_WINDOW_SPAN_MS above, which is the safety clamp on CUSTOM spans. */
+export const MAX_ANALYTICS_RANGE_DAYS = Number(MAX_ANALYTICS_RANGE.slice(0, -1));
+
+/** `YYYY-MM-DD` from a browser date input, or null if it isn't one.
+ *  Anchored on purpose: `new Date('2026-10-04')` parses as UTC midnight and
+ *  `new Date('nonsense')` as Invalid Date, and both would sail through a bare
+ *  `isNaN` check on the wrong branch. */
+function parseIsoDate(value: unknown): number | null {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const ms = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/**
+ * Resolve the analytics window from a request.
+ *
+ * `range` wins when it names a known preset; otherwise `from`/`to` are read as
+ * a date pair. A half-specified or inverted pair falls back to the `defaultRange`
+ * rather than erroring: the dashboard must render something, and the presets
+ * are always a correct answer for whatever the operator typed.
+ */
+export function resolveWindow(
+  query: Record<string, unknown>,
+  defaultRange: AnalyticsRange = '7d',
+  nowMs: number = Date.now(),
+): AnalyticsWindow {
+  const range = typeof query.range === 'string' ? query.range : '';
+
+  // The rolling presets. A preset of `Nd` also covers every longer preset the
+  // timeline buckets by month, so 365d and a custom year-long window read the
+  // same interval rather than two subtly different ones.
+  const span = presetMs(range);
+  if (span !== null) {
+    return {
+      since: toSqliteDateTime(nowMs - span),
+      // +1s: `until` is exclusive and the newest row can be `now` exactly.
+      until: toSqliteDateTime(nowMs + 1000),
+      spanMs: span,
+    };
+  }
+
+  const fromMs = parseIsoDate(query.from);
+  const toMs = parseIsoDate(query.to);
+  if (fromMs !== null && toMs !== null) {
+    const start = Math.min(fromMs, toMs);
+    // A `to` date is inclusive on the UI ("Aug 1 to Aug 31"), so the requested
+    // exclusive bound is the NEXT midnight. Without this the final day loses
+    // every row after 00:00 and the custom window reads a day short.
+    const requestedEnd = Math.max(fromMs, toMs) + DAY_MS;
+    // A window entirely in the future is left alone: there is no data in it and
+    // rendering nothing is the honest answer. Any window that REACHES the
+    // present is capped at `now`, because a `to` of 2100 means "everything so
+    // far", not "start in 1900 and stop in 2100".
+    const end = start > nowMs ? requestedEnd : Math.min(requestedEnd, nowMs + 1000);
+    // A same-day window still needs a real span, and the cap measures back from
+    // `end` — so an over-wide pick keeps the most recent history rather than an
+    // empty chart at its far end.
+    const spanMs = Math.min(Math.max(end - start, HOUR_MS), MAX_WINDOW_SPAN_MS);
+    return { since: toSqliteDateTime(end - spanMs), until: toSqliteDateTime(end), spanMs };
+  }
+
+  return resolveWindow({ range: defaultRange }, defaultRange, nowMs);
+}
+
+// Retained for the CLI-fleet route and its tests, which read a cutoff with no
+// upper bound of their own. Same preset table, so both agree by construction.
+export function getSinceTimestamp(range: string): string {
+  return resolveWindow({ range }, '7d').since;
+}
+
+// Window totals read from the durable `request_hourly` aggregate. The raw
 // `requests` table is pruned by REQUEST_ANALYTICS_MAX_ROWS, so any analytics
-// count that depends on a >=7d window must read from the hourly table to stay
-// accurate. Hourly resolution is fine for any UI range the dashboard exposes.
+// count that depends on a long window must read the hourly table to stay
+// accurate. Hourly resolution is fine for any window the dashboard exposes.
+//
+// The aggregate carries NO dimensions — no device, no status, no provider, no
+// model. Any of those filters therefore has to fall through to the raw rows
+// (readRawTotals), which makes a filtered figure subject to the raw prune in a
+// way the unfiltered one is not. That is the standing trade-off, unchanged by
+// this work; it is called out at the call site.
 /** Totals for one analytics window, from either the hourly aggregate or the
  *  raw rows. Both readers return this shape so callers need not know which
  *  source answered. */
@@ -72,14 +195,21 @@ export interface WindowTotals {
   first_request_at: string | null;
 }
 
-function readAggregateSince(since: string): WindowTotals {
+// Hour keys are created_at truncated to the hour, so they share SQLite's
+// canonical 'YYYY-MM-DD HH:MM:SS' text (space separator) and the window bounds
+// compare directly against them — no separator conversion, because the writer
+// (logRequest) and both readers all compare on the space form.
+//
+// `since` is FLOORED to its hour: a rolling 24h window opens mid-hour, and
+// dropping that partial hour would understate the window by up to an hour.
+// `until` is NOT ceiled: a bucket is keyed by its FIRST second, so a bucket at
+// exactly `until` holds only time at or past the bound and must be excluded.
+// Ceiling there pulled in a whole bucket the window excludes, so a custom
+// window ending at midnight counted the following hour.
+const hourFloor = (sqliteUtc: string) => sqliteUtc.slice(0, 13) + ':00:00';
+
+function readAggregateSince(window: AnalyticsWindow): WindowTotals {
   const db = getDb();
-  // Hour keys are created_at truncated to the hour, so they share SQLite's
-  // canonical 'YYYY-MM-DD HH:00:00' text (space separator). The range cutoff is
-  // already in that format — floor it to the hour and compare the strings
-  // directly. No separator conversion: the writer (logRequest) and the timeline
-  // reader both compare on the space form, so this must too.
-  const aggregateSince = since.slice(0, 13) + ':00:00';
   const rows = db.prepare(`
     SELECT
       COALESCE(SUM(total_requests), 0) as total_requests,
@@ -89,10 +219,122 @@ function readAggregateSince(since: string): WindowTotals {
       COALESCE(SUM(output_tokens), 0) as total_output_tokens,
       MIN(hour) as first_request_at
     FROM request_hourly
-    WHERE hour >= ?
-  `).get(aggregateSince) as WindowTotals;
+    WHERE hour >= ? AND hour < ?
+  `).get(hourFloor(window.since), window.until) as WindowTotals;
   return rows;
 }
+
+/** One row of the /by-platform grouping: per-endpoint totals plus the derived
+ *  latency and throughput aggregates, all nullable where the window held too
+ *  few rows to compute them. */
+interface PlatformRow {
+  platform: string;
+  base_url: string | null;
+  requests: number;
+  latency_count: number;
+  success_rate: number | null;
+  avg_latency_ms: number | null;
+  avg_ttfb_ms: number | null;
+  error_count: number | null;
+  avg_tokens_per_second: number | null;
+  total_input_tokens: number | null;
+  total_output_tokens: number | null;
+  est_cost: number | null;
+}
+
+/** One row of the /by-model grouping. */
+interface ModelRow {
+  platform: string;
+  base_url: string | null;
+  model_id: string;
+  display_name: string | null;
+  requests: number;
+  success_rate: number | null;
+  avg_latency_ms: number | null;
+  total_input_tokens: number | null;
+  total_output_tokens: number | null;
+  pinned_requests: number | null;
+  est_cost: number | null;
+}
+
+/** The remaining grouped row shapes the breakdowns read. SQLite hands back
+ *  whatever the aggregate produced, so each query names its own row type
+ *  rather than letting the compiler trust an untyped object. */
+
+
+interface ClientRow {
+  device: string;
+  agents: string | null;
+  requests: number;
+  success_rate: number | null;
+  avg_latency_ms: number | null;
+  total_input_tokens: number | null;
+  total_output_tokens: number | null;
+  est_cost: number | null;
+  last_seen_at: string | null;
+}
+
+interface KeyRow {
+  key_id: number;
+  label: string | null;
+  platform: string | null;
+  requests: number;
+  success_rate: number | null;
+  avg_latency_ms: number | null;
+  total_input_tokens: number | null;
+  total_output_tokens: number | null;
+}
+
+interface TimelineRow {
+  timestamp: string | null;
+  requests: number | null;
+  success_count: number | null;
+  failure_count: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+}
+
+interface ErrorPlatformRow {
+  platform: string;
+  base_url: string | null;
+  count: number;
+}
+
+interface CategoryRow {
+  category: string;
+  count: number;
+}
+
+interface RecentErrorDbRow {
+  id: number;
+  platform: string;
+  base_url: string | null;
+  model_id: string;
+  error: string | null;
+  latency_ms: number | null;
+  created_at: string;
+}
+
+/** One row of the recent-calls list, in its database column names. */
+interface RecentCallDbRow {
+  id: number;
+  platform: string;
+  model_id: string;
+  requested_model: string | null;
+  request_type: string | null;
+  status: string;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  latency_ms: number | null;
+  error: string | null;
+  client_ip: string | null;
+  client_user_agent: string | null;
+  client_agent: string | null;
+  created_at_iso: string;
+  attempt_count: number;
+  key_label: string | null;
+}
+
 
 function readLifetimeSettings() {
   const db = getDb();
@@ -152,16 +394,138 @@ function deviceFilter(raw: unknown, alias = 'r'): { sql: string; params: string[
   return { sql: ` AND ${deviceSql(alias)} = ?`, params: [device] };
 }
 
-// Totals for a device-filtered window, read from the RAW rows.
+// ── Page-wide filters ────────────────────────────────────────────────────────
 //
-// `request_hourly` has no device dimension - it buckets by hour and nothing
-// else - so the moment a device is selected the aggregate cannot answer, and
-// this reads `requests` directly. That makes the filtered numbers subject to
-// the REQUEST_ANALYTICS_MAX_ROWS prune in a way the unfiltered ones are not:
-// on an install old enough to be pruning, a device total for a long range will
-// undercount where the all-devices total stays right. Nothing warns about that
-// yet; this install has pruned nothing so far.
-function readRawTotalsSince(since: string, filter: { sql: string; params: string[] }) {
+// The dashboard's status / provider / model selectors sit ABOVE the cards, so
+// every panel below them has to answer for the same slice of traffic. Before
+// this the only filters were device-scoped, and /requests carried its own
+// status+provider pair — which is why selecting a provider there moved one
+// table and nothing else.
+//
+// These builders are the single place a filter becomes SQL. Every endpoint
+// composes the same three, so "the stat card and the model breakdown disagree"
+// is not expressible. Requires the query to alias `requests` as `r`, and to
+// LEFT JOIN `api_keys` as `k` for the endpoint-scoped provider match.
+export interface QueryFilter {
+  sql: string;
+  params: string[];
+}
+
+const NO_FILTER: QueryFilter = { sql: '', params: [] };
+
+// The three statuses a request row can end in — fixed at build time, so a
+// lookup table rather than a membership set that never grows.
+const VALID_STATUSES: Record<string, true> = { success: true, error: true, canceled: true };
+
+/** `?status=` → an equality fragment, or an error string when the value is not
+ *  one of the three statuses a request can end in. */
+function statusFilter(raw: unknown): QueryFilter | string {
+  if (raw === undefined || raw === '') return NO_FILTER;
+  if (typeof raw !== 'string' || !VALID_STATUSES[raw]) {
+    return "invalid status filter (expected 'success', 'error' or 'canceled')";
+  }
+  return { sql: ' AND r.status = ?', params: [raw] };
+}
+
+/** `?provider=` → an endpoint-scoped equality fragment. The `provider` param
+ *  carries the stable row id /by-platform emits: a platform slug ('groq') or
+ *  'custom:<base_url>' for one relay, because every custom endpoint shares the
+ *  'custom' platform id (#889). The legacy `?platform=` keeps its older,
+ *  non-endpoint-scoped meaning.
+ *
+ *  The bare 'custom' id is the ORPHAN bucket — rows whose endpoint is unknown,
+ *  because the key was deleted or carried no base_url. It must not widen to
+ *  every relay, which is what filtering on the slug alone would do. */
+function providerFilter(provider: unknown, platform: unknown): QueryFilter | string {
+  if (typeof provider === 'string' && provider !== '') {
+    if (provider.length > 256 || /[\r\n]/.test(provider)) return 'invalid provider filter';
+    if (provider === 'custom') {
+      return { sql: ` AND r.platform = 'custom' AND ${ENDPOINT_ID_SQL} = ''`, params: [] };
+    }
+    if (provider.startsWith('custom:')) {
+      return {
+        sql: ` AND r.platform = 'custom' AND ${ENDPOINT_ID_SQL} = ?`,
+        params: [normalizeBaseUrl(provider.slice('custom:'.length))],
+      };
+    }
+    if (/^[A-Za-z0-9_-]{1,64}$/.test(provider)) {
+      return { sql: ' AND r.platform = ?', params: [provider] };
+    }
+    return 'invalid provider filter';
+  }
+  if (platform !== undefined) {
+    if (typeof platform !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(platform)) {
+      return 'invalid platform filter';
+    }
+    return { sql: ' AND r.platform = ?', params: [platform] };
+  }
+  return NO_FILTER;
+}
+
+/** `?model=` → an equality on the SERVED model id, so a filter chosen from the
+ *  model breakdown selects that model and not merely every model on its
+ *  provider. Bound as a parameter; shape-checked so a 4 KB query string can't
+ *  become an unbounded comparison. */
+function modelFilter(raw: unknown): QueryFilter | string {
+  if (raw === undefined || raw === '') return NO_FILTER;
+  if (typeof raw !== 'string' || raw.length > 256 || raw.includes('\0')) {
+    return 'invalid model filter';
+  }
+  return { sql: ' AND r.model_id = ?', params: [raw] };
+}
+
+/** Compose the three page-wide filters. Returns the fragments on success, or
+ *  the error message the endpoint should answer 400 with. */
+export function pageFilters(query: {
+  status?: unknown;
+  provider?: unknown;
+  platform?: unknown;
+  model?: unknown;
+}): QueryFilter | string {
+  const status = statusFilter(query.status);
+  if (typeof status === 'string') return status;
+  const provider = providerFilter(query.provider, query.platform);
+  if (typeof provider === 'string') return provider;
+  const model = modelFilter(query.model);
+  if (typeof model === 'string') return model;
+  return {
+    sql: status.sql + provider.sql + model.sql,
+    params: [...status.params, ...provider.params, ...model.params],
+  };
+}
+
+/** `req` → the window plus every page-wide filter, in one read. The window is
+ *  [since, until) in SQLite UTC text; `until` is exclusive so `until > ?` is
+ *  the upper bound everywhere. */
+function readScope(req: Request): { window: AnalyticsWindow; filters: QueryFilter; device: QueryFilter } | { error: string } {
+  const filters = pageFilters(req.query);
+  if (typeof filters === 'string') return { error: filters };
+  return {
+    window: resolveWindow(req.query),
+    filters,
+    device: deviceFilter(req.query.device),
+  };
+}
+
+/** The WHERE tail every raw-row analytics read shares: the window bounds plus
+ *  the composed filters. `created_at` is indexed and its bounds are always
+ *  bound parameters, never interpolated. */
+function scopeSql(window: AnalyticsWindow, filters: QueryFilter, device: QueryFilter): string {
+  return ' AND r.created_at < ?' + filters.sql + device.sql;
+}
+
+/** Window bounds and filter params in the order `scopeSql` emits them. */
+function scopeParams(window: AnalyticsWindow, filters: QueryFilter, device: QueryFilter): string[] {
+  return [window.until, ...filters.params, ...device.params];
+}
+
+// Totals for a window the hourly aggregate CANNOT answer. The aggregate buckets
+// by hour and by nothing else, so any device, status, provider or model filter
+// forces this reader. That makes a filtered figure subject to the
+// REQUEST_ANALYTICS_MAX_ROWS prune in a way the unfiltered one is not: on an
+// install old enough to be pruning, a filtered total for a long window
+// undercounts where the all-caller total stays right.
+function readRawTotals(window: AnalyticsWindow, filters: QueryFilter, device: QueryFilter): WindowTotals {
   return getDb().prepare(`
     SELECT
       COUNT(*) as total_requests,
@@ -171,28 +535,32 @@ function readRawTotalsSince(since: string, filter: { sql: string; params: string
       COALESCE(SUM(r.output_tokens), 0) as total_output_tokens,
       MIN(r.created_at) as first_request_at
     FROM requests r
-    WHERE r.created_at >= ?${filter.sql}
-  `).get(since, ...filter.params) as WindowTotals;
+    LEFT JOIN api_keys k ON k.id = r.key_id
+    WHERE r.created_at >= ?${scopeSql(window, filters, device)}
+  `).get(window.since, ...scopeParams(window, filters, device)) as WindowTotals;
 }
 
 // Summary stats
 analyticsRouter.get('/summary', (req: Request, res: Response) => {
-  const range = (req.query.range as string) ?? '7d';
-  const since = getSinceTimestamp(range);
+  const scope = readScope(req);
+  if ('error' in scope) {
+    res.status(400).json({ error: scope.error });
+    return;
+  }
+  const { window, filters, device } = scope;
   const db = getDb();
-  const dev = deviceFilter(req.query.device);
+  // Every raw-row query below shares this bound set: the window's upper bound
+  // then the composed filters then the device filter, matching scopeSql's order.
+  const rawSql = scopeSql(window, filters, device);
+  const rawParams = scopeParams(window, filters, device);
 
-  // Totals (request count, token sums, success rate, lifetime first_request_at)
-  // come from the durable `request_hourly` aggregate so they stay accurate even
-  // after the raw `requests` table is pruned. Per-model pin-honor rate and
-  // estimated savings still need the raw table because they're broken down by
-  // (platform, model_id); for those we fall back to the raw rows but they're
-  // only reported for ranges where recent activity still exists. The aggregate
-  // is the source of truth for headline numbers.
-  //
-  // Unless a device is selected: the aggregate has no device dimension, so a
-  // filtered window has to come from the raw rows (see readRawTotalsSince).
-  const aggregate = dev.sql ? readRawTotalsSince(since, dev) : readAggregateSince(since);
+  // Totals come from the durable `request_hourly` aggregate so they stay
+  // accurate past the raw-row prune. The moment ANY dimension is filtered —
+  // device, status, provider, model — the aggregate can no longer answer, and
+  // the totals come from the raw rows instead (see readRawTotals).
+  const aggregate = filters.sql !== '' || device.sql !== ''
+    ? readRawTotals(window, filters, device)
+    : readAggregateSince(window);
   const totalRequests = aggregate.total_requests ?? 0;
   // Success rate over success+error only: a 'canceled' request (#752 — client
   // hung up) still counts in the totals but is neither a success nor a
@@ -200,81 +568,88 @@ analyticsRouter.get('/summary', (req: Request, res: Response) => {
   const decidedRequests = (aggregate.success_count ?? 0) + (aggregate.error_count ?? 0);
   const successRate = decidedRequests > 0 ? (aggregate.success_count / decidedRequests) * 100 : 0;
 
-  // Avg latency is only meaningful at the raw row level; the hourly bucket
-  // doesn't preserve it. Fall back to a 0/null when no recent raw rows exist.
+  // Latency, TTFT, savings, pin-honour and the chat/embedding split all live on
+  // the raw rows: the hourly bucket keeps none of them, and any filter has
+  // already forced the raw read above.
   const latencyRow = db.prepare(`
-    SELECT AVG(r.latency_ms) as avg_latency_ms FROM requests r WHERE r.created_at >= ?${dev.sql}
-  `).get(since, ...dev.params) as { avg_latency_ms: number | null } | undefined;
+    SELECT AVG(r.latency_ms) as avg_latency_ms
+    FROM requests r LEFT JOIN api_keys k ON k.id = r.key_id
+    WHERE r.created_at >= ?${rawSql}
+  `).get(window.since, ...rawParams) as { avg_latency_ms: number | null } | undefined;
 
-  // Estimated savings is a per-request priced value, so it lives on the raw
-  // rows. For ranges where the raw table is empty we report 0 (no recent
-  // activity to price).
+  // Priced per request at the SERVED model's paid-equivalent rate. Endpoint-
+  // scoped join for the #651 reason: (platform, model_id) alone matches one
+  // model row per relay that registered it and multiplies every request by
+  // that count.
   const savings = db.prepare(`
     SELECT COALESCE(SUM(
       CASE WHEN r.status = 'success' THEN
         r.input_tokens  * COALESCE(m.paid_input_per_m,  ?) / 1000000.0 +
-        r.output_tokens * COALESCE(m.paid_output_per_m, ?) / 1000000.0
+        r.output_tokens * COALESCE(m.paid_output_per_m,  ?) / 1000000.0
       ELSE 0 END
     ), 0) as est_savings
     FROM requests r
-    LEFT JOIN models m ON m.platform = r.platform AND m.model_id = r.model_id
-    WHERE r.created_at >= ?${dev.sql}
-  `).get(FALLBACK_INPUT_PER_M, FALLBACK_OUTPUT_PER_M, since, ...dev.params) as { est_savings: number };
+    LEFT JOIN api_keys k ON k.id = r.key_id
+    LEFT JOIN models m
+      ON m.platform = r.platform AND m.model_id = r.model_id
+     AND m.endpoint_scope = ${ENDPOINT_ID_SQL}
+    WHERE r.created_at >= ?${rawSql}
+  `).get(FALLBACK_INPUT_PER_M, FALLBACK_OUTPUT_PER_M, window.since, ...rawParams) as { est_savings: number };
 
-  // Pin-honor stats are also raw-row scoped. We still report them when present
-  // (typically 24h/7d) and gracefully drop them when the raw window is empty.
+  // Pin-honor stats are also raw-row scoped.
   const pinRow = db.prepare(`
     SELECT
       SUM(CASE WHEN r.requested_model IS NOT NULL THEN 1 ELSE 0 END) as pinned_count,
       SUM(CASE WHEN r.requested_model = r.model_id THEN 1 ELSE 0 END) as pin_honored_count
-    FROM requests r WHERE r.created_at >= ?${dev.sql}
-  `).get(since, ...dev.params) as { pinned_count: number | null; pin_honored_count: number | null };
+    FROM requests r LEFT JOIN api_keys k ON k.id = r.key_id
+    WHERE r.created_at >= ?${rawSql}
+  `).get(window.since, ...rawParams) as { pinned_count: number | null; pin_honored_count: number | null };
 
-  // Latency percentiles, time-to-first-token, and the chat/embedding split all
-  // live on the raw rows (the hourly aggregate keeps neither latency nor a
-  // per-type breakdown). When the raw window is empty (older than the prune
-  // horizon) we report null, not 0, so the UI can render a placeholder instead
-  // of a misleading zero. Percentiles use nearest-rank via ORDER BY/OFFSET.
-  // Only rows that actually recorded a latency participate in the percentile.
-  // The IS NOT NULL guard must be on BOTH the offset-denominator count and the
-  // ordered selection so they range over the same set: a NULL sorts first under
-  // ORDER BY latency_ms ASC, so if it were counted but not filtered the offset
-  // math would shift and a NULL could be selected (rendered as 0).
-  const rawCount = (db.prepare(
-    `SELECT COUNT(*) as c FROM requests r WHERE r.created_at >= ? AND r.latency_ms IS NOT NULL${dev.sql}`
-  ).get(since, ...dev.params) as { c: number }).c;
+  // Percentiles use nearest-rank via ORDER BY/OFFSET over rows that recorded a
+  // latency, and report null — never 0 — when that set is empty, so the UI can
+  // render a placeholder instead of a misleading zero. The IS NOT NULL guard
+  // must be on BOTH the denominator count and the ordered selection so they
+  // range over the same set: a NULL sorts first under ORDER BY latency_ms ASC,
+  // so if it were counted but not filtered the offset math would shift and a
+  // NULL could be selected (rendered as 0).
+  const rawCount = (db.prepare(`
+    SELECT COUNT(*) as c
+    FROM requests r LEFT JOIN api_keys k ON k.id = r.key_id
+    WHERE r.created_at >= ? AND r.latency_ms IS NOT NULL${rawSql}
+  `).get(window.since, ...rawParams) as { c: number }).c;
   const percentileAt = (fraction: number): number | null => {
     if (rawCount === 0) return null;
     const offset = Math.floor((rawCount - 1) * fraction);
     const row = db.prepare(`
       SELECT r.latency_ms FROM requests r
-      WHERE r.created_at >= ? AND r.latency_ms IS NOT NULL${dev.sql}
+      LEFT JOIN api_keys k ON k.id = r.key_id
+      WHERE r.created_at >= ? AND r.latency_ms IS NOT NULL${rawSql}
       ORDER BY r.latency_ms ASC
       LIMIT 1 OFFSET ?
-    `).get(since, ...dev.params, offset) as { latency_ms: number } | undefined;
+    `).get(window.since, ...rawParams, offset) as { latency_ms: number } | undefined;
     return row ? Math.round(row.latency_ms) : null;
   };
   const p50LatencyMs = percentileAt(0.5);
   const p95LatencyMs = percentileAt(0.95);
 
   const ttfbRow = db.prepare(`
-    SELECT AVG(r.ttfb_ms) as avg_ttfb_ms FROM requests r
-    WHERE r.created_at >= ? AND r.ttfb_ms IS NOT NULL${dev.sql}
-  `).get(since, ...dev.params) as { avg_ttfb_ms: number | null } | undefined;
+    SELECT AVG(r.ttfb_ms) as avg_ttfb_ms
+    FROM requests r LEFT JOIN api_keys k ON k.id = r.key_id
+    WHERE r.created_at >= ? AND r.ttfb_ms IS NOT NULL${rawSql}
+  `).get(window.since, ...rawParams) as { avg_ttfb_ms: number | null } | undefined;
   const avgTtfbMs = ttfbRow?.avg_ttfb_ms != null ? Math.round(ttfbRow.avg_ttfb_ms) : null;
 
   const typeRows = db.prepare(`
-    SELECT r.request_type, COUNT(*) as count FROM requests r
-    WHERE r.created_at >= ?${dev.sql}
+    SELECT r.request_type, COUNT(*) as count
+    FROM requests r LEFT JOIN api_keys k ON k.id = r.key_id
+    WHERE r.created_at >= ?${rawSql}
     GROUP BY r.request_type
-  `).all(since, ...dev.params) as Array<{ request_type: string; count: number }>;
+  `).all(window.since, ...rawParams) as Array<{ request_type: string; count: number }>;
   const requestTypeCounts = { chat: 0, embedding: 0 };
   for (const row of typeRows) {
     if (row.request_type === 'embedding') requestTypeCounts.embedding = row.count;
     else if (row.request_type === 'chat') requestTypeCounts.chat = row.count;
   }
-
-  const lifetimeFirst = readLifetimeSettings();
 
   res.json({
     totalRequests,
@@ -282,14 +657,9 @@ analyticsRouter.get('/summary', (req: Request, res: Response) => {
     totalInputTokens: aggregate.total_input_tokens ?? 0,
     totalOutputTokens: aggregate.total_output_tokens ?? 0,
     avgLatencyMs: Math.round(latencyRow?.avg_latency_ms ?? 0),
-    // Latency spread (raw rows): p50 typical, p95 tail. Null when the raw
-    // window is empty.
     p50LatencyMs,
     p95LatencyMs,
-    // Average streaming time-to-first-token over rows that recorded it; null
-    // when none did (non-streaming traffic or pruned window).
     avgTtfbMs,
-    // Chat vs embedding request split for the selected window.
     requestTypeCounts,
     estimatedCostSavings: Math.round((savings.est_savings ?? 0) * 100) / 100,
     // Pinned = requests where the client named a specific model (not 'auto').
@@ -298,11 +668,22 @@ analyticsRouter.get('/summary', (req: Request, res: Response) => {
     pinnedRequests: pinRow.pinned_count ?? 0,
     pinHonoredRequests: pinRow.pin_honored_count ?? 0,
     // First-ever request timestamp (lifetime, never pruned). Falls back to
-    // the oldest hour in the current window when lifetime is not yet seeded.
-    firstRequestAt: lifetimeFirst ?? aggregate.first_request_at ?? null,
-    // Lifetime total since install — useful when the user wants to see "all
-    // time" alongside the selected range window. Sourced from settings so it
-    // survives the raw-row prune entirely.
+    // the oldest row inside the current window when lifetime is not seeded.
+    firstRequestAt: readLifetimeSettings() ?? aggregate.first_request_at ?? null,
+    // The window actually read, so a custom span can be labelled without the
+    // client recomputing it and the two can never disagree about what is shown.
+    windowSince: window.since,
+    windowUntil: window.until,
+    // The oldest row still retained, so a horizon notice can name the real date
+    // rather than the window's start. Null when nothing is retained at all.
+    rawWindowOldest: readRawHorizon(db),
+    // True when the window opens before that oldest row. The aggregate-backed
+    // totals above stay right; latency spread, TTFT, savings and the
+    // per-provider/per-model breakdowns do not, so the panel says so rather
+    // than rendering a long window that silently covers less than it claims.
+    rawWindowTruncated: windowExceedsRawHorizon(window.since),
+    // Lifetime total since install — "all time" alongside the selected window.
+    // Sourced from settings so it survives the raw-row prune entirely.
     lifetimeTotalRequests: Number((db.prepare(`SELECT value FROM settings WHERE key='total_requests'`).get() as { value?: string } | undefined)?.value ?? 0) || 0,
   });
 });
@@ -322,12 +703,14 @@ analyticsRouter.get('/summary', (req: Request, res: Response) => {
 // to the ON clause picks the row belonging to the endpoint that actually served
 // the request — the only one whose display name and pricing apply.
 analyticsRouter.get('/by-model', (req: Request, res: Response) => {
-  const range = (req.query.range as string) ?? '7d';
-  const since = getSinceTimestamp(range);
-  const db = getDb();
-  const dev = deviceFilter(req.query.device);
+  const scope = readScope(req);
+  if ('error' in scope) {
+    res.status(400).json({ error: scope.error });
+    return;
+  }
+  const { window, filters, device } = scope;
 
-  const rows = db.prepare(`
+  const rows = getDb().prepare(`
     SELECT
       r.platform,
       ${ENDPOINT_ID_SQL} as base_url,
@@ -342,17 +725,17 @@ analyticsRouter.get('/by-model', (req: Request, res: Response) => {
       SUM(CASE WHEN r.requested_model = r.model_id THEN 1 ELSE 0 END) as pinned_requests,
       SUM(CASE WHEN r.status = 'success' THEN
         r.input_tokens  * COALESCE(m.paid_input_per_m,  ?) / 1000000.0 +
-        r.output_tokens * COALESCE(m.paid_output_per_m, ?) / 1000000.0
+        r.output_tokens * COALESCE(m.paid_output_per_m,  ?) / 1000000.0
       ELSE 0 END) as est_cost
     FROM requests r
     LEFT JOIN api_keys k ON k.id = r.key_id
     LEFT JOIN models m
       ON m.platform = r.platform AND m.model_id = r.model_id
      AND m.endpoint_scope = ${ENDPOINT_ID_SQL}
-    WHERE r.created_at >= ?${dev.sql}
+    WHERE r.created_at >= ?${scopeSql(window, filters, device)}
     GROUP BY r.platform, ${ENDPOINT_ID_SQL}, r.model_id
     ORDER BY requests DESC
-  `).all(FALLBACK_INPUT_PER_M, FALLBACK_OUTPUT_PER_M, since, ...dev.params) as any[];
+  `).all(FALLBACK_INPUT_PER_M, FALLBACK_OUTPUT_PER_M, window.since, ...scopeParams(window, filters, device)) as ModelRow[];
 
   res.json(rows.map(r => ({
     platform: r.platform,
@@ -365,7 +748,7 @@ analyticsRouter.get('/by-model', (req: Request, res: Response) => {
     requests: r.requests,
     // success_rate is NULL when every row in the group was canceled.
     successRate: Math.round((r.success_rate ?? 0) * 10) / 10,
-    avgLatencyMs: Math.round(r.avg_latency_ms),
+    avgLatencyMs: Math.round(r.avg_latency_ms ?? 0),
     totalInputTokens: r.total_input_tokens ?? 0,
     totalOutputTokens: r.total_output_tokens ?? 0,
     // Requests this model served because the client pinned it by name.
@@ -385,11 +768,15 @@ analyticsRouter.get('/by-model', (req: Request, res: Response) => {
 // carry no base_url, so COALESCE(base_url,'') keeps each of them in a single
 // per-platform group exactly as before.
 analyticsRouter.get('/by-platform', (req: Request, res: Response) => {
-  const range = (req.query.range as string) ?? '7d';
-  const since = getSinceTimestamp(range);
+  const scope = readScope(req);
+  if ('error' in scope) {
+    res.status(400).json({ error: scope.error });
+    return;
+  }
+  const { window, filters, device } = scope;
+  const scopeTail = scopeSql(window, filters, device);
+  const scopeArgs = scopeParams(window, filters, device);
   const db = getDb();
-  const dev = deviceFilter(req.query.device);
-
   const rows = db.prepare(`
     SELECT
       r.platform,
@@ -417,10 +804,10 @@ analyticsRouter.get('/by-platform', (req: Request, res: Response) => {
     LEFT JOIN models m
       ON m.platform = r.platform AND m.model_id = r.model_id
      AND m.endpoint_scope = ${ENDPOINT_ID_SQL}
-    WHERE r.created_at >= ?${dev.sql}
+    WHERE r.created_at >= ?${scopeTail}
     GROUP BY r.platform, ${ENDPOINT_ID_SQL}
     ORDER BY requests DESC
-  `).all(FALLBACK_INPUT_PER_M, FALLBACK_OUTPUT_PER_M, since, ...dev.params) as any[];
+  `).all(FALLBACK_INPUT_PER_M, FALLBACK_OUTPUT_PER_M, window.since, ...scopeArgs) as PlatformRow[];
 
   // P95 latency is a per-group percentile; SQLite has no native percentile
   // aggregate, so we take the nearest-rank value per group with a small
@@ -429,13 +816,13 @@ analyticsRouter.get('/by-platform', (req: Request, res: Response) => {
   // readable. The WHERE must match the grouping exactly — platform AND the
   // endpoint's base_url — or a custom endpoint's p95 would bleed in latency
   // from every other custom endpoint.
-  // The device filter belongs here too: latency_count already counts only the
-  // selected device's rows, so an unfiltered percentile query would index into
-  // a larger, differently-ordered set and return another machine's latency.
+  // The page filters belong here too: latency_count already counts only the
+  // filtered rows, so an unfiltered percentile query would index into a
+  // larger, differently-ordered set and return another slice's latency.
   const p95Stmt = db.prepare(`
     SELECT r.latency_ms FROM requests r
     LEFT JOIN api_keys k ON k.id = r.key_id
-    WHERE r.created_at >= ? AND r.platform = ? AND ${ENDPOINT_ID_SQL} = ? AND r.latency_ms IS NOT NULL${dev.sql}
+    WHERE r.created_at >= ? AND r.platform = ? AND ${ENDPOINT_ID_SQL} = ? AND r.latency_ms IS NOT NULL${scopeTail}
     ORDER BY r.latency_ms ASC
     LIMIT 1 OFFSET ?
   `);
@@ -447,7 +834,7 @@ analyticsRouter.get('/by-platform', (req: Request, res: Response) => {
     const latencyCount = r.latency_count ?? 0;
     const baseUrl: string | null = r.base_url || null;
     const p95Row = latencyCount > 0
-      ? (p95Stmt.get(since, r.platform, r.base_url, ...dev.params, Math.floor((latencyCount - 1) * 0.95)) as { latency_ms: number } | undefined)
+      ? (p95Stmt.get(window.since, r.platform, r.base_url, ...scopeArgs, Math.floor((latencyCount - 1) * 0.95)) as { latency_ms: number } | undefined)
       : undefined;
     return {
       platform: r.platform,
@@ -461,7 +848,7 @@ analyticsRouter.get('/by-platform', (req: Request, res: Response) => {
       endpoint: providerDisplayName(r.platform, baseUrl),
       requests: r.requests,
       successRate: Math.round((r.success_rate ?? 0) * 10) / 10,
-      avgLatencyMs: Math.round(r.avg_latency_ms),
+      avgLatencyMs: Math.round(r.avg_latency_ms ?? 0),
       p95LatencyMs: p95Row ? Math.round(p95Row.latency_ms) : null,
       avgTtfbMs: r.avg_ttfb_ms != null ? Math.round(r.avg_ttfb_ms) : null,
       errorCount: r.error_count ?? 0,
@@ -504,8 +891,16 @@ analyticsRouter.get('/by-platform', (req: Request, res: Response) => {
 // the filters could no longer select.
 
 analyticsRouter.get('/by-client', (req: Request, res: Response) => {
-  const range = (req.query.range as string) ?? '7d';
-  const since = getSinceTimestamp(range);
+  const scope = readScope(req);
+  if ('error' in scope) {
+    res.status(400).json({ error: scope.error });
+    return;
+  }
+  // The page filters apply (they change what each device did), but the device
+  // filter deliberately does NOT: this table IS the device breakdown, and
+  // filtering it to one machine would leave a single row with no tab to leave
+  // by. The tab bar above the page is what changes the device scope.
+  const { window, filters } = scope;
   const rows = getDb().prepare(`
     SELECT
       ${deviceSql()} AS device,
@@ -527,10 +922,10 @@ analyticsRouter.get('/by-client', (req: Request, res: Response) => {
     LEFT JOIN models m
       ON m.platform = r.platform AND m.model_id = r.model_id
      AND m.endpoint_scope = ${ENDPOINT_ID_SQL}
-    WHERE r.created_at >= ?
+    WHERE r.created_at >= ?${scopeSql(window, filters, NO_FILTER)}
     GROUP BY device
     ORDER BY requests DESC
-  `).all(FALLBACK_INPUT_PER_M, FALLBACK_OUTPUT_PER_M, since) as any[];
+  `).all(FALLBACK_INPUT_PER_M, FALLBACK_OUTPUT_PER_M, window.since, ...scopeParams(window, filters, NO_FILTER)) as ClientRow[];
 
   res.json(rows.map(row => ({
     // Field name kept for the existing consumer; the value is now a device.
@@ -556,12 +951,14 @@ analyticsRouter.get('/by-client', (req: Request, res: Response) => {
 // dimension), LEFT JOINed to api_keys so a request whose key was later deleted
 // still shows up with a null label — the keyId is always returned.
 analyticsRouter.get('/by-key', (req: Request, res: Response) => {
-  const range = (req.query.range as string) ?? '7d';
-  const since = getSinceTimestamp(range);
-  const db = getDb();
-  const dev = deviceFilter(req.query.device);
+  const scope = readScope(req);
+  if ('error' in scope) {
+    res.status(400).json({ error: scope.error });
+    return;
+  }
+  const { window, filters, device } = scope;
 
-  const rows = db.prepare(`
+  const rows = getDb().prepare(`
     SELECT
       r.key_id as key_id,
       k.label as label,
@@ -573,11 +970,11 @@ analyticsRouter.get('/by-key', (req: Request, res: Response) => {
       SUM(r.output_tokens) as total_output_tokens
     FROM requests r
     LEFT JOIN api_keys k ON k.id = r.key_id
-    WHERE r.key_id IS NOT NULL AND r.created_at >= ?${dev.sql}
+    WHERE r.key_id IS NOT NULL AND r.created_at >= ?${scopeSql(window, filters, device)}
     GROUP BY r.key_id
     ORDER BY requests DESC
     LIMIT 50
-  `).all(since, ...dev.params) as any[];
+  `).all(window.since, ...scopeParams(window, filters, device)) as KeyRow[];
 
   res.json(rows.map(r => ({
     keyId: r.key_id,
@@ -587,42 +984,78 @@ analyticsRouter.get('/by-key', (req: Request, res: Response) => {
     platform: r.platform ?? null,
     requests: r.requests,
     successRate: Math.round((r.success_rate ?? 0) * 10) / 10,
-    avgLatencyMs: Math.round(r.avg_latency_ms),
+    avgLatencyMs: Math.round(r.avg_latency_ms ?? 0),
     totalInputTokens: r.total_input_tokens ?? 0,
     totalOutputTokens: r.total_output_tokens ?? 0,
   })));
 });
 
 // Timeline data
-analyticsRouter.get('/timeline', (req: Request, res: Response) => {
-  const range = (req.query.range as string) ?? '7d';
-  const interval = (req.query.interval as string) ?? (range === '24h' ? 'hour' : 'day');
-  const since = getSinceTimestamp(range);
-  const db = getDb();
+//
+// The bucket size is chosen from the WINDOW'S OWN SPAN, not from the range
+// string — which is the whole point of the wider windows. It used to be
+// `range === '24h' ? 'hour' : 'day'`, so every window past a day drew one
+// point per day: 30d and 90d came back with the SAME 31 bucket labels, so the
+// chart was byte-identical between them and looked frozen. Picking by span
+// gives 180d and 365d a monthly line, and a custom window whatever its length
+// deserves.
+const HOUR_BUCKETS_MAX_SPAN_MS = 3 * DAY_MS;
+const DAY_BUCKETS_MAX_SPAN_MS = 150 * DAY_MS;
 
-  // dateFormat is a hardcoded whitelist — never user-controlled.
-  const dateFormat = interval === 'hour' ? '%Y-%m-%dT%H:00:00' : '%Y-%m-%d';
+/** hour / day / month, from the window's length. */
+function timelineInterval(spanMs: number): 'hour' | 'day' | 'month' {
+  if (spanMs <= HOUR_BUCKETS_MAX_SPAN_MS) return 'hour';
+  return spanMs <= DAY_BUCKETS_MAX_SPAN_MS ? 'day' : 'month';
+}
+
+// strftime formats are a hardcoded whitelist — never user-controlled. The month
+// bucket is anchored to day 01 so the client can parse it as a plain local
+// date; a bare '%Y-%m' would not survive the same Date parsing the other two do.
+const BUCKET_FORMAT = {
+  hour: '%Y-%m-%dT%H:00:00',
+  day: '%Y-%m-%d',
+  month: '%Y-%m-01',
+} as const;
+
+analyticsRouter.get('/timeline', (req: Request, res: Response) => {
+  const scope = readScope(req);
+  if ('error' in scope) {
+    res.status(400).json({ error: scope.error });
+    return;
+  }
+  const { window, filters, device } = scope;
+
+  // An explicit `?interval=` still wins, so a caller can force a resolution.
+  const requested = req.query.interval;
+  const interval: 'hour' | 'day' | 'month' =
+    requested === 'hour' || requested === 'day' || requested === 'month'
+      ? requested
+      : timelineInterval(window.spanMs);
+  const dateFormat = BUCKET_FORMAT[interval];
 
   // tzOffset: viewer's local offset from UTC in minutes (480 = UTC+8), sent by
-  // the browser so hour/day bucket boundaries follow the viewer's wall clock
-  // instead of UTC. Whitelisted to a sane integer range; bound as a parameter,
-  // never interpolated into SQL.
+  // the browser so bucket boundaries follow the viewer's wall clock instead of
+  // UTC. Whitelisted to a sane integer range; bound as a parameter, never
+  // interpolated into SQL.
   const rawOffset = Number(req.query.tzOffset);
   const tzOffset = Number.isInteger(rawOffset) && rawOffset >= -720 && rawOffset <= 840 ? rawOffset : 0;
-  // The single current offset applies to the whole range (SQLite has no tz
+  // The single current offset applies to the whole window (SQLite has no tz
   // database), so buckets on the far side of a DST transition sit 1h off.
   const tzModifier = `${tzOffset >= 0 ? '+' : '-'}${Math.abs(tzOffset)} minutes`;
 
-  // Read from request_hourly (hour-bucketed) for both 'hour' and 'day'
-  // intervals. Day buckets are rolled up via strftime on the hour column,
-  // which keeps the timeline accurate past the raw-row prune window.
+  // Read from request_hourly (hour-bucketed) for every interval. Hour and day
+  // rollups come from strftime on the hour column; month comes from strftime on
+  // the hour column too, truncated to the month. Keeping the aggregate for all
+  // three is what lets the timeline stay accurate past the raw-row prune.
   //
-  // A device filter forces the raw rows instead, for the same reason /summary
-  // does: request_hourly buckets by hour and nothing else, so it cannot answer
-  // "which machine". Same columns either way, so the response shape is one.
-  const dev = deviceFilter(req.query.device);
-  const rows = dev.sql
-    ? db.prepare(`
+  // ANY filter — device, status, provider, model — forces the raw rows instead:
+  // request_hourly buckets by hour and nothing else, so it cannot answer
+  // "which machine" or "which provider". Same columns either way, so the
+  // response shape is one.
+  const scopeTail = scopeSql(window, filters, device);
+  const scopeArgs = scopeParams(window, filters, device);
+  const rows = filters.sql !== '' || device.sql !== ''
+    ? getDb().prepare(`
         SELECT
           strftime(?, r.created_at, ?) as timestamp,
           COUNT(*) as requests,
@@ -631,11 +1064,12 @@ analyticsRouter.get('/timeline', (req: Request, res: Response) => {
           SUM(r.input_tokens) as input_tokens,
           SUM(r.output_tokens) as output_tokens
         FROM requests r
-        WHERE r.created_at >= ?${dev.sql}
+        LEFT JOIN api_keys k ON k.id = r.key_id
+        WHERE r.created_at >= ?${scopeTail}
         GROUP BY timestamp
         ORDER BY timestamp ASC
-      `).all(dateFormat, tzModifier, since, ...dev.params) as any[]
-    : db.prepare(`
+      `).all(dateFormat, tzModifier, window.since, ...scopeArgs) as TimelineRow[]
+    : getDb().prepare(`
         SELECT
           strftime(?, hour, ?) as timestamp,
           SUM(total_requests) as requests,
@@ -644,16 +1078,16 @@ analyticsRouter.get('/timeline', (req: Request, res: Response) => {
           SUM(input_tokens) as input_tokens,
           SUM(output_tokens) as output_tokens
         FROM request_hourly
-        WHERE hour >= ?
+        WHERE hour >= ? AND hour < ?
         GROUP BY timestamp
         ORDER BY timestamp ASC
-      `).all(dateFormat, tzModifier, since) as any[];
+      `).all(dateFormat, tzModifier, hourFloor(window.since), window.until) as TimelineRow[];
 
   res.json(rows.map(r => ({
     timestamp: r.timestamp,
-    requests: r.requests,
-    successCount: r.success_count,
-    failureCount: r.failure_count,
+    requests: r.requests ?? 0,
+    successCount: r.success_count ?? 0,
+    failureCount: r.failure_count ?? 0,
     inputTokens: r.input_tokens ?? 0,
     outputTokens: r.output_tokens ?? 0,
   })));
@@ -661,10 +1095,19 @@ analyticsRouter.get('/timeline', (req: Request, res: Response) => {
 
 // Error distribution (grouped by error type and platform)
 analyticsRouter.get('/error-distribution', (req: Request, res: Response) => {
-  const range = (req.query.range as string) ?? '7d';
-  const since = getSinceTimestamp(range);
+  const scope = readScope(req);
+  if ('error' in scope) {
+    res.status(400).json({ error: scope.error });
+    return;
+  }
+  const { window, filters, device } = scope;
+  // These three queries are all "errors in this window", so they share the
+  // error predicate and the composed scope. A `status` filter composes with it
+  // rather than replacing it: asking for status=success legitimately returns
+  // no errors, which is the truth about that slice.
+  const errTail = ` AND r.status = 'error'` + scopeSql(window, filters, device);
+  const errArgs = scopeParams(window, filters, device);
   const db = getDb();
-  const dev = deviceFilter(req.query.device);
 
   // Group errors by category (extract the key part of the error message).
   // LOWER() first: LIKE is case-sensitive in SQLite, and the error strings we
@@ -674,8 +1117,8 @@ analyticsRouter.get('/error-distribution', (req: Request, res: Response) => {
   // and '*' are literal characters, so it matched nothing real.
   const rows = db.prepare(`
     SELECT
-      platform,
-      model_id,
+      r.platform,
+      r.model_id,
       CASE
         WHEN lower(error) LIKE '%429%' OR lower(error) LIKE '%rate limit%' OR lower(error) LIKE '%too many%' OR lower(error) LIKE '%quota%' THEN 'Rate Limited (429)'
         WHEN lower(error) LIKE '%401%' OR lower(error) LIKE '%unauthorized%' OR lower(error) LIKE '%invalid api key%' OR lower(error) LIKE '%invalid_api_key%' OR lower(error) LIKE '%incorrect api key%' THEN 'Auth Error (401)'
@@ -688,10 +1131,11 @@ analyticsRouter.get('/error-distribution', (req: Request, res: Response) => {
       END as error_category,
       COUNT(*) as count
     FROM requests r
-    WHERE r.status = 'error' AND r.created_at >= ?${dev.sql}
+    LEFT JOIN api_keys k ON k.id = r.key_id
+    WHERE r.created_at >= ?${errTail}
     GROUP BY r.platform, error_category
     ORDER BY count DESC
-  `).all(since, ...dev.params) as any[];
+  `).all(window.since, ...errArgs) as Array<{ platform: string; model_id: string; error_category: string; count: number }>;
 
   // Also get totals by category
   const byCategory = db.prepare(`
@@ -708,10 +1152,11 @@ analyticsRouter.get('/error-distribution', (req: Request, res: Response) => {
       END as category,
       COUNT(*) as count
     FROM requests r
-    WHERE r.status = 'error' AND r.created_at >= ?${dev.sql}
+    LEFT JOIN api_keys k ON k.id = r.key_id
+    WHERE r.created_at >= ?${errTail}
     GROUP BY category
     ORDER BY count DESC
-  `).all(since, ...dev.params) as any[];
+  `).all(window.since, ...errArgs) as CategoryRow[];
 
   // Errors by provider. Endpoint-scoped like /by-platform: one bar per custom
   // relay, not one bar pooling every relay's failures under "custom" (#889) —
@@ -721,10 +1166,10 @@ analyticsRouter.get('/error-distribution', (req: Request, res: Response) => {
     SELECT r.platform, ${ENDPOINT_ID_SQL} as base_url, COUNT(*) as count
     FROM requests r
     LEFT JOIN api_keys k ON k.id = r.key_id
-    WHERE r.status = 'error' AND r.created_at >= ?${dev.sql}
+    WHERE r.created_at >= ?${errTail}
     GROUP BY r.platform, ${ENDPOINT_ID_SQL}
     ORDER BY count DESC
-  `).all(since, ...dev.params) as any[];
+  `).all(window.since, ...errArgs) as ErrorPlatformRow[];
 
   const byPlatform = byPlatformRows.map(r => {
     const baseUrl: string | null = r.base_url || null;
@@ -746,23 +1191,23 @@ analyticsRouter.get('/error-distribution', (req: Request, res: Response) => {
 
 // Recent errors
 analyticsRouter.get('/errors', (req: Request, res: Response) => {
-  const range = (req.query.range as string) ?? '7d';
-  const since = getSinceTimestamp(range);
-  const db = getDb();
-  const dev = deviceFilter(req.query.device);
-
-  // Joined to the serving key so each error names the endpoint it came from.
-  // Without it every custom relay's failures read as a bare "custom" in the
-  // panel (#889) and the operator has to guess which one broke.
-  const rows = db.prepare(`
+  const scope = readScope(req);
+  if ('error' in scope) {
+    res.status(400).json({ error: scope.error });
+    return;
+  }
+  const { window, filters, device } = scope;
+  // A `status` filter that isn't 'error' composes into an empty list rather
+  // than a contradiction: "errors in the success-only slice" is zero rows.
+  const rows = getDb().prepare(`
     SELECT r.id, r.platform, ${ENDPOINT_ID_SQL} as base_url, r.model_id, r.error,
            r.latency_ms, r.created_at
     FROM requests r
     LEFT JOIN api_keys k ON k.id = r.key_id
-    WHERE r.status = 'error' AND r.created_at >= ?${dev.sql}
+    WHERE r.status = 'error' AND r.created_at >= ?${scopeSql(window, filters, device)}
     ORDER BY r.created_at DESC
     LIMIT 50
-  `).all(since, ...dev.params) as any[];
+  `).all(window.since, ...scopeParams(window, filters, device)) as RecentErrorDbRow[];
 
   res.json(rows.map(r => {
     const baseUrl: string | null = r.base_url || null;
@@ -783,87 +1228,30 @@ analyticsRouter.get('/errors', (req: Request, res: Response) => {
 // IP and User-Agent (all local clients share the unified key, so client_ip is
 // the only per-caller discriminator; UA disambiguates tunneled loopback calls).
 // Reads the raw `requests` table, so history is bounded by the retention prune.
+//
+// The status and provider selectors this endpoint used to own now sit above the
+// page and are shared with every other panel (pageFilters), which is what makes
+// "the list and the charts describe different traffic" impossible. The legacy
+// `?platform=` param still works, in its older non-endpoint-scoped meaning.
 analyticsRouter.get('/requests', (req: Request, res: Response) => {
-  const range = (req.query.range as string) ?? '7d';
-  const since = getSinceTimestamp(range);
-  const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 100, 1), 500);
-  const offset = Math.max(parseInt(req.query.offset as string, 10) || 0, 0);
-
-  // Optional filters. All are validated (whitelist / shape) and applied as
-  // bound parameters; absent filters keep the default behavior identical.
-  const status = req.query.status as string | undefined;
-  if (status !== undefined && status !== 'success' && status !== 'error' && status !== 'canceled') {
-    res.status(400).json({ error: "invalid status filter (expected 'success', 'error' or 'canceled')" });
+  const scope = readScope(req);
+  if ('error' in scope) {
+    res.status(400).json({ error: scope.error });
     return;
   }
-  // Provider filter. The `provider` param carries the stable row id returned by
-  // /by-platform: a platform slug ('groq') or 'custom:<base_url>' for a custom
-  // endpoint (#889 — every custom relay shares the 'custom' platform id, so the
-  // endpoint's base_url is what actually selects one). The legacy `platform`
-  // param still works for old clients. Both are bound parameters, never
-  // interpolated, so the only validation needed is shape.
-  const provider = req.query.provider as string | undefined;
-  const platform = req.query.platform as string | undefined;
-  let providerFilterSql = '';
-  const providerFilterParams: string[] = [];
-  if (provider !== undefined) {
-    if (provider.length > 256 || /[\r\n]/.test(provider)) {
-      res.status(400).json({ error: 'invalid provider filter' });
-      return;
-    }
-    if (provider === 'custom') {
-      // The BARE 'custom' id is the orphan bucket, not "all custom traffic":
-      // /by-platform emits it only for rows whose endpoint is unknown (the key
-      // was deleted, or never carried a base_url). Falling through to the slug
-      // branch below would filter on `platform = 'custom'` and return every
-      // relay's traffic — a list that contradicts the very row the user
-      // clicked, which counted the orphans alone. Match what that row counted.
-      providerFilterSql = ` AND r.platform = 'custom' AND ${ENDPOINT_ID_SQL} = ''`;
-    } else if (provider.startsWith('custom:')) {
-      // Select one custom endpoint by its base_url. Normalized on the way in
-      // for the same reason ENDPOINT_ID_SQL normalizes on the way out.
-      providerFilterSql = ` AND r.platform = 'custom' AND ${ENDPOINT_ID_SQL} = ?`;
-      providerFilterParams.push(normalizeBaseUrl(provider.slice('custom:'.length)));
-    } else if (/^[A-Za-z0-9_-]{1,64}$/.test(provider)) {
-      providerFilterSql = ' AND r.platform = ?';
-      providerFilterParams.push(provider);
-    } else {
-      res.status(400).json({ error: 'invalid provider filter' });
-      return;
-    }
-  } else if (platform !== undefined) {
-    // The legacy param keeps its pre-#889 meaning: `platform=custom` is every
-    // custom relay's traffic. Only the `provider` ids are endpoint-scoped.
-    // Platform ids are short slugs ('groq', 'pt-custom_1'); anything else is a
-    // client bug, not a filter.
-    if (!/^[A-Za-z0-9_-]{1,64}$/.test(platform)) {
-      res.status(400).json({ error: 'invalid platform filter' });
-      return;
-    }
-    providerFilterSql = ' AND r.platform = ?';
-    providerFilterParams.push(platform);
-  }
+  const { window, filters, device } = scope;
+  const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 100, 1), 500);
+  const offset = Math.max(parseInt(req.query.offset as string, 10) || 0, 0);
   const db = getDb();
 
-  // Device joins status and provider as a filter dimension, so `total` counts
-  // the same set the rows come from — the list and its count must never
-  // describe different populations.
-  const dev = deviceFilter(req.query.device);
-  const filterSql =
-    (status !== undefined ? ' AND r.status = ?' : '') +
-    providerFilterSql +
-    dev.sql;
-  const filterParams = [
-    ...(status !== undefined ? [status] : []),
-    ...providerFilterParams,
-    ...dev.params,
-  ];
-
+  // `total` counts the SAME set the rows come from — filters are shared with
+  // every other panel, so the list and its count can never describe different
+  // populations, and neither can describe traffic the charts don't show.
   const total = (db.prepare(
     `SELECT COUNT(*) as c FROM requests r
        LEFT JOIN api_keys k ON k.id = r.key_id
-      WHERE r.created_at >= ?${filterSql}`
-  ).get(since, ...filterParams) as { c: number }).c;
+      WHERE r.created_at >= ?${scopeSql(window, filters, device)}`
+  ).get(window.since, ...scopeParams(window, filters, device)) as { c: number }).c;
 
   const rows = db.prepare(`
     SELECT r.id, r.platform, r.model_id, r.requested_model, r.request_type, r.status,
@@ -874,10 +1262,10 @@ analyticsRouter.get('/requests', (req: Request, res: Response) => {
            k.label as key_label
     FROM requests r
     LEFT JOIN api_keys k ON k.id = r.key_id
-    WHERE r.created_at >= ?${filterSql}
+    WHERE r.created_at >= ?${scopeSql(window, filters, device)}
     ORDER BY r.created_at DESC, r.id DESC
     LIMIT ? OFFSET ?
-  `).all(since, ...filterParams, limit, offset) as any[];
+  `).all(window.since, ...scopeParams(window, filters, device), limit, offset) as RecentCallDbRow[];
 
   res.json({
     total,
