@@ -76,50 +76,60 @@ export function ProviderChecklistSection({ onAddKey }: { onAddKey: (platform: st
             // invalid HTML); visually it rides inside the pill.
             const signupUrl = PLATFORMS.find(entry => entry.value === p.platform)?.url
             return (
-              <span key={p.platform} className="relative inline-flex items-center">
-                <Tooltip
-                  text={p.keyless ? t('keys.checklistKeylessTip') : t('keys.checklistNoKeyTip')}
-                >
-                  <button
-                    type="button"
-                    onClick={() => onAddKey(p.platform)}
-                    className={`inline-flex h-5 items-center gap-1 rounded-4xl border border-border pr-1.5 pl-2 text-xs font-medium whitespace-nowrap transition-all hover:bg-muted focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 ${signupUrl && !p.keyless ? 'pr-7' : ''}`}
+              <span key={p.platform} className="inline-flex items-center gap-1">
+                {/* The signup link is absolutely positioned, so it needs a
+                    positioned ancestor. The old markup positioned it against the
+                    outer span, which is not `relative`: the link resolved against
+                    the viewport instead and rendered at its far right, ~1500px
+                    from the chip it belongs to — every chip's link stacked on the
+                    same spot, on top of whatever sat there. This wrapper is the
+                    containing block, so the link lands in the chip's reserved
+                    right padding, clear of the dismiss X. */}
+                <span className="relative inline-flex items-center">
+                  <Tooltip
+                    text={p.keyless ? t('keys.checklistKeylessTip') : t('keys.checklistNoKeyTip')}
                   >
-                    <Plus className="size-3 text-muted-foreground" />
-                    {p.name}
-                    {p.keyless ? (
-                      <span className="inline-flex text-muted-foreground">
-                        <Unlock className="size-3.5" aria-hidden="true" />
-                        <span className="sr-only">{t('keys.checklistKeyless')}</span>
-                      </span>
-                    ) : (
-                      // Needs a key but none added yet — the actionable case. Amber
-                      // so the "add this" providers stand out from anonymous ones.
-                      <span className="inline-flex text-amber-600 dark:text-amber-400">
-                        <KeyRound className="size-3.5" aria-hidden="true" />
-                        <span className="sr-only">{t('models.noKey')}</span>
-                      </span>
-                    )}
-                  </button>
-                </Tooltip>
-                {signupUrl && !p.keyless && (
-                  <a
-                    href={signupUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={t('keys.checklistSignupLink', { provider: p.name })}
-                    aria-label={t('keys.checklistSignupLink', { provider: p.name })}
-                    className="absolute right-1 inline-flex text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground"
-                  >
-                    <ExternalLink className="size-3" aria-hidden="true" />
-                  </a>
-                )}
+                    <button
+                      type="button"
+                      onClick={() => onAddKey(p.platform)}
+                      className={`inline-flex h-5 items-center gap-1 rounded-4xl border border-border pr-1.5 pl-2 text-xs font-medium whitespace-nowrap transition-all hover:bg-muted focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 ${signupUrl && !p.keyless ? 'pr-7' : ''}`}
+                    >
+                      <Plus className="size-3 text-muted-foreground" />
+                      {p.name}
+                      {p.keyless ? (
+                        <span className="inline-flex text-muted-foreground">
+                          <Unlock className="size-3.5" aria-hidden="true" />
+                          <span className="sr-only">{t('keys.checklistKeyless')}</span>
+                        </span>
+                      ) : (
+                        // Needs a key but none added yet — the actionable case. Amber
+                        // so the "add this" providers stand out from anonymous ones.
+                        <span className="inline-flex text-amber-600 dark:text-amber-400">
+                          <KeyRound className="size-3.5" aria-hidden="true" />
+                          <span className="sr-only">{t('models.noKey')}</span>
+                        </span>
+                      )}
+                    </button>
+                  </Tooltip>
+                  {signupUrl && !p.keyless && (
+                    <a
+                      href={signupUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={t('keys.checklistSignupLink', { provider: p.name })}
+                      aria-label={t('keys.checklistSignupLink', { provider: p.name })}
+                      className="absolute right-1 inline-flex text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground"
+                    >
+                      <ExternalLink className="size-3" aria-hidden="true" />
+                    </a>
+                  )}
+                </span>
                 <button
                   type="button"
                   onClick={() => setRemoveTarget({ platform: p.platform, label: p.name })}
                   title={t('keys.checklistRemoveTip', { provider: p.name })}
                   aria-label={t('keys.checklistRemoveTip', { provider: p.name })}
-                  className="ml-0.5 inline-flex text-muted-foreground transition-colors hover:text-destructive focus-visible:text-destructive"
+                  className="inline-flex text-muted-foreground transition-colors hover:text-destructive focus-visible:text-destructive"
                 >
                   <X className="size-3" aria-hidden="true" />
                 </button>
