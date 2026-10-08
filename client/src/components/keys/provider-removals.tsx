@@ -113,12 +113,16 @@ export function ProviderRemovalsLog() {
 
   if (removals.length === 0) return null
 
+  // Collapsed by default: this is a log of what was given up on, not something
+  // to read while working. It used to render expanded above the provider list,
+  // where it pushed the keys you came for down the page. Native <details> so
+  // the open state needs no component state and survives a re-render.
   return (
-    <section className="rounded-xl border p-3">
-      <h2 className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+    <details className="group rounded-xl border p-3">
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs font-medium text-muted-foreground [&::-webkit-details-marker]:hidden">
         <Trash2 className="size-3.5" />
         {t('keys.removedProviders', { count: removals.length })}
-      </h2>
+      </summary>
       <ul className="mt-1.5 space-y-1">
         {removals.map(r => (
           <li key={r.platform} className="flex flex-wrap items-center gap-2 text-xs">
@@ -146,6 +150,6 @@ export function ProviderRemovalsLog() {
           </li>
         ))}
       </ul>
-    </section>
+    </details>
   )
 }

@@ -687,9 +687,6 @@ export function ProviderList({ onAddKey, initialSearch }: {
         </span>
       </div>
 
-      {/* What was removed and why, and the way back. Sits with the list it
-          refers to rather than with the dialogs. */}
-      <ProviderRemovalsLog />
 
       {visibleGroups.length === 0 ? (
         <EmptyState title={t('keys.noFilterMatch')} />
@@ -1333,8 +1330,6 @@ export function ProviderList({ onAddKey, initialSearch }: {
         />
       )}
 
-      <ProviderRemovalsLog />
-
       {copyKey !== null && (
         <CopyKeyDialog
           keyId={copyKey.id}
@@ -1372,6 +1367,11 @@ export function ProviderList({ onAddKey, initialSearch }: {
           />
         ) : null
       })()}
+
+      {/* Last child on purpose: the removal log is a record of what was given up
+          on, not part of the working list. It is collapsed by default, and it
+          used to render twice — once expanded above the list and once here. */}
+      <ProviderRemovalsLog />
     </div>
   )
 }
