@@ -8,12 +8,12 @@ The Imperium provider-routing work is maintained as a bolt-on branch. It is not 
 | --- | --- |
 | Upstream remote | `https://github.com/tashfeenahmed/freellmapi.git` (`origin`) |
 | Fork remote | `https://github.com/jamesjdoan/freellmapi.git` (`fork`) |
-| Upstream base | `v0.13.3` (`5d7b9b6`), taken by merge |
-| Extension branch | `docs/freellm-assert-start-on-redeploy` — carries the whole extension, on `v0.13.3` |
+| Upstream base | `v0.13.6` (`ffef850f`), taken by merge. Previous: `v0.13.3` (`5d7b9b6`) |
+| Extension branch | `docs/freellm-assert-start-on-redeploy` — carries the whole extension, on `v0.13.6` |
 | Publishable subset | `codex/provider-routing-controls` — an ancestor of the above, still on the `v0.9.4` base |
 | Extension worktree | `/Users/jamesdoan/Code/Instrumenta/worktrees/freellmapi-provider-routing` (holds the `codex/…` subset, not the live branch) |
 | Compose deployment | `/Users/jamesdoan/Code/Instrumenta/freellmapi` — confirmed from the live container's `com.docker.compose.project.working_dir` label, not from this table |
-| Live image | `ghcr.io/tashfeenahmed/freellmapi:latest` (`ba22f5c8`), built locally from the extension checkout and tagged with the upstream name |
+| Live image | `ghcr.io/tashfeenahmed/freellmapi:latest` (`482ea005`), built locally from the extension checkout and tagged with the upstream name |
 | Local Docker image | `jamesjdoan/freellmapi:provider-routing` — built, but not what the running container uses |
 | Persistent volume | `freellmapi_freellmapi-data` |
 | Compose override | none in the deployment directory; the stock `docker-compose.yml` is used as-is |
