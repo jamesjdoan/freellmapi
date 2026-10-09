@@ -11,7 +11,10 @@ import { ZhipuProvider } from './zhipu.js';
 import { SailProvider } from './sail.js';
 import { AclideProvider } from './aclide.js';
 import { SpekaProvider } from './speka.js';
+import { TyphoonProvider } from './typhoon.js';
 import { LlmtrProvider } from './llmtr.js';
+import { GizmoProvider } from './gizmo.js';
+import { BlockRunProvider } from './blockrun.js';
 import { MoondreamProvider } from './moondream.js';
 import { ElectronHubProvider } from './electronhub.js';
 import { ExperientialProvider } from './experiential.js';
@@ -60,7 +63,10 @@ register(new OpenAICompatProvider({
 register(new SailProvider());
 register(new AclideProvider());
 register(new SpekaProvider());
+register(new TyphoonProvider());
 register(new LlmtrProvider());
+register(new GizmoProvider());
+register(new BlockRunProvider());
 register(new MoondreamProvider());
 
 // Free-plan grants are shared wallets, not free credits per model. Eligibility
@@ -161,6 +167,17 @@ register(new OpenAICompatProvider({
   extraHeaders: {
     'HTTP-Referer': 'http://localhost:3001',
     'X-Title': 'FreeLLMAPI',
+  },
+  // #1403: OpenRouter reports the key's real credit balance and hard limit on
+  // its key-info endpoint (outside /api/v1). limit/remaining are USD amounts
+  // when set; null means the key is on the free tier with no credit cap, so
+  // the probe records whatever pair the endpoint actually fills.
+  quotaProbe: {
+    url: 'https://openrouter.ai/api/v1/key',
+    metric: 'credits',
+    limitFields: ['limit'],
+    remainingFields: ['limit_remaining'],
+    notes: 'openrouter key-info: USD credit (limit/limit_remaining)',
   },
 }));
 
@@ -346,6 +363,18 @@ register(new OpenAICompatProvider({
   platform: 'siliconflow',
   name: 'SiliconFlow',
   baseUrl: 'https://api.siliconflow.com/v1',
+  // #1403: SiliconFlow reports the account's credit balance on
+  // GET /v1/user/info (data.balance = gift credit, data.totalBalance = gift +
+  // charge; values arrive as numeric strings in CNY). There is no limit field,
+  // so the probe records remaining only — a real number beats parseBudget's 0
+  // for this pool.
+  quotaProbe: {
+    url: 'https://api.siliconflow.com/v1/user/info',
+    metric: 'credits',
+    limitFields: [],
+    remainingFields: ['totalBalance', 'balance'],
+    notes: 'siliconflow user-info: CNY credit balance (totalBalance)',
+  },
 }));
 
 // Routeway — OpenAI-compatible aggregator (api.routeway.ai/v1). Free models

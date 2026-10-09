@@ -135,10 +135,13 @@ export function churnByPlatform(
     if (!b) { b = { arrived: [], departed: [] }; out.set(platform, b) }
     return b
   }
-  for (const m of data.arrived) {
+  // A secondary display payload must not take the Keys page down with it: the
+  // churn chip is decoration on a row that has other things to show, so a body
+  // missing either list renders no chip instead of throwing during render.
+  for (const m of data.arrived ?? []) {
     if (shortDate(m.firstSeenAt) >= cutoff) bucket(m.platform).arrived.push(m)
   }
-  for (const m of data.departed) {
+  for (const m of data.departed ?? []) {
     if (shortDate(m.retiredAt) >= cutoff) bucket(m.platform).departed.push(m)
   }
   return out

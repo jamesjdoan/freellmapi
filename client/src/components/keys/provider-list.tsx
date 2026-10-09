@@ -34,6 +34,7 @@ import {
   statusDot,
   statusLabelKey,
 } from './shared'
+import { balanceByKey, type KeyBalance } from './quota-balance'
 import type { HealthData } from './shared'
 import { NewArrivalsTag, ProviderChurnChip, ProviderChurnPanel } from './provider-churn'
 import { ProviderDiagnosisChip, useProviderDiagnosis } from './provider-diagnosis'
@@ -55,6 +56,19 @@ type StatusFilter = 'all' | 'healthy' | 'issues' | 'disabled'
 // #787: what the batch bar can do to the selected keys of one group.
 type BulkAction = 'enable' | 'disable' | 'delete'
 
+// #1403 phase 3: the balance badge names its unit with the Free tier page's
+// already-translated metric words.
+const METRIC_LABEL_KEY = {
+  requests: 'freeTier.metricRequests',
+  tokens: 'freeTier.metricTokens',
+  credits: 'freeTier.metricCredits',
+  neurons: 'freeTier.metricNeurons',
+} as const
+
+
+/** Stable identity so the memo does not recompute on every render. */
+const EMPTY_FALLBACK: FallbackEntry[] = []
+
 // The Providers tab body: a filter toolbar over a list of collapsible provider
 // groups. Owns the keys/health/proxy queries and every per-key mutation so
 // KeysPage stays a thin shell. `onAddKey` opens the shared Add key dialog.
@@ -66,6 +80,8 @@ interface KeyDetailCtx {
   hasCustomModels: boolean
   isExpanded: boolean
   isChecking: boolean
+  /** Provider-reported balance (#1403), absent when the provider reports none. */
+  balance?: KeyBalance
 }
 
 export function ProviderList({ onAddKey, initialSearch }: {
@@ -85,7 +101,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
    * 'remove' ends up wired to the wrong one.
    */
   function renderKeyDetails(k: ApiKey, ctx: KeyDetailCtx) {
-    const { status, lastChecked, hasCustomModels, isExpanded, isChecking } = ctx
+    const { status, lastChecked, hasCustomModels, isExpanded, isChecking, balance } = ctx
     return (
       <>
             <span className={`size-1.5 rounded-full flex-shrink-0 ${statusDot[status] ?? statusDot.unknown}`} />
@@ -156,6 +172,29 @@ export function ProviderList({ onAddKey, initialSearch }: {
               <Badge variant="secondary" className="text-[10px] text-muted-foreground">
                 {t('keys.accountLimits')}
               </Badge>
+            )}
+            {/* #1403 phase 3: the provider-reported balance. Amber at ≤20%
+                left — the same low-balance signal the Quota outlook panel
+                gives, but visible where the operator actually scans keys
+                instead of on a second tab. */}
+            {balance && (
+              <Tooltip
+                text={balance.limit != null
+                  ? t('keys.quotaBalanceHint', { remaining: new Intl.NumberFormat(locale).format(balance.remaining), limit: new Intl.NumberFormat(locale).format(balance.limit), metric: t(METRIC_LABEL_KEY[balance.metric]) })
+                  : t('keys.quotaBalanceLeft', { remaining: new Intl.NumberFormat(locale).format(balance.remaining) })}
+              >
+                <Badge
+                  variant="outline"
+                  aria-label={t('keys.quotaBalanceLeft', { remaining: new Intl.NumberFormat(locale).format(balance.remaining) })}
+                  className={`text-[10px] tabular-nums ${balance.fraction != null && balance.fraction <= 0.2
+                    ? 'border-amber-600/30 text-amber-700 dark:text-amber-300'
+                    : 'text-muted-foreground'} ${k.enabled ? '' : 'opacity-50'}`}
+                >
+                  {balance.limit != null && balance.fraction != null
+                    ? `${Math.round(balance.fraction * 100)}% ${t(METRIC_LABEL_KEY[balance.metric])}`
+                    : `${new Intl.NumberFormat(locale).format(balance.remaining)} ${t(METRIC_LABEL_KEY[balance.metric])}`}
+                </Badge>
+              </Tooltip>
             )}
             <div className="flex-1" />
             {lastChecked && (
@@ -266,7 +305,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
     )
   }
 
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const queryClient = useQueryClient()
 
   const [editingKeyId, setEditingKeyId] = useState<number | null>(null)
@@ -350,10 +389,14 @@ export function ProviderList({ onAddKey, initialSearch }: {
 
   // The catalogue, for the "N/M models in key scope" summary on each row.
   // Same query the model-scope dialog runs, deduped by react-query.
-  const { data: fallback = [] } = useQuery<FallbackEntry[]>({
+  // A body that is not a list (a failed or redirected response) must not reach
+  // the row render, where it would throw on iteration; the default only covers
+  // the not-yet-resolved case.
+  const { data: fallbackData } = useQuery<FallbackEntry[]>({
     queryKey: ['fallback'],
     queryFn: () => apiFetch('/api/fallback'),
   })
+  const fallback = Array.isArray(fallbackData) ? fallbackData : EMPTY_FALLBACK
   // Health deliberately ignored here: this summarises what the operator ticked,
   // and the dialog those ticks live in does not grey them out for a failed
   // check either.
@@ -562,6 +605,12 @@ export function ProviderList({ onAddKey, initialSearch }: {
       keys: [k],
     })),
   ].filter(p => p.keys.length > 0)
+
+  // #1403 phase 3: the provider-reported balance for a key, from the same
+  // health poll the row's status already rides on. One badge per key: the
+  // lowest remaining fraction among that key's pools, since that pool is the
+  // one that runs dry first and starts routing around the key.
+  const balanceOf = balanceByKey(healthData?.quotaStates ?? [])
 
   // A provider the operator has removed: its models were tombstoned, so a
   // catalogue refresh cannot bring it back, and its row here would only be
@@ -785,6 +834,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                       hasCustomModels: (k.models ?? []).length > 0,
                       isExpanded: expandedKeyIds.has(k.id),
                       isChecking: checkKey.isPending && checkKey.variables === k.id,
+                      balance: balanceOf.get(k.id),
                     })
                   })()}
                   <DropdownMenu>
@@ -945,6 +995,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                       const health = healthKeyMap.get(k.id)
                       const lastChecked = health?.lastCheckedAt ?? k.lastCheckedAt
                       const lastHealthError = health?.lastHealthError ?? k.lastHealthError
+                      const balance = balanceOf.get(k.id)
                       const customModels = k.models ?? []
                       const hasCustomModels = customModels.length > 0
                       const isExpanded = expandedKeyIds.has(k.id)
@@ -1032,6 +1083,28 @@ export function ProviderList({ onAddKey, initialSearch }: {
                               <Badge variant="secondary" className="text-[10px] text-muted-foreground">
                                 {t('keys.accountLimits')}
                               </Badge>
+                            )}
+                            {/* #1403 phase 3: the provider-reported balance. This row
+                                is laid out here rather than through renderKeyDetails,
+                                so the badge is repeated rather than inherited. */}
+                            {balance && (
+                              <Tooltip
+                                text={balance.limit != null
+                                  ? t('keys.quotaBalanceHint', { remaining: new Intl.NumberFormat(locale).format(balance.remaining), limit: new Intl.NumberFormat(locale).format(balance.limit), metric: t(METRIC_LABEL_KEY[balance.metric]) })
+                                  : t('keys.quotaBalanceLeft', { remaining: new Intl.NumberFormat(locale).format(balance.remaining) })}
+                              >
+                                <Badge
+                                  variant="outline"
+                                  aria-label={t('keys.quotaBalanceLeft', { remaining: new Intl.NumberFormat(locale).format(balance.remaining) })}
+                                  className={`text-[10px] tabular-nums ${balance.fraction != null && balance.fraction <= 0.2
+                                    ? 'border-amber-600/30 text-amber-700 dark:text-amber-300'
+                                    : 'text-muted-foreground'} ${k.enabled ? '' : 'opacity-50'}`}
+                                >
+                                  {balance.limit != null && balance.fraction != null
+                                    ? `${Math.round(balance.fraction * 100)}% ${t(METRIC_LABEL_KEY[balance.metric])}`
+                                    : `${new Intl.NumberFormat(locale).format(balance.remaining)} ${t(METRIC_LABEL_KEY[balance.metric])}`}
+                                </Badge>
+                              </Tooltip>
                             )}
                             <div className="flex-1" />
                             {lastChecked && (

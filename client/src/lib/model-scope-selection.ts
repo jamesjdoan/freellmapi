@@ -62,12 +62,13 @@ export function scopeCandidates(
   // gets the same treatment as an unmeasured model, which sorts last rather
   // than ahead of measured ones (see the MAX_SAFE_INTEGER rule below).
   entries: readonly (Pick<FallbackEntry, 'platform' | 'modelId' | 'displayName' | 'sizeLabel' | 'contextWindow'>
-    & { intelligenceRank?: number })[],
+    & { intelligenceRank?: number })[] | undefined,
   platform: string,
 ): ScopeCandidate[] {
   // 'custom' rows are per-endpoint, not per-platform — one custom key must
-  // never be offered another endpoint's models.
-  if (!platform || platform === 'custom') return []
+  // never be offered another endpoint's models. An absent list (the chain
+  // query has not resolved) yields no candidates rather than throwing.
+  if (!platform || platform === 'custom' || !entries) return []
   const seen = new Set<string>()
   const candidates: ScopeCandidate[] = []
   for (const entry of entries) {
