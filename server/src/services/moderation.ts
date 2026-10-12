@@ -15,6 +15,9 @@ import { getDb } from '../db/index.js';
 import { getClientContext } from '../lib/client-context.js';
 import { decrypt } from '../lib/crypto.js';
 import { proxyFetch } from '../lib/proxy.js';
+import { PAID_BALANCE_GUARD_ID } from '../data/extension-registry.js';
+import { isExtensionEnabled } from './extension-state.js';
+import { consumesPaidBalance } from './provider-quota.js';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -183,11 +186,21 @@ export async function runModerations(
   // platform failover below real (OpenRouter's omni-moderation id carries an
   // `openai/` prefix, so an exact-modelId filter would silently drop it).
   // An explicit model narrows the chain to the platform(s) exposing it.
+  //
+  // paid-balance-guard is the one control over paid spend (router.ts
+  // withoutAutorouteDisabled), and it bars paid routes from AUTOMATIC
+  // selection only: naming a paid model is an intentional request. OpenRouter's
+  // omni-moderation id has no `:free` suffix, so while the guard is on the
+  // default walk skips it. `openai` is not a routing platform and never on the
+  // paid list, so it is excluded by name.
   const isDefaultRequest = !model
     || model === 'text-moderation-stable'
     || model === 'text-moderation-latest';
+  const guardedPaid = new Set<string>(isExtensionEnabled(PAID_BALANCE_GUARD_ID)
+    ? PLATFORM_ORDER.filter(p => p !== 'openai' && consumesPaidBalance(p, MODERATION_MODELS[p].modelId))
+    : []);
   const chain = isDefaultRequest
-    ? models
+    ? models.filter(m => !guardedPaid.has(m.platform))
     : models.filter(m => m.modelId === resolved);
   if (chain.length === 0) {
     throw new ModerationError(`No enabled providers for moderation model '${resolved}'.`, 503);

@@ -236,7 +236,7 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
     defaultEnabled: true,
     offBehaviour: 'Paid routes become selectable by automatic routing and lateral fallback, and real credit can be spent. Requires the typed confirmation and records who acknowledged it and when; an off state without a valid acknowledgement is refused at load. While off, a dashboard warning cannot be dismissed and every inference response carries X-FreeLLM-Paid-Balance-Guard: disabled. Naming a paid model explicitly is unaffected either way - that has always been an intentional request.',
     takesEffect: 'Next upstream dispatch, including a retry of a request already running. It cannot recall a call already sent.',
-    codeLocations: ['server/src/services/provider-quota.ts (consumesPaidBalance, PAID_UNLESS_FREE_SUFFIX)', 'server/src/services/router.ts (automatic-chain filter)'],
+    codeLocations: ['server/src/services/provider-quota.ts (consumesPaidBalance, PAID_UNLESS_FREE_SUFFIX)', 'server/src/services/router.ts (automatic-chain filter)', 'server/src/services/moderation.ts (default-request walk)'],
     disableConfirmation: 'paid-spend',
   },
 

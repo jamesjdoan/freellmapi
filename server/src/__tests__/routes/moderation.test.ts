@@ -164,21 +164,53 @@ describe('POST /v1/moderations route', () => {
   });
 
   it('fails over to the next platform when the first errors', async () => {
-    // openai and openrouter share the default 'omni-moderation-latest'
-    // model, so the chain walks openai → openrouter.
+    // A default request walks every available platform in order. openai →
+    // nvidia: OpenRouter would be the next hop, but paid-balance-guard
+    // withholds it (see below).
     insertKey('openai');
-    insertKey('openrouter');
+    insertKey('nvidia');
     const calls = mockModeration([
       { platform: 'openai', response: {}, status: 500 },
-      { platform: 'openrouter', response: { results: [{ flagged: true }] }, status: 200 },
+      { platform: 'nvidia', response: { results: [{ flagged: true }] }, status: 200 },
     ]);
     const { status, body } = await postModeration(
       { input: 'flagged content' },
       getUnifiedApiKey(),
     );
     expect(status).toBe(200);
+    expect(body._provider).toBe('nvidia');
+    expect(calls).toEqual(['openai', 'nvidia']);
+  });
+
+  it('never calls OpenRouter on a default request while paid-balance-guard is on', async () => {
+    // OpenRouter's omni-moderation id has no `:free` suffix, so it would draw
+    // on the account balance. The guard is the one control over paid spend
+    // and is on by default.
+    insertKey('openrouter');
+    insertKey('nvidia');
+    const calls = mockModeration([
+      { platform: 'openrouter', response: { results: [{ flagged: false }] }, status: 200 },
+      { platform: 'nvidia', response: { results: [{ flagged: false }] }, status: 200 },
+    ]);
+    const { status, body } = await postModeration({ input: 'x' }, getUnifiedApiKey());
+    expect(status).toBe(200);
+    expect(body._provider).toBe('nvidia');
+    expect(calls).toEqual(['nvidia']);
+  });
+
+  it('honours OpenRouter when the request names its model, guard or not', async () => {
+    // The guard bars paid routes from AUTOMATIC selection; naming one is an
+    // intentional request (extension-registry paid-balance-guard offBehaviour).
+    insertKey('openrouter');
+    insertKey('nvidia');
+    const calls = mockModeration([
+      { platform: 'openrouter', response: { results: [{ flagged: false }] }, status: 200 },
+      { platform: 'nvidia', response: { results: [{ flagged: false }] }, status: 200 },
+    ]);
+    const { status, body } = await postModeration({ input: 'x', model: 'openai/omni-moderation-latest' }, getUnifiedApiKey());
+    expect(status).toBe(200);
     expect(body._provider).toBe('openrouter');
-    expect(calls).toEqual(['openai', 'openrouter']);
+    expect(calls).toEqual(['openrouter']);
   });
 
   it('returns 503 when no moderation provider has an enabled key', async () => {
