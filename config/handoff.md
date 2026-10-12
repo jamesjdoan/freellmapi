@@ -25,11 +25,29 @@ Live data only for the chains; nothing here needs a rebuild. Backup taken first:
 - Demoted, not removed: `custom/coding-kimi-k3-free` (0 successes, "cannot be served") to
   chain tails; `nvidia/z-ai/glm-5.3` (never answered, 2/2 45s timeouts) to the Extra-Tier tail;
   `unorouter/glm-5.3:free` swapped for `glm-5.3-flash:free` on the same single counter.
+- **Unassigned free capacity added** (66 servable free rows sat in no chain; 16 placed). Coding
+  +3 tail (`nemotron-3-ultra-free`, `coding-glm-4.7/4.6-free`), Fast-Lane +3
+  (`zhipu/glm-4.7-flash`, `ministral-8b/14b-2512`), Extra-Tier +10. Each inserted before the
+  chain's keep-last anchors, one route per shared or account counter. **Zhipu key 36 had
+  no route in any chain** and now has one in Fast-Lane and one in Extra-Tier. Sizes: Coding
+  17, Fast-Lane 10, Extra-Tier 32. Left out on purpose: electronhub (no tool support),
+  groq prompt-guard and allam (classifiers), and routes already covered by a sibling id.
+- **Space Bunny's clifree range recorded in Keys**: `opencode/space-bunny-free` → proxy
+  `glm-5-3-flash`, the same mapping as the FreeLLM row. It now reads terra-class
+  41.8/71.5/50.9 in `clifree-rank.sh`, instead of `unrated`.
 
-### Changed (atelier, uncommitted)
+### Changed (atelier)
 
-- `scripts/clifree-ask.sh`: the cooldown ledger used one fixed `.tmp` path, so parallel
-  subagents aborted each other (reproduced: 21/40 and 26/40 runs died; fixed: 0/40).
+- `scripts/clifree-ask.sh`, committed `63e8200`: the cooldown ledger used one fixed `.tmp`
+  path, so parallel subagents aborted each other (reproduced: 21/40 and 26/40 runs died; fixed: 0/40).
+- `scripts/clifree-ask.sh`: **a `-m` pin is now the first choice, not the only one.** The ranked
+  tail follows it, so a refusing pin walks down (proved with a failing stub) instead of killing
+  the delegation. The pin is also **exempt from the cooldown skip**, so it leads every call even
+  while benched; non-pinned benched routes are still skipped.
+- `scripts/clifree-rank.sh`: reads recorded `manual`/`proxy` links for `opencode:`/`cline:`
+  routes before name matching (see GOTCHAS). Its JS heredoc sits inside a command
+  substitution, where `/bin/bash` 3.2 miscounts an apostrophe and fails the whole script.
+- **Auto-delegation pinned**: `clifree-auto.sh start -m opencode:space-bunny-free`.
 
 ### Watch
 
