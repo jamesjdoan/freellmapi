@@ -25,6 +25,7 @@ import { enabledModelCount, providerKeyAccess, scopeAfterToggle, scopeCandidates
 import { useI18n } from '@/i18n'
 import { toast } from '@/lib/toast'
 import { keyMatchesQuery } from '@/lib/key-search'
+import { copyText } from '@/lib/clipboard'
 import {
   PLATFORMS,
   CUSTOM_GROUP,
@@ -50,8 +51,25 @@ import { EditModelsDialog } from './edit-models-dialog'
 import { ModelScopeDialog } from './model-scope-dialog'
 import { TestModelsDialog } from './test-models-dialog'
 import { AddModelDialog } from './add-model-dialog'
+import { groupHandle } from '@/lib/endpoint-groups'
 
 type StatusFilter = 'all' | 'healthy' | 'issues' | 'disabled'
+
+// One collapsible section of the Keys page: a platform, or one custom
+// endpoint (an OpenAI-compatible account), which is why `value` and
+// `platform` can differ.
+interface ProviderGroup {
+  value: string
+  label: string
+  url: string
+  platform: string
+  /** Custom endpoints only: the endpoint's normalised base URL. */
+  endpointScope?: string
+  /** Custom endpoints only: the operator-set group label (#1176) that
+   *  `#group` routing addresses, or null when the endpoint has none. */
+  customGroup?: string | null
+  keys: ApiKey[]
+}
 
 // #787: what the batch bar can do to the selected keys of one group.
 type BulkAction = 'enable' | 'disable' | 'delete'
@@ -471,10 +489,11 @@ export function ProviderList({ onAddKey, initialSearch }: {
   })
 
   const togglePlatform = useMutation({
-    mutationFn: ({ platform, enabled }: { platform: string; enabled: boolean }) =>
+    // `group` narrows a custom sweep to one endpoint group (#1176).
+    mutationFn: ({ platform, enabled, group }: { platform: string; enabled: boolean; group?: string | null }) =>
       apiFetch(`/api/keys/platform/${platform}`, {
         method: 'PATCH',
-        body: JSON.stringify({ enabled }),
+        body: JSON.stringify(group === undefined ? { enabled } : { enabled, group }),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['keys'] })
@@ -558,6 +577,14 @@ export function ProviderList({ onAddKey, initialSearch }: {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['proxy-url'] }),
   })
 
+  function copyGroupHandle(label: string) {
+    const handle = `#${groupHandle(label)}`
+    void copyText(handle).then(ok => {
+      if (ok) toast.success(t('keys.groupHandleCopied', { handle }))
+      else toast.error(t('keys.groupHandleCopyFailed'))
+    })
+  }
+
   // One editor for a key: the dialog (#1163). The merged provider row used to
   // open an inline label input on this same state, which took focus, lost it
   // to the dialog and saved-and-closed both on blur.
@@ -594,14 +621,21 @@ export function ProviderList({ onAddKey, initialSearch }: {
   // switch, so bunching them under one "Custom" header hid which was which.
   // `value` is the row's identity; `platform` is what platform-wide actions
   // (switch, scope, bypass) act on.
-  const grouped = [
-    ...PLATFORMS.map(p => ({ ...p, platform: p.value, endpointScope: undefined as string | undefined, keys: keys.filter(k => k.platform === p.value) })),
+  //
+  // Upstream v0.13.10 (#1176) groups custom endpoints by an operator-set label
+  // instead. Kept per endpoint here: an unlabelled endpoint would otherwise
+  // fold back under one "Custom" header, and the models panel, diagnosis and
+  // churn chips are scoped by endpoint. The label rides on each row as
+  // `customGroup`, so its #handle and copy action still show.
+  const grouped: ProviderGroup[] = [
+    ...PLATFORMS.map(p => ({ ...p, platform: p.value, keys: keys.filter(k => k.platform === p.value) })),
     ...keys.filter(k => k.platform === CUSTOM_GROUP.value).map(k => ({
       ...CUSTOM_GROUP,
       value: `custom:${k.id}`,
       label: k.label?.trim() || endpointHost(k.baseUrl) || CUSTOM_GROUP.label,
       platform: CUSTOM_GROUP.value,
       endpointScope: normalizeScope(k.baseUrl),
+      customGroup: k.groupLabel?.trim() || null,
       keys: [k],
     })),
   ].filter(p => p.keys.length > 0)
@@ -778,6 +812,13 @@ export function ProviderList({ onAddKey, initialSearch }: {
                   >
                     <h3 className="text-sm font-medium">{group.label}</h3>
                     <Badge variant="secondary" className="tabular-nums">{group.keys.length}</Badge>
+                    {group.customGroup && (
+                      <Tooltip text={t('keys.groupHandleHint', { handle: groupHandle(group.customGroup) })}>
+                        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                          #{groupHandle(group.customGroup)}
+                        </code>
+                      </Tooltip>
+                    )}
                     <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
                       {healthyCount > 0 && (
                         <span className="inline-flex items-center gap-1">
@@ -860,6 +901,12 @@ export function ProviderList({ onAddKey, initialSearch }: {
                           <DropdownMenuItem onClick={() => setRenameKeyId(group.keys[0].id)}>
                             {t('keys.renameAccount')}
                             <Pencil className="ml-auto size-3.5" />
+                          </DropdownMenuItem>
+                        )}
+                        {group.customGroup && (
+                          <DropdownMenuItem onClick={() => copyGroupHandle(group.customGroup!)}>
+                            {t('keys.copyGroupHandle')}
+                            <Copy className="ml-auto size-3.5" />
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuItem onClick={() => setAddModelTarget({ platform: group.platform })}>

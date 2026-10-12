@@ -263,6 +263,12 @@ export function resolveQuotaPolicy(
   if (platform === 'aclide') return policy('aclide::monthly-credit', 'shared_pool', 'unknown', [], 'unknown');
   if (platform === 'speka') return policy('speka::monthly-credit', 'shared_pool', 'unknown', [], 'unknown');
 
+  // Providers added by upstream v0.13.7 (#1441 Plugsky, #1455 Inferbase and
+  // SimpleLLM). Pool NAMES and shared scope are upstream's; nothing readable
+  // reports their allowance yet, so accounting stays unknown rather than asserted.
+  if (platform === 'plugsky') return policy('plugsky::fair-use', 'shared_pool', 'unknown', [], 'unknown');
+  if (platform === 'inferbase') return policy('inferbase::managed-free', 'shared_pool', 'unknown', [], 'unknown');
+  if (platform === 'simplellm') return policy('simplellm::free', 'shared_pool', 'unknown', [], 'unknown');
   // AI Horde: anonymous requests share one queue priority (the 0000000000 key),
   // so they pool together; a registered key has its own kudos priority but we
   // still bucket per-platform here.

@@ -386,7 +386,10 @@
     "weightSpeed": "Geschwindigkeit",
     "weightIntelligence": "Intelligenz",
     "weightRequired": "Mindestens ein Gewicht muss über Null liegen.",
-    "scoreColumn": "Punktzahl"
+    "scoreColumn": "Punktzahl",
+    "minReliabilityFloor": "Minimale Zuverlässigkeitsschwelle",
+    "minReliabilityFloorHint": "Nimmt ein Modell aus dem Routing, sobald seine beobachtete Erfolgsquote unter diesen Wert fällt. 0,8 bedeutet 80 %. Leer lassen zum Deaktivieren – Modelle mit zu wenig Historie bleiben immer erhalten, damit neue Modelle weiter getestet werden können. Leert niemals die gesamte Kette.",
+    "minReliabilityFloorOff": "Deaktiviert"
   },
   "penaltyInspector": {
     "title": "Router-Druck",
@@ -733,6 +736,13 @@
     "monthlyUsageLine": "{requests} Anfragen, {tokens} Tokens diesen Monat",
     "quotaBalanceHint": "{remaining} von {limit} {metric} übrig",
     "quotaBalanceLeft": "{remaining} übrig",
+    "groupLabel": "Group",
+    "groupLabelPlaceholder": "e.g. Relays, Work…",
+    "groupLabelHint": "Optional: endpoints in the same group are listed together, and a request can stay inside the group with custom:<model>#<group>. Leave blank for the default Custom group.",
+    "groupHandleHint": "Add #{handle} after a model id to route only to this group, e.g. custom:<model>#{handle}",
+    "copyGroupHandle": "Copy group handle",
+    "groupHandleCopied": "Copied {handle}",
+    "groupHandleCopyFailed": "Couldn't copy to the clipboard",
     "checklistRemoveTip": "Remove {provider} from this list",
     "modelLimitsTitle": "Models & account limits",
     "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",

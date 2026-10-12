@@ -71,6 +71,7 @@ import * as unlimitedModels from '../migrations/20260925_000003_unlimited_models
 import * as modelNotes from '../migrations/20260926_000001_model_notes.js';
 import * as providerRemovals from '../migrations/20260928_000001_provider_removals.js';
 import * as requestModelAttribution from '../migrations/20260913_000001_request_model_attribution.js';
+import * as customEndpointGroupLabel from '../migrations/20260930_000001_custom_endpoint_group_label.js';
 import * as catalogueAck from '../migrations/20261001_000001_catalogue_ack.js';
 import * as clifreeLinksToModelLinks from '../migrations/20261012_000001_clifree_links_to_model_links.js';
 
@@ -149,6 +150,7 @@ export const QUOTA_POLICY_PERIOD_KEY_FILENAME = '20260911_000008_quota_policy_pe
 export const QUOTA_POLICY_BUCKET_FILENAME = '20260912_000001_quota_policy_bucket.ts';
 export const AA_COST_PER_TASK_FILENAME = '20260913_000001_aa_cost_per_task.ts';
 export const REQUEST_MODEL_ATTRIBUTION_FILENAME = '20260913_000001_request_model_attribution.ts';
+export const CUSTOM_ENDPOINT_GROUP_LABEL_FILENAME = '20260930_000001_custom_endpoint_group_label.ts';
 export const KEY_MONTHLY_USAGE_FILENAME = '20260914_000001_key_monthly_usage.ts';
 export const QUOTA_SNAPSHOT_FRESHNESS_FILENAME = '20260915_000001_quota_snapshot_freshness.ts';
 export const CATALOGUE_ACK_FILENAME = '20261001_000001_catalogue_ack.ts';
@@ -226,6 +228,9 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: '20260925_000003_unlimited_models.ts', module: unlimitedModels },
   { filename: '20260926_000001_model_notes.ts', module: modelNotes },
   { filename: '20260928_000001_provider_removals.ts', module: providerRemovals },
+  // Upstream v0.13.10. Back-dated relative to our head; the runner applies
+  // pending migrations by filename membership, not "newer than the latest".
+  { filename: CUSTOM_ENDPOINT_GROUP_LABEL_FILENAME, module: customEndpointGroupLabel },
   { filename: CATALOGUE_ACK_FILENAME, module: catalogueAck },
   { filename: '20261012_000001_clifree_links_to_model_links.ts', module: clifreeLinksToModelLinks },
 ];

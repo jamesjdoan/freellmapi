@@ -386,7 +386,10 @@
     "weightSpeed": "السرعة",
     "weightIntelligence": "الذكاء",
     "weightRequired": "يجب أن يكون وزن واحد على الأقل أعلى من الصفر.",
-    "scoreColumn": "النتيجة"
+    "scoreColumn": "النتيجة",
+    "minReliabilityFloor": "الحد الأدنى للموثوقية",
+    "minReliabilityFloorHint": "يستبعد النموذج من التوجيه عندما تنخفض نسبة نجاحه المرصودة دون هذه القيمة. 0.8 تعني 80٪. اتركه فارغًا للتعطيل — تُحفظ دائمًا النماذج ذات السجلّ القليل حتى تظل النماذج الجديدة قابلة للتجربة. لا يُفرِّغ السلسلة كاملة أبدًا.",
+    "minReliabilityFloorOff": "معطّل"
   },
   "penaltyInspector": {
     "title": "ضغط جهاز التوجيه",
@@ -733,6 +736,13 @@
     "monthlyUsageLine": "{requests} طلبًا، {tokens} رمز هذا الشهر",
     "quotaBalanceHint": "متبقٍ {remaining} من {limit} {metric}",
     "quotaBalanceLeft": "متبقٍ {remaining}",
+    "groupLabel": "Group",
+    "groupLabelPlaceholder": "e.g. Relays, Work…",
+    "groupLabelHint": "Optional: endpoints in the same group are listed together, and a request can stay inside the group with custom:<model>#<group>. Leave blank for the default Custom group.",
+    "groupHandleHint": "Add #{handle} after a model id to route only to this group, e.g. custom:<model>#{handle}",
+    "copyGroupHandle": "Copy group handle",
+    "groupHandleCopied": "Copied {handle}",
+    "groupHandleCopyFailed": "Couldn't copy to the clipboard",
     "checklistRemoveTip": "Remove {provider} from this list",
     "modelLimitsTitle": "Models & account limits",
     "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",

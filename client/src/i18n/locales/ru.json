@@ -386,7 +386,10 @@
     "weightSpeed": "Скорость",
     "weightIntelligence": "Интеллект",
     "weightRequired": "Хотя бы один вес должен быть больше нуля.",
-    "scoreColumn": "Оценка"
+    "scoreColumn": "Оценка",
+    "minReliabilityFloor": "Минимальный порог надёжности",
+    "minReliabilityFloorHint": "Исключает модель из маршрутизации, когда её наблюдаемая доля успешных запросов падает ниже этого значения. 0,8 означает 80 %. Оставьте пустым, чтобы отключить — модели с малой историей всегда сохраняются, чтобы новые модели продолжали пробоваться. Никогда не опустошает всю цепочку.",
+    "minReliabilityFloorOff": "Отключено"
   },
   "penaltyInspector": {
     "title": "Давление маршрутизатора",
@@ -733,6 +736,13 @@
     "monthlyUsageLine": "{requests} запросов, {tokens} токенов в этом месяце",
     "quotaBalanceHint": "Осталось {remaining} из {limit} {metric}",
     "quotaBalanceLeft": "Осталось {remaining}",
+    "groupLabel": "Group",
+    "groupLabelPlaceholder": "e.g. Relays, Work…",
+    "groupLabelHint": "Optional: endpoints in the same group are listed together, and a request can stay inside the group with custom:<model>#<group>. Leave blank for the default Custom group.",
+    "groupHandleHint": "Add #{handle} after a model id to route only to this group, e.g. custom:<model>#{handle}",
+    "copyGroupHandle": "Copy group handle",
+    "groupHandleCopied": "Copied {handle}",
+    "groupHandleCopyFailed": "Couldn't copy to the clipboard",
     "checklistRemoveTip": "Remove {provider} from this list",
     "modelLimitsTitle": "Models & account limits",
     "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
