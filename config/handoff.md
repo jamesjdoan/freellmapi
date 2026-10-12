@@ -36,17 +36,29 @@ Live data only for the chains; nothing here needs a rebuild. Backup taken first:
   `glm-5-3-flash`, the same mapping as the FreeLLM row. It now reads terra-class
   41.8/71.5/50.9 in `clifree-rank.sh`, instead of `unrated`.
 
-### Changed (code, uncommitted, not deployed)
+### Changed (code, committed and deployed)
 
-- **Fleet panel maps CLI routes with "closest match", into the store the ranker reads.**
-  `PUT /api/clifree-fleet/link` takes `proxy` and writes `aa_model_link` (platform
-  `opencode`/`cline`). Keys cannot reach 20 of the 25 CLI routes: they have no model row.
-  Proxy rows keep their own line with nudged scores and a `≈`. Migration
-  `20261012_000001` moves `settings.clifree_fleet_links` across; an existing link-table
-  decision wins. Smoke-tested on a copy of the live DB: the migration kept the space-bunny
-  proxy over the panel's stale null and added `nex-n2.5-pro` as `manual`. A panel proxy on
-  `exo-free` showed `≈ GLM-5.3-Flash` at 41.8/71.5/50.9, and the ranker's own link query
-  returned it. Live takes effect only after a rebuild.
+- **Fleet panel maps CLI routes with "closest match", into the store the ranker reads**
+  (`01206d50`, live). `PUT /api/clifree-fleet/link` takes `proxy` and writes
+  `aa_model_link` (platform `opencode`/`cline`). Keys cannot reach 20 of the 25 CLI
+  routes: they have no model row. Proxy rows keep their own line with nudged scores and a
+  `≈`. Migration `20261012_000001` moved `settings.clifree_fleet_links` across, with an
+  existing link-table decision winning. Verified live: the settings key is gone,
+  `nex-n2.5-pro` is `manual`, and the space-bunny proxy survived.
+- **`deploy.sh` backup check** (`38bf146d`): `grep -q` under `pipefail` failed a good
+  archive after the service was already stopped, leaving the gateway down ~2 minutes.
+- **Upstream v0.13.10 merged** (`f1084a55`, live, recovery tag
+  `imperium/pre-v0.13.10-recovery`). 65 conflicts: 59 locales regenerated, 6 code files
+  resolved as recorded in the merge message. Kept our per-endpoint Keys rows over
+  upstream's label grouping and carried the label onto each row. Ported Plugsky, Inferbase
+  and SimpleLLM into the typed pool resolver. Upstream's
+  `20260930_000001_custom_endpoint_group_label` was rehearsed on a DB copy (adds one null
+  column, nothing rewritten) and applied live (76 migrations).
+- **Moderation respects `paid-balance-guard`** (`1b16c7d4`, live). Upstream's
+  `/v1/moderations` default walk would call OpenRouter's paid omni-moderation id. It now
+  skips it while the guard is on. Naming the model still reaches it.
+- **Analytics `routing` row renamed** (`6e3ce5e2`, live) to "Rejected before any provider",
+  across the breakdown table, charts, filter and error tables.
 
 ### Changed (atelier)
 
@@ -66,6 +78,26 @@ Live data only for the chains; nothing here needs a rebuild. Backup taken first:
 - Apex has no unlimited floor now. Space Bunny absorbed its overflow before; under quota
   pressure Apex now falls to its 39-intel floor (`deepseek-v4.1-flash`, `gemini-3.7-flash`).
 - `data/routing-curation.ts` is stale and its applier strips custom routes — do not `--apply`.
+- **OpenRouter's Fast-Lane slot is now `nemotron-3.5-lightning:free`** (priority 3, live;
+  backup `freeapi.db.bak-lightning-20261013-001626`). `ling-3.0-flash-sante:free`, which
+  carried OpenRouter's traffic before 10-08, answers `404 This model is unavailable for
+  free`, as do `fin`, `vl`, `nex-n2.5-pro/mini`, `deepseek-v4-flash-0731` and
+  `qwen3.8-27b` `:free`. Lightning passed 3/3 direct probes at 2.5–3.9 s, while
+  `laguna-s-2.1:free` returned 429 on all three. **Key #19's model scope did not include
+  lightning**, so it was added; without that the router skips the row. The router's own
+  `resolveModelGroupCandidates`, run on a DB copy, lists it as eligible. It ranks behind
+  NVIDIA, custom and gizmo siblings for a pinned request, and behind both Groq routes on
+  `auto:fast-lane`. **Fast-Lane gets no traffic** (0 of ~4,900 requests since 10-11 name
+  it), so lightning was also appended as the **last route of Coding (18), Apex (8) and
+  Frontier (7)** (backup `freeapi.db.bak-lightning-tails-20261013-004104`). It is a small,
+  fast model there purely as a last resort: on 10-12 those chains refused requests when
+  NVIDIA was cooling, `coding-glm-5.3-free` was blocked and the requests exceeded Groq's
+  70k TPM. Each chain still has one OpenRouter route, which its shared free counter
+  needs. An oversized `auto:fast-lane` test proved selection (skipped Groq, dispatched to
+  lightning) but timed out prefilling 297k tokens at 60 s.
+- **Default `/v1/moderations` fails on this install.** OpenRouter is guard-skipped, and
+  upstream's NVIDIA entry calls `integrate.api.nvidia.com/v1/moderations`, which returns
+  404. That is upstream's bug, not the guard's. Nothing here calls moderation today.
 
 ## Session 2026-10-08 — JD-STUDIO (Mac Studio M2 Max)
 
