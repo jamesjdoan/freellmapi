@@ -8,6 +8,7 @@ import { restoreProxySettings, flushProxyCache } from './lib/proxy.js';
 import { startWakeDetect } from './lib/wake-detect.js';
 import { startCatalogSync } from './services/catalog-sync.js';
 import { startCooldownProbe } from './services/cooldown-probe.js';
+import { startZenGateWatch } from './services/clifree-gate-watch.js';
 import { startBurnRecoveryPoller } from './services/quota-burn.js';
 import { startProviderUsagePolling } from './services/provider-usage-api.js';
 import { startCustomModelSync } from './services/custom-model-sync.js';
@@ -90,6 +91,7 @@ async function main() {
     const display = host.includes(':') ? `[${host}]` : host;
     console.log(`Server running on http://${display}:${PORT}`);
     console.log(`Proxy endpoint: http://${display}:${PORT}/v1/chat/completions`);
+    startZenGateWatch(scheduler);
     startHealthChecker(scheduler);
     startCatalogSync(scheduler);
     startCooldownProbe(scheduler);
