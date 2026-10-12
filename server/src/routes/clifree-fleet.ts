@@ -20,6 +20,7 @@
  * service that every later change inherits.
  */
 import { Router, type Request, type Response, type NextFunction } from 'express';
+import { z } from 'zod';
 import { getDb, getUnifiedApiKey } from '../db/index.js';
 import { timingSafeStringEqual } from '../lib/system-prompt.js';
 import { isExtensionEnabled } from '../services/extension-state.js';
@@ -34,6 +35,7 @@ import {
   getFleetGroups,
   setFleetLink,
   FleetDeliveryError,
+  FleetLinkError,
 } from '../services/clifree-fleet.js';
 
 /**
@@ -132,33 +134,37 @@ clifreeFleetRouter.get('/', (req: Request, res: Response) => {
 });
 
 /**
- * Remap one free route to a different benchmark, or to none.
+ * Remap one free route to a different benchmark, to none, or to a closest
+ * match (`proxy: true`) for a model nobody publishes.
  *
- * The catalogue's own /api/analysis/link keys on platform+modelId and cannot
- * serve these: a Cline route has no catalogue row at all, which is the same
- * reason its capability needed a synthetic entry in the first place.
+ * Writes the same `aa_model_link` row the Keys page writes, keyed on provider
+ * and id. That table needs no catalogue row, which a Cline route never has.
  */
+const fleetLinkSchema = z.object({
+  spec: z.string().includes(':', { message: 'spec must be provider:id' }),
+  aaSlug: z.string().nullable().default(null),
+  proxy: z.boolean().default(false),
+});
+
 clifreeFleetRouter.put('/link', (req: Request, res: Response) => {
   if (!isExtensionEnabled(EXTENSION_ID)) {
     res.status(404).json({ error: 'clifree fleet telemetry is disabled' });
     return;
   }
-  const body: unknown = req.body;
-  if (typeof body !== 'object' || body === null || !('spec' in body)) {
-    res.status(400).json({ error: 'spec is required' });
-    return;
-  }
-  const spec = (body as { spec: unknown }).spec;
-  const aaSlug = 'aaSlug' in body ? (body as { aaSlug: unknown }).aaSlug : null;
-  if (typeof spec !== 'string' || !spec.includes(':')) {
-    res.status(400).json({ error: 'spec must be provider:id' });
-    return;
-  }
-  if (aaSlug !== null && typeof aaSlug !== 'string') {
-    res.status(400).json({ error: 'aaSlug must be a string or null' });
+  const parsed = fleetLinkSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.errors.map(e => e.message).join(', ') });
     return;
   }
   const db = getDb();
-  setFleetLink(db, spec, aaSlug);
+  try {
+    setFleetLink(db, parsed.data.spec, parsed.data.aaSlug, parsed.data.proxy);
+  } catch (err) {
+    if (err instanceof FleetLinkError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    throw err;
+  }
   res.json({ groups: getFleetGroups(db) });
 });

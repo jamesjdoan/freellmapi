@@ -54,6 +54,8 @@ export interface FleetGroup {
   name: string
   analysis: FleetAnalysis | null
   fleetSpecs?: string[]
+  /** 'proxy' when the scores are a closest match's, nudged: an estimate. */
+  fleetLinkSource?: 'manual' | 'proxy' | null
 }
 
 /** One machine's consumption and what that inference was worth. Per machine,
@@ -184,6 +186,8 @@ interface Entry {
   coolingMins: number | null
   coolingReason: string | null
   baseline?: boolean
+  /** Scores borrowed from a closest match, not measured for this model. */
+  proxy?: boolean
 }
 
 export function ClifreeFleet() {
@@ -206,8 +210,16 @@ export function ClifreeFleet() {
     queryFn: () => apiFetch('/api/analysis/compare'),
     enabled,
   })
+  const catalogueOptions = useMemo<ModelComboOption[]>(() => [
+    { value: NO_MATCH, label: t('compare.matchNoneOption') },
+    ...(compare?.catalogue ?? []).map(c => ({
+      value: c.slug,
+      label: c.name,
+      sub: c.intelligenceIndex == null ? (c.creator ?? undefined) : c.intelligenceIndex.toFixed(0),
+    })),
+  ], [compare, t])
   const link = useMutation({
-    mutationFn: (body: { spec: string; aaSlug: string | null }) =>
+    mutationFn: (body: { spec: string; aaSlug: string | null; proxy: boolean }) =>
       apiFetch('/api/clifree-fleet/link', { method: 'PUT', body: JSON.stringify(body) }),
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['clifree-fleet'] }) },
   })
@@ -254,6 +266,7 @@ export function ClifreeFleet() {
         name: g.name,
         cls: mine[0]?.class ?? null,
         analysis: g.analysis,
+        proxy: g.fleetLinkSource === 'proxy',
         matchQuality: mine[0]?.matchQuality ?? null,
         specs,
         marks: Object.keys(marks).sort(),
@@ -472,38 +485,17 @@ export function ClifreeFleet() {
                         )}
                   </TableCell>
                   <TableCell className="text-xs" title={e.analysis?.slug ?? ''}>
-                    {/* Always mounted, never swapped in on click.
-                        Swapping a button for this control unmounted the focused
-                        element, focus fell to <body>, and the browser scrolled
-                        the page to the top -- so remapping meant scrolling back
-                        down to find the row you were on. */}
                     {e.baseline ? <span className="text-muted-foreground">–</span> : (
-                      <ModelCombobox
-                        value={e.analysis?.slug ?? NO_MATCH}
-                        options={[
-                          { value: NO_MATCH, label: t('compare.matchNoneOption') },
-                          ...(compare?.catalogue ?? []).map(c => ({
-                            value: c.slug,
-                            label: c.name,
-                            sub: c.intelligenceIndex == null ? (c.creator ?? undefined) : c.intelligenceIndex.toFixed(0),
-                          } satisfies ModelComboOption)),
-                        ]}
-                        renderLabel={label => <ModelName name={label} />}
-                        onSelect={slug => {
+                      <FleetMappingCell
+                        entry={e}
+                        options={catalogueOptions}
+                        disabled={link.isPending}
+                        onLink={(slug, proxy) => {
                           // Every route reaching this capability remaps
                           // together: they were merged BECAUSE they are one
                           // model, so remapping half would split the row.
-                          for (const spec of e.specs) {
-                            link.mutate({ spec, aaSlug: slug === NO_MATCH ? null : slug })
-                          }
+                          for (const spec of e.specs) link.mutate({ spec, aaSlug: slug, proxy })
                         }}
-                        ariaLabel={t('compare.mapAriaLabel')}
-                        placeholder={t('compare.mapSearchPlaceholder')}
-                        emptyText={t('compare.mapNoResults')}
-                        triggerPlaceholder={t('compare.matchNone')}
-                        triggerClassName="h-7 w-full text-[11px]"
-                        align="end"
-                        side="top"
                       />
                     )}
                   </TableCell>
@@ -514,5 +506,72 @@ export function ClifreeFleet() {
         </>
       )}
     </section>
+  )
+}
+
+/**
+ * The benchmark a free route maps to, with the Keys page's closest-match
+ * option: the same `aa_model_link` row, so a mapping made here is the one
+ * clifree-rank ranks the route by.
+ *
+ * Always mounted, never swapped in on click. Swapping a button for this
+ * control unmounted the focused element, focus fell to <body>, and the browser
+ * scrolled the page to the top -- so remapping meant scrolling back down to
+ * find the row you were on. Being mounted, the pick stays provisional until OK
+ * (as on Keys) and is dropped when the list is dismissed instead.
+ */
+function FleetMappingCell({ entry, options, onLink, disabled }: {
+  entry: Entry
+  options: ModelComboOption[]
+  onLink: (slug: string | null, proxy: boolean) => void
+  disabled: boolean
+}) {
+  const { t } = useI18n()
+  const saved = entry.analysis?.slug ?? NO_MATCH
+  const [pending, setPending] = useState<string | null>(null)
+  const [proxy, setProxy] = useState(entry.proxy === true)
+
+  return (
+    <span className="flex items-center gap-1">
+      {entry.proxy && <span className="shrink-0 text-muted-foreground" title={t('keys.proxyHint')}>≈</span>}
+      <ModelCombobox
+        value={pending ?? saved}
+        options={options}
+        renderLabel={label => <ModelName name={label} />}
+        onSelect={setPending}
+        stayOpen
+        onOpenChange={open => {
+          // Opening starts from what is saved; closing without OK drops the
+          // provisional pick so the trigger never shows an unsaved mapping.
+          if (open) setProxy(entry.proxy === true)
+          else setPending(null)
+        }}
+        footer={close => (
+          <span className="flex items-center justify-between gap-2 border-t pt-2">
+            <label className="inline-flex items-center gap-1 text-[10px] text-muted-foreground" title={t('keys.proxyHint')}>
+              <input type="checkbox" checked={proxy} onChange={e => setProxy(e.target.checked)} className="size-3 accent-foreground" />
+              {t('keys.proxyLabel')}
+            </label>
+            <Button
+              size="xs"
+              // A closest match to nothing has no scores to borrow.
+              disabled={disabled || (proxy && (pending ?? saved) === NO_MATCH)}
+              onClick={() => {
+                const slug = pending ?? saved
+                onLink(slug === NO_MATCH ? null : slug, proxy)
+                close()
+              }}
+            >{t('common.ok')}</Button>
+          </span>
+        )}
+        ariaLabel={t('compare.mapAriaLabel')}
+        placeholder={t('compare.mapSearchPlaceholder')}
+        emptyText={t('compare.mapNoResults')}
+        triggerPlaceholder={t('compare.matchNone')}
+        triggerClassName="h-7 w-full min-w-0 text-[11px]"
+        align="end"
+        side="top"
+      />
+    </span>
   )
 }

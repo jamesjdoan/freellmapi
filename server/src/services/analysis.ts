@@ -812,7 +812,7 @@ export function getGroupedCompare(db: Db = getDb()): CompareGroup[] {
  * negative index would sort beneath models that genuinely scored zero. Absent
  * scores stay absent — an estimate of nothing is still nothing.
  */
-function nudge(value: number | null, row: Record<string, unknown>, metric: ProxyMetric): number | null {
+export function nudge(value: number | null, row: Record<string, unknown>, metric: ProxyMetric): number | null {
   if (value == null) return null;
   if (row.link_source !== 'proxy') return value;
   const delta = Number(row[`proxy_delta_${metric}`] ?? 0);

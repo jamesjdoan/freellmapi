@@ -32,9 +32,21 @@ Live data only for the chains; nothing here needs a rebuild. Backup taken first:
   no route in any chain** and now has one in Fast-Lane and one in Extra-Tier. Sizes: Coding
   17, Fast-Lane 10, Extra-Tier 32. Left out on purpose: electronhub (no tool support),
   groq prompt-guard and allam (classifiers), and routes already covered by a sibling id.
-- **Space Bunny's clifree range recorded in Keys**: `opencode/space-bunny-free` → proxy
+- **Space Bunny's clifree range recorded**: `opencode/space-bunny-free` → proxy
   `glm-5-3-flash`, the same mapping as the FreeLLM row. It now reads terra-class
   41.8/71.5/50.9 in `clifree-rank.sh`, instead of `unrated`.
+
+### Changed (code, uncommitted, not deployed)
+
+- **Fleet panel maps CLI routes with "closest match", into the store the ranker reads.**
+  `PUT /api/clifree-fleet/link` takes `proxy` and writes `aa_model_link` (platform
+  `opencode`/`cline`). Keys cannot reach 20 of the 25 CLI routes: they have no model row.
+  Proxy rows keep their own line with nudged scores and a `≈`. Migration
+  `20261012_000001` moves `settings.clifree_fleet_links` across; an existing link-table
+  decision wins. Smoke-tested on a copy of the live DB: the migration kept the space-bunny
+  proxy over the panel's stale null and added `nex-n2.5-pro` as `manual`. A panel proxy on
+  `exo-free` showed `≈ GLM-5.3-Flash` at 41.8/71.5/50.9, and the ranker's own link query
+  returned it. Live takes effect only after a rebuild.
 
 ### Changed (atelier)
 

@@ -39,6 +39,7 @@ export function ModelCombobox({
   ariaInvalid,
   stayOpen,
   renderLabel,
+  onOpenChange,
 }: {
   value: string
   options: ModelComboOption[]
@@ -48,8 +49,10 @@ export function ModelCombobox({
   emptyText: string
   /** Optional row pinned above the list (e.g. a filter toggle). */
   header?: ReactNode
-  /** Optional hint row under the list (e.g. "add a key to see models"). */
-  footer?: ReactNode
+  /** Optional row under the list (e.g. "add a key to see models"). A function
+   *  receives `close`, for an OK button on a picker that stays mounted: there
+   *  is no unmount to close it, and an outside click would discard the pick. */
+  footer?: ReactNode | ((close: () => void) => ReactNode)
   align?: 'start' | 'center' | 'end'
   /** Which side of the trigger to open on. Default (bottom) clips when the
    *  trigger sits near the foot of the page. */
@@ -71,6 +74,9 @@ export function ModelCombobox({
    * plain `label`. Benchmark pickers pass ModelName so a variant reads subdued.
    */
   renderLabel?: (label: string) => ReactNode
+  /** Told whenever the list opens or closes, so a caller holding a provisional
+   *  pick can drop it when the reader dismisses without committing. */
+  onOpenChange?: (open: boolean) => void
 }) {
   const { t } = useI18n()
   const [open, setOpen] = useState(false)
@@ -117,6 +123,7 @@ export function ModelCombobox({
         // point: the reader is still working on the same question.
         if (!o && !stayOpen) setQuery('')
         if (o) setActive(0)
+        onOpenChange?.(o)
       }}
     >
       <PopoverTrigger
@@ -205,7 +212,9 @@ export function ModelCombobox({
               </button>
             ))
           )}
-          {footer}
+          {typeof footer === 'function'
+            ? footer(() => { setOpen(false); onOpenChange?.(false) })
+            : footer}
         </div>
       </PopoverContent>
     </Popover>

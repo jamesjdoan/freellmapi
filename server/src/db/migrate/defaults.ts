@@ -72,6 +72,7 @@ import * as modelNotes from '../migrations/20260926_000001_model_notes.js';
 import * as providerRemovals from '../migrations/20260928_000001_provider_removals.js';
 import * as requestModelAttribution from '../migrations/20260913_000001_request_model_attribution.js';
 import * as catalogueAck from '../migrations/20261001_000001_catalogue_ack.js';
+import * as clifreeLinksToModelLinks from '../migrations/20261012_000001_clifree_links_to_model_links.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -226,4 +227,5 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: '20260926_000001_model_notes.ts', module: modelNotes },
   { filename: '20260928_000001_provider_removals.ts', module: providerRemovals },
   { filename: CATALOGUE_ACK_FILENAME, module: catalogueAck },
+  { filename: '20261012_000001_clifree_links_to_model_links.ts', module: clifreeLinksToModelLinks },
 ];

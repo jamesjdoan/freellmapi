@@ -28,7 +28,7 @@ const PostResponse = z.object({ machine: z.string(), routes: z.number() });
 
 async function call(
   app: Express,
-  method: 'GET' | 'POST',
+  method: 'GET' | 'POST' | 'PUT',
   path: string,
   token: string,
   body?: unknown,
@@ -297,6 +297,62 @@ describe('clifree fleet value', () => {
       spec: 'opencode:remap-free', aaSlug: 'dear-model',
     });
     expect((await valueFor('remap-box'))?.valueUsd).toBe(100);
+  });
+
+  it('keeps a closest-match route apart from a real match, with the operator\'s nudge applied', async () => {
+    getDb().prepare("INSERT INTO aa_model (slug, name, intelligence_index, coding_index) VALUES ('shared-model', 'Shared', 40, 60)").run();
+    await call(app, 'POST', '/api/clifree-fleet', token, {
+      machine: 'proxy-box', observedAtMs: Date.now(),
+      routes: [
+        route('cline:vendor/shared:free', { benchmarkSlug: 'shared-model' }),
+        route('opencode:unpublished-free', { benchmarkSlug: null }),
+      ],
+    });
+    // A second machine classes the same route differently: one snapshot row
+    // each. The row must still list the route once, or OK remaps it twice.
+    await call(app, 'POST', '/api/clifree-fleet', token, {
+      machine: 'proxy-box-2', observedAtMs: Date.now(),
+      routes: [route('opencode:unpublished-free', { benchmarkSlug: null, class: 'luna' })],
+    });
+    await call(app, 'PUT', '/api/clifree-fleet/link', token, {
+      spec: 'opencode:unpublished-free', aaSlug: 'shared-model', proxy: true,
+    });
+    // Same table, row shape and nudge the Keys page writes, which is what
+    // clifree-rank reads when it ranks this route for delegation.
+    getDb().prepare("UPDATE aa_model_link SET proxy_delta_intelligence = -3 WHERE platform = 'opencode' AND model_id = 'unpublished-free'").run();
+
+    const Groups = z.object({ groups: z.array(z.object({
+      name: z.string(),
+      fleetSpecs: z.array(z.string()),
+      fleetLinkSource: z.enum(['manual', 'proxy']).nullable(),
+      analysis: z.object({ intelligenceIndex: z.number().nullable(), codingIndex: z.number().nullable() }).nullable(),
+    })) });
+    const { body } = await call(app, 'GET', '/api/clifree-fleet', token);
+    const groups = Groups.parse(body).groups;
+    const real = groups.find(g => g.fleetSpecs.includes('cline:vendor/shared:free'));
+    const proxy = groups.find(g => g.fleetSpecs.includes('opencode:unpublished-free'));
+
+    // A proxy is an estimate, never a claim that the two are one model.
+    expect(real?.fleetSpecs).toEqual(['cline:vendor/shared:free']);
+    expect(real?.analysis?.intelligenceIndex).toBe(40);
+    expect(proxy).toMatchObject({
+      name: 'unpublished-free',
+      fleetSpecs: ['opencode:unpublished-free'],
+      fleetLinkSource: 'proxy',
+      analysis: { intelligenceIndex: 37, codingIndex: 60 },
+    });
+  });
+
+  it('refuses a closest match to nothing, and a route outside the fleet', async () => {
+    const noSlug = await call(app, 'PUT', '/api/clifree-fleet/link', token, {
+      spec: 'opencode:anything-free', aaSlug: null, proxy: true,
+    });
+    expect(noSlug.status).toBe(400);
+    const notFleet = await call(app, 'PUT', '/api/clifree-fleet/link', token, {
+      spec: 'groq:llama', aaSlug: 'shared-model',
+    });
+    expect(notFleet.status).toBe(400);
+    expect(getDb().prepare("SELECT 1 FROM aa_model_link WHERE platform IN ('groq') OR model_id = 'anything-free'").get()).toBeUndefined();
   });
 
   it('leaves stored usage alone when an older reporter sends none', async () => {

@@ -15,7 +15,7 @@
 
 import type { Db } from '../db/types.js';
 import type { CompareGroup } from './analysis.js';
-import { lookupAa } from './analysis.js';
+import { lookupAa, nudge, setManualLink } from './analysis.js';
 
 /** One route as a reporting machine observed it. */
 export type FleetRoute = {
@@ -261,40 +261,60 @@ export function listFleet(db: Db): FleetRow[] {
  * model; which machines can currently reach it is a property of the fleet, and
  * belongs in the fleet table rather than duplicated down the rank list.
  */
-/**
- * Operator overrides of the benchmark a free route maps to, spec -> slug.
- *
- * A settings document rather than a table: it is bounded by the roster (28
- * routes today), it is a decision the operator made rather than measured data,
- * and it must survive the snapshot being replaced on every delivery -- which a
- * column on clifree_fleet_snapshot would not, since a delivery deletes the
- * machine's rows wholesale.
- *
- * `null` is a meaningful value: "this route has no counterpart", which stops
- * the reporter's automatic match being reapplied on the next delivery.
- */
-const LINKS_KEY = 'clifree_fleet_links';
+/** The providers whose free routes this module describes. */
+const FLEET_PROVIDERS = ['opencode', 'cline'] as const;
 
-export function getFleetLinks(db: Db): Record<string, string | null> {
-  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(LINKS_KEY) as { value: string } | undefined;
-  if (!row) return {};
-  try {
-    const parsed: unknown = JSON.parse(row.value);
-    return typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, string | null>) : {};
-  } catch {
-    // A corrupt document must not take the panel down with it. An empty map
-    // means "no overrides", which is the same state as a fresh install.
-    return {};
-  }
+/** An operator's decision about which benchmark a free route maps to. */
+export interface FleetLink {
+  /** Null means "this route has no counterpart", a decision in its own right:
+   *  it stops the reporter's automatic match being reapplied. */
+  slug: string | null;
+  /** A stand-in for a model nobody publishes. Scores are estimates, the
+   *  operator's per-metric nudges apply, and it never means two routes are the
+   *  same model, so a proxy is never merged with a real match of its slug. */
+  proxy: boolean;
+  /** The raw link row, for analysis.ts nudge(). */
+  row: Record<string, unknown>;
 }
 
-export function setFleetLink(db: Db, spec: string, aaSlug: string | null): Record<string, string | null> {
-  const links = getFleetLinks(db);
-  links[spec] = aaSlug;
-  db.prepare(`INSERT INTO settings (key, value) VALUES (?, ?)
-              ON CONFLICT(key) DO UPDATE SET value = excluded.value`)
-    .run(LINKS_KEY, JSON.stringify(links));
-  return links;
+/**
+ * Operator overrides of the benchmark a free route maps to, keyed by spec.
+ *
+ * Stored in `aa_model_link` under platform `opencode` or `cline`, the same
+ * table, representation and proxy semantics the Keys page uses. Before
+ * 2026-10-12 they lived in a settings document with no proxy option, which
+ * clifree-rank never read, so a remap on this panel did not reach delegation.
+ * Migration 20261012_000001 moved them here.
+ *
+ * These rows are analysis data only. Compare and the proxy-upgrade check build
+ * from `models`, so a route without a model row is never listed there, and
+ * routing does not read this table at all.
+ */
+export function getFleetLinks(db: Db): Map<string, FleetLink> {
+  const rows = db.prepare(`
+    SELECT platform, model_id, aa_slug, source AS link_source,
+           proxy_delta_intelligence, proxy_delta_coding, proxy_delta_agentic, proxy_delta_speed
+      FROM aa_model_link
+     WHERE platform IN (${FLEET_PROVIDERS.map(() => '?').join(',')}) AND source IN ('manual', 'proxy')
+  `).all(...FLEET_PROVIDERS) as (Record<string, unknown> & { platform: string; model_id: string; aa_slug: string | null; link_source: string })[];
+  return new Map(rows.map(r => [
+    `${r.platform}:${r.model_id}`,
+    { slug: r.aa_slug, proxy: r.link_source === 'proxy', row: r },
+  ]));
+}
+
+/** Thrown for a link the panel must refuse rather than store. */
+export class FleetLinkError extends Error {}
+
+export function setFleetLink(db: Db, spec: string, aaSlug: string | null, proxy = false): void {
+  const at = spec.indexOf(':');
+  const provider = spec.slice(0, at);
+  if (!(FLEET_PROVIDERS as readonly string[]).includes(provider)) {
+    throw new FleetLinkError(`provider must be one of ${FLEET_PROVIDERS.join(', ')}`);
+  }
+  // A stand-in for nothing has no scores to borrow.
+  if (proxy && aaSlug === null) throw new FleetLinkError('a closest-match link needs a benchmark');
+  setManualLink(provider, spec.slice(at + 1), aaSlug, db, proxy ? 'proxy' : 'manual');
 }
 
 export function getFleetGroups(db: Db): CompareGroup[] {
@@ -314,15 +334,22 @@ export function getFleetGroups(db: Db): CompareGroup[] {
   // Unrated routes have no benchmark to merge on and stay per-spec: collapsing
   // them would fuse genuinely different models under one empty score.
   const links = getFleetLinks(db);
+  const proxied = new Map<string, FleetLink>();
   for (const s of specs) {
     // An override wins over the reporter's automatic match, including an
     // explicit null meaning "no counterpart".
-    if (Object.prototype.hasOwnProperty.call(links, s.spec)) s.benchmarkSlug = links[s.spec];
+    const link = links.get(s.spec);
+    if (!link) continue;
+    s.benchmarkSlug = link.slug;
+    if (link.proxy) proxied.set(s.spec, link);
   }
 
   const byBenchmark = new Map<string, typeof specs>();
   for (const s of specs) {
-    const key = s.benchmarkSlug ?? `unrated:${s.spec}`;
+    // A proxy is an estimate for a model nobody publishes, never evidence that
+    // two routes are the same model (services/analysis.ts). So it keeps a row
+    // of its own instead of folding into a real match of the same slug.
+    const key = proxied.has(s.spec) ? `proxy:${s.spec}` : s.benchmarkSlug ?? `unrated:${s.spec}`;
     const list = byBenchmark.get(key);
     if (list) list.push(s);
     else byBenchmark.set(key, [s]);
@@ -330,13 +357,25 @@ export function getFleetGroups(db: Db): CompareGroup[] {
 
   return [...byBenchmark.entries()].map(([key, group]) => {
     const first = group[0];
-    const analysis = first.benchmarkSlug ? lookupAa(db, first.benchmarkSlug) : null;
+    const proxy = proxied.get(first.spec);
+    const borrowed = first.benchmarkSlug ? lookupAa(db, first.benchmarkSlug) : null;
+    // The operator's nudges, applied by the same function Keys and Compare use.
+    const analysis = borrowed && proxy
+      ? {
+          ...borrowed,
+          intelligenceIndex: nudge(borrowed.intelligenceIndex, proxy.row, 'intelligence'),
+          codingIndex: nudge(borrowed.codingIndex, proxy.row, 'coding'),
+          agenticIndex: nudge(borrowed.agenticIndex, proxy.row, 'agentic'),
+          medianOutputTokensPerSecond: nudge(borrowed.medianOutputTokensPerSecond, proxy.row, 'speed'),
+        }
+      : borrowed;
     return {
       groupKey: `fleet:${key}`,
       canonicalId: `fleet:${key}`,
-      // The benchmark's name where there is one: `cline:qwen/qwen3.8-27b:free`
+      // The route's own id for a proxy: it is NOT the model it borrows from.
+      // The benchmark's name for a real match: `cline:qwen/qwen3.8-27b:free`
       // is a route identifier, not something a person reads down a column.
-      name: analysis?.name ?? first.spec.slice(first.spec.indexOf(':') + 1),
+      name: proxy || !analysis ? first.spec.slice(first.spec.indexOf(':') + 1) : analysis.name,
       userDefined: false,
       members: [],
       analysis,
@@ -347,8 +386,11 @@ export function getFleetGroups(db: Db): CompareGroup[] {
       enabledMembers: 0,
       keyedMembers: 0,
       reference: true,
-      /** Every free route that reaches this capability. */
-      fleetSpecs: group.map(g => g.spec).sort(),
+      /** Every free route that reaches this capability, once each: machines
+       *  that disagree on a route's class or match give one snapshot row apiece. */
+      fleetSpecs: [...new Set(group.map(g => g.spec))].sort(),
+      /** 'proxy' when the scores are borrowed and nudged; drives the ≈ mark. */
+      fleetLinkSource: proxy ? ('proxy' as const) : links.has(first.spec) ? ('manual' as const) : null,
     };
   });
 }
@@ -429,8 +471,9 @@ function makePricer(db: Db): { slugBySpec: Map<string, string | null>; rateFor: 
   ).all() as { spec: string; slug: string | null }[]) {
     slugBySpec.set(r.spec, r.slug);
   }
-  const links = getFleetLinks(db);
-  for (const spec of Object.keys(links)) slugBySpec.set(spec, links[spec]);
+  // A proxy prices at its stand-in's published rate: the same estimate the
+  // panel shows for its scores.
+  for (const [spec, link] of getFleetLinks(db)) slugBySpec.set(spec, link.slug);
 
   // One lookup per distinct benchmark, not per usage row.
   const priced = new Map<string, Rate | null>();
