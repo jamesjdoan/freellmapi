@@ -1035,6 +1035,8 @@
     "filterAll": "All",
     "filterCanceled": "Canceled",
     "providerBreakdown": "Per-provider breakdown",
+    "routingRejection": "Rejected before any provider",
+    "routingRejectionHint": "Requests FreeLLM refused without trying a provider: no configured route for the model, or every route in the chain cooling, blocked or out of quota. The error column names each candidate and why it was skipped.",
     "tokensPerSec": "Tok/s",
     "allProviders": "All providers",
     "requestDetailTitle": "Request #{id}",

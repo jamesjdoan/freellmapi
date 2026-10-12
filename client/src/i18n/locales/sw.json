@@ -1061,7 +1061,9 @@
     "allModels": "All models",
     "filterAllStatuses": "All",
     "clearFilters": "Clear filters",
-    "rawHorizonNotice": "This window reaches back past {oldest}, the oldest request on record, so it cannot be filled in full. Totals, tokens and the charts cover every request held; latency, time-to-first-token, savings and the per-provider and per-model breakdowns cover only requests inside that span."
+    "rawHorizonNotice": "This window reaches back past {oldest}, the oldest request on record, so it cannot be filled in full. Totals, tokens and the charts cover every request held; latency, time-to-first-token, savings and the per-provider and per-model breakdowns cover only requests inside that span.",
+    "routingRejection": "Rejected before any provider",
+    "routingRejectionHint": "Requests FreeLLM refused without trying a provider: no configured route for the model, or every route in the chain cooling, blocked or out of quota. The error column names each candidate and why it was skipped."
   },
   "logs": {
     "title": "Kumbukumbu",
