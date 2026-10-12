@@ -1,5 +1,42 @@
 # Session Handoff
 
+## Session 2026-10-12 — JD-STUDIO (Mac Studio M2 Max)
+
+Live data only for the chains; nothing here needs a rebuild. Backup taken first:
+`/app/server/data/freeapi.db.bak-rechain-20261012-182310`.
+
+### Changed (live)
+
+- **Space Bunny out of FreeLLM.** Its API path is caller-gated since 2026-10-12 (`403
+  FreeTierError`). Row 1554 disabled, 7 chain rows + 1 fallback row off, tombstoned on the Zen
+  endpoint. Key #35 stays **enabled** so the Zen gate watcher probes it every 6h and warns if
+  the API gate reopens. Through the CLI it still works: 4/4 capability tests correct, graded
+  independently (reasoning, code, JSON, agentic file write + run).
+- **13 free routes restored.** The 2026-10-08 prune had read `paid_input_per_m` as billing; it
+  is analytics-only (see GOTCHAS). Restored by diff against the pre-prune backup, only where
+  keyed, servable, and free per `consumesPaidBalance` — incl. `groq/openai/gpt-oss-20b`.
+- **All 8 chains re-slotted by range**, against the operator's own `imperium_chain_minimums`,
+  measured 7-day reliability and p50 latency, with the contract rules enforced by script:
+  CORE-quality heads, distinct pools in each critical chain's top two, one route per shared
+  counter (`unorouter`, `openrouter`), unproven routes only in Extra-Tier / the Apex tail.
+  Heads: Apex `nvidia/z-ai/glm-5.3-flash`; Frontier and Coding `custom/coding-glm-5.3-free`;
+  Workhorse `nvidia/deepseek-v4.1-flash`; Default, Fast-Lane `groq/qwen3.8-27b`; Vision
+  `google/gemini-3.7-flash`. **The active profile is Coding (id 3), so plain `auto` uses it.**
+- Demoted, not removed: `custom/coding-kimi-k3-free` (0 successes, "cannot be served") to
+  chain tails; `nvidia/z-ai/glm-5.3` (never answered, 2/2 45s timeouts) to the Extra-Tier tail;
+  `unorouter/glm-5.3:free` swapped for `glm-5.3-flash:free` on the same single counter.
+
+### Changed (atelier, uncommitted)
+
+- `scripts/clifree-ask.sh`: the cooldown ledger used one fixed `.tmp` path, so parallel
+  subagents aborted each other (reproduced: 21/40 and 26/40 runs died; fixed: 0/40).
+
+### Watch
+
+- Apex has no unlimited floor now. Space Bunny absorbed its overflow before; under quota
+  pressure Apex now falls to its 39-intel floor (`deepseek-v4.1-flash`, `gemini-3.7-flash`).
+- `data/routing-curation.ts` is stale and its applier strips custom routes — do not `--apply`.
+
 ## Session 2026-10-08 — JD-STUDIO (Mac Studio M2 Max)
 
 Covers 2026-10-06 → 2026-10-08. Everything is committed, pushed to `fork` (`0808bd4f`) and live,
