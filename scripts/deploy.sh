@@ -165,8 +165,11 @@ if [[ "$skip_backup" == "0" ]]; then
     tar tzf "/backup/freellmapi-data-$stamp.tar.gz" >/dev/null \
     || fail "backup written but unreadable: $backup"
   # And one that does not contain the database is not a backup either.
+  # Not `grep -q`: it exits on the first match, tar dies of SIGPIPE, and
+  # pipefail turns that into "no freeapi.db" once the listing outgrows the
+  # pipe buffer (2026-10-12, a volume holding two dozen .bak files).
   docker run --rm -v "$project_root/backups:/backup:ro" alpine \
-    tar tzf "/backup/freellmapi-data-$stamp.tar.gz" 2>/dev/null | grep -q 'freeapi.db' \
+    tar tzf "/backup/freellmapi-data-$stamp.tar.gz" 2>/dev/null | grep 'freeapi.db' >/dev/null \
     || fail "backup contains no freeapi.db: $backup"
   echo "    $backup"
 fi
