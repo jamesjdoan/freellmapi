@@ -184,14 +184,18 @@ function logPass(results: GateProbeResult[]): void {
   ].join(', ');
 
   // Gate movement is the only thing an operator needs to act on, so it is the
-  // only line that escalates. A stable pass stays at info.
-  if (open.length > 0) {
-    providerLog('warn', `[ZenGate] ${open.length} tombstoned Zen free id(s) now answer on the API path: `
+  // only line that escalates. The log table only stores 'warn' and 'error'
+  // (server_logs migration CHECK), so a stable pass warns too: it is the
+  // proof the watcher ran, and the digest is one line either way.
+  const message = open.length > 0
+    ? `[ZenGate] ${open.length} tombstoned Zen free id(s) now answer on the API path: `
       + open.map(r => r.modelId).join(', ')
-      + ` — consider removing the tombstone (${parts})`, { provider: PLATFORM, event: 'clifree_gate_open' });
-  } else {
-    providerLog('info', `[ZenGate] pass: ${parts}`, { provider: PLATFORM, event: 'clifree_gate_pass' });
-  }
+      + ` — consider removing the tombstone (${parts})`
+    : `[ZenGate] pass: ${parts}`;
+  providerLog('warn', message, {
+    provider: PLATFORM,
+    event: open.length > 0 ? 'clifree_gate_open' : 'clifree_gate_pass',
+  });
 }
 
 let cancelWatchJob: (() => void) | null = null;
@@ -204,19 +208,19 @@ export function startZenGateWatch(scheduler: Scheduler): void {
     console.log('[ZenGate] disabled via CLIFREE_GATE_WATCH_DISABLED=1');
     return;
   }
-  console.log(`[ZenGate] watching Zen free-tier gate every ${WATCH_INTERVAL_MS / 3600000}h`);
-  cancelWatchJob = scheduler.every(
-    WATCH_INTERVAL_MS,
-    async () => {
-      try {
-        const results = await runGateWatch();
-        if (results) logPass(results);
-      } catch (err) {
-        console.error('[ZenGate] pass failed:', err);
-      }
-    },
-    { name: 'zen-gate-watch' },
-  );
+  // A baseline at boot: setInterval alone stays silent for the first 6h, and
+  // the gate moving before that is exactly the signal worth catching. The
+  // first pass runs 20s in, after the health checker has had its turn.
+  const pass = async () => {
+    try {
+      const results = await runGateWatch();
+      if (results) logPass(results);
+    } catch (err) {
+      console.error('[ZenGate] pass failed:', err);
+    }
+  };
+  cancelWatchJob = scheduler.every(WATCH_INTERVAL_MS, pass, { name: 'zen-gate-watch' });
+  scheduler.after(20_000, pass);
 }
 
 export function stopZenGateWatch(): void {
