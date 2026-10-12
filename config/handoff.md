@@ -21,6 +21,14 @@ Covers 2026-10-06 → 2026-10-08. Everything is committed, pushed to `fork` (`08
   is still unannounced; the best lead is MiniMax M3.1 Flash, which Artificial Analysis does not
   list. The 85 other Zen ids are tombstoned on key #35. The built-in `opencode` key #23 and its
   7 rows stay off. See GOTCHAS.
+
+  **Status 2026-10-12: the API path closed.** Three direct probes to key #35 that day returned
+  `403 FreeTierError` — the caller-gate that had held the other Zen ids since September. FreeLLM
+  routes by API call, so row 1554 can no longer serve FreeLLM and its chain slots fall through.
+  It still answers through the CLI (`clifree-ask.sh -m opencode:space-bunny-free`, measured
+  `in 19673 out 5`), which the gate does not touch. Tombstoning the row would stop the custom
+  sync resurrecting it and bring it under the Zen gate watcher; that changes FreeLLM routing
+  only, never clifree.
 - **AIHubMix free only.** Deleted `claude-sonnet-5-5` and `gpt-6.1-sol`. Neither was in a chain
   or had served a request. `.env` gained `CUSTOM_MODEL_SYNC_FREE_PATTERNS=*-free,*:free`, which
   is host-local and untracked. The MBP needs the same line if it runs FreeLLM.
@@ -46,7 +54,8 @@ Covers 2026-10-06 → 2026-10-08. Everything is committed, pushed to `fork` (`08
 
 ### Next
 
-1. Watch Space Bunny: `SELECT status, COUNT(*) FROM requests WHERE model_id='space-bunny-free' GROUP BY status`.
+1. Space Bunny: watched, and it closed — 2026-10-12, API path `403 FreeTierError` (see the
+   2026-10-12 status above). Decide whether to tombstone row 1554.
 2. When OpenRouter reveals the maker, relink the benchmark with `PUT /api/analysis/link`.
 
 ## Session 2026-10-04 — JD-STUDIO (Mac Studio M2 Max)
