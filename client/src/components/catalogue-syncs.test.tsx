@@ -4,14 +4,15 @@
 // provider". These tests pin what a server test cannot see: the empty log says
 // so, each row names its providers busiest first, opening a row lists the
 // models per provider, and a row whose model names were never recorded says so
-// instead of showing an empty group.
+// instead of showing an empty group. Updates group by day, and a day's Expand
+// all opens every update and provider in it.
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { I18nProvider } from '@/i18n'
 import { apiFetch } from '@/lib/api'
-import { CatalogueSyncs, providersByChurn } from './catalogue-syncs'
+import { CatalogueSyncs, groupByDay, providersByChurn } from './catalogue-syncs'
 
 vi.mock('@/lib/api', () => ({ apiFetch: vi.fn() }))
 
@@ -176,5 +177,44 @@ describe('CatalogueSyncs', () => {
     await renderList([baseline])
     await act(async () => { host!.querySelector<HTMLButtonElement>('li > button')!.click() })
     expect(vi.mocked(apiFetch).mock.calls.some(([p]) => String(p).includes('/detail'))).toBe(false)
+  })
+
+  // 06:00 and 06:30 UTC sit on the same local day for any offset between
+  // UTC-6 and UTC+17; the third update is three days earlier.
+  const morning = { ...update, id: 10, at: '2026-10-13 06:00:00' }
+  const later = { ...update, id: 11, at: '2026-10-13 06:30:00', docAdded: 1, docRemoved: 0, docChanged: 0 }
+  const quietSameDay = { ...baseline, id: 12, at: '2026-10-13 06:15:00', previousVersion: 'x' }
+  const earlier = { ...update, id: 13, at: '2026-10-10 06:00:00' }
+
+  it('groups updates by day, newest first, with each day’s totals', async () => {
+    expect(groupByDay([later, quietSameDay, morning, earlier]).map(([, s]) => s.map(x => x.id))).toEqual([[11, 12, 10], [13]])
+    await renderList([later, quietSameDay, morning, earlier])
+    const days = [...host!.querySelectorAll('section')]
+    expect(days).toHaveLength(2)
+    expect(days[0].textContent).toMatch(/Updates: 3\s*\+4\s*−1\s*~2/)
+    expect(days[1].textContent).toMatch(/Updates: 1\s*\+3\s*−1\s*~2/)
+  })
+
+  it('expands every update and provider in a day at once, and only that day', async () => {
+    await renderList([later, quietSameDay, morning, earlier])
+    const [today, before] = [...host!.querySelectorAll('section')]
+    await act(async () => { [...today.querySelectorAll('button')].find(b => b.textContent === 'Expand all')!.click() })
+    await act(async () => {
+      await vi.waitFor(() => { if (today.querySelectorAll('details').length < 6) throw new Error('details not all rendered') })
+    })
+    const groups = [...today.querySelectorAll('details')]
+    expect(groups).toHaveLength(6)
+    expect(groups.every(g => g.open)).toBe(true)
+    const fetched = vi.mocked(apiFetch).mock.calls.map(([p]) => String(p)).filter(p => p.includes('/detail'))
+    expect(fetched.sort()).toEqual(['/api/models/changes/syncs/detail?id=10', '/api/models/changes/syncs/detail?id=11'])
+    expect(before.querySelector('details')).toBeNull()
+
+    await act(async () => { [...today.querySelectorAll('button')].find(b => b.textContent === 'Collapse all')!.click() })
+    expect(today.querySelector('details')).toBeNull()
+  })
+
+  it('offers no Expand all on a day when nothing moved', async () => {
+    await renderList([{ ...baseline, at: '2026-10-12 06:00:00' }])
+    expect([...host!.querySelectorAll('button')].some(b => b.textContent === 'Expand all')).toBe(false)
   })
 })

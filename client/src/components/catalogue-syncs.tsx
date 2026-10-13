@@ -5,6 +5,7 @@ import { apiFetch } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { PlatformDot } from '@/components/platform-dot'
 import { formatStamp } from '@/lib/stamp'
+import { parseSqliteUtc } from '@/lib/time-tree'
 
 // One row per applied catalog document, on the Premium page.
 //
@@ -15,9 +16,11 @@ import { formatStamp } from '@/lib/stamp'
 // provider tightening a quota on an existing model never appears in the event
 // log; it appears here.
 //
-// Each row names its providers up front; opening it lists the models per
-// provider, each provider a collapsible group. Detail is fetched on open: a
-// sync can move hundreds of models and the list view stays cheap.
+// Updates are grouped by local day. Each row names its providers up front;
+// opening it lists the models per provider, each provider a collapsible group.
+// A day's "Expand all" opens every update that day and every provider group in
+// them. Detail is fetched on open: a sync can move hundreds of models and the
+// list view stays cheap.
 
 interface Churn { a: number; r: number; c: number }
 
@@ -60,6 +63,26 @@ interface CatalogueSyncDetail extends CatalogueSync {
 const PROVIDERS_SHOWN = 6
 
 const valueOf = (v: FieldValue) => (v === null ? '—' : String(v))
+
+const moved = (s: CatalogueSync) => s.docAdded + s.docRemoved + s.docChanged > 0
+
+/** Local calendar day of a SQLite UTC stamp, as YYYY-MM-DD. */
+export function localDay(at: string): string {
+  const d = parseSqliteUtc(at)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** Consecutive days, newest first, keeping the server's row order inside each. */
+export function groupByDay(syncs: CatalogueSync[]): Array<[string, CatalogueSync[]]> {
+  const days: Array<[string, CatalogueSync[]]> = []
+  for (const sync of syncs) {
+    const day = localDay(sync.at)
+    const last = days[days.length - 1]
+    if (last && last[0] === day) last[1].push(sync)
+    else days.push([day, [sync]])
+  }
+  return days
+}
 
 /** Providers busiest first; ties alphabetical so the order is stable. */
 export function providersByChurn(byPlatform: Record<string, Churn>): Array<[string, Churn]> {
@@ -144,7 +167,7 @@ function ProviderGroup({ provider, churn, detail, open }: {
   )
 }
 
-function SyncDetail({ sync }: { sync: CatalogueSync }) {
+function SyncDetail({ sync, expandAll }: { sync: CatalogueSync; expandAll: boolean }) {
   const { t } = useI18n()
   const { data, isPending } = useQuery<CatalogueSyncDetail>({
     queryKey: ['catalogue-sync-detail', sync.id],
@@ -159,7 +182,15 @@ function SyncDetail({ sync }: { sync: CatalogueSync }) {
     <div className="mb-2 ml-5 mt-1 space-y-1">
       {namesMissing && <p className="text-[11px] text-muted-foreground">{t('catalogue.syncsNamesMissing')}</p>}
       {providers.map(([provider, churn]) => (
-        <ProviderGroup key={provider} provider={provider} churn={churn} detail={data} open={providers.length === 1} />
+        // Keyed on expandAll so toggling the day re-opens or re-folds groups
+        // the operator had toggled by hand.
+        <ProviderGroup
+          key={`${provider}:${expandAll}`}
+          provider={provider}
+          churn={churn}
+          detail={data}
+          open={expandAll || providers.length === 1}
+        />
       ))}
     </div>
   )
@@ -195,7 +226,8 @@ function ProviderSummary({ byPlatform }: { byPlatform: Record<string, Churn> }) 
 
 export function CatalogueSyncs() {
   const { t } = useI18n()
-  const [openId, setOpenId] = useState<number | null>(null)
+  const [openIds, setOpenIds] = useState<ReadonlySet<number>>(new Set())
+  const [expandedDays, setExpandedDays] = useState<ReadonlySet<string>>(new Set())
   const { data } = useQuery<{ syncs: CatalogueSync[]; total: number; totals: CatalogueSyncTotals }>({
     queryKey: ['catalogue-syncs'],
     queryFn: () => apiFetch('/api/models/changes/syncs?limit=30'),
@@ -205,6 +237,32 @@ export function CatalogueSyncs() {
     return <p className="text-xs text-muted-foreground">{t('catalogue.syncsEmpty')}</p>
   }
   const { totals } = data
+
+  const toggleRow = (id: number) => setOpenIds(prev => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  })
+  const toggleDay = (day: string, syncs: CatalogueSync[]) => {
+    const expanding = !expandedDays.has(day)
+    const ids = syncs.filter(moved).map(s => s.id)
+    setExpandedDays(prev => {
+      const next = new Set(prev)
+      if (expanding) next.add(day)
+      else next.delete(day)
+      return next
+    })
+    setOpenIds(prev => {
+      const next = new Set(prev)
+      for (const id of ids) {
+        if (expanding) next.add(id)
+        else next.delete(id)
+      }
+      return next
+    })
+  }
+
   return (
     <div>
       <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
@@ -219,35 +277,65 @@ export function CatalogueSyncs() {
         )}
       </div>
       <p className="mt-3 text-[11px] text-muted-foreground">{t('catalogue.syncsHint')}</p>
-      <ul className="mt-2 divide-y divide-border">
-        {data.syncs.map(s => {
-          const moved = s.docAdded + s.docRemoved + s.docChanged > 0
+      <div className="mt-2 space-y-3">
+        {groupByDay(data.syncs).map(([day, syncs]) => {
+          const dayChurn = syncs.reduce<Churn>(
+            (sum, s) => ({ a: sum.a + s.docAdded, r: sum.r + s.docRemoved, c: sum.c + s.docChanged }),
+            { a: 0, r: 0, c: 0 },
+          )
+          const anyMoved = syncs.some(moved)
+          const dayExpanded = expandedDays.has(day)
           return (
-            <li key={s.id}>
-              <button
-                type="button"
-                onClick={() => moved && setOpenId(v => (v === s.id ? null : s.id))}
-                aria-expanded={moved ? openId === s.id : undefined}
-                className={`flex w-full flex-wrap items-baseline gap-x-2 gap-y-0.5 py-1.5 text-left text-xs ${moved ? '' : 'cursor-default'}`}
-              >
-                <Badge variant="outline" className="text-[10px]">{s.tier}</Badge>
-                <span className="font-mono">
-                  {s.previousVersion ? `${s.previousVersion} → ${s.version}` : s.version}
-                </span>
-                {!s.previousVersion && <span className="text-muted-foreground">({t('catalogue.syncsBaseline')})</span>}
-                {moved
-                  ? <ChurnCounts churn={{ a: s.docAdded, r: s.docRemoved, c: s.docChanged }} />
-                  : <span className="text-muted-foreground">—</span>}
-                <span className="ml-auto flex-shrink-0 text-[11px] text-muted-foreground tabular-nums">
-                  {formatStamp(s.at, { time: true })}
-                </span>
-                <ProviderSummary byPlatform={s.byPlatform} />
-              </button>
-              {openId === s.id && <SyncDetail sync={s} />}
-            </li>
+            <section key={day} aria-label={day}>
+              <div className="flex items-baseline gap-2 border-b pb-1 text-xs">
+                <h4 className="font-medium">{formatStamp(parseSqliteUtc(syncs[0].at))}</h4>
+                <span className="text-[11px] text-muted-foreground">{t('catalogue.syncsDayCount', { count: syncs.length })}</span>
+                {anyMoved && <ChurnCounts churn={dayChurn} />}
+                {anyMoved && (
+                  <button
+                    type="button"
+                    onClick={() => toggleDay(day, syncs)}
+                    aria-expanded={dayExpanded}
+                    className="ml-auto text-[11px] text-muted-foreground underline decoration-dotted hover:text-foreground"
+                  >
+                    {dayExpanded ? t('catalogue.syncsCollapseDay') : t('catalogue.syncsExpandDay')}
+                  </button>
+                )}
+              </div>
+              <ul className="divide-y divide-border">
+                {syncs.map(s => {
+                  const rowMoved = moved(s)
+                  const open = openIds.has(s.id)
+                  return (
+                    <li key={s.id}>
+                      <button
+                        type="button"
+                        onClick={() => rowMoved && toggleRow(s.id)}
+                        aria-expanded={rowMoved ? open : undefined}
+                        className={`flex w-full flex-wrap items-baseline gap-x-2 gap-y-0.5 py-1.5 text-left text-xs ${rowMoved ? '' : 'cursor-default'}`}
+                      >
+                        <Badge variant="outline" className="text-[10px]">{s.tier}</Badge>
+                        <span className="font-mono">
+                          {s.previousVersion ? `${s.previousVersion} → ${s.version}` : s.version}
+                        </span>
+                        {!s.previousVersion && <span className="text-muted-foreground">({t('catalogue.syncsBaseline')})</span>}
+                        {rowMoved
+                          ? <ChurnCounts churn={{ a: s.docAdded, r: s.docRemoved, c: s.docChanged }} />
+                          : <span className="text-muted-foreground">—</span>}
+                        <span className="ml-auto flex-shrink-0 text-[11px] text-muted-foreground tabular-nums">
+                          {formatStamp(s.at, { time: true })}
+                        </span>
+                        <ProviderSummary byPlatform={s.byPlatform} />
+                      </button>
+                      {open && <SyncDetail sync={s} expandAll={dayExpanded} />}
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
           )
         })}
-      </ul>
+      </div>
     </div>
   )
 }

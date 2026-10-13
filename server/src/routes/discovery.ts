@@ -5,11 +5,13 @@ import { isExtensionEnabled } from '../services/extension-state.js';
 import {
   agentTokenStatus,
   deleteExternalLead,
+  ignoreModel,
   isAgentToken,
   listExternalLeads,
   mintAgentToken,
   recordExternalLead,
   revokeAgentToken,
+  unignoreModel,
   updateExternalLead,
   type LeadActor,
   type LeadWriteResult,
@@ -20,7 +22,8 @@ import {
 // Two callers. A dashboard session is the operator and may do anything. The
 // discovery agent token (minted on the Premium page) is an unattended agent:
 // it may list leads, add them, and change or remove only the ones an agent
-// recorded. It authorises nothing outside this router — not inference, not any
+// recorded, cannot change a status the operator set, and is skipped for any
+// model the operator ignored. It authorises nothing outside this router — not inference, not any
 // other /api route — which is why it exists instead of reusing the unified key.
 
 const EXTENSION_ID = 'external-model-discovery';
@@ -85,13 +88,30 @@ const idSchema = z.coerce.number().int().positive();
 
 const messageOf = (error: z.ZodError) => error.errors.map(e => e.message).join(', ');
 
-function sendResult(res: Response, result: LeadWriteResult): void {
+function sendResult(res: Response<unknown, ActorLocals>, result: LeadWriteResult): void {
   if (result.ok) {
     res.json(result.lead);
-  } else if (result.reason === 'not_found') {
-    res.status(404).json({ error: { message: 'No lead with that id' } });
-  } else {
-    res.status(403).json({ error: { message: 'An operator recorded this lead; the agent token can only change leads an agent recorded' } });
+    return;
+  }
+  switch (result.reason) {
+    case 'not_found':
+      res.status(404).json({ error: { message: 'No lead with that id' } });
+      return;
+    case 'not_yours':
+      res.status(403).json({ error: { message: 'An operator recorded this lead; the agent token can only change leads an agent recorded' } });
+      return;
+    case 'status_locked':
+      res.status(409).json({ error: { message: 'The operator set this status; an agent can add notes but not change it' } });
+      return;
+    case 'ignored':
+      // An agent re-finding an ignored model is normal, not an error to retry:
+      // it gets a plain "skipped". An operator adding one is told why it did
+      // not appear.
+      if (res.locals.actor === 'agent') {
+        res.json({ skipped: 'ignored' });
+      } else {
+        res.status(409).json({ error: { message: 'This model is ignored; un-ignore it first' } });
+      }
   }
 }
 
@@ -143,6 +163,36 @@ discoveryRouter.delete('/leads/:id', (req: Request, res: Response<unknown, Actor
     return;
   }
   sendResult(res, deleteExternalLead(id.data, res.locals.actor));
+});
+
+const ignoreSchema = z.object({
+  provider: z.string().max(80).nullish(),
+  modelId: z.string().trim().min(1, 'modelId is required').max(256),
+  reason: z.string().max(500).nullish(),
+});
+
+/** Ignore a model wherever it turns up: hide its leads and skip agent posts. */
+discoveryRouter.post('/ignores', operatorOnly, (req: Request, res: Response) => {
+  const parsed = ignoreSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: messageOf(parsed.error) } });
+    return;
+  }
+  ignoreModel(parsed.data.provider ?? null, parsed.data.modelId, parsed.data.reason ?? null);
+  res.json({ ignored: true });
+});
+
+discoveryRouter.delete('/ignores', operatorOnly, (req: Request, res: Response) => {
+  const parsed = ignoreSchema.pick({ provider: true, modelId: true }).safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: messageOf(parsed.error) } });
+    return;
+  }
+  if (!unignoreModel(parsed.data.provider ?? null, parsed.data.modelId)) {
+    res.status(404).json({ error: { message: 'That model is not ignored' } });
+    return;
+  }
+  res.json({ ignored: false });
 });
 
 discoveryRouter.get('/agent-token', operatorOnly, (_req: Request, res: Response) => {

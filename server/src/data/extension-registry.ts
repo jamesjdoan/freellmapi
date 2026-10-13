@@ -364,7 +364,7 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
   {
     id: 'external-model-discovery',
     title: 'External model discovery',
-    summary: 'Model leads found outside the signed catalog — provider blogs, console pages, agent reports — grouped by provider with a candidate / testing / verified / rejected / added status. An unattended agent writes with its own token, minted on the Premium page: it authorises /api/discovery only, and can change or remove only the leads an agent recorded. Nothing here routes or enables a model.',
+    summary: 'Model leads found outside the signed catalog — provider blogs, console pages, agent reports — grouped by provider with a candidate / testing / verified / rejected / added status. An unattended agent writes with its own token, minted on the Premium page: it authorises /api/discovery only, can change or remove only the leads an agent recorded, and cannot change a status the operator set. Ignoring a model (keyed on provider and model id, not source) hides its leads and makes agents skip it; rejected leads stay visible below the live ones. Nothing here routes or enables a model.',
     settingsLocation: 'Premium → External model discovery',
     destinations: [{ kind: 'internal', label: 'Open external discovery', href: '/premium' }],
     category: 'tooling',

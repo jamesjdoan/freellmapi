@@ -1290,6 +1290,12 @@
     },
     "discoveryByAgent": "Agent",
     "discoveryProvider": "Provider",
+    "discoveryIgnore": "Ignore {model}",
+    "discoveryIgnoredTitle": "Ignored",
+    "discoveryIgnoredHint": "Hidden from the list. An agent that finds one of these models again is skipped, from any source. Rejected leads stay visible instead.",
+    "discoveryHiddenLeads": "{count} hidden",
+    "discoveryUnignore": "Un-ignore",
+    "discoveryUnignoreLabel": "Un-ignore {model}",
     "discoveryUnspecified": "No provider",
     "discoveryAgentTitle": "Agent access",
     "discoveryAgentNone": "No agent token. Create one to let a scheduled agent record leads.",
@@ -1721,7 +1727,10 @@
     "syncsAddedModels": "Added",
     "syncsRemovedModels": "Removed",
     "syncsChangedModels": "Changed",
-    "syncsMoreProviders": "+{count} more"
+    "syncsMoreProviders": "+{count} more",
+    "syncsDayCount": "Updates: {count}",
+    "syncsExpandDay": "Expand all",
+    "syncsCollapseDay": "Collapse all"
   },
   "quota": {
     "title": "Quota",

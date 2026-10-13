@@ -1292,7 +1292,13 @@
     "discoveryAgentCopy": "Copy",
     "discoveryAgentCopied": "Copied",
     "discoveryAgentShownOnce": "Copy it now. It is not shown again.",
-    "discoveryAgentUsage": "The agent sends POST {path} with Authorization: Bearer <token>. It can add leads, and change or remove only the leads it recorded."
+    "discoveryAgentUsage": "The agent sends POST {path} with Authorization: Bearer <token>. It can add leads, and change or remove only the leads it recorded.",
+    "discoveryIgnore": "Ignore {model}",
+    "discoveryIgnoredTitle": "Ignored",
+    "discoveryIgnoredHint": "Hidden from the list. An agent that finds one of these models again is skipped, from any source. Rejected leads stay visible instead.",
+    "discoveryHiddenLeads": "{count} hidden",
+    "discoveryUnignore": "Un-ignore",
+    "discoveryUnignoreLabel": "Un-ignore {model}"
   },
   "languages": {
     "en": "English",
@@ -1721,7 +1727,10 @@
     "syncsAddedModels": "Added",
     "syncsRemovedModels": "Removed",
     "syncsChangedModels": "Changed",
-    "syncsMoreProviders": "+{count} more"
+    "syncsMoreProviders": "+{count} more",
+    "syncsDayCount": "Updates: {count}",
+    "syncsExpandDay": "Expand all",
+    "syncsCollapseDay": "Collapse all"
   },
   "quota": {
     "title": "Quota",

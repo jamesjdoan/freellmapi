@@ -13,9 +13,12 @@ import { timingSafeStringEqual } from '../lib/system-prompt.js';
 // Leads are candidate models to test; nothing here routes or enables a model.
 //
 // Two kinds of caller write here. The dashboard (a signed-in operator) may do
-// anything. An agent, holding the dedicated discovery token, may add leads and
-// change or remove only the leads it recorded: an unattended job must never be
-// able to rewrite or delete what the operator wrote by hand.
+// anything. An agent, holding the dedicated discovery token, is constrained so
+// an unattended job can never undo the operator's judgement:
+//   - it changes or removes only the leads an agent recorded;
+//   - once the operator has set a lead's status, the agent cannot change it,
+//     only add notes;
+//   - a model the operator ignored is skipped, wherever the agent found it.
 
 export type LeadStatus = 'candidate' | 'testing' | 'verified' | 'rejected' | 'added';
 export type LeadKind = 'chat' | 'embedding' | 'image' | 'audio' | 'transcription' | 'video';
@@ -31,8 +34,20 @@ export interface ExternalLead {
   displayName: string | null;
   kind: LeadKind | null;
   status: LeadStatus;
+  /** Who last set the status. An operator-set status is locked to agents. */
+  statusSetBy: LeadActor;
   notes: string | null;
   addedBy: LeadActor;
+}
+
+export interface IgnoredModel {
+  /** Lower-cased; '' when the lead had no provider. */
+  provider: string;
+  modelId: string;
+  at: string;
+  reason: string | null;
+  /** Leads currently hidden by this ignore. */
+  hiddenLeads: number;
 }
 
 export interface ExternalLeadInput {
@@ -62,7 +77,7 @@ export interface ExternalLeadQuery {
 
 export type LeadWriteResult =
   | { ok: true; lead: ExternalLead }
-  | { ok: false; reason: 'not_found' | 'not_yours' };
+  | { ok: false; reason: 'not_found' | 'not_yours' | 'status_locked' | 'ignored' };
 
 interface LeadDbRow {
   id: number;
@@ -73,13 +88,15 @@ interface LeadDbRow {
   display_name: string | null;
   kind: string | null;
   status: string;
+  status_set_by: string;
   notes: string | null;
   added_by: string;
 }
 
 const LEAD_STATUSES: readonly LeadStatus[] = ['candidate', 'testing', 'verified', 'rejected', 'added'];
-const LEAD_COLUMNS = 'id, at, source, provider, model_id, display_name, kind, status, notes, added_by';
+const LEAD_COLUMNS = 'id, at, source, provider, model_id, display_name, kind, status, status_set_by, notes, added_by';
 const MAX_LIMIT = 200;
+const MAX_NOTES = 4000;
 
 /**
  * A provider read off a source URL: `https://blog.anyrouter.dev/...` ->
@@ -102,6 +119,8 @@ function normaliseProvider(provider: string | null | undefined): string | null {
   return trimmed ? trimmed : null;
 }
 
+const asActor = (value: string): LeadActor => (value === 'agent' ? 'agent' : 'user');
+
 function toLead(r: LeadDbRow): ExternalLead {
   return {
     id: r.id,
@@ -112,78 +131,130 @@ function toLead(r: LeadDbRow): ExternalLead {
     displayName: r.display_name,
     kind: (r.kind as LeadKind | null) ?? null,
     status: LEAD_STATUSES.includes(r.status as LeadStatus) ? (r.status as LeadStatus) : 'candidate',
+    statusSetBy: asActor(r.status_set_by),
     notes: r.notes,
-    addedBy: r.added_by === 'agent' ? 'agent' : 'user',
+    addedBy: asActor(r.added_by),
   };
+}
+
+/** The key an ignore is stored under: the effective provider, or ''. */
+const ignoreKey = (provider: string | null, modelId: string) => `${provider ?? ''}\u0000${modelId}`;
+
+function ignoredKeys(db: Db): Set<string> {
+  const rows = db.prepare('SELECT provider, model_id FROM external_model_ignores').all() as Array<{ provider: string; model_id: string }>;
+  return new Set(rows.map(r => ignoreKey(r.provider || null, r.model_id)));
 }
 
 function leadById(db: Db, id: number): LeadDbRow | undefined {
   return db.prepare(`SELECT ${LEAD_COLUMNS} FROM external_model_leads WHERE id = ?`).get(id) as LeadDbRow | undefined;
 }
 
+/** Live candidates first; rejected leads keep their evidence but sink. */
+function byStatusThenRecency(a: ExternalLead, b: ExternalLead): number {
+  const rank = (l: ExternalLead) => (l.status === 'rejected' ? 1 : 0);
+  return rank(a) - rank(b) || (a.at < b.at ? 1 : a.at > b.at ? -1 : b.id - a.id);
+}
+
 export function listExternalLeads(query: ExternalLeadQuery = {}, db: Db = getDb()): {
   leads: ExternalLead[];
   total: number;
   byStatus: Record<LeadStatus, number>;
+  ignored: IgnoredModel[];
 } {
   const limit = Math.min(Math.max(1, query.limit ?? 200), MAX_LIMIT);
   const offset = Math.max(0, query.offset ?? 0);
-  const where = query.status ? 'WHERE status = ?' : '';
-  const params = query.status ? [query.status] : [];
+  const ignored = ignoredKeys(db);
 
-  let leads = (db.prepare(`
-    SELECT ${LEAD_COLUMNS}
-      FROM external_model_leads
-      ${where}
-     ORDER BY at DESC, id DESC
-  `).all(...params) as LeadDbRow[]).map(toLead);
-  // Filtered after mapping because the effective provider may be derived from
-  // the source URL rather than stored.
+  const all = (db.prepare(`SELECT ${LEAD_COLUMNS} FROM external_model_leads`).all() as LeadDbRow[]).map(toLead);
+  const visible = all.filter(l => !ignored.has(ignoreKey(l.provider, l.modelId)));
+
+  // Counted over every visible lead, so the status chips describe the list,
+  // not the page or the current filter.
+  const byStatus: Record<LeadStatus, number> = { candidate: 0, testing: 0, verified: 0, rejected: 0, added: 0 };
+  for (const lead of visible) byStatus[lead.status]++;
+
+  let leads = visible;
+  if (query.status) leads = leads.filter(l => l.status === query.status);
   if (query.provider) {
     const wanted = query.provider.toLowerCase();
     leads = leads.filter(l => l.provider === wanted);
   }
+  leads.sort(byStatusThenRecency);
 
-  const byStatus: Record<LeadStatus, number> = { candidate: 0, testing: 0, verified: 0, rejected: 0, added: 0 };
-  const counts = db.prepare('SELECT status, COUNT(*) AS n FROM external_model_leads GROUP BY status')
-    .all() as Array<{ status: string; n: number }>;
-  for (const c of counts) {
-    if (LEAD_STATUSES.includes(c.status as LeadStatus)) byStatus[c.status as LeadStatus] = c.n;
+  const hidden = new Map<string, number>();
+  for (const lead of all) {
+    const key = ignoreKey(lead.provider, lead.modelId);
+    if (ignored.has(key)) hidden.set(key, (hidden.get(key) ?? 0) + 1);
   }
+  const ignoreRows = db.prepare('SELECT provider, model_id, at, reason FROM external_model_ignores ORDER BY at DESC')
+    .all() as Array<{ provider: string; model_id: string; at: string; reason: string | null }>;
 
-  return { leads: leads.slice(offset, offset + limit), total: leads.length, byStatus };
+  return {
+    leads: leads.slice(offset, offset + limit),
+    total: leads.length,
+    byStatus,
+    ignored: ignoreRows.map(r => ({
+      provider: r.provider,
+      modelId: r.model_id,
+      at: r.at,
+      reason: r.reason,
+      hiddenLeads: hidden.get(ignoreKey(r.provider || null, r.model_id)) ?? 0,
+    })),
+  };
+}
+
+/** Append an agent's note once; a re-run posting the same text adds nothing. */
+function appendNote(existing: string | null, incoming: string | null | undefined): string | null {
+  const note = incoming?.trim();
+  if (!note || existing?.includes(note)) return existing;
+  const stamped = `[agent ${new Date().toISOString().slice(0, 10)}] ${note}`;
+  return (existing ? `${existing}\n${stamped}` : stamped).slice(0, MAX_NOTES);
 }
 
 /**
  * Upsert one lead on (source, model_id), so re-recording the same finding
- * updates it instead of piling up duplicates on repeated agent runs. The
- * first recorder owns the row: an agent re-posting a finding the operator
- * already wrote by hand gets `not_yours` and changes nothing.
+ * updates it instead of piling up duplicates on repeated agent runs.
+ *
+ * Agent constraints: a model the operator ignored is skipped; a lead the
+ * operator recorded is not the agent's to touch; a lead whose status the
+ * operator set keeps that status, and the agent's notes are appended once.
  */
 export function recordExternalLead(input: ExternalLeadInput, actor: LeadActor, db: Db = getDb()): LeadWriteResult {
   const source = input.source.trim();
   const modelId = input.modelId.trim();
-  const existing = db.prepare('SELECT id, added_by FROM external_model_leads WHERE source = ? AND model_id = ?')
-    .get(source, modelId) as { id: number; added_by: string } | undefined;
+  const provider = normaliseProvider(input.provider);
+  const effectiveProvider = provider ?? providerFromSource(source);
+  if (ignoredKeys(db).has(ignoreKey(effectiveProvider, modelId))) return { ok: false, reason: 'ignored' };
+
+  const existing = db.prepare(`SELECT ${LEAD_COLUMNS} FROM external_model_leads WHERE source = ? AND model_id = ?`)
+    .get(source, modelId) as LeadDbRow | undefined;
   if (existing && actor === 'agent' && existing.added_by !== 'agent') return { ok: false, reason: 'not_yours' };
 
+  if (existing && actor === 'agent' && existing.status_set_by === 'user') {
+    db.prepare("UPDATE external_model_leads SET notes = ?, at = datetime('now') WHERE id = ?")
+      .run(appendNote(existing.notes, input.notes), existing.id);
+    return { ok: true, lead: toLead(leadById(db, existing.id)!) };
+  }
+
   db.prepare(`
-    INSERT INTO external_model_leads (source, provider, model_id, display_name, kind, status, notes, added_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO external_model_leads (source, provider, model_id, display_name, kind, status, status_set_by, notes, added_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT (source, model_id) DO UPDATE SET
       provider = COALESCE(excluded.provider, external_model_leads.provider),
       display_name = COALESCE(excluded.display_name, external_model_leads.display_name),
       kind = COALESCE(excluded.kind, external_model_leads.kind),
       status = excluded.status,
+      status_set_by = excluded.status_set_by,
       notes = COALESCE(excluded.notes, external_model_leads.notes),
       at = datetime('now')
   `).run(
     source,
-    normaliseProvider(input.provider),
+    provider,
     modelId,
     input.displayName?.trim() || null,
     input.kind ?? null,
-    input.status ?? 'candidate',
+    input.status ?? existing?.status ?? 'candidate',
+    actor,
     input.notes?.trim() || null,
     actor,
   );
@@ -197,13 +268,18 @@ export function updateExternalLead(id: number, patch: ExternalLeadPatch, actor: 
   const existing = leadById(db, id);
   if (!existing) return { ok: false, reason: 'not_found' };
   if (actor === 'agent' && existing.added_by !== 'agent') return { ok: false, reason: 'not_yours' };
+  const statusChanges = patch.status !== undefined && patch.status !== existing.status;
+  if (actor === 'agent' && statusChanges && existing.status_set_by === 'user') return { ok: false, reason: 'status_locked' };
 
   const sets: string[] = [];
   const params: unknown[] = [];
   if (patch.provider !== undefined) { sets.push('provider = ?'); params.push(normaliseProvider(patch.provider)); }
   if (patch.displayName !== undefined) { sets.push('display_name = ?'); params.push(patch.displayName?.trim() || null); }
   if (patch.kind !== undefined) { sets.push('kind = ?'); params.push(patch.kind); }
-  if (patch.status !== undefined) { sets.push('status = ?'); params.push(patch.status); }
+  if (patch.status !== undefined) {
+    sets.push('status = ?', 'status_set_by = ?');
+    params.push(patch.status, actor);
+  }
   if (patch.notes !== undefined) { sets.push('notes = ?'); params.push(patch.notes?.trim() || null); }
   if (sets.length > 0) {
     db.prepare(`UPDATE external_model_leads SET ${sets.join(', ')} WHERE id = ?`).run(...params, id);
@@ -217,6 +293,20 @@ export function deleteExternalLead(id: number, actor: LeadActor, db: Db = getDb(
   if (actor === 'agent' && existing.added_by !== 'agent') return { ok: false, reason: 'not_yours' };
   db.prepare('DELETE FROM external_model_leads WHERE id = ?').run(id);
   return { ok: true, lead: toLead(existing) };
+}
+
+/** Keep a model out, wherever it is found. Its existing leads are hidden, not
+ *  deleted, so un-ignoring brings them back with their evidence. */
+export function ignoreModel(provider: string | null, modelId: string, reason: string | null, db: Db = getDb()): void {
+  db.prepare(`
+    INSERT INTO external_model_ignores (provider, model_id, reason) VALUES (?, ?, ?)
+    ON CONFLICT (provider, model_id) DO UPDATE SET reason = COALESCE(excluded.reason, external_model_ignores.reason)
+  `).run(normaliseProvider(provider) ?? '', modelId.trim(), reason?.trim() || null);
+}
+
+export function unignoreModel(provider: string | null, modelId: string, db: Db = getDb()): boolean {
+  return db.prepare('DELETE FROM external_model_ignores WHERE provider = ? AND model_id = ?')
+    .run(normaliseProvider(provider) ?? '', modelId.trim()).changes > 0;
 }
 
 // ── Agent token ─────────────────────────────────────────────────────────────

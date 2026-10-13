@@ -4,14 +4,15 @@
 // tests pin what an operator relies on: leads are grouped by provider and the
 // groups fold away once there are several, agent rows are marked, a new lead
 // is posted with the fields typed, remove targets the row it sits on, and the
-// agent token is shown exactly once and can be revoked.
+// agent token is shown exactly once and can be revoked, and an ignored model
+// leaves the list for a collapsed group it can be brought back from.
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { I18nProvider } from '@/i18n'
 import { apiFetch } from '@/lib/api'
-import { ExternalDiscovery, groupByProvider, type ExternalLead } from './external-discovery'
+import { ExternalDiscovery, groupByProvider, type ExternalLead, type IgnoredModel } from './external-discovery'
 
 vi.mock('@/lib/api', () => ({ apiFetch: vi.fn() }))
 
@@ -33,7 +34,7 @@ afterEach(() => {
 const lead = (over: Partial<ExternalLead>): ExternalLead => ({
   id: 1, at: '2026-10-14 03:34:00', source: 'https://opencode.ai/docs/zen', provider: 'opencode',
   modelId: 'big-pickle', displayName: 'Big Pickle', kind: 'chat', status: 'rejected',
-  notes: null, addedBy: 'agent', ...over,
+  statusSetBy: 'agent', notes: null, addedBy: 'agent', ...over,
 })
 
 const leads: ExternalLead[] = [
@@ -43,7 +44,11 @@ const leads: ExternalLead[] = [
   lead({ id: 4, source: 'a forum post', provider: null, modelId: 'mystery-model', status: 'candidate', addedBy: 'user' }),
 ]
 
-async function renderPanel(token: { active: boolean; createdAt: string | null } = { active: false, createdAt: null }, rows = leads) {
+async function renderPanel(
+  token: { active: boolean; createdAt: string | null } = { active: false, createdAt: null },
+  rows = leads,
+  ignored: IgnoredModel[] = [],
+) {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
@@ -54,7 +59,7 @@ async function renderPanel(token: { active: boolean; createdAt: string | null } 
       return token
     }
     if (!init?.method) {
-      return { leads: rows, total: rows.length, byStatus: { candidate: 2, testing: 0, verified: 0, rejected: 2, added: 0 } }
+      return { leads: rows, total: rows.length, byStatus: { candidate: 2, testing: 0, verified: 0, rejected: 2, added: 0 }, ignored }
     }
     return {}
   })
@@ -65,7 +70,14 @@ async function renderPanel(token: { active: boolean; createdAt: string | null } 
     </QueryClientProvider>,
   ))
   await act(async () => {
-    await vi.waitFor(() => { if (!host!.querySelector('details') || !host!.textContent?.includes('Agent access')) throw new Error('not rendered yet') })
+    // Both queries must have resolved: the leads (a group, or the empty
+    // message) and the token status (one of its two status lines).
+    await vi.waitFor(() => {
+      const text = host!.textContent ?? ''
+      const leadsIn = !!host!.querySelector('details') || text.includes('No leads recorded yet')
+      const tokenIn = text.includes('No agent token') || text.includes('Agent token active since')
+      if (!leadsIn || !tokenIn) throw new Error('not rendered yet')
+    })
   })
 }
 
@@ -156,5 +168,31 @@ describe('ExternalDiscovery', () => {
     expect(calls('DELETE')).toHaveLength(0)
     await act(async () => { button('Confirm')!.click() })
     expect(calls('DELETE').map(([p]) => p)).toEqual(['/api/discovery/agent-token'])
+  })
+
+  it('ignores a lead by its provider and model, not its source', async () => {
+    await renderPanel()
+    await act(async () => { host!.querySelector<HTMLButtonElement>('button[aria-label="Ignore cat-jam-free"]')!.click() })
+    const [path, init] = calls('POST').find(([p]) => p === '/api/discovery/ignores')!
+    expect(path).toBe('/api/discovery/ignores')
+    expect(JSON.parse(String(init?.body))).toEqual({ provider: 'opencode', modelId: 'cat-jam-free' })
+  })
+
+  it('keeps ignored models in a collapsed group that can bring them back', async () => {
+    const ignored: IgnoredModel[] = [{ provider: 'opencode', modelId: 'cat-jam-free', at: '2026-10-14 05:00:00', reason: 'harness-only', hiddenLeads: 2 }]
+    await renderPanel(undefined, leads.filter(l => l.modelId !== 'cat-jam-free'), ignored)
+    const group = [...host!.querySelectorAll('details')].find(d => d.querySelector('summary')!.textContent?.startsWith('Ignored'))!
+    expect(group.open).toBe(false)
+    expect(group.textContent).toContain('cat-jam-free')
+    expect(group.textContent).toContain('2 hidden')
+    expect(group.textContent).toContain('harness-only')
+    await act(async () => { group.querySelector<HTMLButtonElement>('button[aria-label="Un-ignore cat-jam-free"]')!.click() })
+    expect(calls('DELETE').map(([p]) => p)).toEqual(['/api/discovery/ignores?provider=opencode&modelId=cat-jam-free'])
+  })
+
+  it('does not call the list empty when every lead is ignored', async () => {
+    await renderPanel(undefined, [], [{ provider: 'opencode', modelId: 'big-pickle', at: '2026-10-14 05:00:00', reason: null, hiddenLeads: 1 }])
+    expect(host!.textContent).not.toContain('No leads recorded yet')
+    expect(host!.textContent).toContain('Ignored')
   })
 })

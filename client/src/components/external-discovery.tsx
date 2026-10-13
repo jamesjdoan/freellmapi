@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Copy, Trash2 } from 'lucide-react'
+import { Copy, EyeOff, Trash2 } from 'lucide-react'
 import { useI18n } from '@/i18n'
 import { apiFetch } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
@@ -17,8 +17,11 @@ import { useExtensionEnabled } from '@/lib/use-extension'
 // anyone has tested it. Nothing here routes traffic or enables a model.
 //
 // Leads are grouped by provider, one collapsible group each, so a busy agent
-// does not bury the list. An agent writes through the same API with its own
-// token (Agent access, below); it can change and remove only its own leads.
+// does not bury the list; within a group, rejected leads sit below the live
+// ones (the server's order). An agent writes through the same API with its own
+// token (Agent access, below): it can change and remove only its own leads,
+// never a status the operator set. Ignoring a model hides its leads and makes
+// agents skip it from any source; rejecting keeps it visible as evidence.
 
 export const LEAD_STATUSES = ['candidate', 'testing', 'verified', 'rejected', 'added'] as const
 export type LeadStatus = typeof LEAD_STATUSES[number]
@@ -32,14 +35,24 @@ export interface ExternalLead {
   displayName: string | null
   kind: string | null
   status: LeadStatus
+  statusSetBy: 'user' | 'agent'
   notes: string | null
   addedBy: 'user' | 'agent'
+}
+
+export interface IgnoredModel {
+  provider: string
+  modelId: string
+  at: string
+  reason: string | null
+  hiddenLeads: number
 }
 
 interface LeadsPage {
   leads: ExternalLead[]
   total: number
   byStatus: Record<LeadStatus, number>
+  ignored: IgnoredModel[]
 }
 
 interface AgentTokenStatus { active: boolean; createdAt: string | null }
@@ -55,6 +68,7 @@ const STATUS_TONE: Record<LeadStatus, string> = {
 const LEADS_KEY = ['discovery-leads']
 const TOKEN_KEY = ['discovery-agent-token']
 const LEADS_PATH = '/api/discovery/leads'
+const IGNORES_PATH = '/api/discovery/ignores'
 
 /** Provider groups, largest first; ties alphabetical, unnamed last. */
 export function groupByProvider(leads: ExternalLead[]): Array<[string | null, ExternalLead[]]> {
@@ -81,9 +95,10 @@ function SourceLabel({ source }: { source: string }) {
   return <span className="break-all">{source}</span>
 }
 
-function LeadRow({ lead, onStatus, onRemove }: {
+function LeadRow({ lead, onStatus, onIgnore, onRemove }: {
   lead: ExternalLead
   onStatus: (status: LeadStatus) => void
+  onIgnore: () => void
   onRemove: () => void
 }) {
   const { t } = useI18n()
@@ -101,6 +116,15 @@ function LeadRow({ lead, onStatus, onRemove }: {
       <code className="text-[11px] text-muted-foreground">{lead.modelId}</code>
       {lead.addedBy === 'agent' && <Badge variant="outline" className="text-[10px]">{t('premium.discoveryByAgent')}</Badge>}
       <span className="ml-auto flex-shrink-0 text-[11px] text-muted-foreground tabular-nums">{formatStamp(lead.at, { time: true })}</span>
+      <button
+        type="button"
+        onClick={onIgnore}
+        aria-label={t('premium.discoveryIgnore', { model: lead.modelId })}
+        title={t('premium.discoveryIgnore', { model: lead.modelId })}
+        className="flex-shrink-0 text-muted-foreground hover:text-foreground"
+      >
+        <EyeOff className="size-3.5" />
+      </button>
       <button
         type="button"
         onClick={onRemove}
@@ -224,6 +248,20 @@ export function ExternalDiscovery() {
     mutationFn: (id: number) => apiFetch(`${LEADS_PATH}/${id}`, { method: 'DELETE' }),
     onSuccess: refresh,
   })
+  const ignore = useMutation({
+    mutationFn: (lead: ExternalLead) => apiFetch(IGNORES_PATH, {
+      method: 'POST',
+      body: JSON.stringify({ provider: lead.provider, modelId: lead.modelId }),
+    }),
+    onSuccess: refresh,
+  })
+  const unignore = useMutation({
+    mutationFn: (model: IgnoredModel) => apiFetch(
+      `${IGNORES_PATH}?${new URLSearchParams({ provider: model.provider, modelId: model.modelId })}`,
+      { method: 'DELETE' },
+    ),
+    onSuccess: refresh,
+  })
 
   const leads = (data?.leads ?? []).filter(l => filter === null || l.status === filter)
   const groups = groupByProvider(leads)
@@ -263,7 +301,7 @@ export function ExternalDiscovery() {
         </div>
       )}
 
-      {data && data.total === 0 && <p className="text-xs text-muted-foreground">{t('premium.discoveryEmpty')}</p>}
+      {data && data.total === 0 && data.ignored.length === 0 && <p className="text-xs text-muted-foreground">{t('premium.discoveryEmpty')}</p>}
 
       <div className="space-y-1">
         {groups.map(([provider, list]) => (
@@ -283,12 +321,44 @@ export function ExternalDiscovery() {
                   key={l.id}
                   lead={l}
                   onStatus={status => setStatus.mutate({ id: l.id, status })}
+                  onIgnore={() => ignore.mutate(l)}
                   onRemove={() => remove.mutate(l.id)}
                 />
               ))}
             </ul>
           </details>
         ))}
+        {data && data.ignored.length > 0 && (
+          <details className="rounded border border-dashed px-2 py-1">
+            <summary className="flex cursor-pointer items-baseline gap-2 text-xs text-muted-foreground">
+              <EyeOff className="size-3.5 self-center" />
+              <span className="font-medium">{t('premium.discoveryIgnoredTitle')}</span>
+              <span className="tabular-nums">{data.ignored.length}</span>
+            </summary>
+            <p className="py-1 text-[11px] text-muted-foreground">{t('premium.discoveryIgnoredHint')}</p>
+            <ul className="divide-y divide-border">
+              {data.ignored.map(m => (
+                <li key={`${m.provider}:${m.modelId}`} className="flex flex-wrap items-baseline gap-x-3 py-1.5 text-xs">
+                  <span className="text-muted-foreground">{m.provider || t('premium.discoveryUnspecified')}</span>
+                  <code>{m.modelId}</code>
+                  {m.hiddenLeads > 0 && (
+                    <span className="text-[11px] text-muted-foreground">{t('premium.discoveryHiddenLeads', { count: m.hiddenLeads })}</span>
+                  )}
+                  {m.reason && <span className="text-[11px] text-muted-foreground">{m.reason}</span>}
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    className="ml-auto"
+                    onClick={() => unignore.mutate(m)}
+                    aria-label={t('premium.discoveryUnignoreLabel', { model: m.modelId })}
+                  >
+                    {t('premium.discoveryUnignore')}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
       </div>
 
       <form

@@ -131,6 +131,65 @@ describe('discovery API', () => {
     expect(count()).toBe(before);
   });
 
+  it('keeps an operator-set status against agent re-runs, and appends the agent note once', async () => {
+    const agent = await mintAgent();
+    const found = { source: 'https://opencode.ai/docs/zen', modelId: 'nemotron-free', notes: 'Listed on /models' };
+    const lead = (await (await post(agent, found)).json()) as { id: number };
+    expect((await call(session, `/leads/${lead.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'rejected' }) })).status).toBe(200);
+
+    const rerun = { ...found, status: 'candidate', notes: 'Still listed 2026-10-15' };
+    const after = await (await post(agent, rerun)).json() as { status: string; statusSetBy: string; notes: string };
+    expect(after.status).toBe('rejected');
+    expect(after.statusSetBy).toBe('user');
+    expect(after.notes).toMatch(/^Listed on \/models\n\[agent \d{4}-\d{2}-\d{2}\] Still listed 2026-10-15$/);
+    const again = await (await post(agent, rerun)).json() as { notes: string };
+    expect(again.notes).toBe(after.notes);
+
+    expect((await call(agent, `/leads/${lead.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'testing' }) })).status).toBe(409);
+    expect((await call(agent, `/leads/${lead.id}`, { method: 'PATCH', body: JSON.stringify({ notes: 'probe queued' }) })).status).toBe(200);
+  });
+
+  it('keeps the existing status when an agent re-posts its own lead without one', async () => {
+    const agent = await mintAgent();
+    const found = { source: 'https://llm7.io/models', modelId: 'llm7-free', status: 'testing' };
+    await post(agent, found);
+    const rerun = await (await post(agent, { source: found.source, modelId: found.modelId })).json() as { status: string };
+    expect(rerun.status).toBe('testing');
+  });
+
+  it('ignores a model wherever it is found: hidden from the list, skipped for agents, refused for the operator', async () => {
+    const agent = await mintAgent();
+    await post(session, { source: 'https://opencode.ai/docs/zen', modelId: 'cat-jam-free' });
+    await post(session, { source: 'https://opencode.ai/blog/stealth', modelId: 'cat-jam-free' });
+    expect((await call(session, '/ignores', { method: 'POST', body: JSON.stringify({ provider: 'opencode', modelId: 'cat-jam-free', reason: 'harness-only' }) })).status).toBe(200);
+
+    const page = await (await call(session, '/leads')).json() as { leads: Array<{ modelId: string }>; ignored: Array<{ provider: string; modelId: string; hiddenLeads: number; reason: string }> };
+    expect(page.leads.some(l => l.modelId === 'cat-jam-free')).toBe(false);
+    expect(page.ignored).toEqual([expect.objectContaining({ provider: 'opencode', modelId: 'cat-jam-free', hiddenLeads: 2, reason: 'harness-only' })]);
+
+    const before = count();
+    const skipped = await post(agent, { source: 'https://opencode.ai/changelog', modelId: 'cat-jam-free' });
+    expect(skipped.status).toBe(200);
+    expect(await skipped.json()).toEqual({ skipped: 'ignored' });
+    expect((await post(session, { source: 'https://opencode.ai/new', modelId: 'cat-jam-free' })).status).toBe(409);
+    expect(count()).toBe(before);
+
+    expect((await call(agent, '/ignores', { method: 'POST', body: JSON.stringify({ provider: 'opencode', modelId: 'x' }) })).status).toBe(403);
+    expect((await call(agent, '/ignores?provider=opencode&modelId=cat-jam-free', { method: 'DELETE' })).status).toBe(403);
+
+    expect((await call(session, '/ignores?provider=opencode&modelId=cat-jam-free', { method: 'DELETE' })).status).toBe(200);
+    const restored = await (await call(session, '/leads')).json() as { leads: Array<{ modelId: string }> };
+    expect(restored.leads.filter(l => l.modelId === 'cat-jam-free')).toHaveLength(2);
+    expect((await call(session, '/ignores?provider=opencode&modelId=cat-jam-free', { method: 'DELETE' })).status).toBe(404);
+  });
+
+  it('lists rejected leads after the live ones', async () => {
+    const page = await (await call(session, '/leads')).json() as { leads: Array<{ status: string }> };
+    const firstRejected = page.leads.findIndex(l => l.status === 'rejected');
+    expect(firstRejected).toBeGreaterThan(-1);
+    expect(page.leads.slice(firstRejected).every(l => l.status === 'rejected')).toBe(true);
+  });
+
   it('closes to both callers when the extension is switched off', async () => {
     const agent = await mintAgent();
     setExtensionEnabled('external-model-discovery', false);
