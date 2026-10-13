@@ -1259,7 +1259,29 @@
     "upsellDescription": "नए मुफ़्त मॉडल 30 दिन बाद के बजाय उसी क्षण उपलब्ध होंगे। एक कुंजी, हर उपकरण। किसी भी समय रद्द करें; राउटर हमेशा के लिए फ्री रहता है।",
     "goPremium": "प्रीमियम जाओ",
     "bundled": "बंडल",
-    "planGeneric": "प्रीमियम"
+    "planGeneric": "प्रीमियम",
+    "catalogueUpdates": "Catalog updates",
+    "catalogueUpdatesHint": "What each catalog update changed: models added, removed, or quietly edited (a quota cut on a surviving model appears here and nowhere else).",
+    "externalDiscovery": "External model discovery",
+    "discoveryHint": "Models found outside the signed catalog — a provider blog, a console page, an agent report. Nothing here routes traffic; it is the list you test from.",
+    "discoveryEmpty": "No leads recorded yet. Add one below, or let an agent post to the same endpoint.",
+    "discoveryAll": "All",
+    "discoveryStatusLabel": "Status for {model}",
+    "discoveryStatus": {
+      "candidate": "Candidate",
+      "testing": "Testing",
+      "verified": "Verified",
+      "rejected": "Rejected",
+      "added": "Added"
+    },
+    "discoveryByAgent": "Agent",
+    "discoveryAgentHint": "An agent posts with addedBy: \"agent\" so a batch is easy to find later.",
+    "discoveryModelId": "Model ID",
+    "discoveryDisplayName": "Display name",
+    "discoverySource": "Source",
+    "discoveryNotes": "Notes",
+    "discoveryAdd": "Add lead",
+    "discoveryRemove": "Remove {model}"
   },
   "languages": {
     "en": "English",
@@ -1673,7 +1695,17 @@
     "logLoadMore": "Load more history",
     "logLoadedAll": "Whole log loaded",
     "latest": "Latest",
-    "lostChains": "{count} left a chain"
+    "lostChains": "{count} left a chain",
+    "syncsTitle": "Catalog updates",
+    "syncsHint": "One row per applied catalog document; counts are changes against the previous document.",
+    "syncsBaseline": "log starts here",
+    "syncsDetailLoading": "Loading field changes…",
+    "syncsEmpty": "No catalog update recorded yet. The next sync writes one.",
+    "syncsTotalUpdates": "Updates logged",
+    "syncsTotalAdded": "Models added",
+    "syncsTotalRemoved": "Models removed",
+    "syncsTotalChanged": "Models changed",
+    "syncsLast": "Last: {when}"
   },
   "quota": {
     "title": "Quota",

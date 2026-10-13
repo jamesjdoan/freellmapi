@@ -8,6 +8,8 @@ import type { Platform } from '@freellmapi/shared/types.js';
 import { REFERENCE_ONLY_PLATFORMS } from '../data/reference-only-platforms.js';
 import type { Scheduler } from '../lib/scheduler.js';
 import { recordCatalogueEvent } from './catalogue-log.js';
+import { recordCatalogueSync } from './catalogue-sync-log.js';
+import type { CatalogDocDiff, CatalogFieldChange, CatalogRegistry } from './catalogue-sync-log.js';
 import {
   applyAllModelOverrides,
   refreshModelOverrideBaselines,
@@ -95,7 +97,7 @@ interface CatalogQuirk {
   targets: { platform: string | null; modelGlob: string | null }[];
 }
 
-interface CatalogModel {
+export interface CatalogModel {
   platform: string;
   modelId: string;
   displayName: string;
@@ -120,7 +122,7 @@ interface CatalogModel {
   requestStyle?: string | null;
 }
 
-interface CatalogEmbedding {
+export interface CatalogEmbedding {
   family: string;
   platform: string;
   modelId: string;
@@ -132,7 +134,7 @@ interface CatalogEmbedding {
   quotaLabel: string;
 }
 
-interface CatalogTranscriptionModel {
+export interface CatalogTranscriptionModel {
   platform: string;
   modelId: string;
   displayName: string;
@@ -150,7 +152,7 @@ interface CatalogTranscriptionModel {
   quotaLabel?: string;
 }
 
-interface CatalogVideoModel {
+export interface CatalogVideoModel {
   platform: string;
   modelId: string;
   displayName: string;
@@ -164,7 +166,7 @@ interface CatalogVideoModel {
   providerModelId?: string;
 }
 
-interface Catalog {
+export interface Catalog {
   version: string;
   generatedAt: string;
   tier: 'live' | 'monthly';
@@ -201,7 +203,7 @@ export interface SyncResult {
 }
 
 /** Minimal structural check — enough to fail loudly on a wrong/garbled body. */
-function isCatalog(value: unknown): value is Catalog {
+export function isCatalog(value: unknown): value is Catalog {
   const c = value as Catalog;
   return (
     !!c &&
@@ -332,6 +334,183 @@ export function applyCatalog(db: Db, catalog: Catalog): NonNullable<SyncResult['
   // the 12-hourly sync freeze every in-flight request — including the 3-query
   // profile-activate POST — for minutes.
   return db.transaction(() => applyCatalogInner(db, catalog))();
+}
+
+/** Parse a previously applied document from its cached raw form. Returns null
+ *  for anything unusable: a missing cache (no sync has ever run), a malformed
+ *  or tampered payload — the diff then reports the new document in full. */
+function parseAppliedCatalog(raw: string | null | undefined): Catalog | null {
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return isCatalog(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+type FieldValue = CatalogFieldChange['o'];
+
+/** Feed values normalised for comparison and storage: absent -> null, arrays
+ *  and objects -> stable JSON strings, everything else verbatim. */
+function fieldValue(value: unknown): FieldValue {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'object') return JSON.stringify(value);
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+  return String(value);
+}
+
+interface RegistryEntry {
+  platform: string;
+  modelId: string;
+  fields: Array<[string, FieldValue]>;
+}
+
+function chatEntry(m: CatalogModel): RegistryEntry {
+  return {
+    platform: m.platform,
+    modelId: m.modelId,
+    fields: [
+      ['displayName', fieldValue(m.displayName)],
+      ['sizeLabel', fieldValue(m.sizeLabel)],
+      ['intelligenceRank', fieldValue(m.intelligenceRank)],
+      ['speedRank', fieldValue(m.speedRank)],
+      ['rpm', fieldValue(m.limits.rpm)],
+      ['rpd', fieldValue(m.limits.rpd)],
+      ['tpm', fieldValue(m.limits.tpm)],
+      ['tpd', fieldValue(m.limits.tpd)],
+      ['monthlyTokenBudget', fieldValue(m.monthlyTokenBudget)],
+      ['contextWindow', fieldValue(m.contextWindow)],
+      ['enabled', fieldValue(m.enabled)],
+      ['supportsVision', fieldValue(m.supportsVision)],
+      ['supportsTools', fieldValue(m.supportsTools)],
+    ],
+  };
+}
+
+function mediaEntry(m: CatalogModel): RegistryEntry {
+  return {
+    platform: m.platform,
+    modelId: m.modelId,
+    fields: [
+      ['displayName', fieldValue(m.displayName)],
+      ['modality', fieldValue(m.modality)],
+      ['priority', fieldValue(m.intelligenceRank ?? 0)],
+      ['quotaLabel', fieldValue(m.mediaNote ?? '')],
+      ['requestStyle', fieldValue(m.requestStyle)],
+      ['enabled', fieldValue(m.enabled)],
+    ],
+  };
+}
+
+function sttEntry(m: CatalogTranscriptionModel): RegistryEntry {
+  return {
+    platform: m.platform,
+    modelId: m.modelId,
+    fields: [
+      ['displayName', fieldValue(m.displayName)],
+      ['priority', fieldValue(m.priority)],
+      ['quotaLabel', fieldValue(m.quotaLabel ?? '')],
+      ['subtitleFormats', fieldValue(m.subtitleFormats)],
+      ['maxBytes', fieldValue(m.maxBytes)],
+      ['requestStyle', fieldValue(m.requestStyle)],
+      ['enabled', fieldValue(m.enabled)],
+    ],
+  };
+}
+
+function videoEntry(m: CatalogVideoModel): RegistryEntry {
+  return {
+    platform: m.platform,
+    modelId: m.modelId,
+    fields: [
+      ['displayName', fieldValue(m.displayName)],
+      ['priority', fieldValue(m.priority)],
+      ['quotaLabel', fieldValue(m.quotaLabel ?? '')],
+      ['providerModelId', fieldValue(m.providerModelId)],
+      ['enabled', fieldValue(m.enabled)],
+    ],
+  };
+}
+
+function embeddingEntry(m: CatalogEmbedding): RegistryEntry {
+  return {
+    platform: m.platform,
+    modelId: m.modelId,
+    fields: [
+      ['family', fieldValue(m.family)],
+      ['displayName', fieldValue(m.displayName)],
+      ['dimensions', fieldValue(m.dimensions)],
+      ['maxInputTokens', fieldValue(m.maxInputTokens)],
+      ['priority', fieldValue(m.priority)],
+      ['quotaLabel', fieldValue(m.quotaLabel)],
+      ['enabled', fieldValue(m.enabled)],
+    ],
+  };
+}
+
+function registryEntries(doc: Catalog): Record<CatalogRegistry, RegistryEntry[]> {
+  const isMedia = (m: CatalogModel) => !!m.modality && MEDIA_MODALITIES.has(m.modality);
+  return {
+    chat: doc.models.filter(m => !isMedia(m)).map(chatEntry),
+    media: doc.models.filter(isMedia).map(mediaEntry),
+    stt: (doc.transcriptionModels ?? []).map(sttEntry),
+    video: (doc.videoModels ?? []).map(videoEntry),
+    embedding: (doc.embeddings ?? []).map(embeddingEntry),
+  };
+}
+
+const REGISTRIES: CatalogRegistry[] = ['chat', 'media', 'stt', 'video', 'embedding'];
+
+/**
+ * What one catalog document changes relative to the one before it.
+ *
+ * Document-against-document, not DB-against-document: the feed's own verdicts,
+ * including changes a local disable or override masked when the document was
+ * applied. `counts.updated` on the apply side cannot serve - it increments for
+ * every row the document still lists, moved or not, so a quiet quota change
+ * on an existing model is invisible there.
+ */
+export function diffCatalogs(prev: Catalog | null, next: Catalog): CatalogDocDiff {
+  const byPlatform: CatalogDocDiff['byPlatform'] = {};
+  const details: CatalogFieldChange[] = [];
+  const bump = (platform: string, k: 'a' | 'r' | 'c') => {
+    (byPlatform[platform] ??= { a: 0, r: 0, c: 0 })[k]++;
+  };
+  const previous = prev ? registryEntries(prev) : null;
+  const current = registryEntries(next);
+  const counts = { added: 0, removed: 0, changed: 0 };
+
+  for (const name of REGISTRIES) {
+    const oldEntries = new Map((previous?.[name] ?? []).map(e => [`${e.platform}:${e.modelId}`, e]));
+    const newEntries = new Map(current[name].map(e => [`${e.platform}:${e.modelId}`, e]));
+    for (const key of [...new Set([...oldEntries.keys(), ...newEntries.keys()])].sort()) {
+      const was = oldEntries.get(key);
+      const now = newEntries.get(key);
+      if (!was && now) {
+        counts.added++;
+        bump(now.platform, 'a');
+      } else if (was && !now) {
+        counts.removed++;
+        bump(was.platform, 'r');
+      } else if (was && now) {
+        const oldFields = new Map(was.fields);
+        let moved = false;
+        for (const [field, nextValue] of now.fields) {
+          const prevValue = oldFields.get(field) ?? null;
+          if (prevValue !== nextValue) {
+            details.push({ r: name, p: now.platform, m: now.modelId, f: field, o: prevValue, n: nextValue });
+            moved = true;
+          }
+        }
+        if (moved) {
+          counts.changed++;
+          bump(now.platform, 'c');
+        }
+      }
+    }
+  }
+  return { ...counts, byPlatform, details };
 }
 
 /**
@@ -843,7 +1022,23 @@ export async function syncCatalog(force = false): Promise<SyncResult> {
 
     const sameAsApplied = applied === catalog.version && getSetting(SETTING_APPLIED_TIER) === catalog.tier;
     if (!sameAsApplied) {
+      // Diff BEFORE the applied cache is overwritten: the previous document is
+      // the "from" side of "what changed from one catalog update to the next".
+      // Replays (reapplyCachedCatalog) never reach this branch, so every row in
+      // the log is a genuinely new document.
+      const previousDoc = parseAppliedCatalog(getSetting(SETTING_APPLIED_JSON));
+      const docDiff = diffCatalogs(previousDoc, catalog);
       const counts = applyCatalog(db, catalog);
+      recordCatalogueSync(db, {
+        version: catalog.version,
+        previousVersion: previousDoc?.version ?? null,
+        tier: catalog.tier,
+        generatedAt: catalog.generatedAt,
+        counts,
+        doc: { added: docDiff.added, removed: docDiff.removed, changed: docDiff.changed },
+        byPlatform: docDiff.byPlatform,
+        details: docDiff.details,
+      });
       setSetting(SETTING_APPLIED_VERSION, catalog.version);
       setSetting(SETTING_APPLIED_TIER, catalog.tier);
       // Cache the verified document so boots can re-apply it offline (see

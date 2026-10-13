@@ -74,6 +74,8 @@ import * as requestModelAttribution from '../migrations/20260913_000001_request_
 import * as customEndpointGroupLabel from '../migrations/20260930_000001_custom_endpoint_group_label.js';
 import * as catalogueAck from '../migrations/20261001_000001_catalogue_ack.js';
 import * as clifreeLinksToModelLinks from '../migrations/20261012_000001_clifree_links_to_model_links.js';
+import * as catalogueSyncLog from '../migrations/20261013_000001_catalogue_sync_log.js';
+import * as externalModelDiscovery from '../migrations/20261014_000001_external_model_discovery.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -233,4 +235,6 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: CUSTOM_ENDPOINT_GROUP_LABEL_FILENAME, module: customEndpointGroupLabel },
   { filename: CATALOGUE_ACK_FILENAME, module: catalogueAck },
   { filename: '20261012_000001_clifree_links_to_model_links.ts', module: clifreeLinksToModelLinks },
+  { filename: '20261013_000001_catalogue_sync_log.ts', module: catalogueSyncLog },
+  { filename: '20261014_000001_external_model_discovery.ts', module: externalModelDiscovery },
 ];

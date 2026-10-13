@@ -10,6 +10,8 @@ import { Badge } from '@/components/ui/badge'
 import { FieldError } from '@/components/ui/field-error'
 import { CardSkeleton } from '@/components/ui/skeleton'
 import { usePremium } from '@/hooks/use-premium'
+import { CatalogueSyncs } from '@/components/catalogue-syncs'
+import { ExternalDiscoverySection } from '@/components/external-discovery'
 import { useI18n } from '@/i18n'
 
 function fmtWhen(ms: number | null): string | null {
@@ -116,6 +118,19 @@ export default function PremiumPage() {
             )}
           </div>
         </section>
+
+        {/* What each applied catalog document changed. The chat-models page
+            keeps the per-model totals; the quantities live here, beside the
+            thing they describe. */}
+        <section>
+          <h2 className="text-sm font-medium mb-3">{t('premium.catalogueUpdates')}</h2>
+          <div className="rounded-3xl border bg-card p-5">
+            <CatalogueSyncs />
+          </div>
+        </section>
+
+        {/* Leads from outside the feed, where an agent drops what it finds. */}
+        <ExternalDiscoverySection title={t('premium.externalDiscovery')} />
 
         {/* License */}
         <section>

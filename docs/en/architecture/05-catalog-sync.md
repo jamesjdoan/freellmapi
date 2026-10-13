@@ -231,7 +231,8 @@ startCatalogSync(scheduler: Scheduler)
 
 | Function | Purpose |
 |----------|---------|
-| `syncCatalog(force?)` | Fetch → verify → apply (or 304/skip) |
+| `syncCatalog(force?)` | Fetch → verify → apply (or 304/skip); records one `catalogue_sync` row per applied document |
+| `diffCatalogs(prev, next)` | Document-vs-document added/removed/changed counts and capped field diff for the sync log |
 | `applyCatalog(db, catalog)` | Transactional upsert/insert/delete + quirks |
 | `reapplyCachedCatalog()` | Boot-time re-apply from verified cache |
 | `refreshLicenseStatus()` | Validate license against catalog service |
@@ -251,6 +252,7 @@ startCatalogSync(scheduler: Scheduler)
 | `embedding_models` | UPSERT embeddings (full snapshot) |
 | `fallback_config` | Ensure every model has a row |
 | `catalog_model_tombstones` | Respect user deletions |
+| `catalogue_sync` | Append one row per applied document: tier, versions, DB counts, document diff, per-platform rollup, capped field details. Read on the Premium page. |
 | `quirks` + `quirk_targets` | Replace wholesale |
 | `settings` | Persist applied version/tier/json, license status, sync time |
 
