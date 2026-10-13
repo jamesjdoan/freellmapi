@@ -11,14 +11,15 @@ import { formatStamp } from '@/lib/stamp'
 // The catalogue log on the chat-models page records what happened to each
 // MODEL; this records what each catalog UPDATE brought: when the document
 // landed, from which tier, and — diffed against the previously applied
-// document — how many models it added, removed, and quietly changed. A
+// document — which providers gained, lost, or quietly changed models. A
 // provider tightening a quota on an existing model never appears in the event
 // log; it appears here.
 //
-// Field-level detail is fetched per row on open, not up front: a sync can move
-// hundreds of fields and the list view stays cheap.
+// Each row names its providers up front; opening it lists the models per
+// provider, each provider a collapsible group. Detail is fetched on open: a
+// sync can move hundreds of models and the list view stays cheap.
 
-interface SyncByPlatform { a: number; r: number; c: number }
+interface Churn { a: number; r: number; c: number }
 
 interface CatalogueSync {
   id: number
@@ -35,7 +36,7 @@ interface CatalogueSync {
   docAdded: number
   docRemoved: number
   docChanged: number
-  byPlatform: Record<string, SyncByPlatform>
+  byPlatform: Record<string, Churn>
 }
 
 interface CatalogueSyncTotals {
@@ -48,37 +49,118 @@ interface CatalogueSyncTotals {
 }
 
 type FieldValue = string | number | boolean | null
+interface FieldChange { r: string; p: string; m: string; f: string; o: FieldValue; n: FieldValue }
+interface Member { r: string; p: string; m: string; n: string | null }
 
 interface CatalogueSyncDetail extends CatalogueSync {
-  details: { r: string; p: string; m: string; f: string; o: FieldValue; n: FieldValue }[]
+  details: FieldChange[]
+  members: { added: Member[]; removed: Member[] } | null
 }
+
+const PROVIDERS_SHOWN = 6
 
 const valueOf = (v: FieldValue) => (v === null ? '—' : String(v))
 
-function SyncDetail({ id }: { id: number }) {
+/** Providers busiest first; ties alphabetical so the order is stable. */
+export function providersByChurn(byPlatform: Record<string, Churn>): Array<[string, Churn]> {
+  return Object.entries(byPlatform).sort(([pa, a], [pb, b]) =>
+    (b.a + b.r + b.c) - (a.a + a.r + a.c) || pa.localeCompare(pb))
+}
+
+function ChurnCounts({ churn }: { churn: Churn }) {
+  return (
+    <span className="tabular-nums">
+      {churn.a > 0 && <span className="text-emerald-600 dark:text-emerald-400">{`+${churn.a}`}</span>}
+      {churn.r > 0 && <span className="ml-1 text-rose-600 dark:text-rose-400">{`−${churn.r}`}</span>}
+      {churn.c > 0 && <span className="ml-1 text-amber-600 dark:text-amber-400">{`~${churn.c}`}</span>}
+    </span>
+  )
+}
+
+function ModelLine({ sign, tone, member }: { sign: string; tone: string; member: Member }) {
+  return (
+    <li className="flex flex-wrap items-baseline gap-x-2">
+      <span className={`w-3 text-center font-medium ${tone}`}>{sign}</span>
+      {member.n && <span>{member.n}</span>}
+      <code className="text-muted-foreground">{member.m}</code>
+      {member.r !== 'chat' && <Badge variant="outline" className="text-[10px]">{member.r}</Badge>}
+    </li>
+  )
+}
+
+function ProviderGroup({ provider, churn, detail, open }: {
+  provider: string
+  churn: Churn
+  detail: CatalogueSyncDetail
+  open: boolean
+}) {
+  const { t } = useI18n()
+  const added = detail.members?.added.filter(m => m.p === provider) ?? []
+  const removed = detail.members?.removed.filter(m => m.p === provider) ?? []
+  const changes = detail.details.filter(d => d.p === provider)
+  const changedModels = [...new Set(changes.map(d => d.m))]
+  return (
+    <details open={open} className="rounded border bg-muted/20 px-2 py-1">
+      <summary className="flex cursor-pointer items-baseline gap-2 text-xs">
+        <PlatformDot platform={provider} />
+        <span className="font-medium">{provider}</span>
+        <ChurnCounts churn={churn} />
+      </summary>
+      <div className="mt-1 space-y-2 pb-1 pl-5 text-[11px]">
+        {added.length > 0 && (
+          <div>
+            <h5 className="text-muted-foreground">{t('catalogue.syncsAddedModels')}</h5>
+            <ul>{added.map(m => <ModelLine key={`${m.r}:${m.m}`} sign="+" tone="text-emerald-600 dark:text-emerald-400" member={m} />)}</ul>
+          </div>
+        )}
+        {removed.length > 0 && (
+          <div>
+            <h5 className="text-muted-foreground">{t('catalogue.syncsRemovedModels')}</h5>
+            <ul>{removed.map(m => <ModelLine key={`${m.r}:${m.m}`} sign="−" tone="text-rose-600 dark:text-rose-400" member={m} />)}</ul>
+          </div>
+        )}
+        {changedModels.length > 0 && (
+          <div>
+            <h5 className="text-muted-foreground">{t('catalogue.syncsChangedModels')}</h5>
+            <ul className="space-y-0.5">
+              {changedModels.map(model => (
+                <li key={model}>
+                  <code className="text-muted-foreground">{model}</code>
+                  {changes.filter(d => d.m === model).map(d => (
+                    <span key={d.f} className="ml-2">
+                      <span className="font-medium">{d.f}</span>{' '}
+                      <code className="text-rose-600 dark:text-rose-400">{valueOf(d.o)}</code>
+                      {' → '}
+                      <code className="text-emerald-600 dark:text-emerald-400">{valueOf(d.n)}</code>
+                    </span>
+                  ))}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </details>
+  )
+}
+
+function SyncDetail({ sync }: { sync: CatalogueSync }) {
   const { t } = useI18n()
   const { data, isPending } = useQuery<CatalogueSyncDetail>({
-    queryKey: ['catalogue-sync-detail', id],
-    queryFn: () => apiFetch(`/api/models/changes/syncs/detail?id=${id}`),
+    queryKey: ['catalogue-sync-detail', sync.id],
+    queryFn: () => apiFetch(`/api/models/changes/syncs/detail?id=${sync.id}`),
   })
   if (isPending) return <p className="pl-5 text-[11px] text-muted-foreground">{t('catalogue.syncsDetailLoading')}</p>
-  if (!data || data.details.length === 0) return null
+  if (!data) return null
+  const providers = providersByChurn(data.byPlatform)
+  if (providers.length === 0) return null
+  const namesMissing = data.members === null && data.docAdded + data.docRemoved > 0
   return (
-    <div className="ml-5 mt-1 max-h-48 overflow-y-auto rounded border bg-muted/30 p-2">
-      <table className="w-full text-[11px]">
-        <tbody>
-          {data.details.map((d, i) => (
-            <tr key={i} className="align-baseline">
-              <td className="w-4 py-0.5"><PlatformDot platform={d.p} /></td>
-              <td className="py-0.5 pr-2"><code className="text-muted-foreground">{d.m}</code></td>
-              <td className="py-0.5 pr-2 font-medium">{d.f}</td>
-              <td className="py-0.5 pr-1 text-rose-600 dark:text-rose-400"><code className="break-all">{valueOf(d.o)}</code></td>
-              <td className="py-0.5 pr-1 text-muted-foreground">→</td>
-              <td className="py-0.5 text-emerald-600 dark:text-emerald-400"><code className="break-all">{valueOf(d.n)}</code></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="mb-2 ml-5 mt-1 space-y-1">
+      {namesMissing && <p className="text-[11px] text-muted-foreground">{t('catalogue.syncsNamesMissing')}</p>}
+      {providers.map(([provider, churn]) => (
+        <ProviderGroup key={provider} provider={provider} churn={churn} detail={data} open={providers.length === 1} />
+      ))}
     </div>
   )
 }
@@ -89,6 +171,25 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: str
       <div className={`text-lg font-semibold tabular-nums ${tone ?? ''}`}>{value}</div>
       <div className="text-[11px] text-muted-foreground">{label}</div>
     </div>
+  )
+}
+
+function ProviderSummary({ byPlatform }: { byPlatform: Record<string, Churn> }) {
+  const { t } = useI18n()
+  const providers = providersByChurn(byPlatform)
+  if (providers.length === 0) return null
+  const shown = providers.slice(0, PROVIDERS_SHOWN)
+  const hidden = providers.length - shown.length
+  return (
+    <span className="flex w-full flex-wrap items-baseline gap-x-3 gap-y-0.5 pl-1 text-[11px] text-muted-foreground">
+      {shown.map(([provider, churn]) => (
+        <span key={provider} className="inline-flex items-baseline gap-1">
+          <span className="text-foreground/80">{provider}</span>
+          <ChurnCounts churn={churn} />
+        </span>
+      ))}
+      {hidden > 0 && <span>{t('catalogue.syncsMoreProviders', { count: hidden })}</span>}
+    </span>
   )
 }
 
@@ -119,32 +220,33 @@ export function CatalogueSyncs() {
       </div>
       <p className="mt-3 text-[11px] text-muted-foreground">{t('catalogue.syncsHint')}</p>
       <ul className="mt-2 divide-y divide-border">
-        {data.syncs.map(s => (
-          <li key={s.id}>
-            <button
-              type="button"
-              onClick={() => setOpenId(v => (v === s.id ? null : s.id))}
-              aria-expanded={openId === s.id}
-              className="flex w-full flex-wrap items-baseline gap-x-2 gap-y-0.5 py-1.5 text-left text-xs"
-            >
-              <Badge variant="outline" className="text-[10px]">{s.tier}</Badge>
-              <span className="font-mono">
-                {s.previousVersion ? `${s.previousVersion} → ${s.version}` : s.version}
-              </span>
-              {!s.previousVersion && <span className="text-muted-foreground">({t('catalogue.syncsBaseline')})</span>}
-              <span className="tabular-nums">
-                {s.docAdded > 0 && <span className="text-emerald-600 dark:text-emerald-400">{`+${s.docAdded}`}</span>}
-                {s.docRemoved > 0 && <span className="ml-1.5 text-rose-600 dark:text-rose-400">{`−${s.docRemoved}`}</span>}
-                {s.docChanged > 0 && <span className="ml-1.5 text-amber-600 dark:text-amber-400">{`~${s.docChanged}`}</span>}
-                {s.docAdded + s.docRemoved + s.docChanged === 0 && <span className="text-muted-foreground">—</span>}
-              </span>
-              <span className="ml-auto flex-shrink-0 text-[11px] text-muted-foreground tabular-nums">
-                {formatStamp(s.at, { time: true })}
-              </span>
-            </button>
-            {openId === s.id && <SyncDetail id={s.id} />}
-          </li>
-        ))}
+        {data.syncs.map(s => {
+          const moved = s.docAdded + s.docRemoved + s.docChanged > 0
+          return (
+            <li key={s.id}>
+              <button
+                type="button"
+                onClick={() => moved && setOpenId(v => (v === s.id ? null : s.id))}
+                aria-expanded={moved ? openId === s.id : undefined}
+                className={`flex w-full flex-wrap items-baseline gap-x-2 gap-y-0.5 py-1.5 text-left text-xs ${moved ? '' : 'cursor-default'}`}
+              >
+                <Badge variant="outline" className="text-[10px]">{s.tier}</Badge>
+                <span className="font-mono">
+                  {s.previousVersion ? `${s.previousVersion} → ${s.version}` : s.version}
+                </span>
+                {!s.previousVersion && <span className="text-muted-foreground">({t('catalogue.syncsBaseline')})</span>}
+                {moved
+                  ? <ChurnCounts churn={{ a: s.docAdded, r: s.docRemoved, c: s.docChanged }} />
+                  : <span className="text-muted-foreground">—</span>}
+                <span className="ml-auto flex-shrink-0 text-[11px] text-muted-foreground tabular-nums">
+                  {formatStamp(s.at, { time: true })}
+                </span>
+                <ProviderSummary byPlatform={s.byPlatform} />
+              </button>
+              {openId === s.id && <SyncDetail sync={s} />}
+            </li>
+          )
+        })}
       </ul>
     </div>
   )

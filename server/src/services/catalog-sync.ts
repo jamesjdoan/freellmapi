@@ -9,7 +9,7 @@ import { REFERENCE_ONLY_PLATFORMS } from '../data/reference-only-platforms.js';
 import type { Scheduler } from '../lib/scheduler.js';
 import { recordCatalogueEvent } from './catalogue-log.js';
 import { recordCatalogueSync } from './catalogue-sync-log.js';
-import type { CatalogDocDiff, CatalogFieldChange, CatalogRegistry } from './catalogue-sync-log.js';
+import type { CatalogDocDiff, CatalogFieldChange, CatalogMember, CatalogRegistry } from './catalogue-sync-log.js';
 import {
   applyAllModelOverrides,
   refreshModelOverrideBaselines,
@@ -363,6 +363,7 @@ function fieldValue(value: unknown): FieldValue {
 interface RegistryEntry {
   platform: string;
   modelId: string;
+  displayName: string | null;
   fields: Array<[string, FieldValue]>;
 }
 
@@ -370,6 +371,7 @@ function chatEntry(m: CatalogModel): RegistryEntry {
   return {
     platform: m.platform,
     modelId: m.modelId,
+    displayName: m.displayName ?? null,
     fields: [
       ['displayName', fieldValue(m.displayName)],
       ['sizeLabel', fieldValue(m.sizeLabel)],
@@ -392,6 +394,7 @@ function mediaEntry(m: CatalogModel): RegistryEntry {
   return {
     platform: m.platform,
     modelId: m.modelId,
+    displayName: m.displayName ?? null,
     fields: [
       ['displayName', fieldValue(m.displayName)],
       ['modality', fieldValue(m.modality)],
@@ -407,6 +410,7 @@ function sttEntry(m: CatalogTranscriptionModel): RegistryEntry {
   return {
     platform: m.platform,
     modelId: m.modelId,
+    displayName: m.displayName ?? null,
     fields: [
       ['displayName', fieldValue(m.displayName)],
       ['priority', fieldValue(m.priority)],
@@ -423,6 +427,7 @@ function videoEntry(m: CatalogVideoModel): RegistryEntry {
   return {
     platform: m.platform,
     modelId: m.modelId,
+    displayName: m.displayName ?? null,
     fields: [
       ['displayName', fieldValue(m.displayName)],
       ['priority', fieldValue(m.priority)],
@@ -437,6 +442,7 @@ function embeddingEntry(m: CatalogEmbedding): RegistryEntry {
   return {
     platform: m.platform,
     modelId: m.modelId,
+    displayName: m.displayName ?? null,
     fields: [
       ['family', fieldValue(m.family)],
       ['displayName', fieldValue(m.displayName)],
@@ -474,6 +480,8 @@ const REGISTRIES: CatalogRegistry[] = ['chat', 'media', 'stt', 'video', 'embeddi
 export function diffCatalogs(prev: Catalog | null, next: Catalog): CatalogDocDiff {
   const byPlatform: CatalogDocDiff['byPlatform'] = {};
   const details: CatalogFieldChange[] = [];
+  const added: CatalogMember[] = [];
+  const removed: CatalogMember[] = [];
   const bump = (platform: string, k: 'a' | 'r' | 'c') => {
     (byPlatform[platform] ??= { a: 0, r: 0, c: 0 })[k]++;
   };
@@ -490,9 +498,11 @@ export function diffCatalogs(prev: Catalog | null, next: Catalog): CatalogDocDif
       if (!was && now) {
         counts.added++;
         bump(now.platform, 'a');
+        added.push({ r: name, p: now.platform, m: now.modelId, n: now.displayName });
       } else if (was && !now) {
         counts.removed++;
         bump(was.platform, 'r');
+        removed.push({ r: name, p: was.platform, m: was.modelId, n: was.displayName });
       } else if (was && now) {
         const oldFields = new Map(was.fields);
         let moved = false;
@@ -510,7 +520,7 @@ export function diffCatalogs(prev: Catalog | null, next: Catalog): CatalogDocDif
       }
     }
   }
-  return { ...counts, byPlatform, details };
+  return { ...counts, byPlatform, details, members: { added, removed } };
 }
 
 /**
@@ -1038,6 +1048,7 @@ export async function syncCatalog(force = false): Promise<SyncResult> {
         doc: { added: docDiff.added, removed: docDiff.removed, changed: docDiff.changed },
         byPlatform: docDiff.byPlatform,
         details: docDiff.details,
+        members: docDiff.members,
       });
       setSetting(SETTING_APPLIED_VERSION, catalog.version);
       setSetting(SETTING_APPLIED_TIER, catalog.tier);

@@ -364,14 +364,14 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
   {
     id: 'external-model-discovery',
     title: 'External model discovery',
-    summary: 'A shopping list of model leads found outside the signed catalog — from blog posts, agent reports, or console UIs. Operators can mark leads candidate / testing / verified / rejected / added. Nothing here routes or enables a model; it is the list beside the sync-log section on the Premium page.',
+    summary: 'Model leads found outside the signed catalog — provider blogs, console pages, agent reports — grouped by provider with a candidate / testing / verified / rejected / added status. An unattended agent writes with its own token, minted on the Premium page: it authorises /api/discovery only, and can change or remove only the leads an agent recorded. Nothing here routes or enables a model.',
     settingsLocation: 'Premium → External model discovery',
     destinations: [{ kind: 'internal', label: 'Open external discovery', href: '/premium' }],
     category: 'tooling',
     defaultEnabled: true,
-    offBehaviour: 'The Premium-page section is hidden; recorded leads and the API stay, so switching back on shows them unchanged.',
+    offBehaviour: 'The Premium-page section is hidden and /api/discovery answers 404 to the operator and the agent token alike. Recorded leads and the token are kept, so switching back on resumes unchanged.',
     takesEffect: 'Next page load.',
-    codeLocations: ['server/src/services/external-model-discovery.ts', 'server/src/routes/models.ts', 'client/src/components/external-discovery.tsx', 'client/src/pages/PremiumPage.tsx'],
+    codeLocations: ['server/src/services/external-model-discovery.ts', 'server/src/routes/discovery.ts', 'client/src/components/external-discovery.tsx', 'client/src/pages/PremiumPage.tsx'],
     disableConfirmation: 'none',
   },
   {

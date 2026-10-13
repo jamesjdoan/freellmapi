@@ -1289,7 +1289,18 @@
       "added": "Added"
     },
     "discoveryByAgent": "Agent",
-    "discoveryAgentHint": "An agent posts with addedBy: \"agent\" so a batch is easy to find later.",
+    "discoveryProvider": "Provider",
+    "discoveryUnspecified": "No provider",
+    "discoveryAgentTitle": "Agent access",
+    "discoveryAgentNone": "No agent token. Create one to let a scheduled agent record leads.",
+    "discoveryAgentActive": "Agent token active since {when}.",
+    "discoveryAgentCreate": "Create agent token",
+    "discoveryAgentReplace": "Replace token",
+    "discoveryAgentRevoke": "Revoke",
+    "discoveryAgentCopy": "Copy",
+    "discoveryAgentCopied": "Copied",
+    "discoveryAgentShownOnce": "Copy it now. It is not shown again.",
+    "discoveryAgentUsage": "The agent sends POST {path} with Authorization: Bearer <token>. It can add leads, and change or remove only the leads it recorded.",
     "discoveryModelId": "Model ID",
     "discoveryDisplayName": "Display name",
     "discoverySource": "Source",
@@ -1705,7 +1716,12 @@
     "syncsTotalAdded": "Models added",
     "syncsTotalRemoved": "Models removed",
     "syncsTotalChanged": "Models changed",
-    "syncsLast": "Last: {when}"
+    "syncsLast": "Last: {when}",
+    "syncsNamesMissing": "Model names were not recorded for this update; only the counts are known.",
+    "syncsAddedModels": "Added",
+    "syncsRemovedModels": "Removed",
+    "syncsChangedModels": "Changed",
+    "syncsMoreProviders": "+{count} more"
   },
   "quota": {
     "title": "Quota",

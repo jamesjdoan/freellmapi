@@ -15,6 +15,7 @@ import {
   type CatalogueSyncInput,
 } from '../../services/catalogue-sync-log.js';
 import { up as syncLogUp } from '../../db/migrations/20261013_000001_catalogue_sync_log.js';
+import { up as membersUp } from '../../db/migrations/20261014_000002_catalogue_sync_members.js';
 import { requireAuth } from '../../middleware/requireAuth.js';
 import { modelsRouter } from '../../routes/models.js';
 import { mintDashboardToken } from '../helpers/auth.js';
@@ -66,6 +67,7 @@ function syncInput(over: Partial<CatalogueSyncInput> = {}): CatalogueSyncInput {
     doc: { added: 0, removed: 0, changed: 0 },
     byPlatform: {},
     details: [],
+    members: { added: [], removed: [] },
     ...over,
   };
 }
@@ -92,7 +94,9 @@ describe('diffCatalogs', () => {
 
   it('counts a no-op resync as nothing', () => {
     const doc = catalogOf([baseModel({ modelId: 'a' })]);
-    expect(diffCatalogs(doc, doc)).toEqual({ added: 0, removed: 0, changed: 0, byPlatform: {}, details: [] });
+    expect(diffCatalogs(doc, doc)).toEqual({
+      added: 0, removed: 0, changed: 0, byPlatform: {}, details: [], members: { added: [], removed: [] },
+    });
   });
 
   it('captures field-level changes on an existing model, including a quiet quota cut', () => {
@@ -118,6 +122,15 @@ describe('diffCatalogs', () => {
     const diff = diffCatalogs(prev, next);
     expect(diff.removed).toBe(1);
     expect(diff.byPlatform.groq.r).toBe(1);
+  });
+
+  it('names the models that arrived and departed, with their provider and display name', () => {
+    const prev = catalogOf([baseModel({ modelId: 'a' }), baseModel({ modelId: 'b', displayName: 'Model B' })]);
+    const next = catalogOf([baseModel({ modelId: 'a' }), baseModel({ platform: 'mistral', modelId: 'c', displayName: 'Model C' })]);
+    expect(diffCatalogs(prev, next).members).toEqual({
+      added: [{ r: 'chat', p: 'mistral', m: 'c', n: 'Model C' }],
+      removed: [{ r: 'chat', p: 'groq', m: 'b', n: 'Model B' }],
+    });
   });
 
   it('splits a modality change into a media departure and a chat arrival', () => {
@@ -213,6 +226,55 @@ describe('baseline migration', () => {
     const db = rawDb();
     syncLogUp(db);
     expect(db.prepare('SELECT COUNT(*) AS n FROM catalogue_sync').get()).toEqual({ n: 0 });
+  });
+});
+
+describe('model-name backfill migration', () => {
+  // Rows written before members_json existed are filled from catalogue_event
+  // only when the events in their window match their counts exactly.
+  function rawDbWithLog(): Db {
+    const raw = new DatabaseSync(':memory:');
+    raw.exec('CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)');
+    raw.exec(`CREATE TABLE catalogue_event (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL,
+      kind TEXT NOT NULL, platform TEXT NOT NULL, model_id TEXT NOT NULL, display_name TEXT,
+      source TEXT, reason TEXT, chains_json TEXT)`);
+    const db = raw as unknown as Db;
+    syncLogUp(db);
+    return db;
+  }
+  const addSync = (db: Db, at: string, added: number, removed: number) =>
+    db.prepare('INSERT INTO catalogue_sync (at, version, tier, doc_added, doc_removed) VALUES (?, ?, ?, ?, ?)')
+      .run(at, `v-${at}`, 'live', added, removed);
+  const addEvent = (db: Db, at: string, kind: string, model: string, source = 'catalog') =>
+    db.prepare('INSERT INTO catalogue_event (at, kind, platform, model_id, display_name, source) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(at, kind, 'inferbase', model, model.toUpperCase(), source);
+  const membersOf = (db: Db, at: string) => {
+    const row = db.prepare('SELECT members_json FROM catalogue_sync WHERE at = ?').get(at) as { members_json: string | null };
+    return row.members_json === null ? null : JSON.parse(row.members_json);
+  };
+
+  it('fills a row whose window of events matches its counts exactly', () => {
+    const db = rawDbWithLog();
+    addSync(db, '2026-10-13 06:00:00', 0, 0);
+    addEvent(db, '2026-10-13 09:39:59', 'arrived', 'm1');
+    addEvent(db, '2026-10-13 09:39:59', 'arrived', 'm2');
+    addEvent(db, '2026-10-13 09:39:59', 'removed', 'gone');
+    addEvent(db, '2026-10-13 09:39:59', 'arrived', 'hand-added', 'user');
+    addSync(db, '2026-10-13 09:40:00', 2, 1);
+    membersUp(db);
+    expect(membersOf(db, '2026-10-13 06:00:00')).toEqual({ added: [], removed: [] });
+    expect(membersOf(db, '2026-10-13 09:40:00')).toEqual({
+      added: [{ r: 'chat', p: 'inferbase', m: 'm1', n: 'M1' }, { r: 'chat', p: 'inferbase', m: 'm2', n: 'M2' }],
+      removed: [{ r: 'chat', p: 'inferbase', m: 'gone', n: 'GONE' }],
+    });
+  });
+
+  it('leaves the names unknown when the events do not account for the counts', () => {
+    const db = rawDbWithLog();
+    addEvent(db, '2026-10-13 09:39:59', 'arrived', 'm1');
+    addSync(db, '2026-10-13 09:40:00', 3, 0);
+    membersUp(db);
+    expect(membersOf(db, '2026-10-13 09:40:00')).toBeNull();
   });
 });
 
@@ -329,6 +391,10 @@ describe('syncCatalog writes the log through the signed-feed path', () => {
     const detailBody = await detail.json() as { version: string; details: Array<{ m: string; f: string }> };
     expect(detailBody.version).toBe('2099.03.02');
     expect(detailBody.details).toContainEqual({ r: 'chat', p: 'groq', m: 'a', f: 'rpd', o: 1000, n: 500 });
+    expect((detailBody as unknown as { members: unknown }).members).toEqual({
+      added: [{ r: 'embedding', p: 'cohere', m: 'e1', n: 'E1' }],
+      removed: [{ r: 'chat', p: 'groq', m: 'b', n: 'Test Model' }],
+    });
 
     const missing = await api('/api/models/changes/syncs/detail?id=999999');
     expect(missing.status).toBe(404);

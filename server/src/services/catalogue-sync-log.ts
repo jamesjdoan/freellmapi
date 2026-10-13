@@ -35,6 +35,22 @@ export interface CatalogFieldChange {
 
 export interface PlatformChurn { a: number; r: number; c: number }
 
+/** One model that entered or left a registry between two documents. */
+export interface CatalogMember {
+  /** chat | media | stt | video | embedding */
+  r: string;
+  p: string;
+  m: string;
+  /** Display name as the document that held it gave it. */
+  n: string | null;
+}
+
+/** Which models arrived and departed in one update, each list capped. */
+export interface CatalogMembers {
+  added: CatalogMember[];
+  removed: CatalogMember[];
+}
+
 /** Document-vs-document quantities plus the per-platform rollup and the
  *  (capped) field-level detail. The vocabulary of one sync-log row. */
 export interface CatalogDocDiff {
@@ -43,6 +59,7 @@ export interface CatalogDocDiff {
   changed: number;
   byPlatform: Record<string, PlatformChurn>;
   details: CatalogFieldChange[];
+  members: CatalogMembers;
 }
 
 export interface CatalogueSyncInput {
@@ -63,6 +80,7 @@ export interface CatalogueSyncInput {
   doc: { added: number; removed: number; changed: number };
   byPlatform: Record<string, PlatformChurn>;
   details: CatalogFieldChange[];
+  members: CatalogMembers;
 }
 
 export interface CatalogueSyncRow {
@@ -85,6 +103,10 @@ export interface CatalogueSyncRow {
 
 export interface CatalogueSyncDetailRow extends CatalogueSyncRow {
   details: CatalogFieldChange[];
+  /** Null for a row written before model names were recorded and that the
+   *  backfill could not reconstruct exactly: the counts stand, the names are
+   *  unknown. */
+  members: CatalogMembers | null;
 }
 
 /** Whole-log quantities, independent of the page being read. */
@@ -127,6 +149,7 @@ interface SyncDbRow {
   doc_changed: number;
   by_platform_json: string | null;
   details_json?: string | null;
+  members_json?: string | null;
 }
 
 const MAX_LIMIT = 200;
@@ -178,8 +201,8 @@ export function recordCatalogueSync(db: Db, input: CatalogueSyncInput): void {
       INSERT INTO catalogue_sync (
         version, previous_version, tier, generated_at,
         updated, inserted, removed, skipped_unknown_platform, quirks,
-        doc_added, doc_removed, doc_changed, by_platform_json, details_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        doc_added, doc_removed, doc_changed, by_platform_json, details_json, members_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       input.version,
       input.previousVersion,
@@ -195,6 +218,10 @@ export function recordCatalogueSync(db: Db, input: CatalogueSyncInput): void {
       input.doc.changed,
       JSON.stringify(input.byPlatform),
       JSON.stringify(input.details.slice(0, DETAILS_CAP)),
+      JSON.stringify({
+        added: input.members.added.slice(0, DETAILS_CAP),
+        removed: input.members.removed.slice(0, DETAILS_CAP),
+      }),
     );
   } catch (error) {
     console.warn('[catalogue-sync-log] could not record sync:', error instanceof Error ? error.message : error);
@@ -237,10 +264,14 @@ export function listCatalogueSyncs(query: CatalogueSyncQuery = {}, db: Db = getD
 
 export function getCatalogueSync(id: number, db: Db = getDb()): CatalogueSyncDetailRow | null {
   const row = db.prepare(`
-    SELECT ${ROW_COLUMNS}, details_json
+    SELECT ${ROW_COLUMNS}, details_json, members_json
       FROM catalogue_sync
      WHERE id = ?
   `).get(id) as SyncDbRow | undefined;
   if (!row) return null;
-  return { ...toRow(row), details: parseJson<CatalogFieldChange[]>(row.details_json, []) };
+  return {
+    ...toRow(row),
+    details: parseJson<CatalogFieldChange[]>(row.details_json, []),
+    members: parseJson<CatalogMembers | null>(row.members_json, null),
+  };
 }

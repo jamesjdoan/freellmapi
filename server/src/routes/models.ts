@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { getCatalogueChanges, acknowledgeDeparture, acknowledgeArrivals, acknowledgeDepartures } from '../services/catalogue-changes.js';
 import { listCatalogueEvents } from '../services/catalogue-log.js';
 import { listCatalogueSyncs, getCatalogueSync } from '../services/catalogue-sync-log.js';
-import { listExternalLeads, recordExternalLead, updateExternalLead, deleteExternalLead } from '../services/external-model-discovery.js';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import type { Platform } from '@freellmapi/shared/types.js';
@@ -718,86 +717,4 @@ modelsRouter.get('/changes/syncs/detail', (req: Request, res: Response) => {
     return;
   }
   res.json(row);
-});
-
-const LEAD_STATUSES = ['candidate', 'testing', 'verified', 'rejected', 'added'] as const;
-const LEAD_KINDS = ['chat', 'embedding', 'image', 'audio', 'transcription', 'video'] as const;
-
-const leadsQuerySchema = z.object({
-  status: z.enum(LEAD_STATUSES).optional(),
-  source: z.string().min(1).optional(),
-  limit: z.coerce.number().int().positive().max(200).optional(),
-  offset: z.coerce.number().int().nonnegative().optional(),
-});
-
-/**
- * External model discovery: leads found outside the signed catalog (a provider
- * blog, an agent report, a console page). Nothing here routes or enables a
- * model; it is the list an operator or an agent keeps beside the catalog.
- */
-modelsRouter.get('/discovery/leads', (req: Request, res: Response) => {
-  const parsed = leadsQuerySchema.safeParse(req.query);
-  if (!parsed.success) {
-    res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
-    return;
-  }
-  res.json(listExternalLeads(parsed.data));
-});
-
-const leadCreateSchema = z.object({
-  source: z.string().trim().min(1, 'source is required').max(500),
-  modelId: z.string().trim().min(1, 'modelId is required').max(256),
-  displayName: z.string().max(200).nullish(),
-  kind: z.enum(LEAD_KINDS).nullish(),
-  status: z.enum(LEAD_STATUSES).optional(),
-  notes: z.string().max(4000).nullish(),
-  addedBy: z.enum(['user', 'agent']).optional(),
-});
-
-/** Record a lead. (source, modelId) is unique, so re-posting the same finding
- *  updates it instead of duplicating it — an agent can re-run safely. */
-modelsRouter.post('/discovery/leads', (req: Request, res: Response) => {
-  const parsed = leadCreateSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
-    return;
-  }
-  res.json(recordExternalLead(parsed.data));
-});
-
-const leadPatchSchema = z.object({
-  displayName: z.string().max(200).nullish(),
-  kind: z.enum(LEAD_KINDS).nullish(),
-  status: z.enum(LEAD_STATUSES).optional(),
-  notes: z.string().max(4000).nullish(),
-});
-
-const leadIdSchema = z.coerce.number().int().positive();
-
-modelsRouter.patch('/discovery/leads/:id', (req: Request, res: Response) => {
-  const id = leadIdSchema.safeParse(req.params.id);
-  const parsed = leadPatchSchema.safeParse(req.body);
-  if (!id.success || !parsed.success) {
-    res.status(400).json({ error: { message: id.success ? parsed.error!.errors.map(e => e.message).join(', ') : 'Invalid lead id' } });
-    return;
-  }
-  const lead = updateExternalLead(id.data, parsed.data);
-  if (!lead) {
-    res.status(404).json({ error: { message: 'No lead with that id' } });
-    return;
-  }
-  res.json(lead);
-});
-
-modelsRouter.delete('/discovery/leads/:id', (req: Request, res: Response) => {
-  const id = leadIdSchema.safeParse(req.params.id);
-  if (!id.success) {
-    res.status(400).json({ error: { message: 'Invalid lead id' } });
-    return;
-  }
-  if (!deleteExternalLead(id.data)) {
-    res.status(404).json({ error: { message: 'No lead with that id' } });
-    return;
-  }
-  res.json({ deleted: true });
 });

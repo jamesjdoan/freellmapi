@@ -1,17 +1,17 @@
 // @vitest-environment jsdom
 //
-// The syncs strip answers "what did each catalog update change" with three
-// numbers per row and a lazily fetched field diff. These tests pin the parts a
-// server test cannot see: the empty log says so rather than rendering a
-// shell, a row shows its version transition and signed counts, and opening a
-// row is what fetches its detail.
+// The update list answers "what did each catalog update change, and on which
+// provider". These tests pin what a server test cannot see: the empty log says
+// so, each row names its providers busiest first, opening a row lists the
+// models per provider, and a row whose model names were never recorded says so
+// instead of showing an empty group.
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { I18nProvider } from '@/i18n'
 import { apiFetch } from '@/lib/api'
-import { CatalogueSyncs } from './catalogue-syncs'
+import { CatalogueSyncs, providersByChurn } from './catalogue-syncs'
 
 vi.mock('@/lib/api', () => ({ apiFetch: vi.fn() }))
 
@@ -30,104 +30,151 @@ afterEach(() => {
   vi.mocked(apiFetch).mockReset()
 })
 
-const syncRow = {
+const update = {
   id: 2,
-  at: '2026-10-12 13:03:49',
-  version: '2026.10.12.daddd7e6',
-  previousVersion: '2026.10.10.abc123',
+  at: '2026-10-13 09:40:02',
+  version: '2026.10.13.70a95cb9',
+  previousVersion: '2026.10.12.daddd7e6',
   tier: 'live',
-  generatedAt: '2026-10-12T10:09:44.790Z',
-  updated: 910,
-  inserted: 1,
-  removed: 0,
-  skippedUnknownPlatform: 0,
-  quirks: 89,
-  docAdded: 1,
-  docRemoved: 2,
-  docChanged: 3,
-  byPlatform: {},
+  generatedAt: null,
+  updated: 910, inserted: 3, removed: 1, skippedUnknownPlatform: 0, quirks: 89,
+  docAdded: 3,
+  docRemoved: 1,
+  docChanged: 2,
+  byPlatform: { inferbase: { a: 2, r: 0, c: 0 }, llm7: { a: 1, r: 1, c: 0 }, sail: { a: 0, r: 0, c: 2 } },
 }
 
-const baselineRow = {
-  ...syncRow,
-  id: 1,
-  version: '2026.10.08.deadbee',
-  previousVersion: null,
-  docAdded: 0,
-  docRemoved: 0,
-  docChanged: 0,
+const baseline = {
+  ...update, id: 1, version: '2026.10.12.daddd7e6', previousVersion: null,
+  docAdded: 0, docRemoved: 0, docChanged: 0, byPlatform: {},
 }
 
-function renderPage(syncs: unknown[]) {
+const detail = {
+  ...update,
+  details: [
+    { r: 'chat', p: 'sail', m: 'sail-pro', f: 'enabled', o: true, n: false },
+    { r: 'chat', p: 'sail', m: 'sail-lite', f: 'rpd', o: 1000, n: 500 },
+  ],
+  members: {
+    added: [
+      { r: 'chat', p: 'inferbase', m: 'qwen-3-max', n: 'Qwen 3 Max' },
+      { r: 'chat', p: 'inferbase', m: 'glm-5', n: null },
+      { r: 'chat', p: 'llm7', m: 'llm7-new', n: 'LLM7 New' },
+    ],
+    removed: [{ r: 'chat', p: 'llm7', m: 'llm7-old', n: 'LLM7 Old' }],
+  },
+}
+
+async function renderList(syncs: unknown[], detailBody: unknown = detail) {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
   vi.mocked(apiFetch).mockImplementation(async (path: string) => {
-    if (String(path).startsWith('/api/models/changes/syncs/detail')) {
-      return {
-        ...syncRow,
-        details: [{ r: 'chat', p: 'groq', m: 'test-model', f: 'rpd', o: 1000, n: 500 }],
-      }
+    if (String(path).startsWith('/api/models/changes/syncs/detail')) return detailBody
+    const list = syncs as Array<{ docAdded: number; docRemoved: number; docChanged: number }>
+    return {
+      syncs, total: list.length,
+      totals: {
+        syncs: list.length,
+        added: list.reduce<number>((n, s) => n + s.docAdded, 0),
+        removed: list.reduce<number>((n, s) => n + s.docRemoved, 0),
+        changed: list.reduce<number>((n, s) => n + s.docChanged, 0),
+        lastAt: list.length ? '2026-10-13 09:40:02' : null,
+        lastVersion: null,
+      },
     }
-    const totals = {
-      syncs: syncs.length,
-      added: syncs.reduce<number>((n, s) => n + (s as { docAdded: number }).docAdded, 0),
-      removed: syncs.reduce<number>((n, s) => n + (s as { docRemoved: number }).docRemoved, 0),
-      changed: syncs.reduce<number>((n, s) => n + (s as { docChanged: number }).docChanged, 0),
-      lastAt: syncs.length ? '2026-10-12 13:03:49' : null,
-      lastVersion: null,
-    }
-    return { syncs, total: syncs.length, totals }
   })
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   act(() => root!.render(
     <QueryClientProvider client={client}>
-      <I18nProvider initialLocale="en">
-        <CatalogueSyncs />
-      </I18nProvider>
+      <I18nProvider initialLocale="en"><CatalogueSyncs /></I18nProvider>
     </QueryClientProvider>,
   ))
-  // The query resolves on a timer; let it settle before reading the DOM.
-  // `Promise.withResolvers` is ES2024 and this package compiles against
-  // ES2023 (tsconfig.app.json), so the executor form is what is available.
-  return act(async () => { await new Promise<void>(resolve => { setTimeout(resolve, 0) }) })
+  await act(async () => {
+    await vi.waitFor(() => { if (!host!.textContent) throw new Error('not rendered yet') })
+  })
 }
+
+async function openRow(index = 0) {
+  const row = host!.querySelectorAll<HTMLButtonElement>('li > button')[index]
+  await act(async () => { row.click() })
+  await act(async () => {
+    await vi.waitFor(() => { if (!host!.querySelector('details')) throw new Error('detail not rendered yet') })
+  })
+}
+
+describe('providersByChurn', () => {
+  it('orders providers busiest first, ties alphabetically', () => {
+    expect(providersByChurn({ b: { a: 1, r: 0, c: 0 }, a: { a: 0, r: 1, c: 0 }, z: { a: 5, r: 0, c: 1 } }).map(([p]) => p))
+      .toEqual(['z', 'a', 'b'])
+  })
+})
 
 describe('CatalogueSyncs', () => {
   it('says the log is empty instead of rendering an empty table', async () => {
-    await renderPage([])
+    await renderList([])
     expect(host!.textContent).toContain('No catalog update recorded yet')
     expect(host!.querySelector('li')).toBeNull()
   })
 
-  it('shows each applied document with its transition and signed counts', async () => {
-    await renderPage([syncRow, baselineRow])
-    expect(host!.textContent).toContain('2026.10.10.abc123 → 2026.10.12.daddd7e6')
-    expect(host!.textContent).toContain('+1')
-    expect(host!.textContent).toContain('−2')
-    expect(host!.textContent).toContain('~3')
-    // The baseline names itself instead of inventing a previous version.
-    expect(host!.textContent).toContain('2026.10.08.deadbee')
-    expect(host!.textContent).toContain('log starts here')
-  })
-
   it('sums the whole log into the headline quantities', async () => {
-    await renderPage([syncRow, baselineRow])
+    await renderList([update, baseline])
     const text = host!.textContent ?? ''
-    expect(text).toContain('Updates logged')
-    expect(text).toMatch(/\+1\s*Models added/)
-    expect(text).toMatch(/−2\s*Models removed/)
-    expect(text).toMatch(/~3\s*Models changed/)
+    expect(text).toMatch(/\+3\s*Models added/)
+    expect(text).toMatch(/−1\s*Models removed/)
+    expect(text).toMatch(/~2\s*Models changed/)
   })
 
-  it('fetches and shows the field diff only while a row is open', async () => {
-    await renderPage([syncRow])
-    expect(host!.textContent).not.toContain('rpd')
-    const row = host!.querySelector<HTMLButtonElement>('li > button')!
-    await act(async () => { row.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
-    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
-    expect(host!.textContent).toContain('rpd')
-    expect(host!.textContent).toContain('1000')
-    expect(host!.textContent).toContain('500')
+  it('names each row’s providers with their counts, busiest first', async () => {
+    await renderList([update, baseline])
+    const row = host!.querySelectorAll('li')[0].textContent ?? ''
+    expect(row).toContain('2026.10.12.daddd7e6 → 2026.10.13.70a95cb9')
+    expect(row.indexOf('inferbase')).toBeLessThan(row.indexOf('llm7'))
+    expect(row).toMatch(/inferbase\s*\+2/)
+    expect(row).toMatch(/llm7\s*\+1\s*−1/)
+    expect(row).toMatch(/sail\s*~2/)
+    expect(host!.querySelectorAll('li')[1].textContent).toContain('log starts here')
+  })
+
+  it('collapses providers past the sixth into a count', async () => {
+    const busy = { ...update, byPlatform: Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`p${i}`, { a: 8 - i, r: 0, c: 0 }])) }
+    await renderList([busy])
+    const row = host!.querySelector('li')!.textContent ?? ''
+    expect(row).toContain('p5')
+    expect(row).not.toContain('p6')
+    expect(row).toContain('+2 more')
+  })
+
+  it('lists added, removed and changed models per provider, each provider collapsible', async () => {
+    await renderList([update])
+    await openRow()
+    const groups = [...host!.querySelectorAll('details')]
+    expect(groups.map(g => g.querySelector('summary')!.textContent)).toEqual([
+      expect.stringContaining('inferbase'), expect.stringContaining('llm7'), expect.stringContaining('sail'),
+    ])
+    expect(groups.every(g => !g.open)).toBe(true)
+    expect(groups[0].textContent).toContain('Qwen 3 Max')
+    expect(groups[0].textContent).toContain('glm-5')
+    expect(groups[1].textContent).toMatch(/Added.*llm7-new.*Removed.*llm7-old/)
+    expect(groups[2].textContent).toMatch(/sail-lite.*rpd.*1000.*500/)
+  })
+
+  it('opens the group straight away when only one provider moved', async () => {
+    const single = { ...update, docRemoved: 0, docChanged: 0, byPlatform: { inferbase: { a: 2, r: 0, c: 0 } } }
+    await renderList([single], { ...detail, ...single, details: [], members: { added: detail.members.added.slice(0, 2), removed: [] } })
+    await openRow()
+    expect(host!.querySelector('details')!.open).toBe(true)
+  })
+
+  it('says the names are unknown for an update recorded before they were kept', async () => {
+    await renderList([update], { ...detail, members: null })
+    await openRow()
+    expect(host!.textContent).toContain('Model names were not recorded for this update')
+  })
+
+  it('does not expand a row that changed nothing', async () => {
+    await renderList([baseline])
+    await act(async () => { host!.querySelector<HTMLButtonElement>('li > button')!.click() })
+    expect(vi.mocked(apiFetch).mock.calls.some(([p]) => String(p).includes('/detail'))).toBe(false)
   })
 })

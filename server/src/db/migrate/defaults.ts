@@ -76,6 +76,8 @@ import * as catalogueAck from '../migrations/20261001_000001_catalogue_ack.js';
 import * as clifreeLinksToModelLinks from '../migrations/20261012_000001_clifree_links_to_model_links.js';
 import * as catalogueSyncLog from '../migrations/20261013_000001_catalogue_sync_log.js';
 import * as externalModelDiscovery from '../migrations/20261014_000001_external_model_discovery.js';
+import * as catalogueSyncMembers from '../migrations/20261014_000002_catalogue_sync_members.js';
+import * as externalLeadProvider from '../migrations/20261014_000003_external_lead_provider.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -237,4 +239,6 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: '20261012_000001_clifree_links_to_model_links.ts', module: clifreeLinksToModelLinks },
   { filename: '20261013_000001_catalogue_sync_log.ts', module: catalogueSyncLog },
   { filename: '20261014_000001_external_model_discovery.ts', module: externalModelDiscovery },
+  { filename: '20261014_000002_catalogue_sync_members.ts', module: catalogueSyncMembers },
+  { filename: '20261014_000003_external_lead_provider.ts', module: externalLeadProvider },
 ];

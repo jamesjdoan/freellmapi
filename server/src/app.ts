@@ -21,6 +21,7 @@ import { quotaRouter } from './routes/quota.js';
 import { extensionsRouter } from './routes/extensions.js';
 import { chainMinimumsRouter } from './routes/chain-minimums.js';
 import { clifreeFleetRouter } from './routes/clifree-fleet.js';
+import { discoveryRouter } from './routes/discovery.js';
 import { analysisRouter } from './routes/analysis.js';
 import { healthRouter } from './routes/health.js';
 import { freeTierRouter } from './routes/free-tier.js';
@@ -272,6 +273,9 @@ export function createApp(config?: Config) {
   // Auth lives INSIDE this router: it accepts the unified API key as well as a
   // dashboard session, because an unattended reporter cannot hold a 30-day session.
   app.use('/api/clifree-fleet', clifreeFleetRouter);
+  // Same reason: an unattended discovery agent holds its own narrow token,
+  // not a dashboard session. Auth and the extension gate live in the router.
+  app.use('/api/discovery', discoveryRouter);
   app.use('/api/analysis', requireAuth, analysisRouter);
   app.use('/api/settings', requireAuth, settingsRouter);
   app.use('/api/premium', requireAuth, premiumRouter);

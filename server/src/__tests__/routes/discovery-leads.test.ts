@@ -3,94 +3,140 @@ import express from 'express';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { initDb, getDb } from '../../db/index.js';
-import { requireAuth } from '../../middleware/requireAuth.js';
-import { modelsRouter } from '../../routes/models.js';
+import { discoveryRouter } from '../../routes/discovery.js';
+import { setExtensionEnabled } from '../../services/extension-state.js';
+import { providerFromSource } from '../../services/external-model-discovery.js';
 import { mintDashboardToken } from '../helpers/auth.js';
 
-// The discovery API is what an agent writes to, so its contract is the one an
-// unattended caller depends on: re-posting the same finding must update rather
-// than duplicate, status counts cover the whole table, bad input is a 400 that
-// writes nothing, and an unknown id is a 404 rather than a silent success.
+// The discovery API is what an unattended agent writes to, so its contract is
+// the one that caller depends on and the operator is protected by:
+//   - re-posting the same finding updates rather than duplicates;
+//   - the agent token can add leads and change only the leads an agent wrote,
+//     never the operator's;
+//   - the token cannot manage itself, and a revoked token stops working;
+//   - switching the extension off closes the API to both callers.
 
-describe('discovery leads API', () => {
+describe('discovery API', () => {
   let server: Server;
   let url: string;
-  let token: string;
+  let session: string;
 
   beforeAll(async () => {
     process.env.ENCRYPTION_KEY = '0'.repeat(64);
     initDb(':memory:');
-    token = mintDashboardToken();
+    session = mintDashboardToken();
     const app = express();
     app.use(express.json());
-    app.use('/api/models', requireAuth, modelsRouter);
+    app.use('/api/discovery', discoveryRouter);
     server = app.listen(0, '127.0.0.1');
     await new Promise<void>(resolve => { server.once('listening', resolve); });
     url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   });
 
   afterAll(async () => {
+    setExtensionEnabled('external-model-discovery', true);
     await new Promise<void>((resolve, reject) => { server.close(error => (error ? reject(error) : resolve())); });
   });
 
-  const call = (path: string, init: RequestInit = {}) => fetch(`${url}${path}`, {
+  const call = (token: string | null, path: string, init: RequestInit = {}) => fetch(`${url}/api/discovery${path}`, {
     ...init,
-    headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'content-type': 'application/json' },
   });
+  const post = (token: string, body: unknown) => call(token, '/leads', { method: 'POST', body: JSON.stringify(body) });
   const count = () => (getDb().prepare('SELECT COUNT(*) AS n FROM external_model_leads').get() as { n: number }).n;
 
-  it('upserts on (source, modelId) so an agent can re-run without duplicating', async () => {
-    const lead = { source: 'https://opencode.ai/docs/zen', modelId: 'big-pickle', notes: 'Free in stealth', addedBy: 'agent' };
-    const first = await call('/api/models/discovery/leads', { method: 'POST', body: JSON.stringify(lead) });
-    expect(first.status).toBe(200);
-    const again = await call('/api/models/discovery/leads', {
-      method: 'POST',
-      body: JSON.stringify({ ...lead, status: 'testing', notes: 'Probe pending' }),
-    });
-    const body = await again.json() as { id: number; status: string; notes: string; addedBy: string };
+  async function mintAgent(): Promise<string> {
+    const res = await call(session, '/agent-token', { method: 'POST' });
+    expect(res.status).toBe(200);
+    return ((await res.json()) as { token: string }).token;
+  }
+
+  it('refuses a caller with neither a session nor the agent token', async () => {
+    expect((await call(null, '/leads')).status).toBe(401);
+    expect((await call('fld_not-the-token', '/leads')).status).toBe(401);
+  });
+
+  it('upserts on (source, modelId) so a re-run updates instead of duplicating', async () => {
+    const lead = { source: 'https://opencode.ai/docs/zen', modelId: 'big-pickle', notes: 'Free in stealth' };
+    expect((await post(session, lead)).status).toBe(200);
+    const again = await post(session, { ...lead, status: 'testing', notes: 'Probe pending' });
     expect(count()).toBe(1);
-    expect(body).toMatchObject({ status: 'testing', notes: 'Probe pending', addedBy: 'agent' });
+    expect(await again.json()).toMatchObject({ status: 'testing', notes: 'Probe pending', addedBy: 'user' });
   });
 
-  it('lists leads with status counts over the whole table, not the page', async () => {
-    await call('/api/models/discovery/leads', {
-      method: 'POST',
-      body: JSON.stringify({ source: 'OpenRouter stealth page', modelId: 'space-bunny-alpha', status: 'rejected' }),
-    });
-    const res = await call('/api/models/discovery/leads?limit=1');
-    const page = await res.json() as { leads: unknown[]; total: number; byStatus: Record<string, number> };
-    expect(page.leads).toHaveLength(1);
-    expect(page.total).toBe(2);
-    expect(page.byStatus).toMatchObject({ testing: 1, rejected: 1, candidate: 0 });
+  it('derives the provider from the source URL when none is given, and keeps a named one', async () => {
+    const derived = await (await call(session, '/leads')).json() as { leads: Array<{ modelId: string; provider: string }> };
+    expect(derived.leads.find(l => l.modelId === 'big-pickle')?.provider).toBe('opencode');
+    const named = await post(session, { source: 'OpenRouter stealth page', modelId: 'space-bunny-alpha', provider: 'OpenRouter', status: 'rejected' });
+    expect(await named.json()).toMatchObject({ provider: 'openrouter' });
+    expect(providerFromSource('https://blog.anyrouter.dev/anyrouter-snapshot')).toBe('anyrouter');
+    expect(providerFromSource('not a url')).toBeNull();
   });
 
-  it('rejects a lead without a model id and writes nothing', async () => {
+  it('filters by provider and counts statuses across the whole table', async () => {
+    const res = await call(session, '/leads?provider=opencode');
+    const page = await res.json() as { leads: Array<{ modelId: string }>; total: number; byStatus: Record<string, number> };
+    expect(page.leads.map(l => l.modelId)).toEqual(['big-pickle']);
+    expect(page.byStatus).toMatchObject({ testing: 1, rejected: 1 });
+  });
+
+  it('records agent leads as the agent, whatever the body claims', async () => {
+    const agent = await mintAgent();
+    const res = await post(agent, { source: 'https://vercel.com/ai-gateway', modelId: 'stealth/glyph-cluster', addedBy: 'user' });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ addedBy: 'agent', provider: 'vercel' });
+  });
+
+  it('lets the agent change and remove its own leads but not the operator’s', async () => {
+    const agent = await mintAgent();
+    const own = (await (await post(agent, { source: 'https://anyrouter.dev', modelId: 'stealth/space-bunny-alpha' })).json()) as { id: number };
+    const operators = getDb().prepare("SELECT id FROM external_model_leads WHERE added_by = 'user' LIMIT 1").get() as { id: number };
+
+    expect((await call(agent, `/leads/${own.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'verified' }) })).status).toBe(200);
+    expect((await call(agent, `/leads/${operators.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'added' }) })).status).toBe(403);
+    expect((await call(agent, `/leads/${operators.id}`, { method: 'DELETE' })).status).toBe(403);
     const before = count();
-    const res = await call('/api/models/discovery/leads', { method: 'POST', body: JSON.stringify({ source: 'x' }) });
-    expect(res.status).toBe(400);
+    expect((await post(agent, { source: 'https://opencode.ai/docs/zen', modelId: 'big-pickle', status: 'rejected' })).status).toBe(403);
+    expect(count()).toBe(before);
+    expect((getDb().prepare("SELECT status FROM external_model_leads WHERE model_id = 'big-pickle'").get() as { status: string }).status).toBe('testing');
+
+    expect((await call(agent, `/leads/${own.id}`, { method: 'DELETE' })).status).toBe(200);
+    expect(count()).toBe(before - 1);
+  });
+
+  it('keeps token management with the operator, and a revoked token stops working', async () => {
+    const agent = await mintAgent();
+    expect((await call(agent, '/agent-token', { method: 'POST' })).status).toBe(403);
+    expect((await call(agent, '/agent-token')).status).toBe(403);
+    const replacement = await mintAgent();
+    expect((await call(agent, '/leads')).status).toBe(401);
+    expect((await call(replacement, '/leads')).status).toBe(200);
+    const revoked = await call(session, '/agent-token', { method: 'DELETE' });
+    expect(await revoked.json()).toEqual({ active: false, createdAt: null });
+    expect((await call(replacement, '/leads')).status).toBe(401);
+  });
+
+  it('stores only the token hash', async () => {
+    const agent = await mintAgent();
+    const stored = getDb().prepare("SELECT value FROM settings WHERE key = 'discovery_agent_token_hash'").get() as { value: string };
+    expect(stored.value).not.toContain(agent.slice(4));
+    expect(stored.value).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('rejects bad input without writing, and answers 404 for an unknown id', async () => {
+    const before = count();
+    expect((await post(session, { source: 'x' })).status).toBe(400);
+    expect((await call(session, '/leads/1', { method: 'PATCH', body: JSON.stringify({ status: 'shipped' }) })).status).toBe(400);
+    expect((await call(session, '/leads/9999', { method: 'DELETE' })).status).toBe(404);
     expect(count()).toBe(before);
   });
 
-  it('rejects a status outside the lifecycle', async () => {
-    const res = await call('/api/models/discovery/leads/1', { method: 'PATCH', body: JSON.stringify({ status: 'shipped' }) });
-    expect(res.status).toBe(400);
-  });
-
-  it('patches only the fields sent', async () => {
-    const res = await call('/api/models/discovery/leads/1', { method: 'PATCH', body: JSON.stringify({ status: 'verified' }) });
-    const lead = await res.json() as { status: string; notes: string };
-    expect(lead).toMatchObject({ status: 'verified', notes: 'Probe pending' });
-  });
-
-  it('answers 404 for an id that does not exist, on both patch and delete', async () => {
-    expect((await call('/api/models/discovery/leads/9999', { method: 'PATCH', body: JSON.stringify({ status: 'added' }) })).status).toBe(404);
-    expect((await call('/api/models/discovery/leads/9999', { method: 'DELETE' })).status).toBe(404);
-  });
-
-  it('deletes a lead', async () => {
-    const before = count();
-    const res = await call('/api/models/discovery/leads/1', { method: 'DELETE' });
-    expect(res.status).toBe(200);
-    expect(count()).toBe(before - 1);
+  it('closes to both callers when the extension is switched off', async () => {
+    const agent = await mintAgent();
+    setExtensionEnabled('external-model-discovery', false);
+    expect((await call(session, '/leads')).status).toBe(404);
+    expect((await call(agent, '/leads')).status).toBe(404);
+    setExtensionEnabled('external-model-discovery', true);
+    expect((await call(agent, '/leads')).status).toBe(200);
   });
 });
