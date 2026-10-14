@@ -11,6 +11,7 @@ import { FieldError } from '@/components/ui/field-error'
 import { CardSkeleton } from '@/components/ui/skeleton'
 import { usePremium } from '@/hooks/use-premium'
 import { CatalogueSyncs } from '@/components/catalogue-syncs'
+import { CatalogueLogPanel } from '@/components/catalogue-log'
 import { ExternalDiscoverySection } from '@/components/external-discovery'
 import { SyncOutcome, type SyncResultView } from '@/components/sync-outcome'
 import { useI18n } from '@/i18n'
@@ -137,6 +138,9 @@ export default function PremiumPage() {
             <CatalogueSyncs />
           </div>
         </section>
+
+        {/* Every model event, including the ones no feed document carries. */}
+        <CatalogueLogPanel />
 
         {/* Leads from outside the feed, where an agent drops what it finds. */}
         <ExternalDiscoverySection title={t('premium.externalDiscovery')} />

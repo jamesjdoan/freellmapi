@@ -1305,7 +1305,8 @@
     "syncPartOn": "{count} switched back on",
     "syncPartChanged": "~{count} changed",
     "discoveryHideIgnored": "Hide ignored",
-    "discoveryAddByHand": "Add a lead by hand"
+    "discoveryAddByHand": "Add a lead by hand",
+    "modelHistory": "Model history"
   },
   "languages": {
     "en": "English",
@@ -1710,7 +1711,7 @@
     "changesShowRecent": "Show only the recent ones",
     "changesMarkRead": "Mark {count} read",
     "changesMarkReadConfirm": "Mark as read",
-    "changesMarkReadHint": "Marks every change on this panel as read. Nothing is deleted — the catalogue log keeps the full record.",
+    "changesMarkReadHint": "Marks every change on this panel as read. Nothing is deleted — Model history on the Premium page keeps the full record.",
     "showDetail": "Show the changes",
     "hideDetail": "Hide the changes",
     "logSummary": "{total} changes across {providers} providers",

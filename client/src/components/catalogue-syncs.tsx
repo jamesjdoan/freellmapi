@@ -9,7 +9,7 @@ import { parseSqliteUtc } from '@/lib/time-tree'
 
 // One row per applied catalog document, on the Premium page.
 //
-// The catalogue log on the chat-models page records what happened to each
+// The model history below it on the same page records what happened to each
 // MODEL; this records what each catalog UPDATE brought: when the document
 // landed, from which tier, and — diffed against the previously applied
 // document — which providers gained, lost, or quietly changed models. A

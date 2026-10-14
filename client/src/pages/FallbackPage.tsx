@@ -55,7 +55,6 @@ import { ReliabilityFloorControl } from '@/components/reliability-floor-control'
 import { ChainManager } from '@/components/chain-manager'
 import { addAlias, unmergeGroupKeys, type AliasMerge } from '@/lib/alias-merge'
 import { CatalogueChangesPanel } from '@/components/catalogue-changes'
-import { CatalogueLogPanel } from '@/components/catalogue-log'
 
 // `tKey` is the i18n suffix under `strategies.*` (label) and `strategies.*Blurb`.
 // It differs from the routing `key` for Manual, whose strategy id is 'priority'.
@@ -670,10 +669,6 @@ export default function FallbackPage() {
             auto-routed, or a retirement that took a chain head with it, is the
             reason you are here. Renders nothing when neither happened. */}
         <CatalogueChangesPanel />
-
-        {/* The full history behind the panel above: same events, folded by
-            year/month/week so a long log stays readable. */}
-        <CatalogueLogPanel />
 
         {/* Named fallback chains (#960/#895): list/create/activate/delete.
             Activating a chain makes the table below edit that chain. */}

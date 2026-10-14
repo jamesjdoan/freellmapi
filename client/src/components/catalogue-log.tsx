@@ -14,9 +14,11 @@ import { useExtensionEnabled } from '@/lib/use-extension'
 // The catalogue's history: every model that arrived, was retired, removed or
 // relisted, and when.
 //
-// Distinct from the changes panel above it, which is a worklist of the recent
-// and unacknowledged. This is the whole record, and it answers the question the
-// panel cannot: what has this provider been doing over time.
+// Lives on the Premium page, beside the per-update log: that one says what
+// each feed document changed; this one is every model event, including the
+// ones no document carries — a provider's own end-of-life response, a relist,
+// an operator's delete. The Models page keeps only the changes worklist, the
+// part that needs a routing decision.
 //
 // It exists because one departure path used to record nothing at all — catalog
 // sync deletes models the upstream catalogue has stopped listing, so a provider
@@ -80,7 +82,9 @@ export function CatalogueLogPanel() {
   if (!data || data.byPlatform.length === 0) return null
 
   return (
-    <section className="rounded-xl border p-4">
+    <section>
+      <h2 className="text-sm font-medium mb-3">{t('premium.modelHistory')}</h2>
+      <div className="rounded-3xl border bg-card p-5">
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -91,7 +95,7 @@ export function CatalogueLogPanel() {
           {expanded ? <ChevronDown className="size-4 text-muted-foreground" />
                     : <ChevronRight className="size-4 text-muted-foreground" />}
           <History className="size-4 text-muted-foreground" />
-          <h2 className="text-sm font-medium">{t('catalogue.logTitle')}</h2>
+          <h3 className="text-sm font-medium">{t('catalogue.logTitle')}</h3>
           <span className="text-xs text-muted-foreground">
             {t('catalogue.logSummary', { total: filtering ? events.length : data.total, providers: providers.shown.length })}
           </span>
@@ -195,6 +199,7 @@ export function CatalogueLogPanel() {
           )}
         </div>
       </div>}
+      </div>
     </section>
   )
 }
