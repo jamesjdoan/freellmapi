@@ -1,4 +1,5 @@
 import { getDb } from '../db/index.js';
+import { ignoredSql } from './catalogue-ignores.js';
 import type { Db } from '../db/types.js';
 import type { RetiredChainMembership } from './model-state.js';
 
@@ -117,14 +118,16 @@ export function getCatalogueChanges(sinceDays = 30, db: Db = getDb()): Catalogue
       LEFT JOIN catalogue_ack a
              ON a.platform = m.platform AND a.model_id = m.model_id
      WHERE m.first_seen_at IS NOT NULL AND m.first_seen_at >= ?
+       AND NOT ${ignoredSql('m')}
      ORDER BY m.first_seen_at DESC, m.platform, m.model_id
   `).all(since) as ArrivedRow[];
 
   const departedRows = db.prepare(`
     SELECT platform, model_id, created_at, reason, chains_json,
            acknowledged_at
-      FROM catalog_model_tombstones
+      FROM catalog_model_tombstones t
      WHERE kind = 'chat' AND source = 'upstream_eol'
+       AND NOT ${ignoredSql('t')}
      ORDER BY created_at DESC
   `).all() as DepartedRow[];
 

@@ -92,6 +92,7 @@ Applied inside **one transaction** (`applyCatalog`):
 | Catalog models user deleted | Stay deleted via **tombstones** (`catalog_model_tombstones` table) |
 | Auto-retired (410/end-of-life) | **Disabled, not deleted** — catalog listing them enabled lifts retirement (#634) |
 | Models vanished from catalog | **Deleted** (fallback_config first, FK order) |
+| Ignored provider or model (Imperium, `catalogue_ignores`) | **Kept off** — `enforceCatalogueIgnores` runs after `applyAllModelOverrides`, so an ignored provider's keys and models, and its new arrivals, stay disabled. Un-ignore restores only what the ignore switched off |
 
 ### Provenance Column (`source`)
 

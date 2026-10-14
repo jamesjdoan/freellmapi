@@ -84,6 +84,7 @@ async function renderList(syncs: unknown[], detailBody: unknown = detail) {
         changed: list.reduce<number>((n, s) => n + s.docChanged, 0),
         switchedOff: list.reduce<number>((n, s) => n + s.docSwitchedOff, 0),
         switchedOn: list.reduce<number>((n, s) => n + s.docSwitchedOn, 0),
+        hiddenIgnored: 0,
         lastAt: list.length ? '2026-10-13 09:40:02' : null,
         lastVersion: null,
       },

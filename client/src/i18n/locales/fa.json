@@ -1744,7 +1744,21 @@
     "syncsSwitchedOffModels": "Switched off by the feed",
     "syncsSwitchedOnModels": "Switched back on",
     "syncsTotalSwitchedOff": "Switched off",
-    "syncsTotalSwitchedOn": "Switched back on"
+    "syncsTotalSwitchedOn": "Switched back on",
+    "ignoreProvider": "Ignore provider",
+    "ignoreModel": "Ignore",
+    "ignoreLabel": "Ignore {name}",
+    "ignoreChecking": "Checking…",
+    "ignoreImpact": "Switches off keys: {keys}, models: {models}.",
+    "ignoreImpactChains": "Leaves chains: {chains}.",
+    "ignoreConfirm": "Ignore and switch off",
+    "ignoreCancel": "Cancel",
+    "ignoredTitle": "Ignored providers and models",
+    "ignoredHidden": "({count} changes hidden from these totals)",
+    "ignoredWholeProvider": "whole provider",
+    "ignoredSwitchedOff": "switched off keys: {keys}, models: {models}",
+    "unignore": "Un-ignore",
+    "unignoreLabel": "Un-ignore {name}"
   },
   "quota": {
     "title": "Quota",

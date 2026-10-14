@@ -1,6 +1,7 @@
 import { getDb } from '../db/index.js';
 import type { Db } from '../db/types.js';
 import type { RetiredChainMembership } from './model-state.js';
+import { ignoredSql } from './catalogue-ignores.js';
 
 // An append-only history of models entering and leaving the catalogue.
 //
@@ -126,7 +127,9 @@ export function listCatalogueEvents(query: CatalogueLogQuery = {}, db: Db = getD
   const limit = Math.min(Math.max(query.limit ?? 100, 1), MAX_LIMIT);
   const offset = Math.max(query.offset ?? 0, 0);
 
-  const where: string[] = [];
+  // Ignored providers and models are out of the history: the operator said
+  // they are never going to be used, so their churn is noise.
+  const where: string[] = [`NOT ${ignoredSql('catalogue_event')}`];
   const params: unknown[] = [];
   if (query.platform) { where.push('platform = ?'); params.push(query.platform); }
   if (query.kind) { where.push('kind = ?'); params.push(query.kind); }
@@ -150,6 +153,7 @@ export function listCatalogueEvents(query: CatalogueLogQuery = {}, db: Db = getD
            SUM(CASE WHEN kind IN ('arrived', 'relisted') THEN 1 ELSE 0 END) AS arrived,
            SUM(CASE WHEN kind IN ('retired', 'removed') THEN 1 ELSE 0 END) AS departed
       FROM catalogue_event
+     WHERE NOT ${ignoredSql('catalogue_event')}
      GROUP BY platform
      ORDER BY COUNT(*) DESC, platform
   `).all() as { platform: string; arrived: number; departed: number }[];

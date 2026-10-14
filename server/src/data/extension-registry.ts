@@ -351,14 +351,14 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
   {
     id: 'catalogue-log',
     title: 'Catalogue arrival, departure and sync log',
-    summary: 'An append-only history of models entering and leaving the catalogue, folded by year, month, week and day — plus one row per applied catalog document saying what it changed against the document before it — models added, removed, switched off or back on by the feed, and edited — per provider, grouped by day. The two existing surfaces report what the catalogue holds NOW and cannot answer what happened last week; a departure is captured with the chains it was serving, because a deleted row leaves nothing to read afterwards, and a quiet quota cut on a surviving row appears nowhere but the sync log.',
+    summary: 'An append-only history of models entering and leaving the catalogue, folded by year, month, week and day — plus one row per applied catalog document saying what it changed against the document before it — models added, removed, switched off or back on by the feed, and edited — per provider, grouped by day. A provider or model can be ignored from there: that switches its keys and models off for routing, keeps them off across catalog syncs, and drops it from these views; un-ignoring restores exactly what it switched off. The two existing surfaces report what the catalogue holds NOW and cannot answer what happened last week; a departure is captured with the chains it was serving, because a deleted row leaves nothing to read afterwards, and a quiet quota cut on a surviving row appears nowhere but the sync log.',
     settingsLocation: 'Premium → Catalog updates and Model history',
     destinations: [{ kind: 'internal', label: 'Open the catalogue history', href: '/premium' }],
     category: 'presentation',
     defaultEnabled: true,
-    offBehaviour: 'The panel is hidden; events keep being recorded so the history stays complete.',
+    offBehaviour: 'The panels are hidden; events and update rows keep being recorded so the history stays complete. Ignored providers and models stay switched off: an ignore is a routing decision, not a view setting.',
     takesEffect: 'Next page load.',
-    codeLocations: ['server/src/services/catalogue-log.ts', 'server/src/services/catalogue-sync-log.ts', 'client/src/components/catalogue-log.tsx', 'client/src/components/catalogue-syncs.tsx', 'client/src/lib/time-tree.ts'],
+    codeLocations: ['server/src/services/catalogue-log.ts', 'server/src/services/catalogue-sync-log.ts', 'server/src/services/catalogue-ignores.ts', 'client/src/components/catalogue-log.tsx', 'client/src/components/catalogue-syncs.tsx', 'client/src/components/catalogue-ignore.tsx', 'client/src/lib/time-tree.ts'],
     disableConfirmation: 'none',
   },
   {

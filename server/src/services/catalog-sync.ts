@@ -8,6 +8,7 @@ import type { Platform } from '@freellmapi/shared/types.js';
 import { REFERENCE_ONLY_PLATFORMS } from '../data/reference-only-platforms.js';
 import type { Scheduler } from '../lib/scheduler.js';
 import { recordCatalogueEvent } from './catalogue-log.js';
+import { enforceCatalogueIgnores } from './catalogue-ignores.js';
 import { recordCatalogueSync } from './catalogue-sync-log.js';
 import type { CatalogDocDiff, CatalogFieldChange, CatalogMember, CatalogRegistry } from './catalogue-sync-log.js';
 import {
@@ -836,6 +837,9 @@ function applyCatalogInner(db: Db, catalog: Catalog): NonNullable<SyncResult['co
 
     counts.removed += deleteTombstonedCatalogModels(db);
     applyAllModelOverrides(db);
+    // Providers and models the operator ignored stay off: an update cannot
+    // switch them back on, and an ignored provider's new arrivals land off.
+    enforceCatalogueIgnores(db);
 
     // Ensure every model has a fallback_config row (same invariant migrations keep).
     const missingFb = db

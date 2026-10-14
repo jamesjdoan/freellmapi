@@ -5,6 +5,7 @@ import { apiFetch } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { PlatformDot } from '@/components/platform-dot'
 import { formatStamp } from '@/lib/stamp'
+import { CatalogueIgnoresList, IgnoreButton } from '@/components/catalogue-ignore'
 import { parseSqliteUtc } from '@/lib/time-tree'
 
 // One row per applied catalog document, on the Premium page.
@@ -53,6 +54,8 @@ interface CatalogueSyncTotals {
   changed: number
   switchedOff: number
   switchedOn: number
+  /** Changes left out because their provider or model is ignored. */
+  hiddenIgnored: number
   lastAt: string | null
   lastVersion: string | null
 }
@@ -114,12 +117,14 @@ function ChurnCounts({ churn }: { churn: Churn }) {
 }
 
 function ModelLine({ sign, tone, member }: { sign: string; tone: string; member: Member }) {
+  const { t } = useI18n()
   return (
     <li className="flex flex-wrap items-baseline gap-x-2">
       <span className={`w-3 text-center font-medium ${tone}`}>{sign}</span>
       {member.n && <span>{member.n}</span>}
       <code className="text-muted-foreground">{member.m}</code>
       {member.r !== 'chat' && <Badge variant="outline" className="text-[10px]">{member.r}</Badge>}
+      <span className="ml-auto"><IgnoreButton platform={member.p} modelId={member.m} label={t('catalogue.ignoreModel')} /></span>
     </li>
   )
 }
@@ -148,6 +153,7 @@ function ProviderGroup({ provider, churn, detail, open }: {
         <PlatformDot platform={provider} />
         <span className="font-medium">{provider}</span>
         <ChurnCounts churn={churn} />
+        <span className="ml-auto"><IgnoreButton platform={provider} modelId={null} label={t('catalogue.ignoreProvider')} /></span>
       </summary>
       <div className="mt-1 space-y-2 pb-1 pl-5 text-[11px]">
         {added.length > 0 && (
@@ -179,7 +185,7 @@ function ProviderGroup({ provider, churn, detail, open }: {
             <h5 className="text-muted-foreground">{t('catalogue.syncsChangedModels')}</h5>
             <ul className="space-y-0.5">
               {changedModels.map(model => (
-                <li key={model}>
+                <li key={model} className="flex flex-wrap items-baseline gap-x-2">
                   <code className="text-muted-foreground">{model}</code>
                   {changes.filter(d => d.m === model).map(d => (
                     <span key={d.f} className="ml-2">
@@ -189,6 +195,7 @@ function ProviderGroup({ provider, churn, detail, open }: {
                       <code className="text-emerald-600 dark:text-emerald-400">{valueOf(d.n)}</code>
                     </span>
                   ))}
+                  <span className="ml-auto"><IgnoreButton platform={provider} modelId={model} label={t('catalogue.ignoreModel')} /></span>
                 </li>
               ))}
             </ul>
@@ -313,6 +320,7 @@ export function CatalogueSyncs() {
         )}
       </div>
       <p className="mt-3 text-[11px] text-muted-foreground">{t('catalogue.syncsHint')}</p>
+      <CatalogueIgnoresList hidden={totals.hiddenIgnored} />
       <div className="mt-2 space-y-3">
         {groupByDay(data.syncs).map(([day, syncs]) => {
           const dayChurn = syncs.map(churnOf).reduce<Churn>(

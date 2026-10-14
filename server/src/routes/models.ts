@@ -2,6 +2,12 @@ import { Router } from 'express';
 import { getCatalogueChanges, acknowledgeDeparture, acknowledgeArrivals, acknowledgeDepartures } from '../services/catalogue-changes.js';
 import { listCatalogueEvents } from '../services/catalogue-log.js';
 import { listCatalogueSyncs, getCatalogueSync } from '../services/catalogue-sync-log.js';
+import {
+  ignoreInCatalogue,
+  listCatalogueIgnores,
+  previewIgnore,
+  unignoreInCatalogue,
+} from '../services/catalogue-ignores.js';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import type { Platform } from '@freellmapi/shared/types.js';
@@ -255,6 +261,58 @@ modelsRouter.delete('/custom/:id', (req: Request, res: Response) => {
   remove();
   res.json({ success: true });
 });
+
+// Registered before the `/:id` routes: `DELETE /:id` would otherwise read
+// "catalogue-ignores" as a model id.
+const ignoreTargetSchema = z.object({
+  platform: z.string().trim().min(1, 'platform is required').max(80),
+  modelId: z.string().trim().min(1).max(256).nullish(),
+});
+
+/**
+ * Providers and models the operator never wants to use. Ignoring switches off
+ * the provider's keys and the models, keeps them off across catalog syncs, and
+ * drops them from the catalogue views. Un-ignoring restores exactly what the
+ * ignore switched off.
+ */
+modelsRouter.get('/catalogue-ignores', (_req: Request, res: Response) => {
+  res.json({ ignores: listCatalogueIgnores() });
+});
+
+/** What ignoring would switch off, for the confirm step. Changes nothing. */
+modelsRouter.get('/catalogue-ignores/preview', (req: Request, res: Response) => {
+  const parsed = ignoreTargetSchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
+    return;
+  }
+  res.json(previewIgnore(parsed.data.platform, parsed.data.modelId ?? null));
+});
+
+modelsRouter.post('/catalogue-ignores', (req: Request, res: Response) => {
+  const parsed = ignoreTargetSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
+    return;
+  }
+  const impact = ignoreInCatalogue(parsed.data.platform, parsed.data.modelId ?? null);
+  res.json({ ignored: true, switchedOff: impact });
+});
+
+modelsRouter.delete('/catalogue-ignores', (req: Request, res: Response) => {
+  const parsed = ignoreTargetSchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
+    return;
+  }
+  const restored = unignoreInCatalogue(parsed.data.platform, parsed.data.modelId ?? null);
+  if (!restored) {
+    res.status(404).json({ error: { message: 'That provider or model is not ignored' } });
+    return;
+  }
+  res.json({ ignored: false, restored });
+});
+
 
 modelsRouter.patch('/:id', async (req: Request, res: Response) => {
   const id = Number(req.params.id);
@@ -573,6 +631,8 @@ modelsRouter.get('/', (_req: Request, res: Response) => {
     overrideFields: overriddenFieldNames(m.overrides_json),
     hasProvider: hasProvider(m.platform),
     keyCount: keyCountMap.get(m.platform) ?? 0,
+    // The operator never wants this provider or model: it is off and stays
+    // off across syncs. Shown, labelled, so the routing picture is honest.
   }));
 
   res.json(result);

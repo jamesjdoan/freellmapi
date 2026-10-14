@@ -80,6 +80,7 @@ import * as catalogueSyncMembers from '../migrations/20261014_000002_catalogue_s
 import * as externalLeadProvider from '../migrations/20261014_000003_external_lead_provider.js';
 import * as externalLeadIgnores from '../migrations/20261014_000004_external_lead_ignores.js';
 import * as catalogueSyncSwitches from '../migrations/20261014_000005_catalogue_sync_switches.js';
+import * as catalogueIgnores from '../migrations/20261014_000006_catalogue_ignores.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -245,4 +246,5 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: '20261014_000003_external_lead_provider.ts', module: externalLeadProvider },
   { filename: '20261014_000004_external_lead_ignores.ts', module: externalLeadIgnores },
   { filename: '20261014_000005_catalogue_sync_switches.ts', module: catalogueSyncSwitches },
+  { filename: '20261014_000006_catalogue_ignores.ts', module: catalogueIgnores },
 ];

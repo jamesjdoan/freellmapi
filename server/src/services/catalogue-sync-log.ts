@@ -1,5 +1,6 @@
 import { getDb } from '../db/index.js';
 import type { Db } from '../db/types.js';
+import { isIgnored, loadIgnoreSets, type IgnoreSets } from './catalogue-ignores.js';
 
 // The sync-level companion to catalogue-log: one row per APPLIED catalog
 // document, with what the feed changed vs the previous document and what the
@@ -124,6 +125,8 @@ export interface CatalogueSyncTotals {
   changed: number;
   switchedOff: number;
   switchedOn: number;
+  /** Model changes left out because their provider or model is ignored. */
+  hiddenIgnored: number;
   lastAt: string | null;
   lastVersion: string | null;
 }
@@ -244,40 +247,83 @@ export function recordCatalogueSync(db: Db, input: CatalogueSyncInput): void {
   }
 }
 
+const churnWeight = (c: PlatformChurn) => c.a + c.r + c.c + (c.off ?? 0) + (c.on ?? 0);
+
+/**
+ * A sync row with ignored providers and models taken out. A provider is
+ * dropped whole; an ignored model's own arrivals, departures, on/off flips and
+ * edits are subtracted from its provider, using the row's stored names and
+ * field changes. Counts are then re-summed from what is left.
+ */
+function withoutIgnored(row: SyncDbRow, sets: IgnoreSets): { row: CatalogueSyncRow; hidden: number; members: CatalogMembers | null; details: CatalogFieldChange[] } {
+  const base = toRow(row);
+  const members = parseJson<CatalogMembers | null>(row.members_json, null);
+  const details = parseJson<CatalogFieldChange[]>(row.details_json, []);
+  const before = Object.values(base.byPlatform).reduce((n, c) => n + churnWeight(c), 0);
+  if (sets.providers.size === 0 && sets.models.size === 0) return { row: base, hidden: 0, members, details };
+
+  const byPlatform: Record<string, PlatformChurn> = {};
+  for (const [platform, churn] of Object.entries(base.byPlatform)) {
+    if (!sets.providers.has(platform)) byPlatform[platform] = { ...churn, off: churn.off ?? 0, on: churn.on ?? 0 };
+  }
+  const subtract = (platform: string, k: keyof PlatformChurn) => {
+    const churn = byPlatform[platform];
+    if (churn && (churn[k] ?? 0) > 0) churn[k] = (churn[k] ?? 0) - 1;
+  };
+  for (const m of members?.added ?? []) if (!sets.providers.has(m.p) && isIgnored(sets, m.p, m.m)) subtract(m.p, 'a');
+  for (const m of members?.removed ?? []) if (!sets.providers.has(m.p) && isIgnored(sets, m.p, m.m)) subtract(m.p, 'r');
+  const editedIgnored = new Set<string>();
+  for (const d of details) {
+    if (sets.providers.has(d.p) || !isIgnored(sets, d.p, d.m)) continue;
+    if (d.f !== 'enabled') {
+      const key = `${d.r}:${d.p}:${d.m}`;
+      if (!editedIgnored.has(key)) { editedIgnored.add(key); subtract(d.p, 'c'); }
+    } else if (d.o === true && d.n === false) subtract(d.p, 'off');
+    else if (d.o === false && d.n === true) subtract(d.p, 'on');
+  }
+  for (const [platform, churn] of Object.entries(byPlatform)) if (churnWeight(churn) === 0) delete byPlatform[platform];
+
+  const sum = (k: keyof PlatformChurn) => Object.values(byPlatform).reduce((n, c) => n + (c[k] ?? 0), 0);
+  const after = Object.values(byPlatform).reduce((n, c) => n + churnWeight(c), 0);
+  return {
+    row: { ...base, byPlatform, docAdded: sum('a'), docRemoved: sum('r'), docChanged: sum('c'), docSwitchedOff: sum('off'), docSwitchedOn: sum('on') },
+    hidden: before - after,
+    members: members && {
+      added: members.added.filter(m => !isIgnored(sets, m.p, m.m)),
+      removed: members.removed.filter(m => !isIgnored(sets, m.p, m.m)),
+    },
+    details: details.filter(d => !isIgnored(sets, d.p, d.m)),
+  };
+}
+
 export function listCatalogueSyncs(query: CatalogueSyncQuery = {}, db: Db = getDb()): CatalogueSyncPage {
   const limit = Math.min(Math.max(1, query.limit ?? 50), MAX_LIMIT);
   const offset = Math.max(0, query.offset ?? 0);
+  // Every row, so the totals describe the whole log after ignores are taken
+  // out. The table grows by one row per applied document; this stays small.
   const rows = db.prepare(`
-    SELECT ${ROW_COLUMNS}
+    SELECT ${ROW_COLUMNS}, details_json, members_json
       FROM catalogue_sync
      ORDER BY at DESC, id DESC
-     LIMIT ? OFFSET ?
-  `).all(limit, offset) as SyncDbRow[];
-
-  const agg = db.prepare(`
-    SELECT COUNT(*) AS syncs,
-           COALESCE(SUM(doc_added), 0) AS added,
-           COALESCE(SUM(doc_removed), 0) AS removed,
-           COALESCE(SUM(doc_changed), 0) AS changed,
-           COALESCE(SUM(doc_switched_off), 0) AS switchedOff,
-           COALESCE(SUM(doc_switched_on), 0) AS switchedOn
-      FROM catalogue_sync
-  `).get() as { syncs: number; added: number; removed: number; changed: number; switchedOff: number; switchedOn: number };
-  const last = db.prepare('SELECT at, version FROM catalogue_sync ORDER BY at DESC, id DESC LIMIT 1')
-    .get() as { at: string; version: string } | undefined;
+  `).all() as SyncDbRow[];
+  const sets = loadIgnoreSets(db);
+  const filtered = rows.map(r => withoutIgnored(r, sets));
+  const sum = (k: 'docAdded' | 'docRemoved' | 'docChanged' | 'docSwitchedOff' | 'docSwitchedOn') =>
+    filtered.reduce((n, f) => n + f.row[k], 0);
 
   return {
-    syncs: rows.map(toRow),
-    total: agg.syncs,
+    syncs: filtered.slice(offset, offset + limit).map(f => f.row),
+    total: rows.length,
     totals: {
-      syncs: agg.syncs,
-      added: agg.added,
-      removed: agg.removed,
-      changed: agg.changed,
-      switchedOff: agg.switchedOff,
-      switchedOn: agg.switchedOn,
-      lastAt: last?.at ?? null,
-      lastVersion: last?.version ?? null,
+      syncs: rows.length,
+      added: sum('docAdded'),
+      removed: sum('docRemoved'),
+      changed: sum('docChanged'),
+      switchedOff: sum('docSwitchedOff'),
+      switchedOn: sum('docSwitchedOn'),
+      hiddenIgnored: filtered.reduce((n, f) => n + f.hidden, 0),
+      lastAt: rows[0]?.at ?? null,
+      lastVersion: rows[0]?.version ?? null,
     },
   };
 }
@@ -289,9 +335,6 @@ export function getCatalogueSync(id: number, db: Db = getDb()): CatalogueSyncDet
      WHERE id = ?
   `).get(id) as SyncDbRow | undefined;
   if (!row) return null;
-  return {
-    ...toRow(row),
-    details: parseJson<CatalogFieldChange[]>(row.details_json, []),
-    members: parseJson<CatalogMembers | null>(row.members_json, null),
-  };
+  const filtered = withoutIgnored(row, loadIgnoreSets(db));
+  return { ...filtered.row, details: filtered.details, members: filtered.members };
 }
