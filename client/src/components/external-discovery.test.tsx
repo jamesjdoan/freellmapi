@@ -4,15 +4,15 @@
 // tests pin what an operator relies on: leads are grouped by provider and the
 // groups fold away once there are several, agent rows are marked, a new lead
 // is posted with the fields typed, remove targets the row it sits on, and the
-// agent token is shown exactly once and can be revoked, and an ignored model
-// leaves the list for a collapsed group it can be brought back from.
+// agent token is shown exactly once and can be revoked, "Ignored" is a status
+// whose leads stay hidden until asked for, and the manual form is folded away.
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { I18nProvider } from '@/i18n'
 import { apiFetch } from '@/lib/api'
-import { ExternalDiscovery, groupByProvider, type ExternalLead, type IgnoredModel } from './external-discovery'
+import { ExternalDiscovery, groupByProvider, type ExternalLead } from './external-discovery'
 
 vi.mock('@/lib/api', () => ({ apiFetch: vi.fn() }))
 
@@ -29,6 +29,7 @@ afterEach(() => {
   root = null
   host = null
   vi.mocked(apiFetch).mockReset()
+  localStorage.clear()
 })
 
 const lead = (over: Partial<ExternalLead>): ExternalLead => ({
@@ -47,7 +48,6 @@ const leads: ExternalLead[] = [
 async function renderPanel(
   token: { active: boolean; createdAt: string | null } = { active: false, createdAt: null },
   rows = leads,
-  ignored: IgnoredModel[] = [],
 ) {
   host = document.createElement('div')
   document.body.append(host)
@@ -59,7 +59,9 @@ async function renderPanel(
       return token
     }
     if (!init?.method) {
-      return { leads: rows, total: rows.length, byStatus: { candidate: 2, testing: 0, verified: 0, rejected: 2, added: 0 }, ignored }
+      const byStatus = { candidate: 0, testing: 0, verified: 0, rejected: 0, added: 0, ignored: 0 }
+      for (const l of rows) byStatus[l.status]++
+      return { leads: rows, total: rows.length, byStatus }
     }
     return {}
   })
@@ -74,7 +76,7 @@ async function renderPanel(
     // message) and the token status (one of its two status lines).
     await vi.waitFor(() => {
       const text = host!.textContent ?? ''
-      const leadsIn = !!host!.querySelector('details') || text.includes('No leads recorded yet')
+      const leadsIn = [...host!.querySelectorAll('button')].some(b => b.textContent?.startsWith('All')) || text.includes('No leads recorded yet')
       const tokenIn = text.includes('No agent token') || text.includes('Agent token active since')
       if (!leadsIn || !tokenIn) throw new Error('not rendered yet')
     })
@@ -170,29 +172,53 @@ describe('ExternalDiscovery', () => {
     expect(calls('DELETE').map(([p]) => p)).toEqual(['/api/discovery/agent-token'])
   })
 
-  it('ignores a lead by its provider and model, not its source', async () => {
+  it('keeps the manual form folded away by default', async () => {
     await renderPanel()
-    await act(async () => { host!.querySelector<HTMLButtonElement>('button[aria-label="Ignore cat-jam-free"]')!.click() })
-    const [path, init] = calls('POST').find(([p]) => p === '/api/discovery/ignores')!
-    expect(path).toBe('/api/discovery/ignores')
-    expect(JSON.parse(String(init?.body))).toEqual({ provider: 'opencode', modelId: 'cat-jam-free' })
+    const form = host!.querySelector('form')!
+    const fold = form.closest('details')!
+    expect(fold.querySelector('summary')!.textContent).toBe('Add a lead by hand')
+    expect(fold.open).toBe(false)
   })
 
-  it('keeps ignored models in a collapsed group that can bring them back', async () => {
-    const ignored: IgnoredModel[] = [{ provider: 'opencode', modelId: 'cat-jam-free', at: '2026-10-14 05:00:00', reason: 'harness-only', hiddenLeads: 2 }]
-    await renderPanel(undefined, leads.filter(l => l.modelId !== 'cat-jam-free'), ignored)
-    const group = [...host!.querySelectorAll('details')].find(d => d.querySelector('summary')!.textContent?.startsWith('Ignored'))!
-    expect(group.open).toBe(false)
-    expect(group.textContent).toContain('cat-jam-free')
-    expect(group.textContent).toContain('2 hidden')
-    expect(group.textContent).toContain('harness-only')
-    await act(async () => { group.querySelector<HTMLButtonElement>('button[aria-label="Un-ignore cat-jam-free"]')!.click() })
-    expect(calls('DELETE').map(([p]) => p)).toEqual(['/api/discovery/ignores?provider=opencode&modelId=cat-jam-free'])
+  it('offers Ignored in the status dropdown and sends it as a status', async () => {
+    await renderPanel()
+    const select = host!.querySelector<HTMLSelectElement>('select[aria-label="Status for big-pickle"]')!
+    expect([...select.options].map(o => o.textContent)).toContain('Ignored')
+    await act(async () => {
+      select.value = 'ignored'
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    const [path, init] = calls('PATCH')[0]
+    expect(path).toBe('/api/discovery/leads/1')
+    expect(JSON.parse(String(init?.body))).toEqual({ status: 'ignored' })
   })
 
-  it('does not call the list empty when every lead is ignored', async () => {
-    await renderPanel(undefined, [], [{ provider: 'opencode', modelId: 'big-pickle', at: '2026-10-14 05:00:00', reason: null, hiddenLeads: 1 }])
-    expect(host!.textContent).not.toContain('No leads recorded yet')
-    expect(host!.textContent).toContain('Ignored')
+  const withIgnored = [...leads, lead({ id: 9, modelId: 'space-bunny-free', status: 'ignored', statusSetBy: 'user' })]
+  const rowFor = (model: string) => [...host!.querySelectorAll('li')].find(r => r.textContent?.includes(model))
+
+  it('hides ignored leads by default but still counts them', async () => {
+    await renderPanel(undefined, withIgnored)
+    expect(rowFor('space-bunny-free')).toBeUndefined()
+    expect([...host!.querySelectorAll('button')].map(b => b.textContent)).toContain('Ignored 1')
+    expect(host!.querySelector<HTMLInputElement>('input[type="checkbox"]')!.checked).toBe(true)
+  })
+
+  it('shows ignored leads when the toggle is cleared, and remembers the choice', async () => {
+    await renderPanel(undefined, withIgnored)
+    await act(async () => { host!.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click() })
+    expect(rowFor('space-bunny-free')).toBeDefined()
+    expect(localStorage.getItem('freellmapi_discovery_hide_ignored')).toBe('false')
+  })
+
+  it('shows ignored leads when their chip is chosen, even while hidden', async () => {
+    await renderPanel(undefined, withIgnored)
+    await act(async () => { button('Ignored 1')!.click() })
+    expect(rowFor('space-bunny-free')).toBeDefined()
+    expect(rowFor('big-pickle')).toBeUndefined()
+  })
+
+  it('offers no hide toggle when nothing is ignored', async () => {
+    await renderPanel()
+    expect(host!.querySelector('input[type="checkbox"]')).toBeNull()
   })
 })

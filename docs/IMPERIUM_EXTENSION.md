@@ -122,7 +122,7 @@ The additive migration is `server/src/db/migrations/20260902_000002_provider_acc
 | Provider free-model copy | `client/src/lib/provider-model-details-export.ts`, `client/src/components/keys/provider-model-details-copy-action.tsx` |
 | Free catalogue copy | `client/src/pages/KeysPage.tsx`, `client/src/components/keys/free-catalog-copy-action.tsx`, `client/src/lib/provider-model-details-export.ts`, `client/src/lib/model-scope-selection.ts` |
 | Catalogue event log | `server/src/services/catalogue-log.ts`, `server/src/db/migrations/20260910_000002_catalogue_event_log.ts`, `client/src/components/catalogue-log.tsx`, `client/src/lib/time-tree.ts` |
-| Catalogue sync log (Premium: per-update and per-provider changes) | `server/src/services/catalogue-sync-log.ts`, `server/src/services/catalog-sync.ts` (`diffCatalogs`), migrations `20261013_000001`, `20261014_000002`, `client/src/components/catalogue-syncs.tsx` |
+| Catalogue sync log (Premium: per-update and per-provider changes) | `server/src/services/catalogue-sync-log.ts`, `server/src/services/catalog-sync.ts` (`diffCatalogs`), migrations `20261013_000001`, `20261014_000002`, `20261014_000005` (switched off/on), `client/src/components/catalogue-syncs.tsx`, `client/src/components/sync-outcome.tsx` |
 | External model discovery (Premium) and agent token | `server/src/services/external-model-discovery.ts`, `server/src/routes/discovery.ts`, migrations `20261014_000001`, `20261014_000003`, `20261014_000004` (status owner, ignores), `client/src/components/external-discovery.tsx` |
 | Benchmark sync, matching and links | `server/src/services/analysis.ts`, `server/src/services/analysis-match.ts`, `server/src/routes/analysis.ts`, `server/src/db/migrations/20260911_000001_analysis_benchmarks.ts` |
 | Proxy scores and adjustments | `server/src/services/analysis.ts` (`setManualLink`, `setProxyDelta`, `findProxyUpgrades`), migrations `20260911_000004/000005/000006` |
@@ -138,7 +138,7 @@ The additive migration is `server/src/db/migrations/20260902_000002_provider_acc
 
 - Registry and rendered panel: `client/src/lib/extension-registry.test.tsx`
 - Catalogue event log: `server/src/__tests__/services/catalogue-log.test.ts`, `client/src/lib/time-tree.test.ts`, `client/src/components/time-tree-log.test.tsx`
-- Catalogue sync log: `server/src/__tests__/services/catalogue-sync-log.test.ts`, `client/src/components/catalogue-syncs.test.tsx`
+- Catalogue sync log: `server/src/__tests__/services/catalogue-sync-log.test.ts`, `client/src/components/catalogue-syncs.test.tsx`, `client/src/components/sync-outcome.test.tsx`
 - External discovery and agent token: `server/src/__tests__/routes/discovery-leads.test.ts`, `client/src/components/external-discovery.test.tsx`
 - Benchmark matching and links: `server/src/__tests__/services/analysis-match.test.ts`, `analysis-link.test.ts`, `analysis-grouped.test.ts`, `server/src/__tests__/routes/analysis-link.test.ts`
 - Proxy scores, adjustments and upgrade prompts: `server/src/__tests__/services/analysis-grouped.test.ts`

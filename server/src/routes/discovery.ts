@@ -5,13 +5,11 @@ import { isExtensionEnabled } from '../services/extension-state.js';
 import {
   agentTokenStatus,
   deleteExternalLead,
-  ignoreModel,
   isAgentToken,
   listExternalLeads,
   mintAgentToken,
   recordExternalLead,
   revokeAgentToken,
-  unignoreModel,
   updateExternalLead,
   type LeadActor,
   type LeadWriteResult,
@@ -56,7 +54,7 @@ function operatorOnly(_req: Request, res: Response<unknown, ActorLocals>, next: 
   next();
 }
 
-const LEAD_STATUSES = ['candidate', 'testing', 'verified', 'rejected', 'added'] as const;
+const LEAD_STATUSES = ['candidate', 'testing', 'verified', 'rejected', 'added', 'ignored'] as const;
 const LEAD_KINDS = ['chat', 'embedding', 'image', 'audio', 'transcription', 'video'] as const;
 
 const listSchema = z.object({
@@ -99,6 +97,9 @@ function sendResult(res: Response<unknown, ActorLocals>, result: LeadWriteResult
       return;
     case 'not_yours':
       res.status(403).json({ error: { message: 'An operator recorded this lead; the agent token can only change leads an agent recorded' } });
+      return;
+    case 'operator_only':
+      res.status(403).json({ error: { message: 'Only the operator can ignore a model or lift an ignore' } });
       return;
     case 'status_locked':
       res.status(409).json({ error: { message: 'The operator set this status; an agent can add notes but not change it' } });
@@ -163,36 +164,6 @@ discoveryRouter.delete('/leads/:id', (req: Request, res: Response<unknown, Actor
     return;
   }
   sendResult(res, deleteExternalLead(id.data, res.locals.actor));
-});
-
-const ignoreSchema = z.object({
-  provider: z.string().max(80).nullish(),
-  modelId: z.string().trim().min(1, 'modelId is required').max(256),
-  reason: z.string().max(500).nullish(),
-});
-
-/** Ignore a model wherever it turns up: hide its leads and skip agent posts. */
-discoveryRouter.post('/ignores', operatorOnly, (req: Request, res: Response) => {
-  const parsed = ignoreSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: { message: messageOf(parsed.error) } });
-    return;
-  }
-  ignoreModel(parsed.data.provider ?? null, parsed.data.modelId, parsed.data.reason ?? null);
-  res.json({ ignored: true });
-});
-
-discoveryRouter.delete('/ignores', operatorOnly, (req: Request, res: Response) => {
-  const parsed = ignoreSchema.pick({ provider: true, modelId: true }).safeParse(req.query);
-  if (!parsed.success) {
-    res.status(400).json({ error: { message: messageOf(parsed.error) } });
-    return;
-  }
-  if (!unignoreModel(parsed.data.provider ?? null, parsed.data.modelId)) {
-    res.status(404).json({ error: { message: 'That model is not ignored' } });
-    return;
-  }
-  res.json({ ignored: false });
 });
 
 discoveryRouter.get('/agent-token', operatorOnly, (_req: Request, res: Response) => {

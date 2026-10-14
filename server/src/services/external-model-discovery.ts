@@ -19,8 +19,14 @@ import { timingSafeStringEqual } from '../lib/system-prompt.js';
 //   - once the operator has set a lead's status, the agent cannot change it,
 //     only add notes;
 //   - a model the operator ignored is skipped, wherever the agent found it.
+//
+// "Ignored" is a status the operator picks, next to "rejected": rejected means
+// tested and it does not work; ignored means we will not use it whether or not
+// it works. Setting it records an ignore on (provider, model id) so the next
+// agent run skips the model from any source, and marks every lead of that
+// model; picking any other status lifts the ignore for all of them.
 
-export type LeadStatus = 'candidate' | 'testing' | 'verified' | 'rejected' | 'added';
+export type LeadStatus = 'candidate' | 'testing' | 'verified' | 'rejected' | 'added' | 'ignored';
 export type LeadKind = 'chat' | 'embedding' | 'image' | 'audio' | 'transcription' | 'video';
 export type LeadActor = 'user' | 'agent';
 
@@ -38,16 +44,6 @@ export interface ExternalLead {
   statusSetBy: LeadActor;
   notes: string | null;
   addedBy: LeadActor;
-}
-
-export interface IgnoredModel {
-  /** Lower-cased; '' when the lead had no provider. */
-  provider: string;
-  modelId: string;
-  at: string;
-  reason: string | null;
-  /** Leads currently hidden by this ignore. */
-  hiddenLeads: number;
 }
 
 export interface ExternalLeadInput {
@@ -77,7 +73,7 @@ export interface ExternalLeadQuery {
 
 export type LeadWriteResult =
   | { ok: true; lead: ExternalLead }
-  | { ok: false; reason: 'not_found' | 'not_yours' | 'status_locked' | 'ignored' };
+  | { ok: false; reason: 'not_found' | 'not_yours' | 'status_locked' | 'ignored' | 'operator_only' };
 
 interface LeadDbRow {
   id: number;
@@ -93,7 +89,7 @@ interface LeadDbRow {
   added_by: string;
 }
 
-const LEAD_STATUSES: readonly LeadStatus[] = ['candidate', 'testing', 'verified', 'rejected', 'added'];
+const LEAD_STATUSES: readonly LeadStatus[] = ['candidate', 'testing', 'verified', 'rejected', 'added', 'ignored'];
 const LEAD_COLUMNS = 'id, at, source, provider, model_id, display_name, kind, status, status_set_by, notes, added_by';
 const MAX_LIMIT = 200;
 const MAX_NOTES = 4000;
@@ -149,9 +145,9 @@ function leadById(db: Db, id: number): LeadDbRow | undefined {
   return db.prepare(`SELECT ${LEAD_COLUMNS} FROM external_model_leads WHERE id = ?`).get(id) as LeadDbRow | undefined;
 }
 
-/** Live candidates first; rejected leads keep their evidence but sink. */
+/** Live leads first, then rejected (kept as evidence), then ignored. */
 function byStatusThenRecency(a: ExternalLead, b: ExternalLead): number {
-  const rank = (l: ExternalLead) => (l.status === 'rejected' ? 1 : 0);
+  const rank = (l: ExternalLead) => (l.status === 'ignored' ? 2 : l.status === 'rejected' ? 1 : 0);
   return rank(a) - rank(b) || (a.at < b.at ? 1 : a.at > b.at ? -1 : b.id - a.id);
 }
 
@@ -159,48 +155,49 @@ export function listExternalLeads(query: ExternalLeadQuery = {}, db: Db = getDb(
   leads: ExternalLead[];
   total: number;
   byStatus: Record<LeadStatus, number>;
-  ignored: IgnoredModel[];
 } {
   const limit = Math.min(Math.max(1, query.limit ?? 200), MAX_LIMIT);
   const offset = Math.max(0, query.offset ?? 0);
-  const ignored = ignoredKeys(db);
-
   const all = (db.prepare(`SELECT ${LEAD_COLUMNS} FROM external_model_leads`).all() as LeadDbRow[]).map(toLead);
-  const visible = all.filter(l => !ignored.has(ignoreKey(l.provider, l.modelId)));
 
-  // Counted over every visible lead, so the status chips describe the list,
-  // not the page or the current filter.
-  const byStatus: Record<LeadStatus, number> = { candidate: 0, testing: 0, verified: 0, rejected: 0, added: 0 };
-  for (const lead of visible) byStatus[lead.status]++;
+  // Counted over every lead, so the status chips describe the list, not the
+  // page or the current filter.
+  const byStatus: Record<LeadStatus, number> = { candidate: 0, testing: 0, verified: 0, rejected: 0, added: 0, ignored: 0 };
+  for (const lead of all) byStatus[lead.status]++;
 
-  let leads = visible;
+  let leads = all;
   if (query.status) leads = leads.filter(l => l.status === query.status);
   if (query.provider) {
     const wanted = query.provider.toLowerCase();
     leads = leads.filter(l => l.provider === wanted);
   }
   leads.sort(byStatusThenRecency);
+  return { leads: leads.slice(offset, offset + limit), total: leads.length, byStatus };
+}
 
-  const hidden = new Map<string, number>();
-  for (const lead of all) {
-    const key = ignoreKey(lead.provider, lead.modelId);
-    if (ignored.has(key)) hidden.set(key, (hidden.get(key) ?? 0) + 1);
+/** Every lead of one model, matched on effective provider and model id. */
+function sameModelLeadIds(db: Db, provider: string | null, modelId: string): number[] {
+  const rows = db.prepare(`SELECT ${LEAD_COLUMNS} FROM external_model_leads WHERE model_id = ?`).all(modelId) as LeadDbRow[];
+  return rows.map(toLead).filter(l => l.provider === provider).map(l => l.id);
+}
+
+/**
+ * Keep the ignore record and every lead of the model in step with a status
+ * the operator just set: entering "ignored" records the ignore and marks all
+ * the model's leads; leaving it lifts the ignore and moves them all to the
+ * new status.
+ */
+function applyIgnoreTransition(db: Db, lead: ExternalLead, from: LeadStatus, to: LeadStatus): void {
+  if (from !== 'ignored' && to !== 'ignored') return;
+  const key = lead.provider ?? '';
+  if (to === 'ignored') {
+    db.prepare('INSERT OR IGNORE INTO external_model_ignores (provider, model_id) VALUES (?, ?)').run(key, lead.modelId);
+  } else {
+    db.prepare('DELETE FROM external_model_ignores WHERE provider = ? AND model_id = ?').run(key, lead.modelId);
   }
-  const ignoreRows = db.prepare('SELECT provider, model_id, at, reason FROM external_model_ignores ORDER BY at DESC')
-    .all() as Array<{ provider: string; model_id: string; at: string; reason: string | null }>;
-
-  return {
-    leads: leads.slice(offset, offset + limit),
-    total: leads.length,
-    byStatus,
-    ignored: ignoreRows.map(r => ({
-      provider: r.provider,
-      modelId: r.model_id,
-      at: r.at,
-      reason: r.reason,
-      hiddenLeads: hidden.get(ignoreKey(r.provider || null, r.model_id)) ?? 0,
-    })),
-  };
+  const ids = sameModelLeadIds(db, lead.provider, lead.modelId);
+  const mark = db.prepare("UPDATE external_model_leads SET status = ?, status_set_by = 'user' WHERE id = ?");
+  for (const id of ids) mark.run(to, id);
 }
 
 /** Append an agent's note once; a re-run posting the same text adds nothing. */
@@ -225,6 +222,7 @@ export function recordExternalLead(input: ExternalLeadInput, actor: LeadActor, d
   const provider = normaliseProvider(input.provider);
   const effectiveProvider = provider ?? providerFromSource(source);
   if (ignoredKeys(db).has(ignoreKey(effectiveProvider, modelId))) return { ok: false, reason: 'ignored' };
+  if (actor === 'agent' && input.status === 'ignored') return { ok: false, reason: 'operator_only' };
 
   const existing = db.prepare(`SELECT ${LEAD_COLUMNS} FROM external_model_leads WHERE source = ? AND model_id = ?`)
     .get(source, modelId) as LeadDbRow | undefined;
@@ -261,7 +259,9 @@ export function recordExternalLead(input: ExternalLeadInput, actor: LeadActor, d
 
   const row = db.prepare(`SELECT ${LEAD_COLUMNS} FROM external_model_leads WHERE source = ? AND model_id = ?`)
     .get(source, modelId) as LeadDbRow;
-  return { ok: true, lead: toLead(row) };
+  const lead = toLead(row);
+  if (lead.status === 'ignored') applyIgnoreTransition(db, lead, existing ? toLead(existing).status : 'candidate', 'ignored');
+  return { ok: true, lead: toLead(leadById(db, lead.id)!) };
 }
 
 export function updateExternalLead(id: number, patch: ExternalLeadPatch, actor: LeadActor, db: Db = getDb()): LeadWriteResult {
@@ -269,6 +269,9 @@ export function updateExternalLead(id: number, patch: ExternalLeadPatch, actor: 
   if (!existing) return { ok: false, reason: 'not_found' };
   if (actor === 'agent' && existing.added_by !== 'agent') return { ok: false, reason: 'not_yours' };
   const statusChanges = patch.status !== undefined && patch.status !== existing.status;
+  if (actor === 'agent' && statusChanges && (patch.status === 'ignored' || existing.status === 'ignored')) {
+    return { ok: false, reason: 'operator_only' };
+  }
   if (actor === 'agent' && statusChanges && existing.status_set_by === 'user') return { ok: false, reason: 'status_locked' };
 
   const sets: string[] = [];
@@ -284,6 +287,8 @@ export function updateExternalLead(id: number, patch: ExternalLeadPatch, actor: 
   if (sets.length > 0) {
     db.prepare(`UPDATE external_model_leads SET ${sets.join(', ')} WHERE id = ?`).run(...params, id);
   }
+  const updated = toLead(leadById(db, id)!);
+  if (statusChanges) applyIgnoreTransition(db, updated, toLead(existing).status, updated.status);
   return { ok: true, lead: toLead(leadById(db, id)!) };
 }
 
@@ -293,20 +298,6 @@ export function deleteExternalLead(id: number, actor: LeadActor, db: Db = getDb(
   if (actor === 'agent' && existing.added_by !== 'agent') return { ok: false, reason: 'not_yours' };
   db.prepare('DELETE FROM external_model_leads WHERE id = ?').run(id);
   return { ok: true, lead: toLead(existing) };
-}
-
-/** Keep a model out, wherever it is found. Its existing leads are hidden, not
- *  deleted, so un-ignoring brings them back with their evidence. */
-export function ignoreModel(provider: string | null, modelId: string, reason: string | null, db: Db = getDb()): void {
-  db.prepare(`
-    INSERT INTO external_model_ignores (provider, model_id, reason) VALUES (?, ?, ?)
-    ON CONFLICT (provider, model_id) DO UPDATE SET reason = COALESCE(excluded.reason, external_model_ignores.reason)
-  `).run(normaliseProvider(provider) ?? '', modelId.trim(), reason?.trim() || null);
-}
-
-export function unignoreModel(provider: string | null, modelId: string, db: Db = getDb()): boolean {
-  return db.prepare('DELETE FROM external_model_ignores WHERE provider = ? AND model_id = ?')
-    .run(normaliseProvider(provider) ?? '', modelId.trim()).changes > 0;
 }
 
 // ── Agent token ─────────────────────────────────────────────────────────────

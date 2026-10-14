@@ -157,37 +157,47 @@ describe('discovery API', () => {
     expect(rerun.status).toBe('testing');
   });
 
-  it('ignores a model wherever it is found: hidden from the list, skipped for agents, refused for the operator', async () => {
+  it('treats Ignored as an operator status: every lead of the model follows it, agents skip the model anywhere', async () => {
     const agent = await mintAgent();
-    await post(session, { source: 'https://opencode.ai/docs/zen', modelId: 'cat-jam-free' });
+    const first = (await (await post(session, { source: 'https://opencode.ai/docs/zen', modelId: 'cat-jam-free' })).json()) as { id: number };
     await post(session, { source: 'https://opencode.ai/blog/stealth', modelId: 'cat-jam-free' });
-    expect((await call(session, '/ignores', { method: 'POST', body: JSON.stringify({ provider: 'opencode', modelId: 'cat-jam-free', reason: 'harness-only' }) })).status).toBe(200);
 
-    const page = await (await call(session, '/leads')).json() as { leads: Array<{ modelId: string }>; ignored: Array<{ provider: string; modelId: string; hiddenLeads: number; reason: string }> };
-    expect(page.leads.some(l => l.modelId === 'cat-jam-free')).toBe(false);
-    expect(page.ignored).toEqual([expect.objectContaining({ provider: 'opencode', modelId: 'cat-jam-free', hiddenLeads: 2, reason: 'harness-only' })]);
+    const ignored = await call(session, `/leads/${first.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'ignored' }) });
+    expect(await ignored.json()).toMatchObject({ status: 'ignored', statusSetBy: 'user' });
+    const listed = await (await call(session, '/leads')).json() as { leads: Array<{ modelId: string; status: string }>; byStatus: Record<string, number> };
+    expect(listed.leads.filter(l => l.modelId === 'cat-jam-free').map(l => l.status)).toEqual(['ignored', 'ignored']);
+    expect(listed.byStatus.ignored).toBe(2);
 
     const before = count();
     const skipped = await post(agent, { source: 'https://opencode.ai/changelog', modelId: 'cat-jam-free' });
-    expect(skipped.status).toBe(200);
     expect(await skipped.json()).toEqual({ skipped: 'ignored' });
     expect((await post(session, { source: 'https://opencode.ai/new', modelId: 'cat-jam-free' })).status).toBe(409);
     expect(count()).toBe(before);
 
-    expect((await call(agent, '/ignores', { method: 'POST', body: JSON.stringify({ provider: 'opencode', modelId: 'x' }) })).status).toBe(403);
-    expect((await call(agent, '/ignores?provider=opencode&modelId=cat-jam-free', { method: 'DELETE' })).status).toBe(403);
-
-    expect((await call(session, '/ignores?provider=opencode&modelId=cat-jam-free', { method: 'DELETE' })).status).toBe(200);
-    const restored = await (await call(session, '/leads')).json() as { leads: Array<{ modelId: string }> };
-    expect(restored.leads.filter(l => l.modelId === 'cat-jam-free')).toHaveLength(2);
-    expect((await call(session, '/ignores?provider=opencode&modelId=cat-jam-free', { method: 'DELETE' })).status).toBe(404);
+    const lifted = await call(session, `/leads/${first.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'candidate' }) });
+    expect(lifted.status).toBe(200);
+    const after = await (await call(session, '/leads')).json() as { leads: Array<{ modelId: string; status: string }> };
+    expect(after.leads.filter(l => l.modelId === 'cat-jam-free').map(l => l.status)).toEqual(['candidate', 'candidate']);
+    expect((await post(agent, { source: 'https://opencode.ai/changelog', modelId: 'cat-jam-free' })).status).toBe(200);
   });
 
-  it('lists rejected leads after the live ones', async () => {
+  it('keeps ignoring and un-ignoring with the operator', async () => {
+    const agent = await mintAgent();
+    const own = (await (await post(agent, { source: 'https://zz.dev/x', modelId: 'agent-own' })).json()) as { id: number };
+    expect((await call(agent, `/leads/${own.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'ignored' }) })).status).toBe(403);
+    expect((await post(agent, { source: 'https://zz.dev/y', modelId: 'agent-other', status: 'ignored' })).status).toBe(403);
+    await call(session, `/leads/${own.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'ignored' }) });
+    expect((await call(agent, `/leads/${own.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'candidate' }) })).status).toBe(403);
+    expect((await call(session, '/ignores', { method: 'POST', body: JSON.stringify({ modelId: 'x' }) })).status).toBe(404);
+  });
+
+  it('lists live leads first, then rejected, then ignored', async () => {
     const page = await (await call(session, '/leads')).json() as { leads: Array<{ status: string }> };
-    const firstRejected = page.leads.findIndex(l => l.status === 'rejected');
-    expect(firstRejected).toBeGreaterThan(-1);
-    expect(page.leads.slice(firstRejected).every(l => l.status === 'rejected')).toBe(true);
+    const rank = (s: string) => (s === 'ignored' ? 2 : s === 'rejected' ? 1 : 0);
+    const ranks = page.leads.map(l => rank(l.status));
+    expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
+    expect(ranks).toContain(1);
+    expect(ranks).toContain(2);
   });
 
   it('closes to both callers when the extension is switched off', async () => {

@@ -12,6 +12,7 @@ import { CardSkeleton } from '@/components/ui/skeleton'
 import { usePremium } from '@/hooks/use-premium'
 import { CatalogueSyncs } from '@/components/catalogue-syncs'
 import { ExternalDiscoverySection } from '@/components/external-discovery'
+import { SyncOutcome, type SyncResultView } from '@/components/sync-outcome'
 import { useI18n } from '@/i18n'
 
 function fmtWhen(ms: number | null): string | null {
@@ -36,6 +37,7 @@ export default function PremiumPage() {
     queryClient.invalidateQueries({ queryKey: ['premium'] })
     // A sync may have changed the model list and quirks.
     queryClient.invalidateQueries({ queryKey: ['models'] })
+    queryClient.invalidateQueries({ queryKey: ['catalogue-syncs'] })
   }
 
   const activate = useMutation({
@@ -53,9 +55,15 @@ export default function PremiumPage() {
     onSuccess: invalidate,
   })
 
+  const [syncOutcome, setSyncOutcome] = useState<{ result: SyncResultView | null; error: string | null; at: Date } | null>(null)
   const syncNow = useMutation({
-    mutationFn: () => apiFetch('/api/premium/sync', { method: 'POST' }),
-    onSuccess: invalidate,
+    meta: { silenceToast: true },
+    mutationFn: () => apiFetch<{ sync: SyncResultView }>('/api/premium/sync', { method: 'POST' }),
+    onSuccess: ({ sync }) => {
+      setSyncOutcome({ result: sync, error: null, at: new Date() })
+      invalidate()
+    },
+    onError: (err: Error) => setSyncOutcome({ result: null, error: err.message, at: new Date() }),
   })
 
   const openPortal = useMutation({
@@ -116,6 +124,7 @@ export default function PremiumPage() {
             {catalog.lastError && (
               <p className="text-destructive text-xs mt-2">{t('premium.lastSyncProblem', { error: catalog.lastError })}</p>
             )}
+            {syncOutcome && <SyncOutcome result={syncOutcome.result} error={syncOutcome.error} at={syncOutcome.at} />}
           </div>
         </section>
 

@@ -200,6 +200,10 @@ export interface SyncResult {
   tier?: string;
   detail?: string;
   counts?: { updated: number; inserted: number; removed: number; skippedUnknownPlatform: number; quirks: number };
+  /** What the applied document changed against the previous one (the same
+   *  quantities the sync log records), so a manual "check for updates" can
+   *  say what it did. Present only for `applied`. */
+  changes?: { added: number; removed: number; changed: number; switchedOff: number; switchedOn: number };
 }
 
 /** Minimal structural check — enough to fail loudly on a wrong/garbled body. */
@@ -482,12 +486,12 @@ export function diffCatalogs(prev: Catalog | null, next: Catalog): CatalogDocDif
   const details: CatalogFieldChange[] = [];
   const added: CatalogMember[] = [];
   const removed: CatalogMember[] = [];
-  const bump = (platform: string, k: 'a' | 'r' | 'c') => {
-    (byPlatform[platform] ??= { a: 0, r: 0, c: 0 })[k]++;
+  const bump = (platform: string, k: 'a' | 'r' | 'c' | 'off' | 'on') => {
+    (byPlatform[platform] ??= { a: 0, r: 0, c: 0, off: 0, on: 0 })[k]++;
   };
   const previous = prev ? registryEntries(prev) : null;
   const current = registryEntries(next);
-  const counts = { added: 0, removed: 0, changed: 0 };
+  const counts = { added: 0, removed: 0, changed: 0, switchedOff: 0, switchedOn: 0 };
 
   for (const name of REGISTRIES) {
     const oldEntries = new Map((previous?.[name] ?? []).map(e => [`${e.platform}:${e.modelId}`, e]));
@@ -504,16 +508,26 @@ export function diffCatalogs(prev: Catalog | null, next: Catalog): CatalogDocDif
         bump(was.platform, 'r');
         removed.push({ r: name, p: was.platform, m: was.modelId, n: was.displayName });
       } else if (was && now) {
+        // The feed switching a model off is not an edit: the router stops
+        // serving it, so for the operator it has left the free pool. Those
+        // flips are counted on their own; "changed" means a real field edit.
         const oldFields = new Map(was.fields);
-        let moved = false;
+        let edited = false;
         for (const [field, nextValue] of now.fields) {
           const prevValue = oldFields.get(field) ?? null;
-          if (prevValue !== nextValue) {
-            details.push({ r: name, p: now.platform, m: now.modelId, f: field, o: prevValue, n: nextValue });
-            moved = true;
+          if (prevValue === nextValue) continue;
+          details.push({ r: name, p: now.platform, m: now.modelId, f: field, o: prevValue, n: nextValue });
+          if (field !== 'enabled') {
+            edited = true;
+          } else if (prevValue === true && nextValue === false) {
+            counts.switchedOff++;
+            bump(now.platform, 'off');
+          } else if (prevValue === false && nextValue === true) {
+            counts.switchedOn++;
+            bump(now.platform, 'on');
           }
         }
-        if (moved) {
+        if (edited) {
           counts.changed++;
           bump(now.platform, 'c');
         }
@@ -1045,7 +1059,10 @@ export async function syncCatalog(force = false): Promise<SyncResult> {
         tier: catalog.tier,
         generatedAt: catalog.generatedAt,
         counts,
-        doc: { added: docDiff.added, removed: docDiff.removed, changed: docDiff.changed },
+        doc: {
+          added: docDiff.added, removed: docDiff.removed, changed: docDiff.changed,
+          switchedOff: docDiff.switchedOff, switchedOn: docDiff.switchedOn,
+        },
         byPlatform: docDiff.byPlatform,
         details: docDiff.details,
         members: docDiff.members,
@@ -1065,7 +1082,13 @@ export async function syncCatalog(force = false): Promise<SyncResult> {
       );
       setSetting(SETTING_LAST_SYNC_MS, String(Date.now()));
       setSetting(SETTING_LAST_ERROR, '');
-      return { ok: true, action: 'applied', version: catalog.version, tier: catalog.tier, counts };
+      return {
+        ok: true, action: 'applied', version: catalog.version, tier: catalog.tier, counts,
+        changes: {
+          added: docDiff.added, removed: docDiff.removed, changed: docDiff.changed,
+          switchedOff: docDiff.switchedOff, switchedOn: docDiff.switchedOn,
+        },
+      };
     }
 
     setSetting(SETTING_LAST_SYNC_MS, String(Date.now()));

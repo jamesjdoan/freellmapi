@@ -41,13 +41,15 @@ const update = {
   updated: 910, inserted: 3, removed: 1, skippedUnknownPlatform: 0, quirks: 89,
   docAdded: 3,
   docRemoved: 1,
-  docChanged: 2,
-  byPlatform: { inferbase: { a: 2, r: 0, c: 0 }, llm7: { a: 1, r: 1, c: 0 }, sail: { a: 0, r: 0, c: 2 } },
+  docChanged: 1,
+  docSwitchedOff: 1,
+  docSwitchedOn: 0,
+  byPlatform: { inferbase: { a: 2, r: 0, c: 0, off: 0, on: 0 }, llm7: { a: 1, r: 1, c: 0, off: 0, on: 0 }, sail: { a: 0, r: 0, c: 1, off: 1, on: 0 } },
 }
 
 const baseline = {
   ...update, id: 1, version: '2026.10.12.daddd7e6', previousVersion: null,
-  docAdded: 0, docRemoved: 0, docChanged: 0, byPlatform: {},
+  docAdded: 0, docRemoved: 0, docChanged: 0, docSwitchedOff: 0, docSwitchedOn: 0, byPlatform: {},
 }
 
 const detail = {
@@ -72,7 +74,7 @@ async function renderList(syncs: unknown[], detailBody: unknown = detail) {
   root = createRoot(host)
   vi.mocked(apiFetch).mockImplementation(async (path: string) => {
     if (String(path).startsWith('/api/models/changes/syncs/detail')) return detailBody
-    const list = syncs as Array<{ docAdded: number; docRemoved: number; docChanged: number }>
+    const list = syncs as Array<{ docAdded: number; docRemoved: number; docChanged: number; docSwitchedOff: number; docSwitchedOn: number }>
     return {
       syncs, total: list.length,
       totals: {
@@ -80,6 +82,8 @@ async function renderList(syncs: unknown[], detailBody: unknown = detail) {
         added: list.reduce<number>((n, s) => n + s.docAdded, 0),
         removed: list.reduce<number>((n, s) => n + s.docRemoved, 0),
         changed: list.reduce<number>((n, s) => n + s.docChanged, 0),
+        switchedOff: list.reduce<number>((n, s) => n + s.docSwitchedOff, 0),
+        switchedOn: list.reduce<number>((n, s) => n + s.docSwitchedOn, 0),
         lastAt: list.length ? '2026-10-13 09:40:02' : null,
         lastVersion: null,
       },
@@ -123,7 +127,9 @@ describe('CatalogueSyncs', () => {
     const text = host!.textContent ?? ''
     expect(text).toMatch(/\+3\s*Models added/)
     expect(text).toMatch(/−1\s*Models removed/)
-    expect(text).toMatch(/~2\s*Models changed/)
+    expect(text).toMatch(/~1\s*Models changed/)
+    expect(text).toMatch(/1\s*Switched off/)
+    expect(text).not.toContain('Switched back on')
   })
 
   it('names each row’s providers with their counts, busiest first', async () => {
@@ -133,7 +139,7 @@ describe('CatalogueSyncs', () => {
     expect(row.indexOf('inferbase')).toBeLessThan(row.indexOf('llm7'))
     expect(row).toMatch(/inferbase\s*\+2/)
     expect(row).toMatch(/llm7\s*\+1\s*−1/)
-    expect(row).toMatch(/sail\s*~2/)
+    expect(row).toMatch(/sail\s*1 off\s*~1/)
     expect(host!.querySelectorAll('li')[1].textContent).toContain('log starts here')
   })
 
@@ -157,11 +163,12 @@ describe('CatalogueSyncs', () => {
     expect(groups[0].textContent).toContain('Qwen 3 Max')
     expect(groups[0].textContent).toContain('glm-5')
     expect(groups[1].textContent).toMatch(/Added.*llm7-new.*Removed.*llm7-old/)
-    expect(groups[2].textContent).toMatch(/sail-lite.*rpd.*1000.*500/)
+    expect(groups[2].textContent).toMatch(/Switched off by the feed.*sail-pro.*Changed.*sail-lite.*rpd.*1000.*500/)
+    expect(groups[2].textContent).not.toMatch(/Changed.*sail-pro/)
   })
 
   it('opens the group straight away when only one provider moved', async () => {
-    const single = { ...update, docRemoved: 0, docChanged: 0, byPlatform: { inferbase: { a: 2, r: 0, c: 0 } } }
+    const single = { ...update, docRemoved: 0, docChanged: 0, docSwitchedOff: 0, byPlatform: { inferbase: { a: 2, r: 0, c: 0, off: 0, on: 0 } } }
     await renderList([single], { ...detail, ...single, details: [], members: { added: detail.members.added.slice(0, 2), removed: [] } })
     await openRow()
     expect(host!.querySelector('details')!.open).toBe(true)
@@ -182,7 +189,7 @@ describe('CatalogueSyncs', () => {
   // 06:00 and 06:30 UTC sit on the same local day for any offset between
   // UTC-6 and UTC+17; the third update is three days earlier.
   const morning = { ...update, id: 10, at: '2026-10-13 06:00:00' }
-  const later = { ...update, id: 11, at: '2026-10-13 06:30:00', docAdded: 1, docRemoved: 0, docChanged: 0 }
+  const later = { ...update, id: 11, at: '2026-10-13 06:30:00', docAdded: 1, docRemoved: 0, docChanged: 0, docSwitchedOff: 0 }
   const quietSameDay = { ...baseline, id: 12, at: '2026-10-13 06:15:00', previousVersion: 'x' }
   const earlier = { ...update, id: 13, at: '2026-10-10 06:00:00' }
 
@@ -191,8 +198,8 @@ describe('CatalogueSyncs', () => {
     await renderList([later, quietSameDay, morning, earlier])
     const days = [...host!.querySelectorAll('section')]
     expect(days).toHaveLength(2)
-    expect(days[0].textContent).toMatch(/Updates: 3\s*\+4\s*−1\s*~2/)
-    expect(days[1].textContent).toMatch(/Updates: 1\s*\+3\s*−1\s*~2/)
+    expect(days[0].textContent).toMatch(/Updates: 3\s*\+4\s*−1\s*1 off\s*~1/)
+    expect(days[1].textContent).toMatch(/Updates: 1\s*\+3\s*−1\s*1 off\s*~1/)
   })
 
   it('expands every update and provider in a day at once, and only that day', async () => {

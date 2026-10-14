@@ -22,7 +22,9 @@ import { parseSqliteUtc } from '@/lib/time-tree'
 // them. Detail is fetched on open: a sync can move hundreds of models and the
 // list view stays cheap.
 
-interface Churn { a: number; r: number; c: number }
+/** Added, removed, edited, and switched off / back on by the feed. A model the
+ *  feed switches off is still listed but no longer served. */
+interface Churn { a: number; r: number; c: number; off?: number; on?: number }
 
 interface CatalogueSync {
   id: number
@@ -39,6 +41,8 @@ interface CatalogueSync {
   docAdded: number
   docRemoved: number
   docChanged: number
+  docSwitchedOff: number
+  docSwitchedOn: number
   byPlatform: Record<string, Churn>
 }
 
@@ -47,6 +51,8 @@ interface CatalogueSyncTotals {
   added: number
   removed: number
   changed: number
+  switchedOff: number
+  switchedOn: number
   lastAt: string | null
   lastVersion: string | null
 }
@@ -64,7 +70,12 @@ const PROVIDERS_SHOWN = 6
 
 const valueOf = (v: FieldValue) => (v === null ? '—' : String(v))
 
-const moved = (s: CatalogueSync) => s.docAdded + s.docRemoved + s.docChanged > 0
+const moved = (s: CatalogueSync) => s.docAdded + s.docRemoved + s.docChanged + s.docSwitchedOff + s.docSwitchedOn > 0
+
+const churnOf = (s: CatalogueSync): Churn =>
+  ({ a: s.docAdded, r: s.docRemoved, c: s.docChanged, off: s.docSwitchedOff, on: s.docSwitchedOn })
+
+const weight = (c: Churn) => c.a + c.r + c.c + (c.off ?? 0) + (c.on ?? 0)
 
 /** Local calendar day of a SQLite UTC stamp, as YYYY-MM-DD. */
 export function localDay(at: string): string {
@@ -86,15 +97,17 @@ export function groupByDay(syncs: CatalogueSync[]): Array<[string, CatalogueSync
 
 /** Providers busiest first; ties alphabetical so the order is stable. */
 export function providersByChurn(byPlatform: Record<string, Churn>): Array<[string, Churn]> {
-  return Object.entries(byPlatform).sort(([pa, a], [pb, b]) =>
-    (b.a + b.r + b.c) - (a.a + a.r + a.c) || pa.localeCompare(pb))
+  return Object.entries(byPlatform).sort(([pa, a], [pb, b]) => weight(b) - weight(a) || pa.localeCompare(pb))
 }
 
 function ChurnCounts({ churn }: { churn: Churn }) {
+  const { t } = useI18n()
   return (
     <span className="tabular-nums">
       {churn.a > 0 && <span className="text-emerald-600 dark:text-emerald-400">{`+${churn.a}`}</span>}
       {churn.r > 0 && <span className="ml-1 text-rose-600 dark:text-rose-400">{`−${churn.r}`}</span>}
+      {(churn.off ?? 0) > 0 && <span className="ml-1 text-rose-600 dark:text-rose-400">{t('catalogue.syncsOffCount', { count: churn.off ?? 0 })}</span>}
+      {(churn.on ?? 0) > 0 && <span className="ml-1 text-emerald-600 dark:text-emerald-400">{t('catalogue.syncsOnCount', { count: churn.on ?? 0 })}</span>}
       {churn.c > 0 && <span className="ml-1 text-amber-600 dark:text-amber-400">{`~${churn.c}`}</span>}
     </span>
   )
@@ -120,8 +133,15 @@ function ProviderGroup({ provider, churn, detail, open }: {
   const { t } = useI18n()
   const added = detail.members?.added.filter(m => m.p === provider) ?? []
   const removed = detail.members?.removed.filter(m => m.p === provider) ?? []
-  const changes = detail.details.filter(d => d.p === provider)
+  const fields = detail.details.filter(d => d.p === provider)
+  const flips = fields.filter(d => d.f === 'enabled')
+  const switchedOff = flips.filter(d => d.o === true && d.n === false)
+  const switchedOn = flips.filter(d => d.o === false && d.n === true)
+  const changes = fields.filter(d => d.f !== 'enabled')
   const changedModels = [...new Set(changes.map(d => d.m))]
+  const flipList = (rows: FieldChange[], sign: string, tone: string) => (
+    <ul>{rows.map(d => <ModelLine key={`${d.r}:${d.m}`} sign={sign} tone={tone} member={{ r: d.r, p: d.p, m: d.m, n: null }} />)}</ul>
+  )
   return (
     <details open={open} className="rounded border bg-muted/20 px-2 py-1">
       <summary className="flex cursor-pointer items-baseline gap-2 text-xs">
@@ -140,6 +160,18 @@ function ProviderGroup({ provider, churn, detail, open }: {
           <div>
             <h5 className="text-muted-foreground">{t('catalogue.syncsRemovedModels')}</h5>
             <ul>{removed.map(m => <ModelLine key={`${m.r}:${m.m}`} sign="−" tone="text-rose-600 dark:text-rose-400" member={m} />)}</ul>
+          </div>
+        )}
+        {switchedOff.length > 0 && (
+          <div>
+            <h5 className="text-muted-foreground">{t('catalogue.syncsSwitchedOffModels')}</h5>
+            {flipList(switchedOff, '⊘', 'text-rose-600 dark:text-rose-400')}
+          </div>
+        )}
+        {switchedOn.length > 0 && (
+          <div>
+            <h5 className="text-muted-foreground">{t('catalogue.syncsSwitchedOnModels')}</h5>
+            {flipList(switchedOn, '↺', 'text-emerald-600 dark:text-emerald-400')}
           </div>
         )}
         {changedModels.length > 0 && (
@@ -269,6 +301,10 @@ export function CatalogueSyncs() {
         <Stat label={t('catalogue.syncsTotalUpdates')} value={String(totals.syncs)} />
         <Stat label={t('catalogue.syncsTotalAdded')} value={`+${totals.added}`} tone="text-emerald-600 dark:text-emerald-400" />
         <Stat label={t('catalogue.syncsTotalRemoved')} value={`−${totals.removed}`} tone="text-rose-600 dark:text-rose-400" />
+        <Stat label={t('catalogue.syncsTotalSwitchedOff')} value={String(totals.switchedOff)} tone="text-rose-600 dark:text-rose-400" />
+        {totals.switchedOn > 0 && (
+          <Stat label={t('catalogue.syncsTotalSwitchedOn')} value={String(totals.switchedOn)} tone="text-emerald-600 dark:text-emerald-400" />
+        )}
         <Stat label={t('catalogue.syncsTotalChanged')} value={`~${totals.changed}`} tone="text-amber-600 dark:text-amber-400" />
         {totals.lastAt && (
           <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
@@ -279,9 +315,9 @@ export function CatalogueSyncs() {
       <p className="mt-3 text-[11px] text-muted-foreground">{t('catalogue.syncsHint')}</p>
       <div className="mt-2 space-y-3">
         {groupByDay(data.syncs).map(([day, syncs]) => {
-          const dayChurn = syncs.reduce<Churn>(
-            (sum, s) => ({ a: sum.a + s.docAdded, r: sum.r + s.docRemoved, c: sum.c + s.docChanged }),
-            { a: 0, r: 0, c: 0 },
+          const dayChurn = syncs.map(churnOf).reduce<Churn>(
+            (sum, c) => ({ a: sum.a + c.a, r: sum.r + c.r, c: sum.c + c.c, off: (sum.off ?? 0) + (c.off ?? 0), on: (sum.on ?? 0) + (c.on ?? 0) }),
+            { a: 0, r: 0, c: 0, off: 0, on: 0 },
           )
           const anyMoved = syncs.some(moved)
           const dayExpanded = expandedDays.has(day)
@@ -320,7 +356,7 @@ export function CatalogueSyncs() {
                         </span>
                         {!s.previousVersion && <span className="text-muted-foreground">({t('catalogue.syncsBaseline')})</span>}
                         {rowMoved
-                          ? <ChurnCounts churn={{ a: s.docAdded, r: s.docRemoved, c: s.docChanged }} />
+                          ? <ChurnCounts churn={churnOf(s)} />
                           : <span className="text-muted-foreground">—</span>}
                         <span className="ml-auto flex-shrink-0 text-[11px] text-muted-foreground tabular-nums">
                           {formatStamp(s.at, { time: true })}

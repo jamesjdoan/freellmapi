@@ -33,7 +33,8 @@ export interface CatalogFieldChange {
   n: string | number | boolean | null;
 }
 
-export interface PlatformChurn { a: number; r: number; c: number }
+/** Per-provider churn: added, removed, edited, switched off, switched on. */
+export interface PlatformChurn { a: number; r: number; c: number; off: number; on: number }
 
 /** One model that entered or left a registry between two documents. */
 export interface CatalogMember {
@@ -56,7 +57,11 @@ export interface CatalogMembers {
 export interface CatalogDocDiff {
   added: number;
   removed: number;
+  /** Models with a real field edit; on/off flips are counted apart. */
   changed: number;
+  /** Models the feed switched off: still listed, no longer served. */
+  switchedOff: number;
+  switchedOn: number;
   byPlatform: Record<string, PlatformChurn>;
   details: CatalogFieldChange[];
   members: CatalogMembers;
@@ -77,7 +82,7 @@ export interface CatalogueSyncInput {
     quirks: number;
   };
   /** Document-vs-document quantities, summed across every registry. */
-  doc: { added: number; removed: number; changed: number };
+  doc: { added: number; removed: number; changed: number; switchedOff: number; switchedOn: number };
   byPlatform: Record<string, PlatformChurn>;
   details: CatalogFieldChange[];
   members: CatalogMembers;
@@ -98,6 +103,8 @@ export interface CatalogueSyncRow {
   docAdded: number;
   docRemoved: number;
   docChanged: number;
+  docSwitchedOff: number;
+  docSwitchedOn: number;
   byPlatform: Record<string, PlatformChurn>;
 }
 
@@ -115,6 +122,8 @@ export interface CatalogueSyncTotals {
   added: number;
   removed: number;
   changed: number;
+  switchedOff: number;
+  switchedOn: number;
   lastAt: string | null;
   lastVersion: string | null;
 }
@@ -147,6 +156,8 @@ interface SyncDbRow {
   doc_added: number;
   doc_removed: number;
   doc_changed: number;
+  doc_switched_off: number;
+  doc_switched_on: number;
   by_platform_json: string | null;
   details_json?: string | null;
   members_json?: string | null;
@@ -156,7 +167,7 @@ const MAX_LIMIT = 200;
 
 const ROW_COLUMNS = `id, at, version, previous_version, tier, generated_at,
            updated, inserted, removed, skipped_unknown_platform, quirks,
-           doc_added, doc_removed, doc_changed, by_platform_json`;
+           doc_added, doc_removed, doc_changed, doc_switched_off, doc_switched_on, by_platform_json`;
 
 function parseJson<T>(raw: string | null | undefined, fallback: T): T {
   if (!raw) return fallback;
@@ -186,6 +197,8 @@ function toRow(row: SyncDbRow): CatalogueSyncRow {
     docAdded: row.doc_added,
     docRemoved: row.doc_removed,
     docChanged: row.doc_changed,
+    docSwitchedOff: row.doc_switched_off,
+    docSwitchedOn: row.doc_switched_on,
     byPlatform: parseJson<Record<string, PlatformChurn>>(row.by_platform_json, {}),
   };
 }
@@ -201,8 +214,9 @@ export function recordCatalogueSync(db: Db, input: CatalogueSyncInput): void {
       INSERT INTO catalogue_sync (
         version, previous_version, tier, generated_at,
         updated, inserted, removed, skipped_unknown_platform, quirks,
-        doc_added, doc_removed, doc_changed, by_platform_json, details_json, members_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        doc_added, doc_removed, doc_changed, doc_switched_off, doc_switched_on,
+        by_platform_json, details_json, members_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       input.version,
       input.previousVersion,
@@ -216,6 +230,8 @@ export function recordCatalogueSync(db: Db, input: CatalogueSyncInput): void {
       input.doc.added,
       input.doc.removed,
       input.doc.changed,
+      input.doc.switchedOff,
+      input.doc.switchedOn,
       JSON.stringify(input.byPlatform),
       JSON.stringify(input.details.slice(0, DETAILS_CAP)),
       JSON.stringify({
@@ -242,9 +258,11 @@ export function listCatalogueSyncs(query: CatalogueSyncQuery = {}, db: Db = getD
     SELECT COUNT(*) AS syncs,
            COALESCE(SUM(doc_added), 0) AS added,
            COALESCE(SUM(doc_removed), 0) AS removed,
-           COALESCE(SUM(doc_changed), 0) AS changed
+           COALESCE(SUM(doc_changed), 0) AS changed,
+           COALESCE(SUM(doc_switched_off), 0) AS switchedOff,
+           COALESCE(SUM(doc_switched_on), 0) AS switchedOn
       FROM catalogue_sync
-  `).get() as { syncs: number; added: number; removed: number; changed: number };
+  `).get() as { syncs: number; added: number; removed: number; changed: number; switchedOff: number; switchedOn: number };
   const last = db.prepare('SELECT at, version FROM catalogue_sync ORDER BY at DESC, id DESC LIMIT 1')
     .get() as { at: string; version: string } | undefined;
 
@@ -256,6 +274,8 @@ export function listCatalogueSyncs(query: CatalogueSyncQuery = {}, db: Db = getD
       added: agg.added,
       removed: agg.removed,
       changed: agg.changed,
+      switchedOff: agg.switchedOff,
+      switchedOn: agg.switchedOn,
       lastAt: last?.at ?? null,
       lastVersion: last?.version ?? null,
     },

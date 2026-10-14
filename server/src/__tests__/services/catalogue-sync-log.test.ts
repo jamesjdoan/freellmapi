@@ -16,6 +16,7 @@ import {
 } from '../../services/catalogue-sync-log.js';
 import { up as syncLogUp } from '../../db/migrations/20261013_000001_catalogue_sync_log.js';
 import { up as membersUp } from '../../db/migrations/20261014_000002_catalogue_sync_members.js';
+import { up as switchesUp } from '../../db/migrations/20261014_000005_catalogue_sync_switches.js';
 import { requireAuth } from '../../middleware/requireAuth.js';
 import { modelsRouter } from '../../routes/models.js';
 import { mintDashboardToken } from '../helpers/auth.js';
@@ -64,7 +65,7 @@ function syncInput(over: Partial<CatalogueSyncInput> = {}): CatalogueSyncInput {
     tier: 'live',
     generatedAt: '2026-10-12T10:09:44.790Z',
     counts: { updated: 0, inserted: 0, removed: 0, skippedUnknownPlatform: 0, quirks: 0 },
-    doc: { added: 0, removed: 0, changed: 0 },
+    doc: { added: 0, removed: 0, changed: 0, switchedOff: 0, switchedOn: 0 },
     byPlatform: {},
     details: [],
     members: { added: [], removed: [] },
@@ -89,13 +90,14 @@ describe('diffCatalogs', () => {
     expect(diff.added).toBe(3);
     expect(diff.removed).toBe(0);
     expect(diff.changed).toBe(0);
-    expect(diff.byPlatform).toEqual({ groq: { a: 2, r: 0, c: 0 }, cohere: { a: 1, r: 0, c: 0 } });
+    expect(diff.byPlatform).toEqual({ groq: { a: 2, r: 0, c: 0, off: 0, on: 0 }, cohere: { a: 1, r: 0, c: 0, off: 0, on: 0 } });
   });
 
   it('counts a no-op resync as nothing', () => {
     const doc = catalogOf([baseModel({ modelId: 'a' })]);
     expect(diffCatalogs(doc, doc)).toEqual({
-      added: 0, removed: 0, changed: 0, byPlatform: {}, details: [], members: { added: [], removed: [] },
+      added: 0, removed: 0, changed: 0, switchedOff: 0, switchedOn: 0,
+      byPlatform: {}, details: [], members: { added: [], removed: [] },
     });
   });
 
@@ -109,7 +111,7 @@ describe('diffCatalogs', () => {
     expect(diff.changed).toBe(1);
     expect(diff.added).toBe(0);
     expect(diff.removed).toBe(0);
-    expect(diff.byPlatform.groq).toEqual({ a: 0, r: 0, c: 1 });
+    expect(diff.byPlatform.groq).toEqual({ a: 0, r: 0, c: 1, off: 0, on: 0 });
     expect(diff.details).toEqual([
       { r: 'chat', p: 'groq', m: 'a', f: 'displayName', o: 'Test Model', n: 'Test Model v2' },
       { r: 'chat', p: 'groq', m: 'a', f: 'rpd', o: 1000, n: 500 },
@@ -122,6 +124,19 @@ describe('diffCatalogs', () => {
     const diff = diffCatalogs(prev, next);
     expect(diff.removed).toBe(1);
     expect(diff.byPlatform.groq.r).toBe(1);
+  });
+
+  it('counts a model the feed switched off apart from field edits', () => {
+    const prev = catalogOf([baseModel({ modelId: 'a' }), baseModel({ modelId: 'b' }), baseModel({ modelId: 'c', enabled: false })]);
+    const next = catalogOf([
+      baseModel({ modelId: 'a', enabled: false }),
+      baseModel({ modelId: 'b', enabled: false, limits: { rpm: 30, rpd: 10, tpm: 6000, tpd: null } }),
+      baseModel({ modelId: 'c' }),
+    ]);
+    const diff = diffCatalogs(prev, next);
+    expect(diff).toMatchObject({ switchedOff: 2, switchedOn: 1, changed: 1 });
+    expect(diff.byPlatform.groq).toEqual({ a: 0, r: 0, c: 1, off: 2, on: 1 });
+    expect(diff.details.filter(d => d.f === 'enabled')).toHaveLength(3);
   });
 
   it('names the models that arrived and departed, with their provider and display name', () => {
@@ -139,7 +154,7 @@ describe('diffCatalogs', () => {
     const diff = diffCatalogs(prev, next);
     expect(diff.added).toBe(1);
     expect(diff.removed).toBe(1);
-    expect(diff.byPlatform.groq).toEqual({ a: 1, r: 1, c: 0 });
+    expect(diff.byPlatform.groq).toEqual({ a: 1, r: 1, c: 0, off: 0, on: 0 });
   });
 
   it('diffs the optional registries the same way, arrays included', () => {
@@ -170,7 +185,7 @@ describe('catalogue_sync_log storage', () => {
     })) as CatalogueSyncInput['details'];
     recordCatalogueSync(getDb(), syncInput({
       version: '2099.02.01',
-      doc: { added: 0, removed: 0, changed: DETAILS_CAP + 100 },
+      doc: { added: 0, removed: 0, changed: DETAILS_CAP + 100, switchedOff: 0, switchedOn: 0 },
       details,
     }));
     const row = getDb().prepare("SELECT details_json, doc_changed FROM catalogue_sync WHERE version = '2099.02.01'").get() as {
@@ -183,8 +198,8 @@ describe('catalogue_sync_log storage', () => {
 
   it('lists newest first with a total, and resolves detail by id', () => {
     const first = listCatalogueSyncs({}).total;
-    recordCatalogueSync(getDb(), syncInput({ version: '2099.02.02', doc: { added: 2, removed: 1, changed: 3 } }));
-    recordCatalogueSync(getDb(), syncInput({ version: '2099.02.03', doc: { added: 1, removed: 0, changed: 0 } }));
+    recordCatalogueSync(getDb(), syncInput({ version: '2099.02.02', doc: { added: 2, removed: 1, changed: 3, switchedOff: 0, switchedOn: 0 } }));
+    recordCatalogueSync(getDb(), syncInput({ version: '2099.02.03', doc: { added: 1, removed: 0, changed: 0, switchedOff: 0, switchedOn: 0 } }));
     const page = listCatalogueSyncs({ limit: 2 });
     expect(page.total).toBe(first + 2);
     expect(page.syncs.map(s => s.version)).toEqual(['2099.02.03', '2099.02.02']);
@@ -278,6 +293,30 @@ describe('model-name backfill migration', () => {
   });
 });
 
+describe('switched-off recount migration', () => {
+  it('moves enabled flips out of "changed" for existing rows', () => {
+    const raw = new DatabaseSync(':memory:');
+    raw.exec('CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)');
+    const db = raw as unknown as Db;
+    syncLogUp(db);
+    const details = [
+      { r: 'chat', p: 'sail', m: 'x', f: 'enabled', o: true, n: false },
+      { r: 'chat', p: 'sail', m: 'y', f: 'enabled', o: true, n: false },
+      { r: 'chat', p: 'xkiro', m: 'z', f: 'enabled', o: false, n: true },
+      { r: 'chat', p: 'xkiro', m: 'z', f: 'rpd', o: 10, n: 5 },
+    ];
+    db.prepare('INSERT INTO catalogue_sync (version, tier, doc_added, doc_changed, by_platform_json, details_json) VALUES (?, ?, ?, ?, ?, ?)')
+      .run('v1', 'live', 1, 3, JSON.stringify({ sail: { a: 1, r: 0, c: 2 }, xkiro: { a: 0, r: 0, c: 1 } }), JSON.stringify(details));
+    switchesUp(db);
+    const row = db.prepare('SELECT doc_changed, doc_switched_off, doc_switched_on, by_platform_json FROM catalogue_sync').get() as Record<string, unknown>;
+    expect(row).toMatchObject({ doc_changed: 1, doc_switched_off: 2, doc_switched_on: 1 });
+    expect(JSON.parse(String(row.by_platform_json))).toEqual({
+      sail: { a: 1, r: 0, c: 0, off: 2, on: 0 },
+      xkiro: { a: 0, r: 0, c: 1, off: 0, on: 1 },
+    });
+  });
+});
+
 describe('syncCatalog writes the log through the signed-feed path', () => {
   let server: Server;
   let url: string;
@@ -360,7 +399,10 @@ describe('syncCatalog writes the log through the signed-feed path', () => {
       },
     );
     mockCatalog(doc2);
-    expect((await syncCatalog()).action).toBe('applied');
+    const applied = await syncCatalog();
+    expect(applied.action).toBe('applied');
+    // A manual "check for updates" reports the same quantities the log keeps.
+    expect(applied.changes).toEqual({ added: 1, removed: 1, changed: 1, switchedOff: 0, switchedOn: 0 });
 
     page = listCatalogueSyncs({});
     expect(page.syncs).toHaveLength(before + 2);
@@ -372,13 +414,15 @@ describe('syncCatalog writes the log through the signed-feed path', () => {
       docChanged: 1,
     });
     expect(page.syncs[0].byPlatform).toEqual({
-      groq: { a: 0, r: 1, c: 1 },
-      cohere: { a: 1, r: 0, c: 0 },
+      groq: { a: 0, r: 1, c: 1, off: 0, on: 0 },
+      cohere: { a: 1, r: 0, c: 0, off: 0, on: 0 },
     });
 
     const total = page.total;
     mockCatalog(null);
-    expect((await syncCatalog()).action).toBe('up_to_date');
+    const upToDate = await syncCatalog();
+    expect(upToDate.action).toBe('up_to_date');
+    expect(upToDate.changes).toBeUndefined();
     expect(listCatalogueSyncs({}).total).toBe(total);
 
     // The dashboard reads the same rows through the authenticated API.

@@ -1272,7 +1272,8 @@
       "testing": "Testing",
       "verified": "Verified",
       "rejected": "Rejected",
-      "added": "Added"
+      "added": "Added",
+      "ignored": "Ignored"
     },
     "discoveryByAgent": "Agent",
     "discoveryModelId": "Model ID",
@@ -1293,12 +1294,18 @@
     "discoveryAgentCopied": "Copied",
     "discoveryAgentShownOnce": "Copy it now. It is not shown again.",
     "discoveryAgentUsage": "The agent sends POST {path} with Authorization: Bearer <token>. It can add leads, and change or remove only the leads it recorded.",
-    "discoveryIgnore": "Ignore {model}",
-    "discoveryIgnoredTitle": "Ignored",
-    "discoveryIgnoredHint": "Hidden from the list. An agent that finds one of these models again is skipped, from any source. Rejected leads stay visible instead.",
-    "discoveryHiddenLeads": "{count} hidden",
-    "discoveryUnignore": "Un-ignore",
-    "discoveryUnignoreLabel": "Un-ignore {model}"
+    "syncFailed": "Update failed: {error}",
+    "syncUpToDate": "Up to date: {version}",
+    "syncSkippedOlder": "The feed ({version}) is older than this build; nothing applied.",
+    "syncAppliedHead": "Applied {version}",
+    "syncNoModelChanges": "no model changes",
+    "syncPartAdded": "+{count} added",
+    "syncPartRemoved": "−{count} removed",
+    "syncPartOff": "{count} switched off",
+    "syncPartOn": "{count} switched back on",
+    "syncPartChanged": "~{count} changed",
+    "discoveryHideIgnored": "Hide ignored",
+    "discoveryAddByHand": "Add a lead by hand"
   },
   "languages": {
     "en": "English",
@@ -1730,7 +1737,13 @@
     "syncsMoreProviders": "+{count} more",
     "syncsDayCount": "Updates: {count}",
     "syncsExpandDay": "Expand all",
-    "syncsCollapseDay": "Collapse all"
+    "syncsCollapseDay": "Collapse all",
+    "syncsOffCount": "{count} off",
+    "syncsOnCount": "{count} on",
+    "syncsSwitchedOffModels": "Switched off by the feed",
+    "syncsSwitchedOnModels": "Switched back on",
+    "syncsTotalSwitchedOff": "Switched off",
+    "syncsTotalSwitchedOn": "Switched back on"
   },
   "quota": {
     "title": "Quota",

@@ -351,7 +351,7 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
   {
     id: 'catalogue-log',
     title: 'Catalogue arrival, departure and sync log',
-    summary: 'An append-only history of models entering and leaving the catalogue, folded by year, month, week and day — plus one row per applied catalog document saying what it changed against the document before it: quantities and, per row, the field-level diff. The two existing surfaces report what the catalogue holds NOW and cannot answer what happened last week; a departure is captured with the chains it was serving, because a deleted row leaves nothing to read afterwards, and a quiet quota cut on a surviving row appears nowhere but the sync log.',
+    summary: 'An append-only history of models entering and leaving the catalogue, folded by year, month, week and day — plus one row per applied catalog document saying what it changed against the document before it — models added, removed, switched off or back on by the feed, and edited — per provider, grouped by day. The two existing surfaces report what the catalogue holds NOW and cannot answer what happened last week; a departure is captured with the chains it was serving, because a deleted row leaves nothing to read afterwards, and a quiet quota cut on a surviving row appears nowhere but the sync log.',
     settingsLocation: 'Models → Chat models → Catalogue log',
     destinations: [{ kind: 'internal', label: 'Open the catalogue log', href: '/models/chat' }],
     category: 'presentation',
@@ -364,7 +364,7 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
   {
     id: 'external-model-discovery',
     title: 'External model discovery',
-    summary: 'Model leads found outside the signed catalog — provider blogs, console pages, agent reports — grouped by provider with a candidate / testing / verified / rejected / added status. An unattended agent writes with its own token, minted on the Premium page: it authorises /api/discovery only, can change or remove only the leads an agent recorded, and cannot change a status the operator set. Ignoring a model (keyed on provider and model id, not source) hides its leads and makes agents skip it; rejected leads stay visible below the live ones. Nothing here routes or enables a model.',
+    summary: 'Model leads found outside the signed catalog — provider blogs, console pages, agent reports — grouped by provider with a candidate / testing / verified / rejected / added status. An unattended agent writes with its own token, minted on the Premium page: it authorises /api/discovery only, can change or remove only the leads an agent recorded, and cannot change a status the operator set. Ignored is a status only the operator sets (rejected = tested, does not work; ignored = will not use it either way): it applies to every lead of that provider and model, makes agents skip the model from any source, and its leads are hidden by default behind a remembered toggle. Rejected leads sort below live ones, ignored below those. Nothing here routes or enables a model.',
     settingsLocation: 'Premium → External model discovery',
     destinations: [{ kind: 'internal', label: 'Open external discovery', href: '/premium' }],
     category: 'tooling',
