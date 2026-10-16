@@ -64,7 +64,7 @@ describe('Fallback API', () => {
     expect(first).toHaveProperty('contextWindow');
   });
 
-  it('GET /api/fallback/token-usage reports per-model chat usage for configured platforms', async () => {
+  it('GET /api/fallback/token-usage reports all recorded chat usage and its per-model breakdown', async () => {
     const db = getDb();
     const target = db.prepare(`
       SELECT id, platform, model_id FROM models
@@ -96,7 +96,7 @@ describe('Fallback API', () => {
     const { status, body } = await request(app, 'GET', '/api/fallback/token-usage');
 
     expect(status).toBe(200);
-    expect(body.totalUsed).toBe(168);
+    expect(body.totalUsed).toBe(2168);
     const model = body.models.find((m: any) => m.modelDbId === target.id);
     expect(model).toMatchObject({
       platform: target.platform,

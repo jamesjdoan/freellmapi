@@ -155,32 +155,6 @@ describe('free-tier pool overview (#905)', () => {
     expect(disabledGroq.documentedBudget).toBe(6_000_000);
   });
 
-  it('names the models in each pool so the legend can group its rows', async () => {
-    const { body } = await get(app, '/api/free-tier');
-    const groqPools = body.pools.filter((p: any) => p.platform === 'groq');
-    for (const pool of groqPools) {
-      expect(pool.memberModelIds).toHaveLength(1);
-      expect(pool.memberModelIds).toHaveLength(pool.modelCount);
-    }
-
-    const usage = await get(app, '/api/fallback/token-usage');
-    const chainIds = (usage.body.models as any[])
-      .filter(m => m.platform === 'groq')
-      .map(m => m.modelId)
-      .sort();
-    expect(groqPools.flatMap((pool: any) => pool.memberModelIds).sort()).toEqual(chainIds);
-
-    // Every model of every pool maps back to exactly one pool: the join the
-    // legend does cannot put one row under two headers.
-    const seen = new Set<string>();
-    for (const pool of body.pools) {
-      for (const id of pool.memberModelIds) {
-        const qualified = `${pool.platform}::${id}`;
-        expect(seen.has(qualified)).toBe(false);
-        seen.add(qualified);
-      }
-    }
-  });
 
   it('classifies a credits-only pool and skips platforms with no key', async () => {
     const { body } = await get(app, '/api/free-tier');

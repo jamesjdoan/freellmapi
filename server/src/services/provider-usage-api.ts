@@ -154,49 +154,70 @@ export async function pollProviderUsageApis(): Promise<number> {
   }
 
   let written = 0;
-  for (const row of rows) {
-    const reader = USAGE_READERS[row.platform as Platform];
-    if (!reader) continue;
-    let apiKey: string;
+  for (const row of rows) written += await pollKeyRow(row);
+  return written;
+}
+
+/**
+ * Read one key's usage API now, outside the five-minute pass. Used where a
+ * fresh balance is the precondition for the next decision (a paid credit
+ * window measures spend from it). Returns how many observations were written.
+ */
+export async function pollProviderUsageForKey(keyId: number): Promise<number> {
+  if (!isExtensionEnabled('provider-usage-apis')) return 0;
+  let row: KeyRow | undefined;
+  try {
+    row = getDb().prepare('SELECT id, platform, encrypted_key, iv, auth_tag FROM api_keys WHERE id = ?')
+      .get(keyId) as KeyRow | undefined;
+  } catch {
+    return 0;
+  }
+  return row ? pollKeyRow(row) : 0;
+}
+
+async function pollKeyRow(row: KeyRow): Promise<number> {
+  const reader = USAGE_READERS[row.platform as Platform];
+  if (!reader) return 0;
+  let apiKey: string;
+  try {
+    apiKey = decrypt(row.encrypted_key, row.iv, row.auth_tag);
+  } catch {
+    return 0;
+  }
+  let observations: UsageObservation[];
+  try {
+    observations = await reader(apiKey);
+  } catch {
+    // An undocumented endpoint is allowed to disappear. Losing it costs the
+    // measurement, not the request path.
+    return 0;
+  }
+  let written = 0;
+  for (const observation of observations) {
     try {
-      apiKey = decrypt(row.encrypted_key, row.iv, row.auth_tag);
+      recordQuotaObservation({
+        platform: row.platform as Platform,
+        keyId: row.id,
+        quotaPoolKey: observation.quotaPoolKey,
+        // The allowance is credit, not requests or tokens: Ollama meters
+        // dollars of usage at per-model token rates.
+        metric: 'credits',
+        limit: observation.limit,
+        remaining: observation.remaining,
+        unit: observation.unit,
+        // The provider reports how much is left but not when it comes back.
+        // Inventing a reset instant would be the one thing worse than not
+        // having one.
+        resetAt: null,
+        resetStrategy: 'rolling_window',
+        source: 'quota_api',
+        confidence: 0.9,
+        notes: observation.notes,
+        endpoint: 'usage',
+      });
+      written++;
     } catch {
-      continue;
-    }
-    let observations: UsageObservation[];
-    try {
-      observations = await reader(apiKey);
-    } catch {
-      // An undocumented endpoint is allowed to disappear. Losing it costs the
-      // measurement, not the request path.
-      continue;
-    }
-    for (const observation of observations) {
-      try {
-        recordQuotaObservation({
-          platform: row.platform as Platform,
-          keyId: row.id,
-          quotaPoolKey: observation.quotaPoolKey,
-          // The allowance is credit, not requests or tokens: Ollama meters
-          // dollars of usage at per-model token rates.
-          metric: 'credits',
-          limit: observation.limit,
-          remaining: observation.remaining,
-          unit: observation.unit,
-          // The provider reports how much is left but not when it comes back.
-          // Inventing a reset instant would be the one thing worse than not
-          // having one.
-          resetAt: null,
-          resetStrategy: 'rolling_window',
-          source: 'quota_api',
-          confidence: 0.9,
-          notes: observation.notes,
-          endpoint: 'usage',
-        });
-        written++;
-      } catch {
-        // Recording is best-effort; a failed write must not stop the next key.
-      }
+      // Recording is best-effort; a failed write must not stop the next key.
     }
   }
   return written;

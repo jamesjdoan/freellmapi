@@ -2,21 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { useI18n } from '@/i18n'
 import { buildBudgetLegend } from '@/lib/budget-legend'
-import { formatPercent, formatTokens, platformColors, type TokenUsageData } from '@/lib/routing'
+import { formatTokens, platformColors, type TokenUsageData } from '@/lib/routing'
 
 const LEGEND_COLLAPSED_PX = 126
 
-// The monthly token budget: a stacked bar of every configured model's remaining
-// allowance, and under it one flat legend of models, smartest first. No
-// provider headers — the provider pool grouping (#1010) made the first thing on
-// the Models page read as "arranged by provider"; pool quota readings live on
-// each model's own page instead.
+// Estimated capacity and recorded usage are separate quantities. The bar
+// counts shared allowances once, never claims a live remaining balance.
 export function TokenUsageBar({ data }: { data: TokenUsageData }) {
   const { t } = useI18n()
   const { totalBudget, totalUsed, models } = data
-  const remaining = Math.max(0, totalBudget - totalUsed)
-  const remainingPct = totalBudget > 0 ? formatPercent(remaining / totalBudget) : '0%'
-  const usedPct = totalBudget > 0 ? Math.min(100, (totalUsed / totalBudget) * 100) : 0
 
   const { rows, unpublishedCount } = buildBudgetLegend(models, totalBudget)
 
@@ -41,43 +35,29 @@ export function TokenUsageBar({ data }: { data: TokenUsageData }) {
 
   return (
     <section id="quota-pools" className="scroll-mt-20 rounded-3xl border bg-card p-5">
-      <div className="flex items-baseline justify-between mb-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
         <h2 className="text-sm font-medium">{t('models.monthlyTokenBudget')}</h2>
         <span className="text-xs text-muted-foreground tabular-nums">
-          <span className="text-foreground font-medium">{formatTokens(remaining)}</span> {t('models.remaining')}
+          <span className="text-foreground font-medium">{formatTokens(totalBudget)}</span>
           <span className="mx-1.5">·</span>
-          {remainingPct} {t('models.of')} {formatTokens(totalBudget)}
-          {totalUsed > 0 && (
-            <>
-              <span className="mx-1.5">·</span>
-              {/* Say out loud what this number counts (#887): it is not the
-                  analytics total, and custom endpoints are in it. */}
-              <span className="cursor-help underline decoration-dotted underline-offset-2" title={t('models.usedScopeHint')}>
-                <span className="text-foreground font-medium">{formatTokens(totalUsed)}</span> {t('models.used')}
-              </span>
-            </>
-          )}
+          <span className="cursor-help underline decoration-dotted underline-offset-2" title={t('models.usedScopeHint')}>
+            {t('models.recordedChatUsage', { count: formatTokens(totalUsed) })}
+          </span>
         </span>
       </div>
 
+      <p className="mb-3 text-xs text-muted-foreground">{t('models.capacityEstimateHint')}</p>
       <div className="flex h-2.5 rounded-full overflow-hidden bg-muted">
         {rows.map(m => (
           <div
-            key={`${m.platform}:${m.modelId ?? m.displayName}`}
-            title={`${m.displayName} (${m.platform}): ${formatTokens(m.remainingTokens)} ${t('models.remaining')}, ${formatTokens(m.usedTokens)} ${t('models.used')}`}
+            key={m.poolKey}
+            title={`${m.memberNames.join(', ')} (${m.platform}): ${formatTokens(m.budget)}`}
             style={{
               width: `${m.widthPct}%`,
               backgroundColor: platformColors[m.platform] ?? '#94a3b8',
             }}
           />
         ))}
-        {totalUsed > 0 && (
-          <div
-            title={`Used: ${formatTokens(totalUsed)}`}
-            className="bg-muted-foreground/30"
-            style={{ width: `${usedPct}%` }}
-          />
-        )}
       </div>
 
       <div
@@ -87,20 +67,20 @@ export function TokenUsageBar({ data }: { data: TokenUsageData }) {
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-1.5 text-xs tabular-nums">
           {rows.map(m => (
-            <div key={`${m.platform}:${m.modelId ?? m.displayName}`} className="flex items-center gap-2 min-w-0">
+            <div key={m.poolKey} className="flex items-center gap-2 min-w-0">
               <span
                 className="size-2 rounded-sm flex-shrink-0"
                 style={{ backgroundColor: platformColors[m.platform] ?? '#94a3b8' }}
               />
-              <span className="truncate">{m.displayName}</span>
+              <span className="truncate" title={m.memberNames.join(', ')}>
+                {m.displayName}{m.memberNames.length > 1 ? ` +${m.memberNames.length - 1}` : ''}
+              </span>
               <span className="flex-1" />
-              {/* remaining / budget: a bare remaining figure gives no sense of
-                  how much of the allowance is gone (#887). */}
               <span
                 className="font-mono text-muted-foreground"
-                title={t('models.legendRemainingTitle', { name: m.displayName, platform: m.platform })}
+                title={t('models.legendRemainingTitle', { name: m.memberNames.join(', '), platform: m.platform })}
               >
-                {formatTokens(m.remainingTokens)}<span className="mx-0.5">/</span>{formatTokens(m.budget)}
+                {formatTokens(m.budget)}
               </span>
             </div>
           ))}
@@ -120,7 +100,7 @@ export function TokenUsageBar({ data }: { data: TokenUsageData }) {
           onClick={() => setExpanded(e => !e)}
           className="mt-2 flex w-full items-center justify-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
-          {expanded ? t('models.showLess') : t('models.showAllModels', { count: rows.length })}
+          {expanded ? t('models.showLess') : t('models.showAllAllowances', { count: rows.length })}
           <ChevronDown className={`size-3.5 transition-transform duration-300 ${expanded ? 'rotate-180' : ''}`} />
         </button>
       )}

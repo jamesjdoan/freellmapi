@@ -24,6 +24,8 @@ import { overriddenFieldNames } from '../services/model-state.js';
 import { parseModelScope, scopeAllows } from '../lib/model-scope.js';
 import { getQuotaOutlook } from '../services/quota-outlook.js';
 import { isExtensionEnabled } from '../services/extension-state.js';
+import { inferQuotaPoolKey } from '../services/provider-quota.js';
+import type { Platform } from '@freellmapi/shared/types.js';
 
 export const fallbackRouter = Router();
 
@@ -442,6 +444,8 @@ const membershipSchema = z.object({
   chain: z.string().min(1),
   modelDbIds: z.array(z.number().int().positive()).min(1),
   member: z.boolean(),
+  /** Recommendation adoption appends reactivated rows; manual restore keeps rank. */
+  append: z.boolean().optional(),
 });
 
 /**
@@ -519,6 +523,17 @@ fallbackRouter.post('/membership', (req: Request, res: Response) => {
     return;
   }
   const known = knownModelIds(db);
+  const append = parsed.data.member && parsed.data.append === true;
+  if (append && parsed.data.modelDbIds.some(id => !known.has(id))) {
+    res.status(409).json({ error: { message: 'A selected recommendation model no longer exists. Refresh before applying.' } });
+    return;
+  }
+  const active = append ? new Set((db.prepare(
+    'SELECT model_db_id FROM profile_models WHERE profile_id = ? AND enabled = 1',
+  ).all(profile.id) as { model_db_id: number }[]).map(row => row.model_db_id)) : null;
+  const modelDbIds = active
+    ? [...new Set(parsed.data.modelDbIds)].filter(id => !active.has(id))
+    : parsed.data.modelDbIds;
   // Last among the ENABLED members, or first when the chain is empty.
   //
   // Counting disabled rows too put new members far past the end: Apex held a
@@ -528,8 +543,13 @@ fallbackRouter.post('/membership', (req: Request, res: Response) => {
   const tail = db.prepare(`
     SELECT COALESCE(MAX(priority), 0) AS p FROM profile_models
      WHERE profile_id = ? AND enabled = 1
-  `).get(profile.id) as { p: number };
-  const upsert = db.prepare(`
+  `);
+  const upsert = db.prepare(append ? `
+    INSERT INTO profile_models (profile_id, model_db_id, priority, enabled)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(profile_id, model_db_id) DO UPDATE SET priority = excluded.priority, enabled = 1
+      WHERE profile_models.enabled = 0
+  ` : `
     INSERT INTO profile_models (profile_id, model_db_id, priority, enabled)
     VALUES (?, ?, ?, ?)
     ON CONFLICT(profile_id, model_db_id) DO UPDATE SET enabled = excluded.enabled
@@ -540,13 +560,17 @@ fallbackRouter.post('/membership', (req: Request, res: Response) => {
   // and key scope were validated in different places and never joined, so a
   // dead position looked like depth. Removal is always allowed - a member you
   // cannot reach is exactly the one you want to be able to delete.
-  if (parsed.data.member) {
+  if (parsed.data.member && modelDbIds.length > 0) {
     const keys = db.prepare('SELECT platform, enabled, status, model_scope_json FROM api_keys').all() as
       { platform: string; enabled: number; status: string; model_scope_json: string | null }[];
     const rows = db.prepare(
-      `SELECT id, platform, model_id, COALESCE(endpoint_scope, '') AS endpoint_scope
-         FROM models WHERE id IN (${parsed.data.modelDbIds.map(() => '?').join(',')})`,
-    ).all(...parsed.data.modelDbIds) as { id: number; platform: string; model_id: string; endpoint_scope: string }[];
+      `SELECT id, platform, model_id, enabled, COALESCE(endpoint_scope, '') AS endpoint_scope
+         FROM models WHERE id IN (${modelDbIds.map(() => '?').join(',')})`,
+    ).all(...modelDbIds) as { id: number; platform: string; model_id: string; enabled: number; endpoint_scope: string }[];
+    if (append && rows.some(row => row.enabled !== 1)) {
+      res.status(409).json({ error: { message: 'A selected recommendation model is disabled. Enable it separately before applying.' } });
+      return;
+    }
     const blocked = rows
       .map(r => ({ r, cause: unreachableCause(keys, r.platform, r.model_id) }))
       .filter(x => x.cause !== null);
@@ -590,12 +614,15 @@ fallbackRouter.post('/membership', (req: Request, res: Response) => {
   }
 
   let changed = 0;
-  let next = tail.p;
   db.transaction(() => {
-    for (const id of parsed.data.modelDbIds) {
+    // Read the current enabled tail once, inside the write transaction.
+    const currentTail = tail.get(profile.id) as { p: number };
+    let next = currentTail.p;
+    for (const id of modelDbIds) {
       if (!known.has(id)) continue;
+      const result = upsert.run(profile.id, id, parsed.data.member ? next + 1 : next, parsed.data.member ? 1 : 0);
+      if (append && result.changes === 0) continue;
       if (parsed.data.member) next += 1;
-      upsert.run(profile.id, id, next, parsed.data.member ? 1 : 0);
       changed++;
     }
   })();
@@ -711,100 +738,97 @@ fallbackRouter.post('/sort/:preset', (req: Request, res: Response) => {
   res.json({ success: true, preset });
 });
 
-// Token usage per model for the stacked bar
+// Catalogue capacity is an estimate, not a provider-reported monthly balance.
 fallbackRouter.get('/token-usage', (_req: Request, res: Response) => {
   const db = getDb();
+  const activeProfileId = getActiveProfileId(db);
+  const columns = `m.id AS model_db_id, m.platform, m.model_id, m.display_name,
+    m.monthly_token_budget, m.intelligence_rank, m.key_id, m.endpoint_scope,
+    m.rpm_limit, m.rpd_limit, m.tpm_limit, m.tpd_limit`;
+  const rawModels = (activeProfileId
+    ? db.prepare(`
+        SELECT ${columns} FROM profile_models pm JOIN models m ON m.id = pm.model_db_id
+        WHERE pm.profile_id = ? AND pm.enabled = 1 AND m.enabled = 1
+        ORDER BY m.intelligence_rank ASC, pm.priority ASC
+      `).all(activeProfileId)
+    : db.prepare(`
+        SELECT ${columns} FROM fallback_config fc JOIN models m ON m.id = fc.model_db_id
+        WHERE fc.enabled = 1 AND m.enabled = 1
+        ORDER BY m.intelligence_rank ASC, fc.priority ASC
+      `).all()) as {
+        model_db_id: number; platform: Platform; model_id: string; display_name: string;
+        monthly_token_budget: string; intelligence_rank: number; key_id: number | null;
+        endpoint_scope: string; rpm_limit: number | null; rpd_limit: number | null;
+        tpm_limit: number | null; tpd_limit: number | null;
+      }[];
 
-  // Get platforms that have enabled keys
-  const platforms = db.prepare(`
-    SELECT DISTINCT ak.platform
-    FROM api_keys ak
-    WHERE ak.enabled = 1
-  `).all() as { platform: string }[];
-  const platformSet = new Set(platforms.map(p => p.platform));
-
-  // Check if there is an active profile
-  const settingRow = db.prepare(`SELECT value FROM settings WHERE key = 'active_profile_id'`).get() as { value: string } | undefined;
-  const activeProfileId = settingRow ? (parseInt(settingRow.value) || null) : null;
-
-  // Verify active profile still exists
-  const activeProfile = activeProfileId
-    ? db.prepare('SELECT id FROM profiles WHERE id = ?').get(activeProfileId) as any
-    : null;
-
-  // Ordered by intelligence (rank 1 = smartest), not chain priority: the
-  // dashboard's monthly-budget bar and legend follow this order, and chain
-  // priority is seeded provider by provider, which read as "grouped by
-  // provider" (#1243). Priority stays as the tiebreaker within a rank.
-  let rawModels: { model_db_id: number; platform: string; model_id: string; display_name: string; monthly_token_budget: string; priority: number; enabled: number; intelligence_rank: number; rpm_limit: number | null; rpd_limit: number | null; tpm_limit: number | null; tpd_limit: number | null }[];
-
-  if (activeProfile) {
-    // Profile mode: use profile_models chain (all models in profile, checked against enabled)
-    rawModels = db.prepare(`
-      SELECT m.id as model_db_id, m.platform, m.model_id, m.display_name, m.monthly_token_budget,
-             pm.priority, pm.enabled, m.intelligence_rank,
-             m.rpm_limit, m.rpd_limit, m.tpm_limit, m.tpd_limit
-      FROM profile_models pm
-      JOIN models m ON m.id = pm.model_db_id
-      WHERE pm.profile_id = ? AND m.enabled = 1
-      ORDER BY m.intelligence_rank ASC, pm.priority ASC
-    `).all(activeProfileId) as any[];
-  } else {
-    // Default mode: use fallback_config (only include enabled models)
-    rawModels = db.prepare(`
-      SELECT m.id as model_db_id, m.platform, m.model_id, m.display_name, m.monthly_token_budget,
-             fc.priority, fc.enabled, m.intelligence_rank,
-             m.rpm_limit, m.rpd_limit, m.tpm_limit, m.tpd_limit
-      FROM fallback_config fc
-      JOIN models m ON m.id = fc.model_db_id
-      WHERE m.enabled = 1
-      ORDER BY m.intelligence_rank ASC, fc.priority ASC
-    `).all() as any[];
+  const allKeys = db.prepare(`
+    SELECT id, platform, base_url, model_scope_json, enabled, status FROM api_keys
+  `).all() as {
+    id: number; platform: string; base_url: string | null; model_scope_json: string | null;
+    enabled: number; status: string;
+  }[];
+  const baseUrlByKeyId = new Map(allKeys.map(k => [k.id, k.base_url]));
+  const keysByPlatform = new Map<string, { id: number; baseUrl: string | null; scope: Set<string> | null }[]>();
+  for (const key of allKeys) {
+    if (key.enabled !== 1 || (key.status !== 'healthy' && key.status !== 'unknown')) continue;
+    const keys = keysByPlatform.get(key.platform) ?? [];
+    keys.push({ id: key.id, baseUrl: key.base_url, scope: parseModelScope(key.model_scope_json) });
+    keysByPlatform.set(key.platform, keys);
   }
 
-  // Build per-model breakdown (only platforms with keys), preserving enabled state
   const usageRows = db.prepare(`
     SELECT platform, model_id, COALESCE(SUM(input_tokens + output_tokens), 0) AS used
     FROM requests
-    WHERE created_at >= datetime('now', 'start of month')
-      AND request_type = 'chat'
+    WHERE created_at >= datetime('now', 'start of month') AND request_type = 'chat'
     GROUP BY platform, model_id
   `).all() as { platform: string; model_id: string; used: number }[];
   const usageByModel = new Map(usageRows.map(r => [`${r.platform}:${r.model_id}`, r.used]));
+  const poolAllowances = new Map<string, Map<number, number>>();
 
-  const keyCountMap = new Map(
-    (db.prepare("SELECT platform, COUNT(*) as count FROM api_keys WHERE enabled = 1 AND status IN ('healthy', 'unknown') GROUP BY platform").all() as { platform: string; count: number }[])
-      .map(k => [k.platform, k.count])
-  );
-
-  const modelBudgets = rawModels
-    .filter(m => platformSet.has(m.platform))
-    .map(m => {
-      const keys = Math.max(1, keyCountMap.get(m.platform) ?? 1);
-      return {
-        modelDbId: m.model_db_id,
-        displayName: m.display_name,
-        platform: m.platform,
-        modelId: m.model_id,
-        intelligenceRank: m.intelligence_rank,
-        budget: parseBudget(m.monthly_token_budget) * keys,
-        used: usageByModel.get(`${m.platform}:${m.model_id}`) ?? 0,
-        enabled: m.enabled === 1,
-        rpmLimit: m.rpm_limit,
-        rpdLimit: m.rpd_limit,
-        tpmLimit: m.tpm_limit,
-        tpdLimit: m.tpd_limit,
-      };
+  const modelBudgets = rawModels.flatMap(m => {
+    const endpoint = m.endpoint_scope || (m.key_id != null ? baseUrlByKeyId.get(m.key_id) : null);
+    const keys = (keysByPlatform.get(m.platform) ?? []).filter(key => {
+      if (!scopeAllows(key.scope, m.model_id)) return false;
+      if (m.platform !== 'custom') return true;
+      if (endpoint) return key.baseUrl === endpoint;
+      return m.key_id == null || key.id === m.key_id;
     });
-
-  // Total budget counts all models (both enabled and disabled — they contribute to the pool)
-  const totalBudget = modelBudgets.reduce((s, m) => s + m.budget, 0);
-  const totalUsed = modelBudgets.reduce((s, m) => s + m.used, 0);
+    if (keys.length === 0) return [];
+    const poolKey = m.platform === 'custom'
+      ? qualifiedModelMemberId(m.platform, m.model_id, endpoint) ?? inferQuotaPoolKey(m.platform, m.model_id)
+      : inferQuotaPoolKey(m.platform, m.model_id, endpoint);
+    const allowance = parseBudget(m.monthly_token_budget);
+    const pool = poolAllowances.get(poolKey) ?? new Map<number, number>();
+    // Shared models do not create more quota. Scoped keys add only the
+    // allowance of models they can actually serve.
+    for (const key of keys) pool.set(key.id, Math.max(pool.get(key.id) ?? 0, allowance));
+    poolAllowances.set(poolKey, pool);
+    return [{
+      modelDbId: m.model_db_id,
+      displayName: m.display_name,
+      platform: m.platform,
+      modelId: m.model_id,
+      intelligenceRank: m.intelligence_rank,
+      poolKey,
+      budget: allowance * keys.length,
+      used: usageByModel.get(`${m.platform}:${m.model_id}`) ?? 0,
+      enabled: true,
+      rpmLimit: m.rpm_limit,
+      rpdLimit: m.rpd_limit,
+      tpmLimit: m.tpm_limit,
+      tpdLimit: m.tpd_limit,
+    }];
+  });
+  const poolBudgets = new Map([...poolAllowances].map(([poolKey, allowances]) =>
+    [poolKey, [...allowances.values()].reduce((sum, allowance) => sum + allowance, 0)]));
 
   res.json({
-    totalBudget,
-    totalUsed,
-    models: modelBudgets,
+    totalBudget: [...poolBudgets.values()].reduce((sum, budget) => sum + budget, 0),
+    // Recorded spend is independent of estimated capacity, including routes
+    // since removed from the chain and endpoints with unpublished quotas.
+    totalUsed: usageRows.reduce((sum, row) => sum + row.used, 0),
+    models: modelBudgets.map(m => ({ ...m, poolBudget: poolBudgets.get(m.poolKey) ?? 0 })),
   });
 });
 

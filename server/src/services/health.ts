@@ -373,8 +373,8 @@ export async function probeKeyValidity(keyId: number): Promise<KeyProbeOutcome> 
 }
 
 /**
- * Promote a key out of 'error' or 'unknown' after it successfully served a live
- * request.
+ * Clear a prior check failure after successful traffic, promoting an 'error' or
+ * 'unknown' key when needed.
  *
  * Serving traffic is stronger evidence than any probe, so a key stuck at 'error'
  * from an earlier transport blip should not have to wait for the next health pass
@@ -386,7 +386,7 @@ export async function probeKeyValidity(keyId: number): Promise<KeyProbeOutcome> 
 export function markKeyHealthyFromRequest(keyId: number): void {
   try {
     getDb()
-      .prepare("UPDATE api_keys SET status = 'healthy', last_health_error = NULL WHERE id = ? AND status IN ('error', 'unknown')")
+      .prepare("UPDATE api_keys SET status = 'healthy', last_health_error = NULL WHERE id = ? AND (status IN ('error', 'unknown') OR (status = 'healthy' AND last_health_error IS NOT NULL))")
       .run(keyId);
     failureCount.delete(keyId);
   } catch {

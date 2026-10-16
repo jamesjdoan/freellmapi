@@ -210,6 +210,11 @@ describe('provider-quota: pool inference', () => {
     expect(resolveQuotaPolicy('custom', 'llama3', 'http://127.0.0.1:11434/v1')).toMatchObject({
       accounting: 'unmetered', metrics: [],
     });
+    expect(resolveQuotaPolicy('xkiro', 'mistral/mistral-7b-instruct:free')).toMatchObject({
+      poolKey: 'xkiro::free', scope: 'shared_pool', accounting: 'metered',
+      metrics: ['tokens'],
+      reset: { strategy: 'fixed_calendar', period: 'day' },
+    });
   });
 });
 

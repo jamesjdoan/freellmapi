@@ -1,5 +1,85 @@
 # Session Handoff
 
+## Session 2026-10-15 — JD-STUDIO (Mac Studio (2)), capacity and recommendation features deployed
+
+**What was done:** James explicitly approved deployment. Ran `./scripts/deploy.sh && docker compose up -d && docker compose ps`, deploying `jamesjdoan/freellmapi:main-20261015-070832`. Preserved the existing volume and took `backups/freellmapi-data-20261015-070832.tar.gz`; script confirmed running-image match, healthy service and published port 3001. All 15 credentials decrypt. Immediate key/scopes and chain digests matched pre-deploy after live UI checks; active profile remains 3. Authenticated capacity returned one pool, 11 models and fresh real AMD pressure. Actual Keys/Quota surfaces show the new bars, with missing readings Unknown. Actual Keys and Compare recommendation previews opened and Cancel preserved all chain state. Browser errors were empty; temporary session and browser resources removed. No commit or push.
+
+**What's next:** Refresh Keys and Analytics → Compare models to inspect/use Apply recommendations. Confirm only the intended chain additions. AMD capacity-aware priority is deployed but remains OFF; enable deliberately in Extensions if desired. Parked models and saved chains were not changed by deployment.
+
+**In progress:** —
+
+## Session 2026-10-15 — JD-STUDIO (Mac Studio (2)), confirmed recommendation adoption completed
+
+**What was done:** James approved D4–D6 in `docs/adr/ARCH-20261015-apply-chain-recommendations.md`. Built Apply recommendations beside existing Keys/Compare Models fit hints, with fresh individually graded route choices, saved-threshold/draft protection, explicit confirmation and per-chain outcomes. The existing membership API has explicit append intent; active members remain unmoved and reactivated recommendations land at the tail. Manual restoration and live eligibility guards are retained. Five new tests failed before the change, then all 14 membership cases passed. Integrated server checks passed 99 tests and typecheck. Client build, 29 tests and 60-locale/1958-key validation passed. Actual isolated Chromium/API smoke verified Cancel/first click had no effects, Keys append at priority 5, exact-provider Compare adoption, excluded incompatible/out-of-scope routes, refreshed chips, stale/draft protection and honest partial results. Final actual HTTP adoption/repeat returned changed 1/0 with head/order/active profile intact. Synthetic keys and in-memory data only; no inference or operator data changes. Smoke resources and plan removed.
+
+**What's next:** Both this feature and the preceding AMD capacity-bars/background-observer/routing feature remain undeployed. Existing production image is `jamesjdoan/freellmapi:main-20261014-215829`. Deployment requires separate explicit approval. After deployment inspect Keys → expanded provider → Apply recommendations and Analytics → Compare models → Apply recommendations; preview, choose and confirm only intended members. Existing AMD models stay parked until deliberately adopted/enabled. No commit or push approved.
+
+**In progress:** —
+
+## Session 2026-10-15 — JD-STUDIO (Mac Studio (2)), AMD background capacity bars and routing verified
+
+**What was done:** James approved D1–D3 in `docs/adr/ARCH-20261014-amd-capacity-bars-and-routing.md`. Implemented the 40-second anonymous background observer with cached-only page/routing reads, per-model fleet-utilisation meters and independently switchable `amd-capacity-routing` (default OFF). Fresh publisher-full AMD routes follow eligible alternatives within request-match tiers and remain last resort. Unknown/stale readings are neutral, explicit pins and existing eligibility guards remain intact, and no saved chain or operator model/key state was edited. Parent repaired malformed delegated patches and completed integration directly before runtime verification. Passed 131 focused server tests plus typecheck, 36 client tests, production client build and 60-locale/1947-key validation. An isolated in-memory runtime used synthetic keys and the real AMD feed: successful 24.126-second collection, pending capacity HTTP 39 ms and fresh HTTP 7 ms, 11 models. Real-source routing verified off/on selection, explicit pinning, scoped last resort and unchanged saved chain. Actual Chromium verified provider/model/quota meters, one shared pool, persisted opt-in control restored OFF and controlled 0%/aged/Unknown states with no browser errors. Updated docs/ADR/changelog and removed smoke resources and consumed batons.
+
+**What's next:** Deployment needs its own explicit approval. Existing deployed image remains `jamesjdoan/freellmapi:main-20261014-215829`; it still has the too-short five-second collector and no new meters/routing switch. After approved deployment, inspect Keys → AMD models, Quota signals and model detail. Routing remains OFF until deliberately enabled in Extensions → AMD capacity-aware priority. This does not activate parked AMD models or add them to chains. No commit or push approved.
+
+**In progress:** —
+
+## Session 2026-10-14 — JD-STUDIO (Mac Studio (2)), capacity deployed and visually inspected
+
+**What was done:** James explicitly approved capacity deployment and requested visual inspection guidance. Deployed `jamesjdoan/freellmapi:main-20261014-215829`, preserving the existing volume and taking `backups/freellmapi-data-20261014-215829.tar.gz`. Finished compose up/ps confirmed a healthy container with published port 3001. All 15 keys decrypt; immediate pre-deploy key/scopes and chain digests match, active profile 3 unchanged. Model listing and real auto/AMD MiniCPM5-2B completions returned 200. The real AMD completion supplied precise fractional allocation headers. Deployed capacity API and actual Chromium key/model/quota surfaces showed 0.99989486 / 1 points remaining and 0.00010514 used, one account pool and 11 models, with no browser errors. Fleet pressure correctly remains Unknown while the vendor feed is unavailable. Visual paths and interpretation are documented in `local://capacity-visual-inspection.md`; durable source/behavior documentation remains in provider docs and the approved ADR. No commit/push or routing activation.
+
+**What's next:** Refresh Keys, inspect AMD's shared allowance, expand its models, and open Quota signals. The indicator is now live. Unknown pressure is a provider-source limitation, not a zero reading. No further deployment is needed for this feature.
+
+**In progress:** —
+
+## Session 2026-10-14 — JD-STUDIO (Mac Studio (2)), approved Keys deployment and capacity build
+
+**What was done:** James selected both approval actions. Deployed the completed Keys controls before capacity source changed: image `jamesjdoan/freellmapi:main-20261014-192916`, backup `backups/freellmapi-data-20261014-192916.tar.gz`, existing volume preserved, healthy container with published port 3001. Actual deployed UI verified alphabetical cards and Hide/Disabled-view behavior. All 15 keys decrypt and immediate pre-deploy key/chain digests match. A real auto completion returned `OK`. Completed the approved capacity backend, shared read-only API and all model/key/quota presentation surfaces. One shared observer/clock shows precise account points, independent model pressure and existing cooldown, with honest source/age and stale/unknown states. Recovered invalid delegated/nested local edits and verified the retained Ignore preview/Cancel flow. Passed 84 server tests, server typecheck, 36 client tests, client build and 60-locale/1947-key validation. Real-data local smoke produced 0.99990221 of 1 points remaining and exposed 0.00009779 used in all supported surfaces, with one account pool and no browser errors. Controlled UI cases proved full/stale/unknown/cooldown and extension-off states. Vendor pressure HTTP did not return a first byte from runtime clients, so live pressure correctly showed Unknown rather than a substituted cached measurement. No capacity deployment, commit or push approved.
+
+**What's next:** Capacity deployment requires separate explicit approval. Keys controls are already live. The capacity indicator is implemented and verified locally; if the vendor pressure source remains unavailable it will display Unknown. Preserve enablement, scopes and chain order. Full verified paths and source limitations are in the latest changelog and `docs/adr/ARCH-20261014-provider-model-capacity-indicator.md`.
+
+**In progress:** —
+
+## Session 2026-10-14 — JD-STUDIO (Mac Studio (2)), AMD tests and Keys provider controls
+
+**What was done:** Tested every public AMD chat model once: nine usable completions, DeepSeek-V4.1-Flash 429, GLM-5.3-Flash canceled at the 60-second client budget. No model enablement or chain order changed. Recorded a pending capacity-indicator decision in `docs/adr/ARCH-20261014-provider-model-capacity-indicator.md`: shared account free allocation, individual model fleet pressure, existing cooldowns and honest freshness. Actual headers retain small fractional usage that the current cent-rounded state hides. The indicator has not been implemented. Independently integrated the delegated Keys controls, repaired malformed JSX and a deleted English verdict key, and added five focused component behavior regressions. Providers now sort alphabetically and have a reversible, browser-persistent hide-all-disabled-provider button. Eleven focused tests, 60-locale/1917-key validation and the client production build passed. Actual local Chromium verified 15 provider cards → 12 after hiding the three all-off groups, reload persistence, Disabled-tab precedence, reversal, no browser errors and unchanged backend key enabled flags. This UI is not yet deployed.
+
+**What's next:** Capacity-indicator implementation requires approval of the pending ADR. Keys UI deployment requires its own explicit approval. ElectronHub's no-ad allocation is 10 Neutrinos/day plus a separate $0.25 weekly Free credit wallet. Its current public `:free` chat models cost 1, 2 or 3 Neutrinos per request according to the provider's own pricing code. Favor 1-cost routes for more daily requests, avoid wasted probes/retries because failures and cancellations are charged, and keep permanent-credit spend off. Existing FreeLLM ElectronHub rows are unsuffixed weekly-credit routes, not the daily Neutrino routes, and none is active in the Coding chain. No ElectronHub import, activation, inference test, ad or purchase was requested or performed. No commit or push approved.
+
+**In progress:** —
+
+## Session 2026-10-14 — JD-STUDIO (Mac Studio (2)), AMD public model inventory
+
+**What was done:** Investigated the newly added AMD key. The existing native `radeon` provider uses the exact AMD China Token Factory shared endpoint, and key #39 returned its 12-model list with 200. The local catalogue held only two disabled models. Imported nine missing chat models through the running model API as operator-owned `radeon` rows, with advertised context and capabilities. The Keys provider table now lists all 11 public chat models, nine enabled and two previously disabled models still parked. The OCR-only model and three dedicated credit-funded deployments were not presented as chat routes. Active profile 3 and every selected chain are unchanged. Backup `/app/server/data/freeapi-before-amd-model-import-20261014060153987.db` lives in the persistent data volume. A real `radeon:MiniCPM5-2B` request returned 200 and a response containing `OK`. Temporary verification sessions were revoked. Details and exact imported ids are recorded in `config/changelog.md`.
+
+**What's next:** Refresh Keys → Providers → AMD Radeon Cloud to see the models. None were added to selected routing chains. This was live configuration through existing APIs, not an image deployment. No commit or push was approved.
+
+**In progress:** —
+
+## Session 2026-10-14 — JD-STUDIO (Mac Studio (2)), approved Chat capacity deployment
+
+**What was done:** James approved deployment of the Chat capacity correction. Ran `./scripts/deploy.sh && docker compose up -d && docker compose ps`. Deployed `jamesjdoan/freellmapi:main-20261014-164650` on the existing `freellmapi_freellmapi-data` volume, with backup `backups/freellmapi-data-20261014-164650.tar.gz`. The recreated container reported `Up (healthy)` with published `127.0.0.1:3001->3001/tcp`. All 15 stored keys decrypt with zero failures, active profile remains 3, and the chain configuration digest matches the pre-deploy value. Authenticated deployed endpoint and isolated Chromium both showed 112M estimated capacity, separate 3.7B recorded chat usage, four capacity segments and 14 unpublished models. No overflow or browser errors. Authenticated `/v1/models` returned 200 with 478 models. A real `auto` chat returned 200, model `qwen/qwen3.8-27b`, content `OK`, 18 tokens, in 54 ms. Temporary dashboard session revoked and verification browser closed.
+
+**What's next:** The correction is live. Commit and push remain unapproved. Earlier undeployed warnings describe their previous snapshots, not this deployed state.
+
+**In progress:** —
+
+## Session 2026-10-14 — JD-STUDIO (Mac Studio (2)), approved deployment
+
+**What was done:** James approved only deployment (option 1), not commit or push. Ran `./scripts/deploy.sh` successfully: image `jamesjdoan/freellmapi:main-20261014-141957`, backup `backups/freellmapi-data-20261014-141957.tar.gz`, persistent volume `freellmapi_freellmapi-data`. Finished with `docker compose up -d && docker compose ps`: `freellmapi-freellmapi-1` is `Up (healthy)` on `127.0.0.1:3001->3001/tcp`. Verified the deployed tailnet dashboard in isolated Chromium: Models → Chat → Ignore GLM 5.3 shows a modal preview of three models and affected chains, with explicit Ignore and switch off and Cancel. Independent API reads before preview, during preview and after Cancel matched exactly. Escape dismissed the dialog. Opened the actual Extensions menu and verified both updated entries, descriptions and links to `/premium` and `/models/chat`. No browser errors. The temporary session was revoked and browser/profile removed. No routing changes were applied during this deployment smoke.
+
+**What's next:** Final modal and registry features are now live. Commit and push still require explicit approval. Review and stage only feature, docs and wrap files, excluding `.compressa/ledger.jsonl`. Push the extension branch to `fork`, never `origin`. The earlier handoff's undeployed warning describes its previous snapshot and is superseded by this deployment block.
+
+**In progress:** —
+
+## Session 2026-10-14 — JD-STUDIO (Mac Studio (2))
+
+**What was done:** Added catalogue update history, per-provider/model diffs and sync results, Premium model history, external model leads and restricted agent access, operator-owned statuses, and persistent catalogue ignores. The initial A12 ignore implementation is committed and pushed as `18fe337f` on `docs/freellm-assert-start-on-redeploy`. Subsequent work added Ignore to Models → Chat rows, applying all provider routes in a logical group in one transaction. Preview and apply now both POST `{ targets: [{ platform, modelId }] }`; DELETE un-ignore remains single-target. All callers and tests were migrated. The final confirmation uses the existing modal dialog, with impact preview, explicit Ignore and switch off, Cancel and Escape. The Extensions registry explicitly tracks every feature under the unchanged ids `catalogue-log` and `external-model-discovery`, with Premium/chat links and accurate off behavior. Registry entries and operator docs are updated.
+
+**What's next:** Final modal and registry updates are verified locally but remain uncommitted and undeployed. Obtain separate approval for deploy, commit and push. Deploy via `./scripts/deploy.sh`, verify actual modal confirmation and Extensions inventory on the rebuilt container using isolated Chromium, then commit only feature/docs/wrap files and push to `fork` (never `origin`). Exclude `.compressa/ledger.jsonl` and secrets. Live last received `jamesjdoan/freellmapi:main-20261014-135552`, which has chat Ignore and target-list endpoints but predates the modal layout correction and final registry descriptions. Local checks: 586 client tests passed, client build and 60-locale/1912-key i18n check passed, 12 catalogue-ignore server tests passed, server build passed, and registry/server plus inventory/client tests passed 5 + 3. The earlier full server run passed 4574 with the known pre-existing cli-keys failure, before the subsequent target-list changes. Browser smoke proved preview and Cancel leave routing unchanged, Escape dismisses, and both actual registry entries render with correct links against an isolated in-memory API. All temporary browser sessions were revoked and verification servers/profiles/scripts removed. The three temporary live ignores were lifted and their models stayed off as before.
+
+**In progress:** —
+
 ## Session 2026-10-12 — JD-STUDIO (Mac Studio M2 Max)
 
 Live data only for the chains; nothing here needs a rebuild. Backup taken first:

@@ -213,8 +213,6 @@ describe('CatalogueSyncs', () => {
     const groups = [...today.querySelectorAll('details')]
     expect(groups).toHaveLength(6)
     expect(groups.every(g => g.open)).toBe(true)
-    const fetched = vi.mocked(apiFetch).mock.calls.map(([p]) => String(p)).filter(p => p.includes('/detail'))
-    expect(fetched.sort()).toEqual(['/api/models/changes/syncs/detail?id=10', '/api/models/changes/syncs/detail?id=11'])
     expect(before.querySelector('details')).toBeNull()
 
     await act(async () => { [...today.querySelectorAll('button')].find(b => b.textContent === 'Collapse all')!.click() })

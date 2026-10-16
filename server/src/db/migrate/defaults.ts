@@ -81,6 +81,8 @@ import * as externalLeadProvider from '../migrations/20261014_000003_external_le
 import * as externalLeadIgnores from '../migrations/20261014_000004_external_lead_ignores.js';
 import * as catalogueSyncSwitches from '../migrations/20261014_000005_catalogue_sync_switches.js';
 import * as catalogueIgnores from '../migrations/20261014_000006_catalogue_ignores.js';
+import * as bonusGrants from '../migrations/20261016_000001_bonus_grants.js';
+import * as paidCreditWindows from '../migrations/20261017_000001_paid_credit_windows.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -247,4 +249,6 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: '20261014_000004_external_lead_ignores.ts', module: externalLeadIgnores },
   { filename: '20261014_000005_catalogue_sync_switches.ts', module: catalogueSyncSwitches },
   { filename: '20261014_000006_catalogue_ignores.ts', module: catalogueIgnores },
+  { filename: '20261016_000001_bonus_grants.ts', module: bonusGrants },
+  { filename: '20261017_000001_paid_credit_windows.ts', module: paidCreditWindows },
 ];

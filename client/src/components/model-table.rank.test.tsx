@@ -23,6 +23,7 @@ if (!globalThis.localStorage) {
 }
 
 import { MemoryRouter } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { DndContext } from '@dnd-kit/core'
 import { I18nProvider } from '@/i18n'
 import { SortableGroupRow } from './model-table'
@@ -48,6 +49,7 @@ function render(onMoveRank: (n: number) => void, editable = true) {
   root = createRoot(container)
   act(() => {
     root.render(
+      <QueryClientProvider client={new QueryClient()}>
       <I18nProvider>
         <MemoryRouter>
           <DndContext>
@@ -59,7 +61,8 @@ function render(onMoveRank: (n: number) => void, editable = true) {
             </table>
           </DndContext>
         </MemoryRouter>
-      </I18nProvider>,
+      </I18nProvider>
+      </QueryClientProvider>,
     )
   })
 }

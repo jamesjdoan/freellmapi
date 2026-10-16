@@ -169,6 +169,15 @@ During an operator-declared peak window, free relays are congested, so a model's
 - `peakAdjustedWeights()` returns `{ weights, adjusted }` — the dashboard labels the weight summary from the `adjusted` flag.
 - `startHour === endHour` is an **empty** window (not 24-hour) — an operator who drags both ends to the same value means "nothing".
 
+### AMD fleet capacity priority (opt-in)
+
+`amd-capacity-routing` defaults OFF and is controlled in Extensions. When ON, `orderChain` reads the shared AMD observer's cached snapshot, never the network. A validated sample remains fresh for less than 60 seconds. The publisher's `full` state forms a last-resort band after other eligible candidates within the same request-match tier. Both manual-priority and bandit strategies preserve their existing relative order inside each band. This changes priority, not the numeric bandit score.
+
+The final automatic serving order preserves the same pressure bands after soft context-margin/tool preferences. Exploration cannot promote a full route ahead of the leading non-full band. Explicit model/provider pins retain their intent, and the usual capability, key scope, health, cooldown, quota and paid-balance eligibility checks remain authoritative. If no alternative can serve, a full route is still tried. Unknown, stale or failed pressure contributes no preference.
+
+The observer uses the anonymous AMD JSON feed, a 40-second whole-request bound and a 20-second delay after completion. It runs with an AMD key configured and either capacity presentation or capacity routing enabled. Saved chain membership, public model IDs, model enabled state and provider preferences are not rewritten.
+
+
 ---
 
 ## 7. Per-Model Weight Overrides (env: `MODEL_ROUTING_OVERRIDES`)

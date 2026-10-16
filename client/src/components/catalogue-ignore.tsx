@@ -1,9 +1,10 @@
-import { useState, type MouseEvent } from 'react'
+import { useRef, useState, type MouseEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/i18n'
 import { apiFetch } from '@/lib/api'
 import { ConfirmButton } from '@/components/confirm-button'
 import { formatStamp } from '@/lib/stamp'
+import { Dialog, DialogPopup, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 
 // Ignoring a provider or model is the operator saying "never use this, free
 // or not". It switches the provider's keys and the models off (routing stops),
@@ -16,6 +17,9 @@ const BASE = '/api/models/catalogue-ignores'
 
 interface Impact { keys: number; models: number; chains: string[] }
 
+/** A whole provider (modelId null) or one of its models. */
+export interface IgnoreTarget { platform: string; modelId: string | null }
+
 interface CatalogueIgnore {
   platform: string
   modelId: string | null
@@ -23,7 +27,7 @@ interface CatalogueIgnore {
   switchedOff: { keys: number; models: number }
 }
 
-const target = (platform: string, modelId: string | null) =>
+const query = (platform: string, modelId: string | null) =>
   new URLSearchParams(modelId ? { platform, modelId } : { platform }).toString()
 
 function useRefreshCatalogue() {
@@ -42,46 +46,66 @@ const contained = (fn: () => void) => (e: MouseEvent) => {
   fn()
 }
 
-export function IgnoreButton({ platform, modelId, label }: { platform: string; modelId: string | null; label: string }) {
+/**
+ * Ignore one or more targets together. The Models page passes every provider
+ * route of a logical model; Catalog updates passes a single provider or model.
+ * `name` labels the control for screen readers; `className` styles the
+ * unarmed button only, so a hover-revealed button stays visible once armed.
+ */
+export function IgnoreButton({ targets, name, label, className }: {
+  targets: IgnoreTarget[]
+  name: string
+  label: string
+  className?: string
+}) {
   const { t } = useI18n()
   const refresh = useRefreshCatalogue()
   const [impact, setImpact] = useState<Impact | null>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const body = JSON.stringify({ targets })
   const preview = useMutation({
-    mutationFn: () => apiFetch<Impact>(`${BASE}/preview?${target(platform, modelId)}`),
+    mutationFn: () => apiFetch<Impact>(`${BASE}/preview`, { method: 'POST', body }),
     onSuccess: setImpact,
   })
   const ignore = useMutation({
-    mutationFn: () => apiFetch(BASE, { method: 'POST', body: JSON.stringify({ platform, modelId }) }),
+    mutationFn: () => apiFetch(BASE, { method: 'POST', body }),
     onSuccess: () => { setImpact(null); refresh() },
   })
-  const name = modelId ?? platform
 
-  if (!impact) {
-    return (
+  return (
+    <Dialog open={impact !== null} onOpenChange={open => { if (!open && !ignore.isPending) setImpact(null) }}>
       <button
+        ref={buttonRef}
         type="button"
         onClick={contained(() => preview.mutate())}
-        disabled={preview.isPending}
+        disabled={preview.isPending || ignore.isPending}
         aria-label={t('catalogue.ignoreLabel', { name })}
-        className="text-[11px] text-muted-foreground underline decoration-dotted hover:text-foreground"
+        className={className ?? 'text-[11px] text-muted-foreground underline decoration-dotted hover:text-foreground'}
       >
         {preview.isPending ? t('catalogue.ignoreChecking') : label}
       </button>
-    )
-  }
-  return (
-    <span role="group" aria-label={t('catalogue.ignoreLabel', { name })} className="inline-flex flex-wrap items-baseline gap-x-2 rounded border border-rose-500/40 bg-rose-500/5 px-1.5 py-0.5 text-[11px]">
-      <span>{t('catalogue.ignoreImpact', { keys: impact.keys, models: impact.models })}</span>
-      {impact.chains.length > 0 && (
-        <span className="text-rose-600 dark:text-rose-400">{t('catalogue.ignoreImpactChains', { chains: impact.chains.join(', ') })}</span>
+      {impact && (
+        <DialogPopup finalFocus={buttonRef} onClick={e => e.stopPropagation()}>
+          <DialogTitle>{t('catalogue.ignoreLabel', { name })}</DialogTitle>
+          <DialogDescription className="mt-2">
+            {t('catalogue.ignoreImpact', { keys: impact.keys, models: impact.models })}
+          </DialogDescription>
+          {impact.chains.length > 0 && (
+            <p className="mt-2 text-sm text-rose-600 dark:text-rose-400">
+              {t('catalogue.ignoreImpactChains', { chains: impact.chains.join(', ') })}
+            </p>
+          )}
+          <div className="mt-4 flex justify-end gap-3">
+            <button type="button" onClick={contained(() => setImpact(null))} disabled={ignore.isPending} className="rounded border px-3 py-2 text-sm">
+              {t('catalogue.ignoreCancel')}
+            </button>
+            <button type="button" onClick={contained(() => ignore.mutate())} disabled={ignore.isPending} className="rounded border border-rose-500/40 px-3 py-2 text-sm font-medium text-rose-600 dark:text-rose-400">
+              {t('catalogue.ignoreConfirm')}
+            </button>
+          </div>
+        </DialogPopup>
       )}
-      <button type="button" onClick={contained(() => ignore.mutate())} disabled={ignore.isPending} className="font-medium text-rose-600 hover:underline dark:text-rose-400">
-        {t('catalogue.ignoreConfirm')}
-      </button>
-      <button type="button" onClick={contained(() => setImpact(null))} className="text-muted-foreground hover:underline">
-        {t('catalogue.ignoreCancel')}
-      </button>
-    </span>
+    </Dialog>
   )
 }
 
@@ -93,7 +117,7 @@ export function CatalogueIgnoresList({ hidden }: { hidden: number }) {
     queryFn: () => apiFetch(BASE),
   })
   const unignore = useMutation({
-    mutationFn: (ig: CatalogueIgnore) => apiFetch(`${BASE}?${target(ig.platform, ig.modelId)}`, { method: 'DELETE' }),
+    mutationFn: (ig: CatalogueIgnore) => apiFetch(`${BASE}?${query(ig.platform, ig.modelId)}`, { method: 'DELETE' }),
     onSuccess: refresh,
   })
   const ignores = data?.ignores ?? []

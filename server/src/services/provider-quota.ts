@@ -350,6 +350,12 @@ export function consumesPaidBalance(platform: Platform, modelId?: string | null)
   return PAID_UNLESS_FREE_SUFFIX.has(platform) && !(modelId?.trim() ?? '').endsWith(':free');
 }
 
+/** Whether this platform serves billed models on the same credential as its
+ *  free ones, so the paid-balance guard applies to it at all. */
+export function hasPaidTier(platform: string): boolean {
+  return PAID_UNLESS_FREE_SUFFIX.has(platform);
+}
+
 /**
  * True when one quota bucket covers every KEY on the platform, so every key
  * reports the same remaining number. Callers that rank keys against each other
@@ -558,9 +564,11 @@ function maybeAddObservation(
   // Convert into the declared unit before anything reads the number: the
   // observation is stored and compared against other providers' values for the
   // same metric, so a dollars-vs-cents mismatch is not recoverable later.
+  // Usage-priced free allocations can consume fractions of a cent. Rounding
+  // here erased real use and could present a spent allocation as untouched.
   const scale = denomination?.scale;
   const denominate = (value: number | null): number | null =>
-    value === null || scale === undefined ? value : Math.round(value * scale);
+    value === null || scale === undefined ? value : value * scale;
   const limit = denominate(parseHeaderNumber(limitRaw));
   const remaining = denominate(parseHeaderNumber(remainingRaw ?? null));
   const resetAt = parseResetAtFromHeader(resetRaw ?? null);
@@ -967,12 +975,17 @@ export function getKeyQuotaHeadroom(platform: Platform, quotaPoolKey?: string): 
 /** Whether the exact pool consumed by this endpoint has a high-confidence,
  * still-active exhaustion observation. Unknown capacity remains eligible;
  * only a concrete zero with a future reset is a hard routing gate, avoiding
- * permanent lockout when a provider omits reset metadata. */
+ * permanent lockout when a provider omits reset metadata.
+ *
+ * `covered` lets a caller that has funded capacity beyond one exhausted
+ * allowance (a bonus spending window) pass that observation, and only that
+ * one, by its metric and reset instant. */
 export function isQuotaPoolAvailable(
   platform: Platform,
   keyId: number,
   modelId?: string | null,
   endpoint?: string | null,
+  covered?: (metric: string, resetAtMs: number | null) => boolean,
 ): boolean {
   const quota = resolveQuotaPolicy(platform, modelId, endpoint);
   if (quota.accounting === 'unmetered') return true;
@@ -995,7 +1008,7 @@ export function isQuotaPoolAvailable(
   `).get(platform, keyId, quota.poolKey, HEADROOM_MIN_CONFIDENCE);
   const poolKey = exactExists || !legacyPool ? quota.poolKey : legacyPool;
   const exhausted = db.prepare(`
-    SELECT 1
+    SELECT metric, reset_at AS resetAt
       FROM provider_quota_state
      WHERE platform = ?
        AND key_id = ?
@@ -1004,9 +1017,9 @@ export function isQuotaPoolAvailable(
        AND remaining_value = 0
        AND reset_at IS NOT NULL
        AND julianday(reset_at) >= julianday('now')
-     LIMIT 1
-  `).get(platform, keyId, poolKey, HEADROOM_MIN_CONFIDENCE);
-  return !exhausted;
+  `).all(platform, keyId, poolKey, HEADROOM_MIN_CONFIDENCE) as Array<{ metric: string; resetAt: string }>;
+  if (!covered) return exhausted.length === 0;
+  return exhausted.every(row => covered(row.metric, parseStoredUtc(row.resetAt)));
 }
 
 /** Drop the memoised headroom for one platform (or all of them). Called on

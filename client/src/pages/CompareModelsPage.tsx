@@ -1100,7 +1100,7 @@ export default function CompareModelsPage() {
                               tail of a benchmark name is what tells siblings
                               apart, so it is the last part that may be cut. */}
                           <span className="max-w-[220px] whitespace-normal font-medium [overflow-wrap:anywhere]" title={g.name}><ModelName name={g.name} /></span>
-                          {!g.reference && <ChainFit score={groupScore(g)} chains={g.chains} />}
+                          {!g.reference && <ChainFit score={groupScore(g)} chains={g.chains} models={g.members} />}
                           {/* Routes the platform holds a key for that the key
                               does not name. One press each way, because this is
                               the difference between a model being unreachable

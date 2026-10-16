@@ -9,11 +9,28 @@ import {
   resolveEffectiveQuotas,
 } from '../services/quota-policy.js';
 import { getQuotaForecast, getProviderQuotaOverview } from '../services/quota-forecast.js';
+import { getProviderCapacity } from '../services/provider-capacity.js';
 import { listBurnRuns, startBurnRun, cancelBurnRun, BurnStartError, BURN_LIMITS } from '../services/quota-burn.js';
 import {
   getReservationWeights,
   setReservationWeights,
 } from '../services/quota-routing.js';
+import {
+  listBonusGrants,
+  createBonusGrant,
+  updateBonusGrant,
+  openBonusAllowance,
+  closeBonusAllowance,
+  BonusInputError,
+} from '../services/bonus.js';
+import {
+  paidCreditOverview,
+  paidModelOptions,
+  setPaidModelSelected,
+  openPaidCreditWindow,
+  closePaidCreditWindow,
+  PaidCreditInputError,
+} from '../services/paid-credit.js';
 
 // Quota policy + effective-state API (ADR ARCH-20260905, W2).
 //
@@ -165,6 +182,11 @@ quotaRouter.get('/providers', (_req: Request, res: Response) => {
   res.json({ providers: getProviderQuotaOverview() });
 });
 
+// Same measured facts for model, credential and quota surfaces. No routing writes.
+quotaRouter.get('/capacity', async (_req: Request, res: Response) => {
+  res.json(await getProviderCapacity());
+});
+
 /**
  * Deliberate limit discovery. A burn run spends a provider's allowance until it
  * refuses, because for most of the catalogue there is no published number and
@@ -275,4 +297,177 @@ quotaRouter.get('/probes', (req: Request, res: Response) => {
   const limit = Number.isFinite(asked) && asked > 0 ? Math.min(asked, 500) : 500;
   const probes = listQuotaProbes({ platform, modelId, limit });
   res.json({ probes });
+});
+
+// ── Temporary bonus grants (ADR ARCH-20261016) ───────────────────────────────
+// Unlike the rest of this router these DO change routing: a grant with an open
+// spending window admits requests beyond the normal daily allowance.
+
+const BonusGrantBody = z.object({
+  platform: z.string().min(1),
+  keyIds: z.array(z.number().int().positive()).min(1).max(100),
+  metric: z.enum(['requests', 'total_tokens']),
+  quantity: z.number().positive(),
+  durationHours: z.number().positive(),
+  normalLimit: z.number().positive(),
+  timezone: z.string().min(1).default('UTC'),
+  label: z.string().max(120).optional(),
+}).strict();
+
+const BonusGrantPatch = z.object({
+  label: z.string().max(120).optional(),
+  quantity: z.number().positive().optional(),
+  durationHours: z.number().positive().optional(),
+  normalLimit: z.number().positive().optional(),
+}).strict();
+
+const BonusAllowanceBody = z.object({
+  quantity: z.number().positive(),
+  durationHours: z.number().positive(),
+}).strict();
+
+function grantId(req: Request): number | null {
+  const id = Number(req.params.id);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+function bonusFailure(res: Response, err: unknown): void {
+  if (err instanceof BonusInputError) {
+    res.status(err.status).json({ error: { message: err.message } });
+    return;
+  }
+  res.status(500).json({ error: { message: String((err as Error)?.message ?? err) } });
+}
+
+quotaRouter.get('/bonuses', (_req: Request, res: Response) => {
+  res.json({ grants: listBonusGrants(), observedAt: new Date().toISOString() });
+});
+
+quotaRouter.post('/bonuses', (req: Request, res: Response) => {
+  const parsed = BonusGrantBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.issues[0]?.message ?? 'Invalid bonus grant' } });
+    return;
+  }
+  try {
+    res.status(201).json({ grant: createBonusGrant(parsed.data) });
+  } catch (err) {
+    bonusFailure(res, err);
+  }
+});
+
+quotaRouter.patch('/bonuses/:id', (req: Request, res: Response) => {
+  const id = grantId(req);
+  const parsed = BonusGrantPatch.safeParse(req.body);
+  if (id == null || !parsed.success) {
+    res.status(400).json({ error: { message: parsed.success ? 'Invalid grant id' : parsed.error.issues[0]?.message ?? 'Invalid update' } });
+    return;
+  }
+  try {
+    res.json({ grant: updateBonusGrant(id, parsed.data) });
+  } catch (err) {
+    bonusFailure(res, err);
+  }
+});
+
+quotaRouter.post('/bonuses/:id/allowance', (req: Request, res: Response) => {
+  const id = grantId(req);
+  const parsed = BonusAllowanceBody.safeParse(req.body);
+  if (id == null || !parsed.success) {
+    res.status(400).json({ error: { message: parsed.success ? 'Invalid grant id' : parsed.error.issues[0]?.message ?? 'Invalid spending window' } });
+    return;
+  }
+  try {
+    res.json({ grant: openBonusAllowance(id, parsed.data) });
+  } catch (err) {
+    bonusFailure(res, err);
+  }
+});
+
+quotaRouter.delete('/bonuses/:id/allowance', (req: Request, res: Response) => {
+  const id = grantId(req);
+  if (id == null) {
+    res.status(400).json({ error: { message: 'Invalid grant id' } });
+    return;
+  }
+  try {
+    res.json({ grant: closeBonusAllowance(id) });
+  } catch (err) {
+    bonusFailure(res, err);
+  }
+});
+
+// ── Paid credit windows (extension `paid-credit-windows`) ───────────────────
+// The one bounded way automatic routing spends on paid models while the
+// paid-balance guard is on. Opening a window needs the typed confirmation.
+
+function paidCreditFailure(res: Response, err: unknown): void {
+  if (err instanceof PaidCreditInputError) {
+    res.status(err.status).json({ error: { message: err.message } });
+    return;
+  }
+  res.status(500).json({ error: { message: String((err as Error)?.message ?? err) } });
+}
+
+quotaRouter.get('/paid-credit', (_req: Request, res: Response) => {
+  res.json(paidCreditOverview());
+});
+
+quotaRouter.get('/paid-credit/models', async (req: Request, res: Response) => {
+  const platform = typeof req.query.platform === 'string' ? req.query.platform : '';
+  try {
+    res.json({ platform, models: await paidModelOptions(platform) });
+  } catch (err) {
+    paidCreditFailure(res, err);
+  }
+});
+
+quotaRouter.put('/paid-credit/models', async (req: Request, res: Response) => {
+  const parsed = z.object({
+    platform: z.string().min(1),
+    modelId: z.string().min(1),
+    selected: z.boolean(),
+  }).strict().safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.issues[0]?.message ?? 'Invalid selection' } });
+    return;
+  }
+  try {
+    await setPaidModelSelected(parsed.data.platform, parsed.data.modelId, parsed.data.selected);
+    res.json({ platform: parsed.data.platform, models: await paidModelOptions(parsed.data.platform) });
+  } catch (err) {
+    paidCreditFailure(res, err);
+  }
+});
+
+quotaRouter.post('/paid-credit/windows', async (req: Request, res: Response) => {
+  const parsed = z.object({
+    platform: z.string().min(1),
+    keyId: z.number().int().positive(),
+    quantity: z.number().positive(),
+    durationHours: z.number().positive(),
+    confirmation: z.string(),
+  }).strict().safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.issues[0]?.message ?? 'Invalid credit window' } });
+    return;
+  }
+  try {
+    res.status(201).json({ key: await openPaidCreditWindow(parsed.data) });
+  } catch (err) {
+    paidCreditFailure(res, err);
+  }
+});
+
+quotaRouter.delete('/paid-credit/windows/:id', (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: { message: 'Invalid window id' } });
+    return;
+  }
+  try {
+    res.json({ key: closePaidCreditWindow(id) });
+  } catch (err) {
+    paidCreditFailure(res, err);
+  }
 });

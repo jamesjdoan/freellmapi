@@ -15,6 +15,42 @@ Every catalog model row carries `rpm_limit` / `rpd_limit` columns. Before dispat
 
 `tpm_limit` / `tpd_limit` work the same way with estimated tokens: a request counts against its minute/day token window only if `used + in-flight tokens + estimate` fits under the limit. Because some providers publish a generous RPD but a tiny TPM (the code cites groq `gpt-oss-120b`: rpd 1000 yet tpm 8000), the daily token check also feeds a derived cap so one large burst cannot exhaust a day's budget in seconds.
 
+## Estimated monthly token capacity on Chat
+
+The Chat card reports catalogue estimates, not a live provider balance. It includes only enabled models in the active chain that have an enabled healthy/unknown key within model scope. Custom routes count only credentials for their endpoint.
+
+Each quota pool contributes once. Within a shared pool, each usable key contributes the largest published allowance among the enabled models that key can serve. Unknown allowances contribute no tokens and remain visible in the unpublished count.
+
+Recorded usage is a separate total: all chat tokens logged since the start of the UTC calendar month, including custom endpoints and disabled or removed routes. It is not subtracted from estimated capacity. Daily quotas renew, unpublished pools can serve traffic, and requests sent outside FreeLLMAPI are not visible here.
+
+`GET /api/fallback/token-usage` exposes `totalBudget` as estimated capacity and `totalUsed` as recorded chat usage. Its model rows include `poolKey` and `poolBudget` for the deduplicated legend. The configured pool inventory at `/api/free-tier` still includes chain-disabled members.
+
+## AMD Radeon Cloud shared-model inventory
+
+The built-in `radeon` provider already uses `https://developer.amd.com.cn/radeon/api/v1`. The key from the [AMD China Token Factory page](https://developer.amd.com.cn/radeon/tokenfactory) is used for that endpoint; no separate custom-provider key is needed.
+
+On 2026-10-14, the authenticated `/models` response and public page listed 12 shared models: 11 chat models and `MinerU2.5-Pro` with OCR output. The page also listed three dedicated deployments, which require the operator's own instance credits. Those dedicated deployments and the OCR-only model are not ordinary chat routes.
+
+The hosted FreeLLM catalogue had only two older Radeon entries. Nine missing chat models were registered locally through `POST /api/models` as operator-owned `radeon` models, using AMD's advertised context, vision and tool capabilities. Their automatic fallback entries are off, selected chains are unchanged, and the two previously disabled models remain parked. They are visible under **Keys → Providers → AMD Radeon Cloud**.
+
+AMD's shared-model detail describes its prices as **"Free to use. Points show relative usage—not a charge."** Do not classify these routes as paid solely from the `/models` `free: false` field or numeric price metadata.
+
+### Shared allocation, fleet pressure and cooldown
+
+The capacity indicator uses **one free usage-point allowance per actual AMD credential/pool**, referenced by the models that credential may serve. It never assigns every model a separate copy or converts points into a monthly token budget. Completion headers preserve fractional usage, including consumption smaller than one cent of the API's USD-equivalent unit.
+
+The model/provider row, key view and Quota signals panel consume the same authenticated `GET /api/quota/capacity` snapshot. Account allocation expires as current evidence after 15 minutes or its reported reset. The separate RPM sample expires after one minute. Expired readings stay explicitly **Last reported** rather than becoming an inferred refill. Anonymous key-id-0 probe observations do not create a usable account.
+
+`RadeonProvider` reads the [public per-model fleet-pressure JSON feed](https://developer.amd.com.cn/radeon/api/tokenfactory/load) without login or a credential. One startup-owned background observer allows a 40-second whole-request deadline, shares one in-flight request and waits 20 seconds after completion before refreshing. Anonymous responses were measured at 24–26 seconds; the former five-second deadline caused Unknown readings. Dashboard and routing reads use the cached snapshot immediately, without waiting on AMD.
+
+Each reported model has a fleet-utilisation bar. Its percentage means backend utilisation, not remaining account allowance. The provider's own idle/busy/full classification is authoritative: a model can be full below 100%, and busy does not mean quota exhaustion. Missing readings show **Unknown** without a pretend zero bar. Genuine zero remains a measured 0%. A failed refresh or a reading at least 60 seconds old becomes **Last reported**, with a muted bar and its original timestamp. Existing model/key cooldowns retain their own expiry.
+
+Collection never spends an inference request merely to refresh a badge. The China usage-summary endpoint did not accept the saved API key when checked, so idle allocation values remain last reported until a real request supplies new headers. A source failure must not be rendered as zero use or idle capacity.
+
+Presentation belongs to `quota-capacity-dashboard`. Routing belongs to the separate **Extensions → AMD capacity-aware priority** control (`amd-capacity-routing`, default OFF). When enabled, fresh full AMD routes follow eligible non-full alternatives within the requested model's match tier, but remain available as last resort. Unknown/stale pressure is neutral. Explicit model requests and existing health, capability, scope, cooldown, quota and paid-balance protections still apply. No model is enabled and no saved chain or provider preference is rewritten.
+
+Switching presentation off hides the indicators. Background fleet collection stops only when both capacity extensions are off, or no AMD key is configured. Observations, scopes, model enablement and saved chains are retained. Collection also resumes after a key or consumer is enabled.
+
 ## Quota policy and pool identity
 
 Per-model windows cannot describe every provider's economics. `resolveQuotaPolicy()` separates provider, model endpoint and consumed pool, returning a stable pool key plus scope (`model`, `account`, `project`, `shared_pool`), accounting kind (`metered`, `unknown`, `unmetered`), metrics and reset strategy.
@@ -83,6 +119,32 @@ Only the number is kept — never the body — so nothing extra reaches logs or 
 ## Provider-reported quota polling (#1403)
 
 Headers and error bodies only show quota when a request happens to carry them. Providers with a **key-info endpoint** (OpenRouter's `GET /api/v1/key` returns the key's `limit` / `limit_remaining` credit balance; SiliconFlow's `GET /v1/user/info` returns the account's `totalBalance`/`balance` in CNY as numeric strings) can be asked directly, and now are: `BaseProvider.fetchQuota()` is an optional probe that records what the provider itself reports as a `source: 'quota_api'` observation (confidence 1.0). The health pass piggybacks the probe onto a **healthy** verdict only, per key at most once per 15 minutes (`QUOTA_POLL_INTERVAL_MS`), fire-and-forget and failure-silent: a quota probe that errors or times out says nothing about the key and never changes a health verdict. Providers register their endpoint as a `quotaProbe` spec (URL + the JSON fields carrying limit/remaining); a spec may omit `limitFields` when the provider reports only a balance. Providers without a spec pay zero network. This is what fills the dashboard's live balances for pools that send no token-level rate-limit headers, instead of the text-label guess `parseBudget` makes over catalog copy.
+
+xKiro registers `GET https://api.xkiro.com/v1/usage` (`free_tokens.limit_per_day` / `free_tokens.remaining`, metric tokens). Its daily allowance resets at 00:00 UTC, so the observation carries that calendar reset. A spec without a stated reset now records none rather than inventing one 24 hours out.
+
+## Temporary bonus grants
+
+A bonus grant is extra provider capacity layered on a normal per-day allowance, for example xKiro's 30M tokens over 30 days on top of 1M a day. It covers the keys that share one account, one metric (tokens or requests), a quantity, and an expiry measured from creation. Grants are configured at **Keys → Quota signals → Bonus grants** and switched by the `bonus-grants` extension.
+
+Admission, in `selectKeyForModel` before the other quota gates:
+
+1. **Normal first.** Today's normal usage is local `rate_limit_usage` for the covered keys since local midnight in the grant's zone. A provider observation taken today wins when it shows more usage (it also sees other clients); its limit applies only when lower than the operator's figure, so a daily limit that includes the bonus cannot widen normal capacity. Requests already in flight count too.
+2. **Excess needs a window.** The part of a request beyond the normal limit is admitted only while a spending window is open and both the window and the pool have room for it, net of in-flight excess. Otherwise the key is skipped as `bonus-refused(no-spending-window | spending-window-spent | bonus-pool-spent)`.
+3. **Funded excess passes only its own allowance.** When a window funds the excess, the observed-exhaustion gate and quota domains skip the exhausted daily allowance on that metric whose reset is within an hour of the grant's day boundary. Per-minute limits, operator caps, cooldowns, health, scope and the paid-balance guard still apply. A provider 429 benches the key as usual.
+
+Settlement runs synchronously after an attempt's usage is written, including quota-consuming failures. The debit is the attempt's share of today's usage beyond the normal limit, written once to the `bonus_usage` ledger against the pool and the window that admitted it. That window is charged even if it was replaced, cancelled or expired mid-flight. Normal resets restore the normal allowance; they never refill the pool. Edits never reset consumption.
+
+Limits of the local count: only requests this install routed are debited, and only countable metrics are supported. Normal periods are calendar days because `rate_limit_usage` keeps 24 hours.
+
+## Paid credit windows
+
+The paid-balance guard keeps automatic routing off billed models on OpenRouter, AnyAPI and unorouter. A paid credit window (`paid-credit-windows`) is the one bounded exception under it, available where the provider's usage API reports a credit balance (today OpenRouter, `openrouter::credits` in cents).
+
+- **Selection.** The operator ticks paid models from OpenRouter's priced listing. Each gets a `models` row (`source = 'user'`). Only selected models join the auto chains, as a tier appended by `withoutAutorouteDisabled` and walked after every free route, never explored and never promoted by stickiness.
+- **Window.** Opened per key with an amount, a duration and the typed confirmation `ALLOW PAID SPEND`. Opening re-reads the balance and refuses a reading older than two minutes. The reported cumulative usage at that moment is the baseline.
+- **Measured spend.** Spend is reported usage now minus the baseline. Catalogue prices are never used. Spend by other clients of the account counts, so a window stops early, never late.
+- **One attempt at a time.** A paid attempt holds the window. When it ends, the balance is re-read after a five-second settle delay, and the next paid attempt is refused (`paid-credit-refused(credit-awaiting-reading)`) until a reading newer than that exists. Overshoot is bounded by one request's cost plus any lag in the provider's own accounting.
+- **Not a second switch.** With the guard off, paid routes already route unbounded by the acknowledged decision, so windows are not consulted. A client that names a paid model is unaffected either way.
 
 ## Health checks must not burn metered quota (#882)
 

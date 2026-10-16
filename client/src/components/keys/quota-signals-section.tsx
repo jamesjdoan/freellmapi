@@ -3,6 +3,9 @@ import { EmptyState } from '@/components/empty-state'
 import { formatSqliteUtcToLocalTime } from '@/lib/utils'
 import { useI18n } from '@/i18n'
 import { QuotaOutlookSection } from './quota-outlook-section'
+import { ProviderCapacityPanel } from '../provider-capacity'
+import { BonusGrantsPanel } from './bonus-grants-panel'
+import { PaidCreditPanel } from './paid-credit-panel'
 
 function formatQuotaNumber(value: number | null): string {
   return value == null ? '—' : new Intl.NumberFormat().format(value)
@@ -18,6 +21,9 @@ export function QuotaSignalsSection({ states }: { states: ProviderQuotaState[] }
   const { t } = useI18n()
   return (
     <div className="space-y-5">
+      <ProviderCapacityPanel />
+      <BonusGrantsPanel />
+      <PaidCreditPanel />
       <QuotaOutlookSection />
       <details>
         <summary className="cursor-pointer text-sm font-medium">{t('keys.outlookRaw')}</summary>

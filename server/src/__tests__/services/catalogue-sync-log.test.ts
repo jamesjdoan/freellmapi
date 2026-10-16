@@ -208,6 +208,37 @@ describe('catalogue_sync_log storage', () => {
     expect(detail!.docAdded).toBe(2);
     expect(detail!.docRemoved).toBe(1);
   });
+  it('drops a removed provider from the list and the detail like an ignored one', () => {
+    recordCatalogueSync(getDb(), syncInput({
+      version: '2099.02.04',
+      doc: { added: 2, removed: 0, changed: 1, switchedOff: 0, switchedOn: 0 },
+      byPlatform: { 'removed-prov': { a: 2, r: 0, c: 0, off: 0, on: 0 }, groq: { a: 0, r: 0, c: 1, off: 0, on: 0 } },
+      details: [
+        { r: 'chat', p: 'removed-prov', m: 'x', f: 'rpd', o: 1, n: 2 },
+        { r: 'chat', p: 'groq', m: 'y', f: 'rpd', o: 1, n: 2 },
+      ],
+      members: { added: [{ r: 'chat', p: 'removed-prov', m: 'x', n: 'X' }], removed: [] },
+    }));
+    getDb().prepare(`
+      INSERT INTO provider_removal (platform, reason, note, removed_by, models_removed, key_ids_json, restored_at)
+      VALUES ('removed-prov', 'test', NULL, 'test', 0, '[]', NULL)
+    `).run();
+    const page = listCatalogueSyncs({ limit: 1 });
+    expect(page.syncs[0]).toMatchObject({
+      version: '2099.02.04',
+      docAdded: 0,
+      docChanged: 1,
+    });
+    expect(page.syncs[0].byPlatform).toEqual({ groq: { a: 0, r: 0, c: 1, off: 0, on: 0 } });
+    const detail = getCatalogueSync(page.syncs[0].id);
+    expect(detail!.details.map(d => d.p)).toEqual(['groq']);
+    expect(detail!.members!.added).toEqual([]);
+    // Restoring the provider brings its churn back into view.
+    getDb().prepare("UPDATE provider_removal SET restored_at = datetime('now') WHERE platform = 'removed-prov'").run();
+    const restored = listCatalogueSyncs({ limit: 1 });
+    expect(restored.syncs[0].docAdded).toBe(2);
+    expect(restored.syncs[0].byPlatform['removed-prov']).toEqual({ a: 2, r: 0, c: 0, off: 0, on: 0 });
+  });
 });
 
 describe('baseline migration', () => {

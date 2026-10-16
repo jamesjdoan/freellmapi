@@ -124,7 +124,7 @@ function ModelLine({ sign, tone, member }: { sign: string; tone: string; member:
       {member.n && <span>{member.n}</span>}
       <code className="text-muted-foreground">{member.m}</code>
       {member.r !== 'chat' && <Badge variant="outline" className="text-[10px]">{member.r}</Badge>}
-      <span className="ml-auto"><IgnoreButton platform={member.p} modelId={member.m} label={t('catalogue.ignoreModel')} /></span>
+      <span className="ml-auto"><IgnoreButton targets={[{ platform: member.p, modelId: member.m }]} name={member.m} label={t('catalogue.ignoreModel')} /></span>
     </li>
   )
 }
@@ -153,7 +153,7 @@ function ProviderGroup({ provider, churn, detail, open }: {
         <PlatformDot platform={provider} />
         <span className="font-medium">{provider}</span>
         <ChurnCounts churn={churn} />
-        <span className="ml-auto"><IgnoreButton platform={provider} modelId={null} label={t('catalogue.ignoreProvider')} /></span>
+        <span className="ml-auto"><IgnoreButton targets={[{ platform: provider, modelId: null }]} name={provider} label={t('catalogue.ignoreProvider')} /></span>
       </summary>
       <div className="mt-1 space-y-2 pb-1 pl-5 text-[11px]">
         {added.length > 0 && (
@@ -195,7 +195,7 @@ function ProviderGroup({ provider, churn, detail, open }: {
                       <code className="text-emerald-600 dark:text-emerald-400">{valueOf(d.n)}</code>
                     </span>
                   ))}
-                  <span className="ml-auto"><IgnoreButton platform={provider} modelId={model} label={t('catalogue.ignoreModel')} /></span>
+                  <span className="ml-auto"><IgnoreButton targets={[{ platform: provider, modelId: model }]} name={model} label={t('catalogue.ignoreModel')} /></span>
                 </li>
               ))}
             </ul>
@@ -206,11 +206,13 @@ function ProviderGroup({ provider, churn, detail, open }: {
   )
 }
 
-function SyncDetail({ sync, expandAll }: { sync: CatalogueSync; expandAll: boolean }) {
+function SyncDetail({ sync, expandAll, hideIgnored, status }: {
+  sync: CatalogueSync; expandAll: boolean; hideIgnored: boolean; status: string
+}) {
   const { t } = useI18n()
   const { data, isPending } = useQuery<CatalogueSyncDetail>({
-    queryKey: ['catalogue-sync-detail', sync.id],
-    queryFn: () => apiFetch(`/api/models/changes/syncs/detail?id=${sync.id}`),
+    queryKey: ['catalogue-sync-detail', sync.id, hideIgnored, status],
+    queryFn: () => apiFetch(`/api/models/changes/syncs/detail?id=${sync.id}&hideIgnored=${hideIgnored}&status=${status}`),
   })
   if (isPending) return <p className="pl-5 text-[11px] text-muted-foreground">{t('catalogue.syncsDetailLoading')}</p>
   if (!data) return null
@@ -267,14 +269,19 @@ export function CatalogueSyncs() {
   const { t } = useI18n()
   const [openIds, setOpenIds] = useState<ReadonlySet<number>>(new Set())
   const [expandedDays, setExpandedDays] = useState<ReadonlySet<string>>(new Set())
+  const [hideIgnored, setHideIgnored] = useState(true)
+  const [status, setStatus] = useState('all')
+  // Most logged documents changed nothing against the one before — a tier
+  // republish, a quirks-only bump — and their "—" rows bury the ones that
+  // did. Filtered here, not in the request: the day grouping and the totals
+  // header are built from the same payload.
+  const [onlyChanged, setOnlyChanged] = useState(false)
   const { data } = useQuery<{ syncs: CatalogueSync[]; total: number; totals: CatalogueSyncTotals }>({
-    queryKey: ['catalogue-syncs'],
-    queryFn: () => apiFetch('/api/models/changes/syncs?limit=30'),
+    queryKey: ['catalogue-syncs', hideIgnored, status],
+    queryFn: () => apiFetch(`/api/models/changes/syncs?limit=30&hideIgnored=${hideIgnored}&status=${status}`),
   })
   if (!data) return null
-  if (data.syncs.length === 0) {
-    return <p className="text-xs text-muted-foreground">{t('catalogue.syncsEmpty')}</p>
-  }
+  const shown = onlyChanged ? data.syncs.filter(moved) : data.syncs
   const { totals } = data
 
   const toggleRow = (id: number) => setOpenIds(prev => {
@@ -321,8 +328,31 @@ export function CatalogueSyncs() {
       </div>
       <p className="mt-3 text-[11px] text-muted-foreground">{t('catalogue.syncsHint')}</p>
       <CatalogueIgnoresList hidden={totals.hiddenIgnored} />
+      <label className="mt-2 flex w-fit cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
+        <input type="checkbox" checked={onlyChanged} onChange={e => setOnlyChanged(e.target.checked)} />
+        {t('catalogue.syncsOnlyChanged')}
+      </label>
+      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+        <label className="flex cursor-pointer items-center gap-1.5">
+          <input type="checkbox" checked={hideIgnored} onChange={e => setHideIgnored(e.target.checked)} />
+          {t('catalogue.hideIgnored')}
+        </label>
+        <label className="flex items-center gap-2">
+          {t('catalogue.modelStatus')}
+          <select aria-label={t('catalogue.modelStatus')} value={status} onChange={e => setStatus(e.target.value)}
+            className="rounded-md border bg-background px-2 py-1">
+            <option value="all">{t('catalogue.statusAll')}</option>
+            <option value="enabled">{t('catalogue.statusEnabled')}</option>
+            <option value="disabled">{t('catalogue.statusDisabled')}</option>
+          </select>
+        </label>
+      </div>
+      {status !== 'all' && <p className="mt-2 text-[11px] text-muted-foreground">{t('catalogue.currentStatusHint')}</p>}
+      {shown.length === 0 && <p className="mt-3 text-xs text-muted-foreground">
+        {t(status === 'all' && !onlyChanged ? 'catalogue.syncsEmpty' : 'catalogue.noMatchingUpdates')}
+      </p>}
       <div className="mt-2 space-y-3">
-        {groupByDay(data.syncs).map(([day, syncs]) => {
+        {groupByDay(shown).map(([day, syncs]) => {
           const dayChurn = syncs.map(churnOf).reduce<Churn>(
             (sum, c) => ({ a: sum.a + c.a, r: sum.r + c.r, c: sum.c + c.c, off: (sum.off ?? 0) + (c.off ?? 0), on: (sum.on ?? 0) + (c.on ?? 0) }),
             { a: 0, r: 0, c: 0, off: 0, on: 0 },
@@ -371,7 +401,7 @@ export function CatalogueSyncs() {
                         </span>
                         <ProviderSummary byPlatform={s.byPlatform} />
                       </button>
-                      {open && <SyncDetail sync={s} expandAll={dayExpanded} />}
+                      {open && <SyncDetail sync={s} expandAll={dayExpanded} hideIgnored={hideIgnored} status={status} />}
                     </li>
                   )
                 })}

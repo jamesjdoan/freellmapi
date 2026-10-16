@@ -750,6 +750,59 @@ export interface QuotaOutlookResponse {
   pools: QuotaOutlookPool[];
 }
 
+export type CapacityFreshness = 'fresh' | 'stale' | 'unknown';
+
+/** Last measured allowance, never an inferred refill or token conversion. */
+export interface ProviderCapacityReading {
+  limit: number | null;
+  used: number | null;
+  remaining: number | null;
+  remainingPct: number | null;
+  resetAt: string | null;
+  observedAt: string | null;
+  source: QuotaObservationSource | null;
+  freshness: CapacityFreshness;
+}
+
+export interface ProviderCapacityPool {
+  platform: Platform;
+  keyId: number;
+  keyLabel: string | null;
+  keyEnabled: boolean;
+  keyStatus: string;
+  quotaPoolKey: string;
+  /** Free usage points shared by every model using this credential/pool. */
+  allocation: ProviderCapacityReading;
+  /** A separate short request-rate gate, not the allocation percentage. */
+  rpm: ProviderCapacityReading;
+  cooldowns: { modelId: string; expiresAtMs: number }[];
+}
+
+export interface ProviderModelCapacity {
+  modelDbId: number;
+  platform: Platform;
+  modelId: string;
+  modelEnabled: boolean;
+  /** Scoped credentials; eligibility and quota are separate facts. */
+  keyIds: number[];
+  usableKeyIds: number[];
+  pressure: {
+    state: 'idle' | 'busy' | 'full' | null;
+    utilizationPct: number | null;
+    observedAt: string | null;
+    freshness: CapacityFreshness;
+    source: 'provider_api';
+    scope: 'fleet';
+  };
+}
+
+export interface ProviderCapacityResponse {
+  generatedAt: string;
+  /** One entry per actual credential/pool. Models reference it, never copy it. */
+  pools: ProviderCapacityPool[];
+  models: ProviderModelCapacity[];
+}
+
 // ---- Provider Dashboard Types ----
 
 export type ProviderHealthStatus = 'healthy' | 'issues' | 'rate_limited' | 'unknown' | 'unconfigured';

@@ -17,14 +17,9 @@ import type { Platform, QuotaMetric } from '@freellmapi/shared/types.js';
  * alongside live quota observations (used/remaining/reset) when the provider
  * reports them.
  *
- * The model set, the key-count scaling and the enabled semantics deliberately
- * match GET /api/fallback/token-usage (the stacked bar whose legend these pools
- * group), so the two never disagree about the same pool:
- *   - only platforms that actually have an enabled key are counted;
- *   - a documented budget is per account, so it is scaled by the usable
- *     (enabled + healthy/unknown) key count for the platform;
- *   - chain-disabled rows still contribute to the pool (they share the same
- *     provider allowance) and are only marked, never dropped.
+ * This is the configured pool inventory, including chain-disabled rows.
+ * The Chat capacity card is deliberately narrower: it counts enabled,
+ * key-accessible routes only and does not interpret estimates as live balances.
  */
 
 export const freeTierRouter = Router();
@@ -32,11 +27,7 @@ export const freeTierRouter = Router();
 interface PoolAgg {
   poolKey: string;
   platform: string;
-  // Which chain models this pool holds, as their provider model ids. The
-  // dashboard legend lists models, not pools, so it needs this to put each
-  // model row under its own pool header; without it the client would have to
-  // re-implement inferQuotaPoolKey (which is provider knowledge that lives
-  // here). Ordered as the chain returns them.
+  // Provider model ids belonging to this configured pool.
   memberModelIds: string[];
   modelCount: number;
   disabledModelCount: number;
@@ -106,22 +97,19 @@ function summarizeQuota(rows: ReturnType<typeof getQuotaStateForKeys>): PoolQuot
 freeTierRouter.get('/', (_req: Request, res: Response) => {
   const db = getDb();
 
-  // Only platforms with an enabled key have a free tier to speak of — same
-  // filter the stacked bar uses for its per-model breakdown.
+  // Inventory includes platforms with an enabled key, even when no key is
+  // currently usable. The Chat capacity card applies a stricter access filter.
   const platformSet = new Set(
     (db.prepare('SELECT DISTINCT platform FROM api_keys WHERE enabled = 1').all() as { platform: string }[])
       .map(p => p.platform),
   );
-  // Usable keys per platform: a documented budget is per account, so two usable
-  // accounts really are twice the pool (fallback.ts uses the same filter).
+  // Usable keys per platform scale the configured pool's documented estimate.
   const keyCountMap = new Map(
     (db.prepare("SELECT platform, COUNT(*) as count FROM api_keys WHERE enabled = 1 AND status IN ('healthy', 'unknown') GROUP BY platform").all() as { platform: string; count: number }[])
       .map(k => [k.platform, k.count]),
   );
 
-  // Chain membership mirrors /token-usage: the active profile's chain when one
-  // is active, the default fallback chain otherwise. `chain_enabled` is only a
-  // marker — a switched-off row still consumes the same provider allowance.
+  // Inventory follows the active profile, retaining chain-disabled members.
   const activeProfileId = getActiveProfileId(db);
   const rows = (activeProfileId
     ? db.prepare(`
@@ -183,8 +171,7 @@ freeTierRouter.get('/', (_req: Request, res: Response) => {
 
   const poolList = [...pools.values()].map(p => ({
     ...p,
-    // Pooled capacity, scaled the same way the model rows and the stacked bar
-    // are (fallback.ts): one documented allowance per usable account.
+    // Configured pool inventory, not the active Chat capacity estimate.
     documentedBudget: p.documentedBudget * Math.max(1, p.keyCount),
   })).sort((a, b) => b.documentedBudget - a.documentedBudget || a.poolKey.localeCompare(b.poolKey));
 

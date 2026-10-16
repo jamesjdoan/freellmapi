@@ -4,13 +4,18 @@ import {
   GRADED_CHAINS, evaluate, useEffectiveMinimums,
   type GradedChain, type ScoreRow,
 } from '@/lib/chain-minimums'
+import { ApplyChainRecommendations } from './apply-chain-recommendations'
 
 // Where a model fits under the operator's chain minimums, shown on the row
-// itself. Recommendation only - nothing here adds to or removes from a chain.
+// Grading is advisory; membership changes only through confirmed adoption.
 // It grades the AA scores and the chain's tools/vision contract, and nothing
 // else: free, paid, quota and provider never enter it.
 
-export function ChainFit({ score, chains }: { score: ScoreRow; chains: readonly string[] }) {
+export function ChainFit({ score, chains, models }: {
+  score: ScoreRow
+  chains: readonly string[]
+  models: number | readonly { modelDbId: number }[]
+}) {
   const enabled = useExtensionEnabled('chain-minimums')
   const { doc, requirements } = useEffectiveMinimums()
   const { t } = useI18n()
@@ -35,6 +40,7 @@ export function ChainFit({ score, chains }: { score: ScoreRow; chains: readonly 
           {t('chainFit.fits', { chains: fits.join(' · ') })}
         </span>
       )}
+      {fits.length > 0 && <ApplyChainRecommendations models={models} />}
       {misfits.map(r => (
         <span
           key={r.chain}

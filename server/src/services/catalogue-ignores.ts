@@ -8,8 +8,12 @@ import type { Db } from '../db/types.js';
 // gates on), and catalog sync keeps them off — a feed update cannot bring an
 // ignored model back, and a provider's new arrivals land switched off. It is a
 // noise filter second: ignored items drop out of Catalog updates, Model history
-// and the Models-page changes list. The Models page itself still shows them,
-// as off and labelled, because that page is where routing is read.
+// and the Models-page changes list. The Models chain lists only enabled
+// models, so an ignored model leaves it too.
+//
+// One ignore can name several targets at once — the Models page ignores a
+// logical model by ignoring every provider route that serves it — and they are
+// previewed and applied together, in one transaction.
 //
 // Un-ignoring restores exactly what the ignore switched off, from a snapshot
 // taken at the time; anything already off stays off.
@@ -36,6 +40,12 @@ export interface IgnoreSets {
   providers: Set<string>;
   /** `${platform}\0${modelId}` */
   models: Set<string>;
+}
+
+/** A whole provider (modelId null) or one of its models. */
+export interface IgnoreTarget {
+  platform: string;
+  modelId: string | null;
 }
 
 interface Snapshot { keys: number[]; models: number[] }
@@ -99,8 +109,18 @@ function targets(db: Db, platform: string, modelId: string | null): Snapshot {
   };
 }
 
-export function previewIgnore(platform: string, modelId: string | null, db: Db = getDb()): IgnoreImpact {
-  const { keys, models } = targets(db, platform, modelId);
+export function previewIgnore(list: IgnoreTarget[], db: Db = getDb()): IgnoreImpact {
+  // A Set per kind: two targets can reach the same row (a provider and one of
+  // its models), and the count is of rows that switch off, not of targets.
+  const keySet = new Set<number>();
+  const modelSet = new Set<number>();
+  for (const { platform, modelId } of list) {
+    const snap = targets(db, platform, modelId);
+    for (const id of snap.keys) keySet.add(id);
+    for (const id of snap.models) modelSet.add(id);
+  }
+  const keys = [...keySet];
+  const models = [...modelSet];
   const chains = models.length === 0 ? [] : (db.prepare(`
     SELECT DISTINCT p.name
       FROM profile_models pm
@@ -112,22 +132,24 @@ export function previewIgnore(platform: string, modelId: string | null, db: Db =
 }
 
 /**
- * Ignore a provider (modelId null) or one model: switch its keys and models
- * off, remember which were on, and keep them off from here. Ignoring something
- * already ignored is a no-op that returns the current impact (zero).
+ * Ignore providers (modelId null) and models: switch their keys and models
+ * off, remember per target which were on, and keep them off from here. A
+ * target already ignored is skipped. All targets land together or none do.
  */
-export function ignoreInCatalogue(platform: string, modelId: string | null, db: Db = getDb()): IgnoreImpact {
+export function ignoreInCatalogue(list: IgnoreTarget[], db: Db = getDb()): IgnoreImpact {
   return db.transaction(() => {
-    const impact = previewIgnore(platform, modelId, db);
-    const exists = db.prepare('SELECT 1 FROM catalogue_ignores WHERE platform = ? AND model_id = ?').get(platform, modelId ?? '');
-    if (exists) return impact;
-    const snap = targets(db, platform, modelId);
-    db.prepare('INSERT INTO catalogue_ignores (platform, model_id, restore_json) VALUES (?, ?, ?)')
-      .run(platform, modelId ?? '', JSON.stringify(snap));
+    const impact = previewIgnore(list, db);
+    const exists = db.prepare('SELECT 1 FROM catalogue_ignores WHERE platform = ? AND model_id = ?');
+    const insert = db.prepare('INSERT INTO catalogue_ignores (platform, model_id, restore_json) VALUES (?, ?, ?)');
     const offModel = db.prepare('UPDATE models SET enabled = 0 WHERE id = ?');
-    for (const id of snap.models) offModel.run(id);
     const offKey = db.prepare('UPDATE api_keys SET enabled = 0 WHERE id = ?');
-    for (const id of snap.keys) offKey.run(id);
+    for (const { platform, modelId } of list) {
+      if (exists.get(platform, modelId ?? '')) continue;
+      const snap = targets(db, platform, modelId);
+      insert.run(platform, modelId ?? '', JSON.stringify(snap));
+      for (const id of snap.models) offModel.run(id);
+      for (const id of snap.keys) offKey.run(id);
+    }
     return impact;
   })();
 }

@@ -22,8 +22,8 @@ function makeProvider(spec?: {
 
 function stateRows(platform = 'openrouter') {
   return getDb().prepare(
-    'SELECT metric, limit_value, remaining_value, source FROM provider_quota_state WHERE platform = ?',
-  ).all(platform) as { metric: string; limit_value: number | null; remaining_value: number | null; source: string }[];
+    'SELECT metric, limit_value, remaining_value, source, reset_at, reset_strategy FROM provider_quota_state WHERE platform = ?',
+  ).all(platform) as { metric: string; limit_value: number | null; remaining_value: number | null; source: string; reset_at: string | null; reset_strategy: string }[];
 }
 
 describe('fetchQuota — provider-reported quota polling (#1403)', () => {
@@ -162,5 +162,28 @@ describe('fetchQuota — provider-reported quota polling (#1403)', () => {
     expect(ok).toBe(true);
     expect(String(vi.mocked(fetch).mock.calls[0][0])).toBe('https://api.siliconflow.com/v1/user/info');
     expect(stateRows('siliconflow')[0]).toMatchObject({ remaining_value: 0.88, source: 'quota_api' });
+  });
+
+  it('the registered xKiro provider carries the /v1/usage probe', async () => {
+    const provider = resolveProvider('xkiro');
+    expect(provider).toBeDefined();
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true, status: 200, json: async () => ({
+        object: 'usage',
+        plan: null,
+        windows: [],
+        free_tokens: { used_today: 308, limit_per_day: 1000000, remaining: 999692 },
+        wallet: { balance_usd: '0.000000', held_usd: '0.000000' },
+      }),
+    } as unknown as Response);
+    getDb().prepare('DELETE FROM provider_quota_state').run();
+    const ok = await provider!.fetchQuota('sk-xkiro', { platform: 'xkiro', keyId: 11 });
+    expect(ok).toBe(true);
+    expect(String(vi.mocked(fetch).mock.calls[0][0])).toBe('https://api.xkiro.com/v1/usage');
+    expect(stateRows('xkiro')[0]).toMatchObject({
+      metric: 'tokens', limit_value: 1000000, remaining_value: 999692, source: 'quota_api',
+      reset_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T00:00:00\.000Z$/),
+      reset_strategy: 'fixed_calendar',
+    });
   });
 });

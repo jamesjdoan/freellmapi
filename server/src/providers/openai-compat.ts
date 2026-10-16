@@ -13,6 +13,7 @@ import { extractThinkFromMessage } from '../lib/think-tags.js';
 import { repairToolArguments, toolSchemaMap } from '../lib/tool-args.js';
 import { invalidToolCallReasons, isToolArgumentValidationEnabled } from '../lib/tool-validate.js';
 import { recordQuotaObservation, recordQuotaObservationsFromResponse, type QuotaObservationContext } from '../services/provider-quota.js';
+import { resolveQuotaWindow, type QuotaPeriod } from '../services/quota-clock.js';
 import type { QuotaMetric } from '@freellmapi/shared/types.js';
 import { providerTimeoutMs } from '../lib/provider-timeout.js';
 import { isAbortLikeError } from '../lib/error-classify.js';
@@ -107,7 +108,8 @@ export function resetAuthEnforcementProbes(): void {
 
 /** A provider's key-info/quota endpoint (#1403): the GET URL and the JSON
  * field names carrying the limit and the remaining balance. Fields are looked
- * up first under a `data` wrapper (OpenRouter style), then at the top level.
+ * up first under a `data` wrapper (OpenRouter style), then at the top level;
+ * a dotted name (`free_tokens.limit_per_day`) walks into a nested object.
  * `credits` are in the provider's own currency (OpenRouter USD, SiliconFlow
  * CNY); `notes` names it. Only a reading with a limit feeds routing headroom. */
 export interface QuotaProbeSpec {
@@ -116,6 +118,12 @@ export interface QuotaProbeSpec {
   limitFields: string[];
   remainingFields: string[];
   notes?: string;
+  /** A reset the probe body never reports but the provider documents (xKiro
+   * refreshes free_tokens at 00:00 UTC daily). When set, every reading is
+   * stamped with the NEXT such boundary and the `fixed_calendar` strategy, so
+   * an exhausted window expires instead of latching until a provider header
+   * says otherwise. */
+  resetCalendar?: Extract<QuotaPeriod, { kind: 'calendar_day' | 'calendar_week' | 'calendar_month' }>;
 }
 
 export class OpenAICompatProvider extends BaseProvider {
@@ -656,7 +664,9 @@ export class OpenAICompatProvider extends BaseProvider {
    * Provider-reported balance via the registered quotaProbe endpoint (#1403).
    * GETs the key-info URL (e.g. OpenRouter's `GET /api/v1/key`), pulls the
    * limit/remaining numbers out of the JSON (checking the `data` wrapper and
-   * the top level), and records them as a `source: 'quota_api'` observation.
+   * the top level, dotted names walking into nested objects), and records
+   * them as a `source: 'quota_api'` observation. A spec with `resetCalendar`
+   * stamps each reading with the provider's documented next reset boundary.
    * Never throws: a quota probe that fails says nothing about the key, and
    * the caller's health verdict must stay about the key.
    */
@@ -684,7 +694,7 @@ export class OpenAICompatProvider extends BaseProvider {
         for (const obj of scope) {
           if (!obj || typeof obj !== 'object') continue;
           for (const f of fields) {
-            const v = (obj as Record<string, unknown>)[f];
+            const v = readProbeField(obj, f);
             if (typeof v === 'number' && Number.isFinite(v)) return v;
             // Some providers serialize balances as strings ("88.88", SiliconFlow
             // /v1/user/info). Accept a numeric string; "", null and prose never
@@ -709,7 +719,8 @@ export class OpenAICompatProvider extends BaseProvider {
         metric: spec.metric,
         limit,
         remaining,
-        resetStrategy: 'provider_reported',
+        resetAt: spec.resetCalendar ? nextProbeResetAt(spec.resetCalendar) : null,
+        resetStrategy: spec.resetCalendar ? 'fixed_calendar' : 'provider_reported',
         source: 'quota_api',
         statusCode: res.status,
         notes: spec.notes ?? null,
@@ -763,4 +774,28 @@ function normalizeChoices(data: ChatCompletionResponse): void {
       if (fold !== null) msg.content = fold;
     }
   }
+}
+/**
+ * Read a dotted field name from a probe response body. A dotted name (`free_tokens.limit_per_day`)
+ * walks into a nested object.
+ */
+function readProbeField(obj: unknown, field: string): unknown {
+  if (!obj || typeof obj !== 'object') return undefined;
+  const parts = field.split('.');
+  let current: unknown = obj;
+  for (const part of parts) {
+    if (current == null || typeof current !== 'object') return undefined;
+    current = (current as Record<string, unknown>)[part];
+  }
+  return current;
+}
+
+/**
+ * When a probe spec carries a documented reset, stamp every reading with the
+ * provider's next boundary. A provider that refreshes free_tokens at 00:00 UTC
+ * daily must not latch the window until a header says otherwise.
+ */
+function nextProbeResetAt(period: Extract<QuotaPeriod, { kind: 'calendar_day' | 'calendar_week' | 'calendar_month' }>): string | null {
+  const window = resolveQuotaWindow(period, Date.now());
+  return window.resetAtMs == null ? null : new Date(window.resetAtMs).toISOString();
 }

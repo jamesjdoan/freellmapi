@@ -18,6 +18,7 @@ import { churnByPlatform, useCatalogueChanges } from '@/lib/catalogue-changes'
 import { markArrivalsSeen, useUnseenArrivals } from '@/lib/seen-arrivals'
 import { ChainFit } from '@/components/chain-fit'
 import { scoreRowOf, useScoreTone } from '@/lib/chain-minimums'
+import { ProviderModelCapacityIndicator } from '@/components/provider-capacity'
 
 // Every model this provider serves, with the measured scores beside the two
 // switches that decide whether it can route. Lives inside the expanded provider
@@ -733,6 +734,7 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
                     )}
                   </span>
                   <code className="block max-w-[260px] truncate text-[10px] text-muted-foreground" title={r.modelId}>{r.modelId}</code>
+                  <ProviderModelCapacityIndicator platform={r.platform} modelId={r.modelId} />
                   {rename.isError && rename.variables?.id === r.modelDbId && (
                     <span className="block text-[10px] text-destructive">{(rename.error as Error).message}</span>
                   )}
@@ -780,7 +782,7 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
                       {!r.unlimited?.flagged ? t('keys.unlimitedSet') : r.unlimited.effective ? t('keys.unlimitedEffective') : t('keys.unlimitedWaiting')}
                     </button>
                   )}
-                  <span className="mt-0.5 block"><ChainFit score={scoreRowOf(r)} chains={r.chains} /></span>
+                  <span className="mt-0.5 block"><ChainFit score={scoreRowOf(r)} chains={r.chains} models={r.modelDbId} /></span>
                   {noteEdit?.id === r.modelDbId ? (
                     <span className="mt-1 flex max-w-[300px] flex-wrap items-center gap-1">
                       <Input

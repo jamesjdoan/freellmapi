@@ -1,5 +1,134 @@
 # Changelog
 
+## 2026-10-17 — Approved deployment of bonus grants and paid credit windows
+
+- Encryption key hash matched between the running container and compose config before deploying. `bash scripts/deploy.sh` built `jamesjdoan/freellmapi:main-20261017-003343`, took a quiescent backup `backups/freellmapi-data-20261017-003343.tar.gz` and recreated the container on `freellmapi_freellmapi-data`. Rollback tag: `jamesjdoan/freellmapi:provider-routing-before-20261017-003343`.
+- `docker compose ps`: `Up (healthy)` on `127.0.0.1:3001->3001/tcp`. All 16 keys decrypt with the initialised key context. Tables `bonus_grants`, `bonus_usage`, `paid_credit_models` and `paid_credit_windows` exist.
+- A temporary session returned 200 from `/api/quota/bonuses` (no grants), `/api/quota/paid-credit` (OpenRouter key 19, 1200¢ balance, no window, guard active) and `/api/quota/capacity`, then was revoked. No grant, window or paid model created. No commit or push.
+
+## 2026-10-17 — Bonus normal-limit fix and paid credit windows verified locally
+
+- `server/src/services/bonus.ts`: a provider-reported daily limit can now only lower a grant's normal allowance. A provider that folds the bonus into `limit_per_day` can no longer turn the pool into normal capacity and bypass the spending window.
+- New `paid-credit-windows` extension: `server/src/services/paid-credit.ts`, migration `20261017_000001_paid_credit_windows.ts`, `/api/quota/paid-credit*` routes and `client/src/components/keys/paid-credit-panel.tsx`.
+  - The operator selects paid OpenRouter models from its priced listing. They join auto chains as a last-resort tier behind every free route.
+  - Spend needs a credit window opened per key with `ALLOW PAID SPEND`. Spend is the measured rise in OpenRouter's reported usage, and one paid attempt runs at a time with a re-read balance in between.
+  - The paid-balance guard stays on throughout. `provider-usage-api.ts` gained `pollProviderUsageForKey`, and AGENTS.md records the one bounded exception.
+
+## 2026-10-16 — xKiro allowance and temporary bonus grants verified locally
+
+- `server/src/providers/index.ts`, `openai-compat.ts`: xKiro polls `/v1/usage` (1,000,000 tokens a day, 00:00 UTC reset). A probe with no stated reset no longer invents a 24-hour one.
+- `server/src/services/bonus.ts`, migration `20261016_000001_bonus_grants.ts`, `server/src/routes/quota.ts`: provider-neutral bonus pools with operator spending windows. Normal daily allowance first; excess admitted only while a window is open and debited once to window and pool via the `bonus_usage` ledger. Concurrent requests hold headroom. Settlement charges the admitting window after replacement or expiry. Resets never refill the pool, and edits never reset usage. Credit and money grants are refused because there is no per-request cost metering.
+- `server/src/services/router.ts`, `provider-quota.ts`, `quota-pressure.ts`, `lib/fallback-loop.ts`: a funded window bypasses only the exhausted daily allowance it extends. Other gates, cooldowns and the paid guard still apply. Restored the monthly-budget pre-check that a delegated patch had deleted.
+- Restored two pieces of deployed WIP lost from the working tree: the `/api/quota/capacity` route and the Radeon pressure observer wiring in `server/src/index.ts`. Confirmed by diffing a fresh compile against the deployed image's `dist`.
+- New `bonus-grants` extension, default on. Dashboard panel at Keys → Quota signals → Bonus grants. Strings were filled into all 60 locales.
+- Verification: full server suite 376 files / 4,653 tests passed, client 74 files / 612 tests passed, i18n and production build passed. An isolated server on a disposable DB created a grant over HTTP, refused credits, and ran the real migration. Chrome showed the panel, opened a window via Edit, displayed the pool-overflow error and cancelled the window. No deploy, commit or push.
+
+## 2026-10-15 — Approved capacity and recommendation deployment
+
+- Deployed both features with `./scripts/deploy.sh && docker compose up -d && docker compose ps`. Image `jamesjdoan/freellmapi:main-20261015-070832` matched the running container. Quiescent full-volume backup: `backups/freellmapi-data-20261015-070832.tar.gz`; existing `freellmapi_freellmapi-data` volume retained. Compose reported `Up (healthy)` with `127.0.0.1:3001->3001/tcp`.
+- All 15 credentials decrypted after initializing the verification process's encryption context. Immediate pre/post key/scopes digest `b71c49b00832d68fd0abb1fa454cfdc454356cc4c26d38ef826fbe742ceb33f8` and chain digest `36b288867ca5f2d890fcc6553c8f2a4d913e6545edb5b99a5041d14d7b8a1de7` matched after deployed UI inspection. Active profile stayed 3.
+- Authenticated capacity endpoint returned 200 with one account pool, 11 inventory models and real fresh anonymous fleet readings. Actual Keys model bars and Quota signals meters displayed them; unreported models remained Unknown. Capacity-aware routing stayed OFF.
+- Actual deployed Keys and Compare Models recommendation previews listed exact eligible routes and target chains. Preview/Cancel only; no production adoption performed. Browser errors were empty. Temporary verification session revoked and owned browser/profile removed. No commit or push.
+
+## 2026-10-15 — Confirmed chain recommendation adoption verified locally
+
+- `client/src/components/apply-chain-recommendations.tsx`, `chain-fit.tsx`, Keys provider models and Compare Models: shared Apply recommendations preview with selectable chains and exact physical routes. Current evidence is schema-validated, individual fit is re-evaluated, threshold drafts block adoption, and changed saved recommendations require review. Two-stage confirmation precedes writes. Each chain reports success/refusal without hiding partial failure.
+- `server/src/routes/fallback.ts`: explicit `append: true` membership intent appends new/reactivated members behind the current enabled tail, leaves active members unmoved, rejects disappeared/disabled catalogue rows, and retains key-scope/reachability/capability guards. Normal manual restoration keeps its old rank. No whole-chain replacement or active-profile change.
+- `server/src/__tests__/routes/fallback-membership.test.ts`: six consumer acceptance cases added. Five failed before implementation; all 14 membership tests passed after. Integrated server checks passed 99 tests plus typecheck. Final transaction gate reran all 14 successfully.
+- Client production build/typecheck and 29 focused tests passed. Added 11 English keys and filled 649 values across the other 59 locales. Validation passed for 60 locales/1958 keys. Declared existing Zod validation dependency directly in client package/lock without installing another version.
+- Actual isolated in-memory runtime and Chromium proved no-write preview/Cancel/first click, confirmed Keys reactivation at priority 5 instead of historic priority 1, exact-member Compare adoption, excluded incompatible/out-of-scope routes, refreshed membership chips and unchanged active profile/model/key flags. Changed saved minimums caused review without writes; unsaved drafts disabled adoption. A controlled refusal showed partial results while the successful chain append was independently read. Browser errors were empty.
+- Final runtime HTTP exercise returned 200/changed 1 then 200/changed 0, with existing head/order/active profile preserved. Fixtures used synthetic keys, no inference and no operator data. Updated registry/operator guide/ADR and session notes. Owned runtime/browser/profile and throwaway script/consumed plan removed. No deployment, commit or push.
+
+## 2026-10-15 — AMD background capacity bars and opt-in routing verified locally
+
+- `server/src/providers/radeon.ts`: collector requests now have a 40-second whole-request deadline and a completion-spaced 20-second refresh bound. Added cached-only `getModelPressure()` so pages and routing never wait on AMD. Preserved immutable model samples, failure/staleness semantics and inference configuration.
+- `server/src/services/radeon-pressure.ts`, `server/src/index.ts`: one startup-owned background observer, configured-key and presentation/routing gates, completion-spaced scheduling and stop protection during pending requests. Shutdown cancels future polling. `provider-capacity.ts` and its regression mocks use synchronous cached facts.
+- `client/src/components/provider-capacity.tsx`: per-model accessible fleet-utilisation meters on existing AMD provider/model/quota surfaces. Published states remain authoritative, genuine zero remains 0%, stale bars are muted Last reported and unknown has no fabricated meter. Reused existing translated strings; no new locale keys.
+- `server/src/services/router.ts`, `server/src/data/extension-registry.ts`: new `amd-capacity-routing` extension defaults OFF. When enabled, fresh full AMD routes are last-resort candidates within exact-match tiers, before soft preference/scoring. Final serving order and exploration retain the pressure bands. Explicit pins, eligibility gates and saved chain configuration are unchanged.
+- Verification: 131 focused server tests and server typecheck passed. 36 client tests, production client build and 60-locale/1947-key validation passed. An isolated in-memory server read the real anonymous AMD feed in 24.126 seconds. Authenticated capacity HTTP returned in 39 ms with collection pending and 7 ms after success, with 11 fresh models.
+- Real-source routing smoke chose full MiMo-V2.6-Flash with the feature OFF and non-full Gemma-4-31B-IT when ON. Explicit MiMo pinning and full-model last resort worked; saved chain rows were unchanged. Synthetic keys only, no inference calls and no operator data changes.
+- Actual Chromium showed live meters on expanded AMD provider rows, model detail and Quota signals with one account pool. The opt-in switch persisted through reload and was restored OFF. Controlled UI responses proved zero, age-based stale and unknown states. Browser errors were empty. Owned browser/server/profile, throwaway smoke program and consumed build batons removed.
+- Updated routing/provider/extension docs and the approved ADR. Corrected the earlier source-unavailable interpretation: the deployed five-second deadline was too short for the available 24–26-second feed. Integration repaired invalid delegated patches before runtime. No deployment, commit or push.
+
+## 2026-10-14 — Approved capacity-indicator deployment
+
+- Deployed `jamesjdoan/freellmapi:main-20261014-215829` with `./scripts/deploy.sh && docker compose up -d && docker compose ps`. Preserved `freellmapi_freellmapi-data` and backed it up to `backups/freellmapi-data-20261014-215829.tar.gz`. Recreated container reported `Up (healthy)` with published `127.0.0.1:3001->3001/tcp`; running-image match was verified by the deployment script.
+- All 15 provider keys decrypt with zero failures. Key enablement/scope and chain digests match the immediate pre-deploy baseline; active profile remains 3. No routing configuration changed.
+- Authenticated model listing returned 200 with 481 models. Real auto and AMD MiniCPM5-2B completions both returned 200. The AMD request updated real key #39 allocation to 99.989486 internal cents remaining of 100, preserving fractional consumption.
+- Deployed authenticated capacity API returned one account pool and 11 models. Actual key, expanded provider-model, model-detail and quota UI showed 0.99989486 / 1 points remaining and 0.00010514 used. The key badge showed 99.9895%. Source/reset timestamps and Last reported RPM were visible. Browser errors were empty.
+- Live fleet pressure still rendered Unknown because the provider feed did not supply a usable runtime observation. No current pressure value was substituted or invented. Published exact visual inspection steps in a session guide and recorded the deployed state in the handoff/ADR.
+- No commit or push. Temporary dashboard verification session revoked and owned browser resources removed.
+
+## 2026-10-14 — Approved AMD capacity indicator completed locally
+
+- `server/src/providers/radeon.ts`: specialized AMD adapter preserves existing inference configuration and reads the credential-free fleet feed with one in-flight fetch, a 20-second refresh window, bounded timeout, validation and stale/unknown failure semantics.
+- `server/src/services/provider-quota.ts`: preserve fractional normalized credits rather than rounding measured small usage back to an apparently untouched allocation. `server/src/services/provider-capacity.ts`, `server/src/routes/quota.ts` and `shared/types.ts`: authenticated read-only `/api/quota/capacity` snapshot, actual credential/pool references, scope/eligibility, independent allocation/RPM freshness, fleet pressure and existing cooldown expiry. Anonymous/deleted credentials do not create allowances.
+- `client/src/components/provider-capacity.tsx`, `client/src/lib/provider-capacity.ts`, `App.tsx`, model/provider/key and quota components: one shared page observer/clock, all approved surfaces, exact usage-point detail, no paid-dollar label, no false 100%, no inferred refill, explicit Unknown/Last reported and cooldown expiry. Legacy AMD key/RPM-headroom summaries are replaced, while other providers and policy editing remain intact. English strings filled across all locales. Registry metadata and user/provider docs updated.
+- Recovered the invalid delegated/nested edits locally, including the damaged model table. Preserved the existing Ignore modal action and independently exercised preview/Cancel without model changes. No broken capacity UI was deployed.
+- Verification: 84 focused server tests and server typecheck passed. 36 client tests, production build and 60-locale/1947-key validation passed. A temporary in-memory server used current live AMD model/key metadata and bounded actual inference through the new adapter; headers reported 0.99990221 of 1 usage points remaining and 0.00009779 used. Actual key, model-detail, expanded provider-model and quota surfaces showed those precise values, one shared pool, stale RPM as Last reported, no duplicated legacy AMD row and no browser errors.
+- Controlled UI snapshots separately proved full model pressure alongside nearly full allocation, cooldown display/expiry, stale values labelled Last reported, unknown values not zero and extension-off presentation gating. These controlled pressure states are not claimed as current live vendor measurements.
+- The public vendor pressure endpoint did not return a first byte to host/container Node or curl during smoke despite successful connection/TLS. Runtime therefore correctly displayed Unknown pressure. Reader-cached public data was not substituted as live capacity, and there is no claim of a successful live pressure fetch.
+- Capacity implementation is not deployed. The earlier Keys-only deployment remains live and healthy. No model enablement, saved scopes, routing order, provider preference, commit or push changed. Temporary plan/resume/smoke files and verification access/resources are removed after proof.
+
+## 2026-10-14 — Approved Keys deployment and capacity design
+
+- James approved the provider-model capacity design and, separately, deployment of the verified Keys controls. Marked `docs/adr/ARCH-20261014-provider-model-capacity-indicator.md` APPROVED and recorded `config/plan-current.md`.
+- Deployed Keys controls as `jamesjdoan/freellmapi:main-20261014-192916` via `./scripts/deploy.sh && docker compose up -d && docker compose ps`, preserving `freellmapi_freellmapi-data` and taking `backups/freellmapi-data-20261014-192916.tar.gz`. Container reported `Up (healthy)` with `127.0.0.1:3001->3001/tcp`.
+- Deployed Chromium check verified alphabetical provider cards, 15 → 12 on Hide Disabled Providers, and explicit Disabled view exposing the three off groups. No browser errors. All 15 stored keys decrypt; key enablement/scopes and chain digests match the immediate pre-deploy snapshot. Authenticated model listing returned 200 with 481 models; real `auto` completion returned 200, `qwen/qwen3.8-27b`, `OK`, 18 tokens, 1031 ms. Temporary session revoked.
+- Capacity-indicator source changes began only after the Keys image had been built and recreated. Its implementation is separate from this deployed image and has no deployment approval yet. No commit or push.
+
+## 2026-10-14 — Provider list controls, AMD tests and free-allocation research
+
+- `client/src/components/keys/provider-list.tsx`: provider cards default to case-insensitive alphabetical display order, including custom endpoints. Added a browser-persistent Hide/Show Disabled Providers button. Eligibility uses the complete provider key group before search narrows keys. Explicit Disabled view clears hiding, and hiding from that view returns to All. No routing or key-enable writes.
+- `client/src/components/keys/provider-list-controls.test.tsx`: five consumer regressions cover ordering, all-off versus unhealthy/mixed groups, reversal without writes, Disabled-tab precedence, search matching an off sibling and remount persistence. Together with existing balance tests, 11 tests passed.
+- Updated English and all other locale keys. Integration repaired the delegated malformed JSX and restored the English access-denied verdict key it had removed. Final i18n validation passed for 60 locales and 1917 keys. Client production build passed.
+- Actual local Chromium smoke against the existing backend verified 15 alphabetically ordered provider cards, hiding the three wholly disabled groups, 12 remaining groups, persistence through reload, explicit Disabled view, restoration of all providers and unchanged key-enabled state. Browser errors were empty. Updated the provider controls documentation. This UI is not yet deployed.
+- Tested all 11 public AMD chat models once in series: nine usable completions, DeepSeek-V4.1-Flash 429, GLM-5.3-Flash canceled after the 60-second client budget. MiMo-V2.6-Flash returned `pong`, a valid completion rather than an exact `OK` reply. Model enabled flags, Radeon fallback entries and all selected chain memberships/orders matched the pre-test digest. Temporary probe session removed.
+- `docs/adr/ARCH-20261014-provider-model-capacity-indicator.md`: recorded the proposed shared free-allocation, per-model fleet-pressure and existing cooldown indicator. Found integer-cent normalization hiding small measured allocation usage. Proposal is PENDING, not implemented or approved. Do not arm a build plan until approval.
+- ElectronHub read-only research established 10 no-ad Neutrinos/day, separate Free $0.25/week credit, 5 RPM and charges for failed/canceled free-model requests. The live public catalogue and provider UI price-label logic show 1-, 2- and 3-Neutrino chat routes. The existing key's account metadata confirms Free subscription, no ads, inactive Pass and disabled permanent credits. No ElectronHub inference, ad, purchase, settings change, model import or chain activation was performed.
+- No deployment, commit or push. Full test and research tables are session reports; durable decisions and verified state are recorded here and in the handoff.
+
+## 2026-10-14 — AMD Token Factory inventory under the existing key
+
+- The existing Radeon registration already points at AMD China's shared API. Key #39 returned 200 from `/models` with 12 public models, while the local catalogue held two disabled entries. No duplicate Radeon credential exists.
+- Registered the nine missing chat models through the running `POST /api/models` API as operator-owned native `radeon` entries: `DeepSeek-V4.1-Flash`, `DeepSeek-V4-Flash-Vision-Exp`, `Gemma-4-31B-IT`, `GLM-5.3-Flash`, `MiMo-V2.6-Flash`, `MiniCPM5-2B`, `MiniCPM-V-4.7-1B`, `MiniCPM-V-4.7-35B-A3B`, and `Qwen3.8-27B`. Context, vision and tool flags came from AMD's response. Automatic fallback is off for new entries, and existing parked models remain off.
+- Excluded `MinerU2.5-Pro` because its output is OCR, not chat, and the three dedicated deployments because they require separate instance credits. AMD's public detail explicitly calls shared-model prices relative usage points, not charges.
+- Created the consistent pre-import backup `/app/server/data/freeapi-before-amd-model-import-20261014060153987.db` in the persistent volume.
+- Verification: the original roster comparison changed from nine missing chat models to zero. Authenticated `/api/models` returned all 11 Radeon chat models, and the actual Keys provider table showed 11 models, nine enabled and two parked. Chain digest and active profile 3 are unchanged. A real FreeLLM `radeon:MiniCPM5-2B` call returned 200 with a response containing `OK`, 46 tokens, in 2577 ms. Temporary sessions revoked and verification browsers closed.
+- Updated quota documentation and appended the live configuration result to `config/handoff.md`. No application-code change, image rebuild, deployment, commit or push.
+
+## 2026-10-14 — Approved Chat capacity deployment
+
+- Deployed `jamesjdoan/freellmapi:main-20261014-164650` via `./scripts/deploy.sh`, preserving `freellmapi_freellmapi-data` and taking `backups/freellmapi-data-20261014-164650.tar.gz`.
+- Finished with `docker compose up -d && docker compose ps`: recreated container `Up (healthy)`, published `127.0.0.1:3001->3001/tcp`. Deployment script verified the running image matches the build.
+- Post-deploy checks: all 15 keys decrypt, zero failures, active profile 3 and unchanged chain digest. Authenticated capacity API returned 112,000,000 estimated tokens and 3,656,546,308 recorded chat tokens. The actual dashboard showed 112.0M capacity, 3.7B usage and 14 unpublished models, with no overflow or browser errors.
+- Authenticated `/v1/models`: 200, 478 models. Real `auto` chat: 200, `qwen/qwen3.8-27b`, `OK`, 18 tokens, 54 ms. Temporary dashboard verification session revoked.
+- Appended deployed state to `config/handoff.md`. No commit or push.
+
+## 2026-10-14 — Honest Chat monthly capacity
+
+- `server/src/routes/fallback.ts`: estimate capacity from enabled chain members with usable, in-scope, endpoint-matching keys. Count shared pools once per credential. Report all month-to-date chat usage separately, including disabled/removed routes and unpublished endpoints.
+- `client/src/components/token-usage-bar.tsx`, `client/src/lib/budget-legend.ts`, `routing.ts`, `pages/FallbackPage.tsx` and `client/dev/mockApi.ts`: replace the fabricated remaining balance with estimated capacity and separate recorded usage. Shared allowances render once and unpublished capacity stays visible even when the estimate is zero.
+- Updated all 60 locale contracts and quota documentation. Removed the obsolete free-tier-to-Chat legend wiring assertion and clarified that free-tier inventory includes chain-disabled routes.
+- Verification: 34 targeted server tests and 7 legend tests passed. Server typecheck, client production build and i18n validation passed. An isolated in-memory server exercised the actual endpoint with read-only live model/key settings: previous estimate 231M, corrected capacity 112M, recorded chat usage 3,655,963,028 tokens. Isolated Chromium showed 112.0M capacity, 3.7B recorded chat tokens and 14 unpublished models, with four capacity segments totalling 100%, no horizontal overflow and no browser errors.
+- No commit, push, deployment or live data changes.
+
+## 2026-10-14 — Approved deployment of final confirmation and inventory
+
+- Deployed `jamesjdoan/freellmapi:main-20261014-141957` via `./scripts/deploy.sh`, preserving the existing data volume and taking `backups/freellmapi-data-20261014-141957.tar.gz`.
+- `docker compose up -d && docker compose ps` confirmed `Up (healthy)` with published `127.0.0.1:3001->3001/tcp`.
+- Verified the deployed Models → Chat confirmation modal, unchanged routing through preview/Cancel, Escape dismissal, and both actual Extensions entries/links in isolated Chromium. Session revoked and profile removed.
+- Appended the deployed state to `config/handoff.md`. No source edits, commits or pushes in this deployment follow-up.
+
+## 2026-10-14 — Catalogue ignore on chat rows, confirmation and extension inventory
+
+- `server/src/services/catalogue-ignores.ts` and `server/src/routes/models.ts`: preview and apply accept target lists so all provider routes of a logical chat model are ignored in one transaction. Single-target DELETE restores remain unchanged.
+- `client/src/components/catalogue-ignore.tsx`, `catalogue-syncs.tsx` and `model-table.tsx`: reuse Ignore on Models → Chat rows. The final modal preview requires explicit Ignore and switch off, supports Cancel/Escape, and invalidates fallback-chain queries after changes.
+- `server/src/__tests__/services/catalogue-ignores.test.ts`, `server/src/__tests__/routes/catalogue-ignores.test.ts`, `client/src/components/catalogue-ignore.test.tsx` and `client/src/components/model-table.rank.test.tsx`: migrated contracts and covered multi-route ignore and confirmation behavior.
+- `server/src/data/extension-registry.ts` and `docs/IMPERIUM_EXTENSION.md`: catalogue updates, sync outcomes, history, ignores, chat confirmation, external leads, agent access, status ownership and remembered Hide ignored are explicitly tracked under the existing extension ids.
+- `config/handoff.md`, `config/changelog.md` and `docs/GOTCHAS.md`: saved verified state, deploy/commit/push boundary, and the fallback-query and inline-table-confirmation traps.
+- Latest checks: 586 client tests, 12 ignore server tests, 5 registry tests and 3 inventory UI tests passed. Client/server builds and i18n passed. Isolated-browser smoke verified modal cancellation and actual Extensions rendering. Final modal and inventory changes are local only. Earlier catalogue/discovery/A12 changes are committed and pushed through `18fe337f`.
+
 ## 2026-10-08 — Space Bunny via OpenCode Zen; AIHubMix free-only; Mistral re-enabled
 
 - Live-data changes only. The detail and the IDs are in `config/handoff.md` (Session 2026-10-08).

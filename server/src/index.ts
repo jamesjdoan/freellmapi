@@ -27,6 +27,7 @@ import { installLogRedaction } from './lib/log-redaction.js';
 import { cleanupExpiredCooldowns } from './services/ratelimit.js';
 import { loadCacheFromDb } from './services/cache.js';
 import { installGracefulShutdown } from './lib/graceful-shutdown.js';
+import { startRadeonPressurePolling } from './services/radeon-pressure.js';
 
 // Before any other statement runs, so no provider key can reach stdout — users
 // paste server output into bug reports. Module scope, not inside main(), so it
@@ -86,6 +87,7 @@ async function main() {
   restoreProxySettings();
 
   const app = createApp(config);
+  let stopRadeonPressureCollection: (() => void) | undefined;
 
   const onReady = (host: string) => () => {
     const display = host.includes(':') ? `[${host}]` : host;
@@ -97,6 +99,7 @@ async function main() {
     startCooldownProbe(scheduler);
     startBurnRecoveryPoller(scheduler);
     startProviderUsagePolling(scheduler);
+    stopRadeonPressureCollection ??= startRadeonPressurePolling(scheduler);
     startDbBackupPump(getDb(), scheduler, config.dbPath ?? undefined);
     startBackupScheduler(scheduler);
     startCustomModelSync(getDb(), scheduler);
@@ -140,7 +143,13 @@ async function main() {
   const server = app.listen(Number(PORT), HOST, onReady(HOST));
   tuneKeepAlive(server);
   const servers = [server];
-  installGracefulShutdown({ servers: () => servers.filter(s => s.listening), closeDb: () => getDb().close?.() });
+  installGracefulShutdown({
+    servers: () => servers.filter(s => s.listening),
+    closeDb: () => {
+      stopRadeonPressureCollection?.();
+      getDb().close?.();
+    },
+  });
   server.on('error', (err: NodeJS.ErrnoException) => {
     // The default '::' bind fails where IPv6 is disabled (kernel
     // ipv6.disable=1 and the like) — retry IPv4-only rather than dying.

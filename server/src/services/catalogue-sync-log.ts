@@ -1,4 +1,5 @@
 import { getDb } from '../db/index.js';
+import { removedPlatforms } from './provider-removals.js';
 import type { Db } from '../db/types.js';
 import { isIgnored, loadIgnoreSets, type IgnoreSets } from './catalogue-ignores.js';
 
@@ -142,6 +143,8 @@ export interface CatalogueSyncQuery {
   limit?: number;
   /** Skip this many, for paging through a long history. */
   offset?: number;
+  hideIgnored?: boolean;
+  status?: 'all' | 'enabled' | 'disabled';
 }
 
 interface SyncDbRow {
@@ -249,18 +252,28 @@ export function recordCatalogueSync(db: Db, input: CatalogueSyncInput): void {
 
 const churnWeight = (c: PlatformChurn) => c.a + c.r + c.c + (c.off ?? 0) + (c.on ?? 0);
 
+/** Ignore sets plus the providers an active removal has vetted out: their
+ *  churn is unreadable noise, and their tombstones mean no future document
+ *  can bring them back. */
+function withRemovedPlatforms(sets: IgnoreSets, db: Db): IgnoreSets {
+  for (const platform of removedPlatforms(db)) sets.providers.add(platform);
+  return sets;
+}
+
 /**
  * A sync row with ignored providers and models taken out. A provider is
  * dropped whole; an ignored model's own arrivals, departures, on/off flips and
  * edits are subtracted from its provider, using the row's stored names and
  * field changes. Counts are then re-summed from what is left.
  */
-function withoutIgnored(row: SyncDbRow, sets: IgnoreSets): { row: CatalogueSyncRow; hidden: number; members: CatalogMembers | null; details: CatalogFieldChange[] } {
+function withoutIgnored(row: SyncDbRow, sets: IgnoreSets, status: CatalogueSyncQuery['status'] = 'all', enabledModels?: Set<string>): { row: CatalogueSyncRow; hidden: number; members: CatalogMembers | null; details: CatalogFieldChange[] } {
   const base = toRow(row);
   const members = parseJson<CatalogMembers | null>(row.members_json, null);
   const details = parseJson<CatalogFieldChange[]>(row.details_json, []);
+  const excluded = (r: string, p: string, m: string) => isIgnored(sets, p, m)
+    || (status !== 'all' && enabledModels?.has(`${r}\0${p}\0${m}`) !== (status === 'enabled'));
   const before = Object.values(base.byPlatform).reduce((n, c) => n + churnWeight(c), 0);
-  if (sets.providers.size === 0 && sets.models.size === 0) return { row: base, hidden: 0, members, details };
+  if (status === 'all' && sets.providers.size === 0 && sets.models.size === 0) return { row: base, hidden: 0, members, details };
 
   const byPlatform: Record<string, PlatformChurn> = {};
   for (const [platform, churn] of Object.entries(base.byPlatform)) {
@@ -270,16 +283,40 @@ function withoutIgnored(row: SyncDbRow, sets: IgnoreSets): { row: CatalogueSyncR
     const churn = byPlatform[platform];
     if (churn && (churn[k] ?? 0) > 0) churn[k] = (churn[k] ?? 0) - 1;
   };
-  for (const m of members?.added ?? []) if (!sets.providers.has(m.p) && isIgnored(sets, m.p, m.m)) subtract(m.p, 'a');
-  for (const m of members?.removed ?? []) if (!sets.providers.has(m.p) && isIgnored(sets, m.p, m.m)) subtract(m.p, 'r');
+  for (const m of members?.added ?? []) if (!sets.providers.has(m.p) && excluded(m.r, m.p, m.m)) subtract(m.p, 'a');
+  for (const m of members?.removed ?? []) if (!sets.providers.has(m.p) && excluded(m.r, m.p, m.m)) subtract(m.p, 'r');
   const editedIgnored = new Set<string>();
   for (const d of details) {
-    if (sets.providers.has(d.p) || !isIgnored(sets, d.p, d.m)) continue;
+    if (sets.providers.has(d.p) || !excluded(d.r, d.p, d.m)) continue;
     if (d.f !== 'enabled') {
       const key = `${d.r}:${d.p}:${d.m}`;
       if (!editedIgnored.has(key)) { editedIgnored.add(key); subtract(d.p, 'c'); }
     } else if (d.o === true && d.n === false) subtract(d.p, 'off');
     else if (d.o === false && d.n === true) subtract(d.p, 'on');
+  }
+  // Current-state filters can classify only the named, recorded changes.
+  if (status !== 'all') {
+    for (const platform of Object.keys(byPlatform)) delete byPlatform[platform];
+    for (const m of members?.added ?? []) {
+      if (excluded(m.r, m.p, m.m)) continue;
+      (byPlatform[m.p] ??= { a: 0, r: 0, c: 0, off: 0, on: 0 }).a++;
+    }
+    for (const m of members?.removed ?? []) {
+      if (excluded(m.r, m.p, m.m)) continue;
+      (byPlatform[m.p] ??= { a: 0, r: 0, c: 0, off: 0, on: 0 }).r++;
+    }
+    const edited = new Set<string>();
+    for (const d of details) {
+      if (excluded(d.r, d.p, d.m)) continue;
+      const churn = byPlatform[d.p] ??= { a: 0, r: 0, c: 0, off: 0, on: 0 };
+      if (d.f === 'enabled') {
+        if (d.o === true && d.n === false) churn.off++;
+        else if (d.o === false && d.n === true) churn.on++;
+      } else {
+        const key = `${d.r}\0${d.p}\0${d.m}`;
+        if (!edited.has(key)) { edited.add(key); churn.c++; }
+      }
+    }
   }
   for (const [platform, churn] of Object.entries(byPlatform)) if (churnWeight(churn) === 0) delete byPlatform[platform];
 
@@ -289,11 +326,24 @@ function withoutIgnored(row: SyncDbRow, sets: IgnoreSets): { row: CatalogueSyncR
     row: { ...base, byPlatform, docAdded: sum('a'), docRemoved: sum('r'), docChanged: sum('c'), docSwitchedOff: sum('off'), docSwitchedOn: sum('on') },
     hidden: before - after,
     members: members && {
-      added: members.added.filter(m => !isIgnored(sets, m.p, m.m)),
-      removed: members.removed.filter(m => !isIgnored(sets, m.p, m.m)),
+      added: members.added.filter(m => !excluded(m.r, m.p, m.m)),
+      removed: members.removed.filter(m => !excluded(m.r, m.p, m.m)),
     },
-    details: details.filter(d => !isIgnored(sets, d.p, d.m)),
+    details: details.filter(d => !excluded(d.r, d.p, d.m)),
   };
+}
+
+/** Current local enablement, not the feed's historical enabled flag. */
+function enabledCatalogueModels(db: Db): Set<string> {
+  const rows = db.prepare(`
+    SELECT 'chat' AS registry, platform, model_id FROM models WHERE enabled = 1
+    UNION ALL
+    SELECT CASE modality WHEN 'transcription' THEN 'stt' WHEN 'video' THEN 'video' ELSE 'media' END,
+           platform, model_id FROM media_models WHERE enabled = 1
+    UNION ALL
+    SELECT 'embedding', platform, model_id FROM embedding_models WHERE enabled = 1
+  `).all() as Array<{ registry: string; platform: string; model_id: string }>;
+  return new Set(rows.map(row => `${row.registry}\0${row.platform}\0${row.model_id}`));
 }
 
 export function listCatalogueSyncs(query: CatalogueSyncQuery = {}, db: Db = getDb()): CatalogueSyncPage {
@@ -306,35 +356,41 @@ export function listCatalogueSyncs(query: CatalogueSyncQuery = {}, db: Db = getD
       FROM catalogue_sync
      ORDER BY at DESC, id DESC
   `).all() as SyncDbRow[];
-  const sets = loadIgnoreSets(db);
-  const filtered = rows.map(r => withoutIgnored(r, sets));
+  const sets = query.hideIgnored === false ? { providers: new Set<string>(), models: new Set<string>() }
+    : withRemovedPlatforms(loadIgnoreSets(db), db);
+  const enabled = query.status && query.status !== 'all' ? enabledCatalogueModels(db) : undefined;
+  const filtered = rows.map(r => withoutIgnored(r, sets, query.status ?? 'all', enabled))
+    .filter(f => !query.status || query.status === 'all' || Object.keys(f.row.byPlatform).length > 0);
   const sum = (k: 'docAdded' | 'docRemoved' | 'docChanged' | 'docSwitchedOff' | 'docSwitchedOn') =>
     filtered.reduce((n, f) => n + f.row[k], 0);
 
   return {
     syncs: filtered.slice(offset, offset + limit).map(f => f.row),
-    total: rows.length,
+    total: filtered.length,
     totals: {
-      syncs: rows.length,
+      syncs: filtered.length,
       added: sum('docAdded'),
       removed: sum('docRemoved'),
       changed: sum('docChanged'),
       switchedOff: sum('docSwitchedOff'),
       switchedOn: sum('docSwitchedOn'),
-      hiddenIgnored: filtered.reduce((n, f) => n + f.hidden, 0),
+      hiddenIgnored: rows.reduce((n, row) => n + withoutIgnored(row, sets).hidden, 0),
       lastAt: rows[0]?.at ?? null,
       lastVersion: rows[0]?.version ?? null,
     },
   };
 }
 
-export function getCatalogueSync(id: number, db: Db = getDb()): CatalogueSyncDetailRow | null {
+export function getCatalogueSync(id: number, db: Db = getDb(), query: CatalogueSyncQuery = {}): CatalogueSyncDetailRow | null {
   const row = db.prepare(`
     SELECT ${ROW_COLUMNS}, details_json, members_json
       FROM catalogue_sync
      WHERE id = ?
   `).get(id) as SyncDbRow | undefined;
   if (!row) return null;
-  const filtered = withoutIgnored(row, loadIgnoreSets(db));
+  const sets = query.hideIgnored === false ? { providers: new Set<string>(), models: new Set<string>() }
+    : withRemovedPlatforms(loadIgnoreSets(db), db);
+  const filtered = withoutIgnored(row, sets, query.status ?? 'all',
+    query.status && query.status !== 'all' ? enabledCatalogueModels(db) : undefined);
   return { ...filtered.row, details: filtered.details, members: filtered.members };
 }

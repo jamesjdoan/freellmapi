@@ -48,6 +48,7 @@ import LogsPage from '@/pages/LogsPage'
 import PremiumPage from '@/pages/PremiumPage'
 import NotFoundPage from '@/pages/NotFoundPage'
 import AgentsPage from '@/pages/AgentsPage'
+import { ProviderCapacityProvider } from './components/provider-capacity'
 
 // Every failed mutation surfaces as an error toast, so no action fails
 // silently. A page that already shows the failure inline can opt out with
@@ -512,6 +513,7 @@ function App() {
         <I18nProvider>
           <BrowserRouter basename={import.meta.env.BASE_URL}>
             <AuthGate>
+              <ProviderCapacityProvider>
               {/* Column, so a full-bleed route can claim the height the navbar
                   leaves without anyone having to know how tall the navbar is.
                   Fixed-position children (toaster, palette, reminder) are out of
@@ -555,6 +557,7 @@ function App() {
                 <UpdateReminder />
                 <NewBuildPrompt />
               </AppShell>
+              </ProviderCapacityProvider>
             </AuthGate>
           </BrowserRouter>
         </I18nProvider>

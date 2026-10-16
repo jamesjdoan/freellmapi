@@ -268,6 +268,12 @@ const ignoreTargetSchema = z.object({
   platform: z.string().trim().min(1, 'platform is required').max(80),
   modelId: z.string().trim().min(1).max(256).nullish(),
 });
+// A logical model on the Models page can be served by many providers; cap well
+// above any real group so a malformed body cannot fan out unbounded.
+const ignoreTargetsSchema = z.object({
+  targets: z.array(ignoreTargetSchema).min(1, 'targets is required').max(200),
+});
+const toTargets = (list: z.infer<typeof ignoreTargetSchema>[]) => list.map(x => ({ platform: x.platform, modelId: x.modelId ?? null }));
 
 /**
  * Providers and models the operator never wants to use. Ignoring switches off
@@ -279,23 +285,24 @@ modelsRouter.get('/catalogue-ignores', (_req: Request, res: Response) => {
   res.json({ ignores: listCatalogueIgnores() });
 });
 
-/** What ignoring would switch off, for the confirm step. Changes nothing. */
-modelsRouter.get('/catalogue-ignores/preview', (req: Request, res: Response) => {
-  const parsed = ignoreTargetSchema.safeParse(req.query);
+/** What ignoring `targets` would switch off, for the confirm step. Changes
+ *  nothing; POST only because the target list rides in the body. */
+modelsRouter.post('/catalogue-ignores/preview', (req: Request, res: Response) => {
+  const parsed = ignoreTargetsSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
     return;
   }
-  res.json(previewIgnore(parsed.data.platform, parsed.data.modelId ?? null));
+  res.json(previewIgnore(toTargets(parsed.data.targets)));
 });
 
 modelsRouter.post('/catalogue-ignores', (req: Request, res: Response) => {
-  const parsed = ignoreTargetSchema.safeParse(req.body);
+  const parsed = ignoreTargetsSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
     return;
   }
-  const impact = ignoreInCatalogue(parsed.data.platform, parsed.data.modelId ?? null);
+  const impact = ignoreInCatalogue(toTargets(parsed.data.targets));
   res.json({ ignored: true, switchedOff: impact });
 });
 
@@ -744,6 +751,8 @@ modelsRouter.post('/changes/acknowledge-bulk', (req: Request, res: Response) => 
 const syncsQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(200).optional(),
   offset: z.coerce.number().int().nonnegative().optional(),
+  hideIgnored: z.enum(['true', 'false']).optional().transform(value => value !== 'false'),
+  status: z.enum(['all', 'enabled', 'disabled']).optional(),
 });
 
 /**
@@ -762,6 +771,8 @@ modelsRouter.get('/changes/syncs', (req: Request, res: Response) => {
 
 const syncDetailSchema = z.object({
   id: z.coerce.number().int().positive(),
+  hideIgnored: z.enum(['true', 'false']).optional().transform(value => value !== 'false'),
+  status: z.enum(['all', 'enabled', 'disabled']).optional(),
 });
 
 /** The field-level diff behind one sync row. 404 on an id never recorded. */
@@ -771,7 +782,7 @@ modelsRouter.get('/changes/syncs/detail', (req: Request, res: Response) => {
     res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
     return;
   }
-  const row = getCatalogueSync(parsed.data.id);
+  const row = getCatalogueSync(parsed.data.id, getDb(), parsed.data);
   if (!row) {
     res.status(404).json({ error: { message: 'No recorded catalog sync with that id' } });
     return;

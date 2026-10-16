@@ -34,7 +34,7 @@ const listed = () => act(async () => {
   await vi.waitFor(() => { if (!host!.textContent?.includes('Ignored providers')) throw new Error('list not rendered yet') })
 })
 const calls = (method: string) => vi.mocked(apiFetch).mock.calls.filter(([, init]) => (init?.method ?? 'GET') === method)
-const button = (text: string) => [...host!.querySelectorAll('button')].find(b => b.textContent?.trim() === text)
+const button = (text: string) => [...document.querySelectorAll('button')].find(b => b.textContent?.trim() === text)
 
 function render(node: React.ReactNode, ignores: unknown[] = []) {
   host = document.createElement('div')
@@ -51,29 +51,43 @@ function render(node: React.ReactNode, ignores: unknown[] = []) {
   ))
 }
 
+// Preview is a POST too (the target list rides in the body), so a "write" is
+// only a POST to the ignore endpoint itself.
+const previews = () => calls('POST').filter(([p]) => p === '/api/models/catalogue-ignores/preview')
+const writes = () => calls('POST').filter(([p]) => p === '/api/models/catalogue-ignores')
+const bodyOf = (call: unknown[]) => JSON.parse(String((call[1] as RequestInit).body))
+
 describe('IgnoreButton', () => {
   it('previews a provider ignore, then writes only on confirm', async () => {
-    render(<IgnoreButton platform="sail" modelId={null} label="Ignore provider" />)
+    render(<IgnoreButton targets={[{ platform: 'sail', modelId: null }]} name="sail" label="Ignore provider" />)
     await act(async () => { button('Ignore provider')!.click() })
     await settle()
-    expect(calls('GET').map(([p]) => p)).toEqual(['/api/models/catalogue-ignores/preview?platform=sail'])
-    expect(host!.textContent).toContain('Switches off keys: 1, models: 13.')
-    expect(host!.textContent).toContain('Leaves chains: Apex, Default.')
-    expect(calls('POST')).toHaveLength(0)
+    expect(previews().map(bodyOf)).toEqual([{ targets: [{ platform: 'sail', modelId: null }] }])
+    expect(document.querySelector('[role="dialog"]')!.textContent).toContain('Switches off keys: 1, models: 13.')
+    expect(document.querySelector('[role="dialog"]')!.textContent).toContain('Leaves chains: Apex, Default.')
+    expect(writes()).toHaveLength(0)
 
     await act(async () => { button('Ignore and switch off')!.click() })
-    const [path, init] = calls('POST')[0]
-    expect(path).toBe('/api/models/catalogue-ignores')
-    expect(JSON.parse(String(init?.body))).toEqual({ platform: 'sail', modelId: null })
+    expect(writes().map(bodyOf)).toEqual([{ targets: [{ platform: 'sail', modelId: null }] }])
+  })
+
+  it('ignores every provider route of a model in one write', async () => {
+    const routes = [{ platform: 'groq', modelId: 'glm-5.3' }, { platform: 'sail', modelId: 'zai-org/GLM-5.3' }]
+    render(<IgnoreButton targets={routes} name="GLM 5.3" label="Ignore" />)
+    await act(async () => { button('Ignore')!.click() })
+    await settle()
+    expect(writes()).toHaveLength(0)
+    await act(async () => { button('Ignore and switch off')!.click() })
+    expect(writes().map(bodyOf)).toEqual([{ targets: routes }])
   })
 
   it('writes nothing when the preview is cancelled', async () => {
-    render(<IgnoreButton platform="xkiro" modelId="kiro/claude-sonnet-4" label="Ignore" />)
+    render(<IgnoreButton targets={[{ platform: 'xkiro', modelId: 'kiro/claude-sonnet-4' }]} name="kiro/claude-sonnet-4" label="Ignore" />)
     await act(async () => { button('Ignore')!.click() })
     await settle()
-    expect(calls('GET')[0][0]).toBe('/api/models/catalogue-ignores/preview?platform=xkiro&modelId=kiro%2Fclaude-sonnet-4')
+    expect(previews()).toHaveLength(1)
     await act(async () => { button('Cancel')!.click() })
-    expect(calls('POST')).toHaveLength(0)
+    expect(writes()).toHaveLength(0)
     expect(button('Ignore')).toBeDefined()
   })
 })

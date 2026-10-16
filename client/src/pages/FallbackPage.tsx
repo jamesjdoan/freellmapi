@@ -507,8 +507,8 @@ export default function FallbackPage() {
         {/* First-run checklist: hides itself once the install has keys + a request */}
         <GettingStarted />
 
-        {/* Monthly token budget — moved to the top */}
-        {tokenUsage && tokenUsage.totalBudget > 0 && <TokenUsageBar data={tokenUsage} />}
+        {/* Estimated capacity stays visible even when every quota is unpublished. */}
+        {tokenUsage && <TokenUsageBar data={tokenUsage} />}
 
         {/* Strategy selector */}
         <section className="rounded-3xl border bg-card p-5">

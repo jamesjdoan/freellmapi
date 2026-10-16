@@ -1,3 +1,4 @@
+import { settleBonusUsage } from '../services/bonus.js';
 import { nextMonthResetAt } from '../services/key-budget.js';
 // One shared provider retry/fallback loop for every OpenAI-, Responses- and
 // Anthropic-shaped chat surface (routes/proxy.ts legacy /completions and
@@ -750,9 +751,11 @@ function recordFailedAttemptUsage(route: RouteResult, err: unknown): void {
   // the most. Only what the surface measured is metered; nothing is estimated
   // here.
   const wasted = (err as { wastedInputTokens?: unknown } | null)?.wastedInputTokens;
-  if (typeof wasted === 'number' && Number.isFinite(wasted) && wasted > 0) {
-    recordTokens(route.platform, route.modelId, route.keyId, Math.round(wasted));
-  }
+  const wastedTokens = typeof wasted === 'number' && Number.isFinite(wasted) && wasted > 0 ? Math.round(wasted) : 0;
+  if (wastedTokens > 0) recordTokens(route.platform, route.modelId, route.keyId, wastedTokens);
+  // The provider counted this attempt, so a bonus grant that admitted it pays
+  // for whatever part of it fell beyond the normal allowance.
+  settleBonusUsage({ leaseId: route.leaseId, modelId: route.modelId, keyId: route.keyId, requests: 1, tokens: wastedTokens });
 }
 
 /**
@@ -773,6 +776,9 @@ export function recordUpstreamSuccess(route: RouteResult, rateLimitTokens: numbe
   }
   recordRequest(route.platform, route.modelId, route.keyId);
   recordTokens(route.platform, route.modelId, route.keyId, rateLimitTokens);
+  // Bonus excess is read from the counts just written, so this stays directly
+  // after them with nothing asynchronous in between.
+  settleBonusUsage({ leaseId: route.leaseId, modelId: route.modelId, keyId: route.keyId, requests: 1, tokens: rateLimitTokens });
   recordSuccess(route.modelDbId);
   // A served request proves the model+key can complete: the empty-completion
   // streak (#751) starts over.

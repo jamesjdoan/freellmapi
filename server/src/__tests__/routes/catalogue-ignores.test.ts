@@ -42,13 +42,13 @@ describe('catalogue ignore routes', () => {
   const enabled = () => (getDb().prepare("SELECT enabled FROM models WHERE model_id = 'ig-route'").get() as { enabled: number }).enabled;
 
   it('previews without changing anything', async () => {
-    const res = await call('/catalogue-ignores/preview?platform=groq&modelId=ig-route');
+    const res = await call('/catalogue-ignores/preview', { method: 'POST', body: JSON.stringify({ targets: [{ platform: 'groq', modelId: 'ig-route' }] }) });
     expect(await res.json()).toMatchObject({ keys: 0, models: 1 });
     expect(enabled()).toBe(1);
   });
 
   it('ignores and un-ignores', async () => {
-    const res = await call('/catalogue-ignores', { method: 'POST', body: JSON.stringify({ platform: 'groq', modelId: 'ig-route' }) });
+    const res = await call('/catalogue-ignores', { method: 'POST', body: JSON.stringify({ targets: [{ platform: 'groq', modelId: 'ig-route' }] }) });
     expect(await res.json()).toMatchObject({ ignored: true, switchedOff: { models: 1 } });
     expect(enabled()).toBe(0);
     const ignores = await (await call('/catalogue-ignores')).json() as { ignores: Array<{ platform: string; modelId: string }> };

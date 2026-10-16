@@ -80,7 +80,7 @@ describe('ignoring a provider', () => {
     const key = addKey('groq');
     const offKey = addKey('groq', 0);
 
-    const impact = ignoreInCatalogue('groq', null);
+    const impact = ignoreInCatalogue([{ platform: 'groq', modelId: null }]);
     expect(impact.keys).toBe(1);
     expect(enabledOf('groq', 'ig-on')).toBe(0);
     expect(keyEnabled(key)).toBe(0);
@@ -96,7 +96,7 @@ describe('ignoring a provider', () => {
   });
 
   it('keeps its new arrivals and new keys off through a catalog sync', () => {
-    ignoreInCatalogue('groq', null);
+    ignoreInCatalogue([{ platform: 'groq', modelId: null }]);
     const lateKey = addKey('groq');
     applyCatalog(db(), catalogOfExisting([{ ...catalogOfExisting().models[0], platform: 'groq', modelId: 'ig-arrival', displayName: 'Arrival' }]));
     expect(enabledOf('groq', 'ig-arrival')).toBe(0);
@@ -109,7 +109,7 @@ describe('ignoring a model', () => {
     addModel('groq', 'ig-target');
     addModel('groq', 'ig-neighbour');
     const key = addKey('groq');
-    ignoreInCatalogue('groq', 'ig-target');
+    ignoreInCatalogue([{ platform: 'groq', modelId: 'ig-target' }]);
     expect(enabledOf('groq', 'ig-target')).toBe(0);
     expect(enabledOf('groq', 'ig-neighbour')).toBe(1);
     expect(keyEnabled(key)).toBe(1);
@@ -121,8 +121,8 @@ describe('ignoring a model', () => {
   it('stays off when its provider is un-ignored around it', () => {
     addModel('groq', 'ig-target');
     addModel('groq', 'ig-neighbour');
-    ignoreInCatalogue('groq', 'ig-target');
-    ignoreInCatalogue('groq', null);
+    ignoreInCatalogue([{ platform: 'groq', modelId: 'ig-target' }]);
+    ignoreInCatalogue([{ platform: 'groq', modelId: null }]);
     unignoreInCatalogue('groq', null);
     expect(enabledOf('groq', 'ig-neighbour')).toBe(1);
     expect(enabledOf('groq', 'ig-target')).toBe(0);
@@ -132,8 +132,30 @@ describe('ignoring a model', () => {
     const id = addModel('groq', 'ig-target');
     const profile = db().prepare('SELECT id, name FROM profiles ORDER BY id LIMIT 1').get() as { id: number; name: string };
     db().prepare('INSERT INTO profile_models (profile_id, model_db_id, priority, enabled) VALUES (?, ?, 1, 1)').run(profile.id, id);
-    expect(previewIgnore('groq', 'ig-target')).toEqual({ keys: 0, models: 1, chains: [profile.name] });
+    expect(previewIgnore([{ platform: 'groq', modelId: 'ig-target' }])).toEqual({ keys: 0, models: 1, chains: [profile.name] });
     expect(enabledOf('groq', 'ig-target')).toBe(1);
+  });
+
+  it('ignores every provider route of one model together, counting overlaps once', () => {
+    addModel('groq', 'ig-shared');
+    addModel('mistral', 'ig-shared');
+    addModel('mistral', 'ig-other');
+    const key = addKey('mistral');
+    const routes = [{ platform: 'groq', modelId: 'ig-shared' }, { platform: 'mistral', modelId: 'ig-shared' }];
+    // A provider target plus one of its own models reaches that model once.
+    const provider = { platform: 'mistral', modelId: null }
+    expect(previewIgnore([routes[1], provider]).models).toBe(previewIgnore([provider]).models);
+
+    expect(ignoreInCatalogue(routes)).toMatchObject({ keys: 0, models: 2 });
+    expect(enabledOf('groq', 'ig-shared')).toBe(0);
+    expect(enabledOf('mistral', 'ig-shared')).toBe(0);
+    expect(enabledOf('mistral', 'ig-other')).toBe(1);
+    expect(keyEnabled(key)).toBe(1);
+    // Each route is its own entry, so each can be lifted on its own.
+    expect(listCatalogueIgnores().map(i => `${i.platform}:${i.modelId}`).sort()).toEqual(['groq:ig-shared', 'mistral:ig-shared']);
+    unignoreInCatalogue('mistral', 'ig-shared');
+    expect(enabledOf('mistral', 'ig-shared')).toBe(1);
+    expect(enabledOf('groq', 'ig-shared')).toBe(0);
   });
 
   it('answers null when un-ignoring something not ignored', () => {
@@ -147,7 +169,7 @@ describe('the catalogue views leave ignored items out', () => {
     addModel('groq', 'ig-hidden');
     recordCatalogueEvent(db(), { kind: 'arrived', platform: 'groq', modelId: 'ig-hidden', source: 'catalog' });
     recordCatalogueEvent(db(), { kind: 'arrived', platform: 'mistral', modelId: 'ig-visible', source: 'catalog' });
-    ignoreInCatalogue('groq', null);
+    ignoreInCatalogue([{ platform: 'groq', modelId: null }]);
 
     const arrived = getCatalogueChanges(30).arrived.map(a => a.modelId);
     expect(arrived).toContain('ig-visible');

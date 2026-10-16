@@ -52,8 +52,10 @@ import { ModelScopeDialog } from './model-scope-dialog'
 import { TestModelsDialog } from './test-models-dialog'
 import { AddModelDialog } from './add-model-dialog'
 import { groupHandle } from '@/lib/endpoint-groups'
+import { ProviderKeyCapacityIndicator } from '../provider-capacity'
 
 type StatusFilter = 'all' | 'healthy' | 'issues' | 'disabled'
+const HIDE_DISABLED_PROVIDERS_KEY = 'imperium.keys.hideDisabledProviders'
 
 // One collapsible section of the Keys page: a platform, or one custom
 // endpoint (an OpenAI-compatible account), which is why `value` and
@@ -195,7 +197,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                 left — the same low-balance signal the Quota outlook panel
                 gives, but visible where the operator actually scans keys
                 instead of on a second tab. */}
-            {balance && (
+            {balance && k.platform !== 'radeon' && (
               <Tooltip
                 text={balance.limit != null
                   ? t('keys.quotaBalanceHint', { remaining: new Intl.NumberFormat(locale).format(balance.remaining), limit: new Intl.NumberFormat(locale).format(balance.limit), metric: t(METRIC_LABEL_KEY[balance.metric]) })
@@ -214,6 +216,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                 </Badge>
               </Tooltip>
             )}
+            <ProviderKeyCapacityIndicator platform={k.platform} keyId={k.id} />
             <div className="flex-1" />
             {lastChecked && (
               <span className="text-[11px] text-muted-foreground tabular-nums">
@@ -325,6 +328,9 @@ export function ProviderList({ onAddKey, initialSearch }: {
 
   const { t, locale } = useI18n()
   const queryClient = useQueryClient()
+  // No useMemo: the React Compiler memoizes this on `locale` itself, and the
+  // manual wrapper is what made it bail out of optimizing this component.
+  const providerCollator = new Intl.Collator(locale, { sensitivity: 'base' })
 
   const [editingKeyId, setEditingKeyId] = useState<number | null>(null)
   const [expandedKeyIds, setExpandedKeyIds] = useState<Set<number>>(new Set())
@@ -350,6 +356,22 @@ export function ProviderList({ onAddKey, initialSearch }: {
     if (initialSearch) setSearch(initialSearch)
   }, [initialSearch])
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [hideDisabledProviders, setHideDisabledProviders] = useState(() => {
+    try { return localStorage.getItem(HIDE_DISABLED_PROVIDERS_KEY) === '1' } catch { return false }
+  })
+  function rememberHideDisabledProviders(hidden: boolean) {
+    setHideDisabledProviders(hidden)
+    try { localStorage.setItem(HIDE_DISABLED_PROVIDERS_KEY, hidden ? '1' : '0') } catch { /* view state only */ }
+  }
+  function selectStatusFilter(value: StatusFilter) {
+    setStatusFilter(value)
+    if (value === 'disabled') rememberHideDisabledProviders(false)
+  }
+  function toggleHideDisabledProviders() {
+    const hidden = !hideDisabledProviders
+    if (hidden && statusFilter === 'disabled') setStatusFilter('all')
+    rememberHideDisabledProviders(hidden)
+  }
   // Custom endpoint whose model list is being fetched (#488) — relays change
   // what they serve constantly, so this is a repeat action, not a one-off.
   // `builtin`: a built-in provider key the catalog has no models for (#1348),
@@ -638,7 +660,9 @@ export function ProviderList({ onAddKey, initialSearch }: {
       customGroup: k.groupLabel?.trim() || null,
       keys: [k],
     })),
-  ].filter(p => p.keys.length > 0)
+  ].filter(p => p.keys.length > 0).sort((a, b) =>
+    providerCollator.compare(a.label, b.label) || a.value.localeCompare(b.value),
+  )
 
   // #1403 phase 3: the provider-reported balance for a key, from the same
   // health poll the row's status already rides on. One badge per key: the
@@ -694,6 +718,8 @@ export function ProviderList({ onAddKey, initialSearch }: {
   // row renders "api.unorouter.com" on screen, so searching that host must
   // find the row the same way the fallback table's search does.
   const visibleGroups = grouped
+    // Decide from the full provider, before search can narrow it to an off key.
+    .filter(group => !hideDisabledProviders || group.keys.some(key => key.enabled))
     .map(group => {
       if (!q) return group
       if (group.label.toLowerCase().includes(q)) return group
@@ -752,7 +778,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
         </div>
         <SegmentedControl
           value={statusFilter}
-          onValueChange={setStatusFilter}
+          onValueChange={selectStatusFilter}
           options={[
             { value: 'all', label: t('keys.filterAll') },
             { value: 'healthy', label: t('keys.filterHealthy') },
@@ -764,12 +790,14 @@ export function ProviderList({ onAddKey, initialSearch }: {
         <Button size="sm" variant="outline" className="h-8" aria-pressed={expandAll} onClick={() => { setExpandAllRemembered(!expandAll); setOpenGroup('') }}>
           {expandAll ? t('keys.collapseAll') : t('keys.expandAll')}
         </Button>
+        <Button size="sm" variant="outline" className="h-8" aria-pressed={hideDisabledProviders} onClick={toggleHideDisabledProviders}>
+          {hideDisabledProviders ? t('keys.showDisabledProviders') : t('keys.hideDisabledProviders')}
+        </Button>
         <span className="flex-1" />
         <span className="text-xs text-muted-foreground tabular-nums">
           {t('keys.providerCountSummary', { providers: totalProviders, keys: totalKeys })}
         </span>
       </div>
-
 
       {visibleGroups.length === 0 ? (
         <EmptyState title={t('keys.noFilterMatch')} />
@@ -1041,7 +1069,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                       const status = statusOf(k)
                       const health = healthKeyMap.get(k.id)
                       const lastChecked = health?.lastCheckedAt ?? k.lastCheckedAt
-                      const lastHealthError = health?.lastHealthError ?? k.lastHealthError
+                      const lastHealthError = health ? health.lastHealthError : k.lastHealthError
                       const balance = balanceOf.get(k.id)
                       const customModels = k.models ?? []
                       const hasCustomModels = customModels.length > 0
@@ -1134,7 +1162,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                             {/* #1403 phase 3: the provider-reported balance. This row
                                 is laid out here rather than through renderKeyDetails,
                                 so the badge is repeated rather than inherited. */}
-                            {balance && (
+                            {balance && k.platform !== 'radeon' && (
                               <Tooltip
                                 text={balance.limit != null
                                   ? t('keys.quotaBalanceHint', { remaining: new Intl.NumberFormat(locale).format(balance.remaining), limit: new Intl.NumberFormat(locale).format(balance.limit), metric: t(METRIC_LABEL_KEY[balance.metric]) })
@@ -1153,6 +1181,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                                 </Badge>
                               </Tooltip>
                             )}
+                            <ProviderKeyCapacityIndicator platform={k.platform} keyId={k.id} />
                             <div className="flex-1" />
                             {lastChecked && (
                               <span className="text-[11px] text-muted-foreground tabular-nums">
@@ -1352,7 +1381,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                   {single && (() => {
                     const k = group.keys[0]
                     const health = healthKeyMap.get(k.id)
-                    const lastHealthError = health?.lastHealthError ?? k.lastHealthError
+                    const lastHealthError = health ? health.lastHealthError : k.lastHealthError
                     const customModels = k.models ?? []
                     if (!lastHealthError && !(customModels.length > 0 && expandedKeyIds.has(k.id))) return null
                     return (

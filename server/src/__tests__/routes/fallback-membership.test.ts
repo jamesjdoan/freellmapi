@@ -115,6 +115,70 @@ describe('POST /api/fallback/membership', () => {
     expect(rowIn('Coding')?.priority).toBe(5);
   });
 
+  it('appends a recommendation reactivation instead of restoring its historic first position', async () => {
+    const db = getDb();
+    db.prepare('INSERT INTO profile_models (profile_id, model_db_id, priority, enabled) VALUES (?, ?, 1, 0)')
+      .run(otherChainId, modelId);
+    const before = db.prepare("SELECT value FROM settings WHERE key = 'active_profile_id'").get();
+    const res = await call(app, '/api/fallback/membership', token, {
+      chain: 'Coding', modelDbIds: [modelId], member: true, append: true,
+    });
+    expect(res.status).toBe(200);
+    expect(rowIn('Coding')).toEqual({ priority: 5, enabled: 1 });
+    expect(db.prepare('SELECT priority, enabled FROM profile_models WHERE profile_id = ? AND model_db_id = 1')
+      .get(otherChainId)).toEqual({ priority: 4, enabled: 1 });
+    expect(db.prepare("SELECT value FROM settings WHERE key = 'active_profile_id'").get()).toEqual(before);
+  });
+
+  it('makes duplicate recommendation adoption idempotent without moving an active member', async () => {
+    const body = { chain: 'Coding', modelDbIds: [modelId, modelId], member: true, append: true };
+    const first = await call(app, '/api/fallback/membership', token, body);
+    expect(first.status).toBe(200);
+    expect(first.body.changed).toBe(1);
+    const second = await call(app, '/api/fallback/membership', token, body);
+    expect(second.status).toBe(200);
+    expect(second.body.changed).toBe(0);
+    expect(rowIn('Coding')).toEqual({ priority: 5, enabled: 1 });
+  });
+
+  it('keeps already-active members untouched and appends only the new selection without gaps', async () => {
+    const res = await call(app, '/api/fallback/membership', token, {
+      chain: 'Coding', modelDbIds: [1, modelId], member: true, append: true,
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.changed).toBe(1);
+    expect(rowIn('Coding')).toEqual({ priority: 5, enabled: 1 });
+    expect(getDb().prepare('SELECT priority, enabled FROM profile_models WHERE profile_id = ? AND model_db_id = 1')
+      .get(otherChainId)).toEqual({ priority: 4, enabled: 1 });
+  });
+
+  it('rejects a removed recommendation model before writing any valid member from the same request', async () => {
+    const res = await call(app, '/api/fallback/membership', token, {
+      chain: 'Coding', modelDbIds: [modelId, 999999], member: true, append: true,
+    });
+    expect(res.status).toBe(409);
+    expect(rowIn('Coding')).toBeUndefined();
+  });
+
+  it('does not enable a globally disabled model through recommendation adoption', async () => {
+    getDb().prepare('UPDATE models SET enabled = 0 WHERE id = ?').run(modelId);
+    const res = await call(app, '/api/fallback/membership', token, {
+      chain: 'Coding', modelDbIds: [modelId], member: true, append: true,
+    });
+    expect(res.status).toBe(409);
+    expect(rowIn('Coding')).toBeUndefined();
+    expect(getDb().prepare('SELECT enabled FROM models WHERE id = ?').get(modelId)).toEqual({ enabled: 0 });
+  });
+
+  it('still refuses recommendation adoption after its usable key becomes disabled', async () => {
+    getDb().prepare("UPDATE api_keys SET enabled = 0 WHERE platform = 'groq'").run();
+    const res = await call(app, '/api/fallback/membership', token, {
+      chain: 'Coding', modelDbIds: [modelId], member: true, append: true,
+    });
+    expect(res.status).toBe(409);
+    expect(rowIn('Coding')).toBeUndefined();
+  });
+
   it('rejects an unknown chain rather than creating one', async () => {
     const res = await call(app, '/api/fallback/membership', token, {
       chain: 'Nonexistent', modelDbIds: [modelId], member: true,

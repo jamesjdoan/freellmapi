@@ -38,6 +38,11 @@ describe('CLI provider keys through the dashboard API', () => {
 
   beforeEach(() => {
     getDb().prepare('DELETE FROM api_keys').run();
+    // Deleting the last key of a platform writes a provider_removal row, which
+    // then hides the platform from /providers — the next test's `keys add`
+    // would refuse it. The CLI test file runs each action against a fresh
+    // key set, so that log belongs to no case either.
+    getDb().prepare('DELETE FROM provider_removal').run();
     output = '';
     vi.spyOn(process.stdout, 'write').mockImplementation(chunk => { output += String(chunk); return true; });
     vi.spyOn(provider, 'validateKey').mockResolvedValue(true);

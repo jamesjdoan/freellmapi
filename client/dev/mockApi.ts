@@ -138,8 +138,12 @@ export function mockApiPlugin(): Plugin {
         }
 
         if (url === '/api/fallback/token-usage') {
-          const withKeys = models
-          const modelBudgets = withKeys.map(m => ({ displayName: m.displayName, platform: m.platform, budget: budgetTokens(m.monthlyTokenBudget) }))
+          const withKeys = models.filter(m => m.enabled)
+          const modelBudgets = withKeys.map(m => ({
+            displayName: m.displayName, platform: m.platform, modelId: m.modelId,
+            intelligenceRank: m.intelligenceRank, poolKey: `${m.platform}::model::${m.modelId}`,
+            poolBudget: budgetTokens(m.monthlyTokenBudget), budget: budgetTokens(m.monthlyTokenBudget),
+          }))
           const totalBudget = modelBudgets.reduce((s, m) => s + m.budget, 0)
           return send({ totalBudget, totalUsed: Math.round(totalBudget * 0.18), models: modelBudgets })
         }

@@ -399,6 +399,9 @@ export function quotaDomainsAdmit(
   endpointScope: string,
   estimatedTokens = 0,
   now: number = Date.now(),
+  /** A domain the caller has funded beyond (a bonus spending window over this
+   *  daily allowance). Skipped here; every other domain still applies. */
+  covered?: (quota: EffectiveQuota) => boolean,
 ): AdmissionDecision {
   // `quota-ledger-precedence` off: stop consulting the typed ledger and admit
   // on upstream's own counters alone. The policies, their provenance and their
@@ -408,6 +411,7 @@ export function quotaDomainsAdmit(
     const quotas = resolveEffectiveQuotas(platform, modelId, now, endpointScope || null);
     for (const quota of quotas) {
       if (quota.limit <= 0 || !ENFORCEABLE_SOURCES[quota.source]) continue;
+      if (covered?.(quota)) continue;
 
       const measured = quota.reportedRemaining != null
         ? quota.limit - quota.reportedRemaining

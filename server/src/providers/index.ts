@@ -20,6 +20,7 @@ import { GizmoProvider } from './gizmo.js';
 import { BlockRunProvider } from './blockrun.js';
 import { MoondreamProvider } from './moondream.js';
 import { ElectronHubProvider } from './electronhub.js';
+import { RadeonProvider } from './radeon.js';
 import { ExperientialProvider } from './experiential.js';
 import { Router9Provider } from './router9.js';
 import { SeptorProvider } from './septor.js';
@@ -126,18 +127,9 @@ register(new OpenAICompatProvider({
   baseUrl: 'https://api.anyapi.ai/v1',
 }));
 
-// AMD Radeon Cloud TokenFactory — the shared Model API is OpenAI-compatible
-// and its current public roster is free without consuming GPU-instance
-// credits. Public models are experimental and may rotate, so their ids remain
-// in the hosted catalog rather than migrations. Both current models reject
-// parallel tool calls; long reasoning requests may run for up to ten minutes.
-register(new OpenAICompatProvider({
-  platform: 'radeon',
-  name: 'AMD Radeon Cloud',
-  baseUrl: 'https://developer.amd.com.cn/radeon/api/v1',
-  forceSingleToolCall: true,
-  timeoutMs: 600_000,
-}));
+// AMD's public model roster stays catalogue-managed; the adapter also reads
+// the credential-free per-model fleet-pressure feed for capacity presentation.
+register(new RadeonProvider());
 
 // SambaNova was dropped in V23 (June 2026): the free tier is permanently gone.
 // The always-free tier was retired in early 2025 for a one-time $5 trial
@@ -526,6 +518,14 @@ register(new OpenAICompatProvider({
   name: 'xKiro',
   baseUrl: 'https://api.xkiro.com/v1',
   validateUrl: 'https://api.xkiro.com/v1/usage',
+  quotaProbe: {
+    url: 'https://api.xkiro.com/v1/usage',
+    metric: 'tokens',
+    limitFields: ['free_tokens.limit_per_day'],
+    remainingFields: ['free_tokens.remaining'],
+    notes: 'xKiro /v1/usage free_tokens: daily token allowance',
+    resetCalendar: { kind: 'calendar_day', timezone: 'UTC' },
+  },
 }));
 
 // ModelScope (魔搭社区, Alibaba) — OpenAI-compatible inference API

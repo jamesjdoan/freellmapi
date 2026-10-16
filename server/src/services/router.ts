@@ -50,10 +50,13 @@ import { getKeyQuotaHeadroom, inferQuotaPoolKey, isQuotaPoolAvailable, resolveQu
 import { effectiveRouteLimits } from './quota-policy.js';
 import { normalizeGroupKey } from './model-groups.js';
 import { quotaPressure, quotaDomainsAdmit, inFlightPoolShare } from './quota-pressure.js';
+import { evaluateBonusAdmission, bonusCoversExhaustion, reserveBonusLease, releaseBonusLease } from './bonus.js';
+import { paidCreditActive, evaluatePaidCredit, holdPaidCredit, releasePaidCredit } from './paid-credit.js';
 import type { RoutingDecisionTrace } from '../lib/attempt-trace.js';
 import type { BaseProvider } from '../providers/base.js';
 import type { Platform } from '@freellmapi/shared/types.js';
 import type { Db } from '../db/types.js';
+import { RadeonPressureSnapshot, RadeonProvider } from '../providers/radeon.js';
 
 class RouteError extends Error {
   status: number;
@@ -199,6 +202,12 @@ export interface ChainRow {
   match_tier?: number;
   /** Explicit per-unified-model order. Absent means preserve automatic routing. */
   provider_preference_rank?: number;
+  /**
+   * Added by the paid credit tier (`paid-credit-windows`): an operator-selected
+   * paid model the guard would otherwise exclude. Always walked after every
+   * free route, and admitted only through an open credit window on its key.
+   */
+  paid_credit?: boolean;
 }
 
 export interface RouteResult {
@@ -265,6 +274,9 @@ export interface RouteResult {
    * path simply carries no trace, and the ladder record stores null.
    */
   routingTrace?: RoutingDecisionTrace;
+  /** Rate-limit lease this attempt holds; bonus settlement finds its
+   *  reservation by it. Absent on test doubles. */
+  leaseId?: number;
 }
 
 // ── Routing token estimate: cap the reserved OUTPUT, not the full max_tokens ──
@@ -1264,6 +1276,19 @@ export function applyReliabilityFloor(chain: ChainRow[]): ChainRow[] {
   return kept.length > 0 ? kept : chain;
 }
 
+/** Only validated, fresh fleet pressure can change automatic priority. */
+function freshAmdRoutingPressure(): RadeonPressureSnapshot['models'] | undefined {
+  if (!isExtensionEnabled('amd-capacity-routing')) return undefined;
+  const provider = getProvider('radeon');
+  if (!(provider instanceof RadeonProvider)) return undefined;
+  const pressure = provider.getModelPressure();
+  return pressure.freshness === 'fresh' ? pressure.models : undefined;
+}
+
+function amdCapacityBand(platform: string, modelId: string, pressure: RadeonPressureSnapshot['models'] | undefined): number {
+  return platform === 'radeon' && pressure && Object.hasOwn(pressure, modelId) && pressure[modelId].state === 'full' ? 1 : 0;
+}
+
 /**
  * Order the enabled fallback chain for routing.
  *  - 'priority' strategy → legacy manual order + 429 penalty (unchanged).
@@ -1289,12 +1314,14 @@ function orderChain(
   sampled = true,
   task?: 'code' | 'chat',
   traces?: Map<number, RoutingDecisionTrace>,
+  capacityPressure = freshAmdRoutingPressure(),
 ): ChainRow[] {
   // Tier first, always: it is the one ordering input that score must not be able
   // to override (see ChainRow.match_tier). Zero for every chain built anywhere
   // else, so this is a no-op outside slug-fallback resolution.
   const tier = (e: ChainRow) => e.match_tier ?? 0;
   const preference = (e: ChainRow) => e.provider_preference_rank ?? 0;
+  const capacityBand = (e: ChainRow) => amdCapacityBand(e.platform, e.model_id, capacityPressure);
   // An unlimited model (services/unlimited-models.ts) is tried first among the
   // chain's members, after the match tier and before provider preference. It
   // only orders: a benched or keyless one is still skipped at key selection,
@@ -1378,7 +1405,8 @@ function orderChain(
       });
 
     const outer = (a: { e: ChainRow }, b: { e: ChainRow }) =>
-      tier(a.e) - tier(b.e) || unlimitedFirst(a.e) - unlimitedFirst(b.e) || preference(a.e) - preference(b.e);
+      tier(a.e) - tier(b.e) || capacityBand(a.e) - capacityBand(b.e)
+      || unlimitedFirst(a.e) - unlimitedFirst(b.e) || preference(a.e) - preference(b.e);
     const ordered = [...scoredByPriority]
       .sort((a, b) => outer(a, b) || a.eff - b.eff || a.e.priority - b.e.priority || a.i - b.i);
 
@@ -1412,7 +1440,8 @@ function orderChain(
 
   const scored = chain.map(e => ({ e, s: scoreChainEntry(e, weights, intelMin, intelMax, sampled, keyCounts, headroomCfg) }));
   const outer = (a: { e: ChainRow }, b: { e: ChainRow }) =>
-    tier(a.e) - tier(b.e) || unlimitedFirst(a.e) - unlimitedFirst(b.e) || preference(a.e) - preference(b.e);
+    tier(a.e) - tier(b.e) || capacityBand(a.e) - capacityBand(b.e)
+    || unlimitedFirst(a.e) - unlimitedFirst(b.e) || preference(a.e) - preference(b.e);
   // Higher score first WITHIN a tier; manual priority breaks ties so the chain
   // still matters.
   const ordered = [...scored]
@@ -1532,13 +1561,17 @@ const GLOBAL_SORT_ALIASES: Record<string, string> = {
  *  `auto:coding` quietly picking one because the catalogue grew a paid twin of
  *  a free route and it happened to score well.
  *
- *  The guard is the `paid-balance-guard` extension, and it is the ONLY control
- *  over this. The previous `routing_allow_paid_balance` setting is gone: it
- *  turned real spending on from a bare settings row, with nothing recorded
- *  about who decided that or when. Disabling the extension requires the typed
- *  confirmation and stores an acknowledgement, and an off state that has lost
- *  its acknowledgement is repaired to ON at load rather than honoured. Two
- *  controls over one hazard is how a guard gets bypassed by the forgotten one.
+ *  The guard is the `paid-balance-guard` extension. The previous
+ *  `routing_allow_paid_balance` setting is gone: it turned real spending on
+ *  from a bare settings row, with nothing recorded about who decided that or
+ *  when. Disabling the extension requires the typed confirmation and stores an
+ *  acknowledgement, and an off state that has lost its acknowledgement is
+ *  repaired to ON at load rather than honoured.
+ *
+ *  The only spend the guard lets through is a paid credit window
+ *  (`paid-credit-windows`): selected models only, last resort only, bounded by
+ *  measured provider spend, and opened with the same typed confirmation. It
+ *  is not a second switch over the hazard; it is a metered allowance under it.
  *
  *  Read per call, from an in-memory snapshot, so re-enabling the guard takes
  *  effect on the next dispatch — including a retry of a request already in
@@ -1546,13 +1579,43 @@ const GLOBAL_SORT_ALIASES: Record<string, string> = {
 function withoutAutorouteDisabled(rows: ChainRow[]): ChainRow[] {
   const excluded = getAutorouteDisabledPlatforms();
   const guarded = isExtensionEnabled(PAID_BALANCE_GUARD_ID);
-  return rows.filter(row =>
+  const allowed = rows.filter(row =>
     !excluded.includes(row.platform.toLowerCase())
     // An unlimited model is exempt only while its provider prices it at $0
     // (isUnlimitedModel re-checks that), so the exemption cannot outlive a
     // stealth period.
     && (!guarded || !consumesPaidBalance(row.platform as Platform, row.model_id) || isUnlimitedModel(row.platform, row.model_id)),
   );
+  // The one bounded exception to the guard: paid models the operator selected
+  // for a credit window, appended as a tier routeRequest walks last. The
+  // window, not this list, is what authorises spend (selectKeyForModel).
+  const present = new Set(allowed.map(r => r.model_db_id));
+  for (const row of paidCreditTierRows()) {
+    if (!present.has(row.model_db_id) && !excluded.includes(row.platform.toLowerCase())) allowed.push(row);
+  }
+  return allowed;
+}
+
+function paidCreditTierRows(): ChainRow[] {
+  // Guard off: paid models already route on their chain rows, unbounded, by
+  // the operator's acknowledged decision; there is nothing for a window to add.
+  if (!paidCreditActive()) return [];
+  try {
+    const rows = getDb().prepare(`
+      SELECT m.id as model_db_id, 0 as priority, 1 as enabled,
+             m.platform, m.model_id, m.display_name, m.intelligence_rank,
+             m.size_label, m.monthly_token_budget,
+             m.rpm_limit, m.rpd_limit, m.tpm_limit, m.tpd_limit, m.supports_vision,
+             m.supports_tools, m.context_window, m.key_id, m.endpoint_scope
+        FROM paid_credit_models p
+        JOIN models m ON m.platform = p.platform AND m.model_id = p.model_id AND m.endpoint_scope = ''
+       WHERE m.enabled = 1
+       ORDER BY p.created_at, m.model_id
+    `).all() as ChainRow[];
+    return rows.map(r => ({ ...r, paid_credit: true }));
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -1944,7 +2007,22 @@ function selectKeyForModel(entry: ChainRow, estimatedTokens: number, skipKeys?: 
     // above and concurrency below still do - those are the provider saying no,
     // not a count of ours.
     const unlimited = isUnlimitedModel(entry.platform, entry.model_id);
-    if (!unlimited && !isQuotaPoolAvailable(entry.platform as Platform, key.id, entry.model_id, key.base_url)) { note('observed-quota-exhausted'); continue; }
+    // Temporary bonus grant (ADR ARCH-20261016): the normal daily allowance is
+    // spent first; beyond it only an open spending window admits the request.
+    // When the window funds the excess, the gates enforcing that one daily
+    // allowance must not refuse it — every other gate, and any provider
+    // refusal through cooldown, still applies.
+    const bonus = unlimited ? null : evaluateBonusAdmission(entry.platform, key.id, estimatedTokens);
+    if (bonus && !bonus.admitted) { note(`bonus-refused(${bonus.reason ?? 'unknown'})`); continue; }
+    // Paid credit tier: spend only through an open, unspent credit window on
+    // this key, one measured attempt at a time.
+    const paidCredit = entry.paid_credit ? evaluatePaidCredit(entry.platform, key.id) : null;
+    if (paidCredit && !paidCredit.admitted) { note(`paid-credit-refused(${paidCredit.reason ?? 'unknown'})`); continue; }
+    const funded = bonus?.funded ?? [];
+    const poolCovered = funded.length > 0
+      ? (metric: string, resetAtMs: number | null) => bonusCoversExhaustion(funded, metric, resetAtMs)
+      : undefined;
+    if (!unlimited && !isQuotaPoolAvailable(entry.platform as Platform, key.id, entry.model_id, key.base_url, poolCovered)) { note('observed-quota-exhausted'); continue; }
     if (!unlimited && !canUseProvider(entry.platform, key.id)) { note('provider-daily-cap'); continue; }
     // Account-wide per-minute budget, checked before the per-model gates: a model
     // with a NULL rpm_limit would otherwise sail past them and spend a budget its
@@ -1970,7 +2048,10 @@ function selectKeyForModel(entry: ChainRow, estimatedTokens: number, skipKeys?: 
     // Only a limit the provider measured or a human stated closes the route
     // here; shipped catalogue guesses and ceilings inferred from one 429 stay
     // advisory (see ENFORCEABLE_SOURCES).
-    const domains = quotaDomainsAdmit(entry.platform, entry.model_id, entry.endpoint_scope ?? '', estimatedTokens);
+    const domains = quotaDomainsAdmit(
+      entry.platform, entry.model_id, entry.endpoint_scope ?? '', estimatedTokens, Date.now(),
+      funded.length > 0 ? quota => bonusCoversExhaustion(funded, quota.metric, quota.window.resetAtMs) : undefined,
+    );
     if (!unlimited && !domains.ok) { note(`quota-domain-exhausted(${domains.blockedBy ?? 'unknown'})`); continue; }
     // Monthly budget (#1158): a key whose request/token caps are spent for the
     // current UTC month is not a candidate — same skip semantics as the daily
@@ -2000,6 +2081,8 @@ function selectKeyForModel(entry: ChainRow, estimatedTokens: number, skipKeys?: 
     const budget = unlimited ? { allowed: true as const, release: () => {} } : reserveMonthlyBudget(key.id, estimatedTokens);
     if (!budget.allowed) { note('monthly-budget-cap'); continue; }
     const leaseId = acquireLease(entry.platform, entry.model_id, key.id, estimatedTokens);
+    if (bonus) reserveBonusLease(leaseId, bonus);
+    if (paidCredit?.windowId != null) holdPaidCredit(leaseId, paidCredit.windowId, key.id);
     return {
       provider: resolvedProvider,
       modelId: entry.model_id,
@@ -2016,7 +2099,8 @@ function selectKeyForModel(entry: ChainRow, estimatedTokens: number, skipKeys?: 
       providerBaseUrl: entry.platform === 'custom' ? (key.base_url ?? '') : '',
       rpdLimit: limits.rpd,
       tpdLimit: limits.tpd,
-      release: () => { releaseLease(leaseId); budget.release(); },
+      release: () => { releaseBonusLease(leaseId); releasePaidCredit(leaseId); releaseLease(leaseId); budget.release(); },
+      leaseId,
     };
   }
 
@@ -2490,7 +2574,8 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
   // routeRequest call because the route that finally clears the gates may not
   // be the one ordering put first.
   const traces = new Map<number, RoutingDecisionTrace>();
-  const sortedChain = orderChain(chain, strategy, true, task, traces);
+  const capacityPressure = freshAmdRoutingPressure();
+  const sortedChain = orderChain(chain, strategy, true, task, traces, capacityPressure);
 
   // Exploration toggle (#685/#707 follow-up): when enabled, give a model with
   // no reliability/speed samples a guaranteed chance to be tried, so it stops
@@ -2514,11 +2599,16 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
     // a perpetual probe target — the explicit ban outranks exploration.
     const overrides = getModelWeightOverrides();
     const preferredRank = sortedChain[0]?.provider_preference_rank;
+    const first = sortedChain[0];
+    const firstCapacityBand = first ? amdCapacityBand(first.platform, first.model_id, capacityPressure) : 0;
     const unmeasured = sortedChain.filter(e => {
+      if (amdCapacityBand(e.platform, e.model_id, capacityPressure) > firstCapacityBand) return false;
       if (preferredRank !== undefined && e.provider_preference_rank !== preferredRank) return false;
       if (overrides.get(e.model_id) === 0) return false;
       const stats = statsCache?.get(modelStatsKey(e.platform, e.model_id, e.endpoint_scope));
       if ((stats?.successes ?? 0) + (stats?.failures ?? 0) >= EXPLORE_MIN_SAMPLES) return false;
+      // A paid route is never an exploration probe: it is a last resort.
+      if (e.paid_credit) return false;
       // Mirror the main loop's gates below so exploration only samples
       // candidates that can actually serve this request.
       if (skipModels?.has(e.model_db_id)) return false;
@@ -2548,7 +2638,8 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
   if (preferredModelDbId) {
     const idx = sortedChain.findIndex(e => e.model_db_id === preferredModelDbId);
     if (idx >= 0) {
-      if (idx > 0) {
+      // A paid route served last turn stays a last resort this turn.
+      if (idx > 0 && !sortedChain[idx].paid_credit) {
         const [preferred] = sortedChain.splice(idx, 1);
         sortedChain.unshift(preferred);
         noteSelectionOverride(traces, preferred, 'sticky');
@@ -2638,6 +2729,22 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
     (fitsContextWindow(e.platform, e.context_window, estimatedTokens, exactOutputReserve) ? servingChain : marginDeferred).push(e);
   }
   servingChain.push(...marginDeferred, ...toolDeferred);
+  // Full fleet load is a last-resort preference, including after the existing
+  // soft margin/tool passes. Exact-match tiers and deliberate pins still win.
+  if (capacityPressure && servingChain.some(e =>
+    e.model_db_id !== preferredModelDbId && amdCapacityBand(e.platform, e.model_id, capacityPressure) === 1)) {
+    servingChain.sort((a, b) =>
+      Number(b.model_db_id === preferredModelDbId) - Number(a.model_db_id === preferredModelDbId)
+      || (a.match_tier ?? 0) - (b.match_tier ?? 0)
+      || amdCapacityBand(a.platform, a.model_id, capacityPressure) - amdCapacityBand(b.platform, b.model_id, capacityPressure));
+  }
+  // Paid credit routes go behind every free one, whatever their score or pin.
+  if (servingChain.some(e => e.paid_credit)) {
+    const paid = servingChain.filter(e => e.paid_credit);
+    const free = servingChain.filter(e => !e.paid_credit);
+    servingChain.length = 0;
+    servingChain.push(...free, ...paid);
+  }
 
   // 1-based position in the walk, counting every candidate looked at — so a
   // route reached third says so even when the two before it were rejected by

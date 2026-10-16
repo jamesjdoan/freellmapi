@@ -4,6 +4,7 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useI18n } from '@/i18n'
 import { ConfirmButton } from '@/components/confirm-button'
+import { IgnoreButton } from '@/components/catalogue-ignore'
 import { CopyButton } from '@/components/copy-button'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip } from '@/components/tooltip'
@@ -23,6 +24,7 @@ import {
   type RateLimitUsageRow,
   type Row,
 } from '@/lib/routing'
+import { ProviderModelCapacityIndicator } from './provider-capacity'
 
 // The unified model/provider table pieces, extracted from FallbackPage so the
 // Models page and the per-model detail page share one module.
@@ -266,6 +268,7 @@ export function RowContent({
             row.rpdLimit ? t('models.rpdLimit', { count: row.rpdLimit }) : null,
           ].filter(Boolean).join(' · ') || cleanQuotaLabel(row.monthlyTokenBudget) || '—'}
         </div>
+        <ProviderModelCapacityIndicator platform={row.platform} modelId={row.modelId} />
       </td>
       {/* Reliability/speed are measured axes: with zero recorded requests the
           scorer only has its exploration priors, so show an explicit "no data"
@@ -497,6 +500,14 @@ export function GroupHeaderCells({ group, rank, dragHandle, editableRank, onMove
               text={copyId}
               label={t('models.copyModelId')}
               className="size-6 border-0 bg-transparent hover:bg-muted opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+            />
+          </span>
+          <span onClick={event => event.stopPropagation()} className="shrink-0">
+            <IgnoreButton
+              targets={group.members.map(member => ({ platform: member.platform, modelId: member.modelId }))}
+              name={group.label}
+              label={t('catalogue.ignore')}
+              className="rounded-full px-1.5 py-0.5 text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
             />
           </span>
         </div>

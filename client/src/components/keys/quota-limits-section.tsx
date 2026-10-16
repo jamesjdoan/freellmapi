@@ -660,7 +660,7 @@ export function QuotaLimitsSection() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {providerGroups.map(group => (
+              {providerGroups.filter(group => group.platform !== 'radeon').map(group => (
                 <Fragment key={`group:${group.platform}`}>
                   {group.pools.length > 1 && (
                     <TableRow className="border-t-2">

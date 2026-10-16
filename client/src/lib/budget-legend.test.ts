@@ -2,7 +2,10 @@ import { describe, it, expect } from 'vitest'
 import { buildBudgetLegend, sortByIntelligence, type LegendModel } from './budget-legend'
 
 function model(platform: string, modelId: string, intelligenceRank: number | undefined, budget: number, used = 0): LegendModel {
-  return { displayName: `${platform}/${modelId}`, platform, modelId, intelligenceRank, budget, used }
+  return {
+    displayName: `${platform}/${modelId}`, platform, modelId, intelligenceRank, budget, used,
+    poolKey: `${platform}::${modelId}`, poolBudget: budget,
+  }
 }
 
 describe('sortByIntelligence', () => {
@@ -43,20 +46,20 @@ describe('sortByIntelligence', () => {
 })
 
 describe('buildBudgetLegend', () => {
-  it('is one flat list of budgeted models, smartest first, with no provider grouping', () => {
-    const legend = buildBudgetLegend([
-      model('groq', 'llama-70b', 12, 1_000_000, 250_000),
-      model('google', 'gemini-flash', 8, 2_000_000),
-      model('groq', 'llama-8b', 40, 500_000),
-    ], 3_500_000)
-    expect(legend.rows.map(r => r.modelId)).toEqual(['gemini-flash', 'llama-70b', 'llama-8b'])
-    // Only model rows — nothing in the shape names a pool or a provider header.
-    for (const row of legend.rows) expect(Object.keys(row)).not.toContain('pool')
+  it('counts shared capacity once and names every member in smartest-first order', () => {
+    const first = { ...model('mistral', 'codestral', 5, 100_000_000), poolKey: 'mistral::codestral', poolBudget: 150_000_000 }
+    const second = { ...model('mistral', 'mistral-code', 2, 100_000_000), poolKey: first.poolKey, poolBudget: first.poolBudget }
+    const legend = buildBudgetLegend([first, model('groq', 'llama', 3, 50_000_000), second], 200_000_000)
+    expect(legend.rows.map(r => [r.modelId, r.budget, r.widthPct, r.memberNames])).toEqual([
+      ['mistral-code', 150_000_000, 75, ['mistral/mistral-code', 'mistral/codestral']],
+      ['llama', 50_000_000, 25, ['groq/llama']],
+    ])
   })
 
-  it('computes used / remaining / width per row against the whole budget', () => {
-    const legend = buildBudgetLegend([model('groq', 'llama-70b', 1, 1_000_000, 250_000)], 4_000_000)
-    expect(legend.rows[0]).toMatchObject({ usedTokens: 250_000, remainingTokens: 750_000, widthPct: 18.75 })
+  it('does not subtract recorded traffic from a renewing allowance estimate', () => {
+    const legend = buildBudgetLegend([model('groq', 'llama', 1, 1_000_000, 2_000_000)], 1_000_000)
+    expect(legend.rows[0].budget).toBe(1_000_000)
+    expect(legend.rows[0].widthPct).toBe(100)
   })
 
   it('folds rows without a published budget into the unpublished count', () => {

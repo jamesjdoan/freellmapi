@@ -1,20 +1,14 @@
 import type { TokenUsageData } from './routing'
 
-// The monthly-budget legend: one flat list of models, smartest first.
-//
-// It used to nest model rows under provider pool headers (#1010), which read
-// as "arranged by provider" — the first thing on the Models page and the one
-// place it was grouped that way. The legend is back to models only, ordered by
-// intelligence so the top of the list is what the router reaches for first
-// under the smartest strategy. Pool-level quota readings live on each model's
-// own page.
+// One capacity segment per quota pool, ordered by its smartest member.
+// Recorded spend is not subtracted: catalogue estimates and renewing daily
+// allowances are not a measured monthly balance.
 
 export type LegendModel = TokenUsageData['models'][number]
 
 export interface LegendRow extends LegendModel {
-  usedTokens: number
-  remainingTokens: number
-  /** Share of the whole budget this model's remaining allowance is. */
+  memberNames: string[]
+  /** Share of the estimated capacity, counted once per pool. */
   widthPct: number
 }
 
@@ -38,22 +32,27 @@ export function sortByIntelligence<T extends { intelligenceRank?: number }>(mode
 }
 
 export function buildBudgetLegend(models: readonly LegendModel[], totalBudget: number): BudgetLegend {
-  const ordered = sortByIntelligence(models)
   const rows: LegendRow[] = []
+  const byPool = new Map<string, LegendRow>()
   let unpublishedCount = 0
-  for (const m of ordered) {
-    const usedTokens = m.used ?? 0
-    const remainingTokens = Math.max(0, m.budget - usedTokens)
-    if (m.budget <= 0) {
+  for (const m of sortByIntelligence(models)) {
+    if (m.poolBudget <= 0) {
       unpublishedCount += 1
       continue
     }
-    rows.push({
+    const existing = byPool.get(m.poolKey)
+    if (existing) {
+      existing.memberNames.push(m.displayName)
+      continue
+    }
+    const row: LegendRow = {
       ...m,
-      usedTokens,
-      remainingTokens,
-      widthPct: totalBudget > 0 ? (remainingTokens / totalBudget) * 100 : 0,
-    })
+      budget: m.poolBudget,
+      memberNames: [m.displayName],
+      widthPct: totalBudget > 0 ? (m.poolBudget / totalBudget) * 100 : 0,
+    }
+    rows.push(row)
+    byPool.set(m.poolKey, row)
   }
   return { rows, unpublishedCount }
 }
