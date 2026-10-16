@@ -262,6 +262,10 @@ export function resolveQuotaPolicy(
   // per-platform default until measured.
   if (platform === 'aclide') return policy('aclide::monthly-credit', 'shared_pool', 'unknown', [], 'unknown');
   if (platform === 'speka') return policy('speka::monthly-credit', 'shared_pool', 'unknown', [], 'unknown');
+  // Upstream v0.15.0 (#1524): Auray's free credits renew monthly and are one
+  // wallet shared across chat and embeddings, so one pool for the account.
+  // Nothing readable reports the balance yet, so accounting stays unknown.
+  if (platform === 'auray') return policy('auray::monthly-credit', 'shared_pool', 'unknown', [], 'unknown');
 
   // Providers added by upstream v0.13.7 (#1441 Plugsky, #1455 Inferbase and
   // SimpleLLM). Pool NAMES and shared scope are upstream's; nothing readable

@@ -36,9 +36,11 @@ export default function PremiumPage() {
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['premium'] })
-    // A sync may have changed the model list and quirks.
-    queryClient.invalidateQueries({ queryKey: ['models'] })
-    queryClient.invalidateQueries({ queryKey: ['catalogue-syncs'] })
+    // A sync may have changed every model list (chat, embeddings, media,
+    // search) and quirks, not just ['models'], and records a catalogue update.
+    for (const queryKey of [['models'], ['fallback'], ['embeddings'], ['media'], ['search-engines'], ['catalogue-syncs']]) {
+      queryClient.invalidateQueries({ queryKey })
+    }
   }
 
   const activate = useMutation({

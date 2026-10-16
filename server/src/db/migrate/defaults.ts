@@ -75,6 +75,7 @@ import * as customEndpointGroupLabel from '../migrations/20260930_000001_custom_
 import * as catalogueAck from '../migrations/20261001_000001_catalogue_ack.js';
 import * as clifreeLinksToModelLinks from '../migrations/20261012_000001_clifree_links_to_model_links.js';
 import * as catalogueSyncLog from '../migrations/20261013_000001_catalogue_sync_log.js';
+import * as searchEngines from '../migrations/20261013_000001_search_engines.js';
 import * as externalModelDiscovery from '../migrations/20261014_000001_external_model_discovery.js';
 import * as catalogueSyncMembers from '../migrations/20261014_000002_catalogue_sync_members.js';
 import * as externalLeadProvider from '../migrations/20261014_000003_external_lead_provider.js';
@@ -163,6 +164,7 @@ export const CUSTOM_ENDPOINT_GROUP_LABEL_FILENAME = '20260930_000001_custom_endp
 export const KEY_MONTHLY_USAGE_FILENAME = '20260914_000001_key_monthly_usage.ts';
 export const QUOTA_SNAPSHOT_FRESHNESS_FILENAME = '20260915_000001_quota_snapshot_freshness.ts';
 export const CATALOGUE_ACK_FILENAME = '20261001_000001_catalogue_ack.ts';
+export const SEARCH_ENGINES_FILENAME = '20261013_000001_search_engines.ts';
 
 export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: LEGACY_BASELINE_FILENAME, module: legacyBaseline },
@@ -243,6 +245,9 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: CATALOGUE_ACK_FILENAME, module: catalogueAck },
   { filename: '20261012_000001_clifree_links_to_model_links.ts', module: clifreeLinksToModelLinks },
   { filename: '20261013_000001_catalogue_sync_log.ts', module: catalogueSyncLog },
+  // Upstream v0.15.0. Back-dated relative to our head like the entry above;
+  // applied by filename membership.
+  { filename: SEARCH_ENGINES_FILENAME, module: searchEngines },
   { filename: '20261014_000001_external_model_discovery.ts', module: externalModelDiscovery },
   { filename: '20261014_000002_catalogue_sync_members.ts', module: catalogueSyncMembers },
   { filename: '20261014_000003_external_lead_provider.ts', module: externalLeadProvider },

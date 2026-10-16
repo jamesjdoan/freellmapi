@@ -53,6 +53,7 @@ import { TestModelsDialog } from './test-models-dialog'
 import { AddModelDialog } from './add-model-dialog'
 import { groupHandle } from '@/lib/endpoint-groups'
 import { ProviderKeyCapacityIndicator } from '../provider-capacity'
+import { SEARCH_PROVIDERS, isSearchPlatform } from '@/lib/search'
 
 type StatusFilter = 'all' | 'healthy' | 'issues' | 'disabled'
 const HIDE_DISABLED_PROVIDERS_KEY = 'imperium.keys.hideDisabledProviders'
@@ -70,6 +71,8 @@ interface ProviderGroup {
   /** Custom endpoints only: the operator-set group label (#1176) that
    *  `#group` routing addresses, or null when the endpoint has none. */
   customGroup?: string | null
+  /** A web search provider (#1174): listed in its own section, never chat. */
+  search?: boolean
   keys: ApiKey[]
 }
 
@@ -284,8 +287,9 @@ export function ProviderList({ onAddKey, initialSearch }: {
                 </>
               )}
               {/* Deliberately secondary (#657): a small hover-cluster affordance,
-                  not a first-fold control. */}
-              {!k.keyless && (
+                  not a first-fold control. A search key (upstream #1174) serves
+                  no models, so it has nothing here to scope. */}
+              {!k.keyless && !isSearchPlatform(k.platform) && (
                 <Tooltip text={t('keys.modelsAndAccountLimits')}>
                   <Button
                     variant="ghost"
@@ -649,7 +653,11 @@ export function ProviderList({ onAddKey, initialSearch }: {
   // fold back under one "Custom" header, and the models panel, diagnosis and
   // churn chips are scoped by endpoint. The label rides on each row as
   // `customGroup`, so its #handle and copy action still show.
+  //
+  // Search providers (upstream v0.14.0, #1174) lead in their own section:
+  // their keys serve /v1/search and agent web search, never a chat completion.
   const grouped: ProviderGroup[] = [
+    ...SEARCH_PROVIDERS.map(p => ({ ...p, platform: p.value, search: true, keys: keys.filter(k => k.platform === p.value) })),
     ...PLATFORMS.map(p => ({ ...p, platform: p.value, keys: keys.filter(k => k.platform === p.value) })),
     ...keys.filter(k => k.platform === CUSTOM_GROUP.value).map(k => ({
       ...CUSTOM_GROUP,
@@ -660,8 +668,9 @@ export function ProviderList({ onAddKey, initialSearch }: {
       customGroup: k.groupLabel?.trim() || null,
       keys: [k],
     })),
-  ].filter(p => p.keys.length > 0).sort((a, b) =>
-    providerCollator.compare(a.label, b.label) || a.value.localeCompare(b.value),
+  ].filter(p => p.keys.length > 0).sort((a: ProviderGroup, b: ProviderGroup) =>
+    Number(!!b.search) - Number(!!a.search)
+    || providerCollator.compare(a.label, b.label) || a.value.localeCompare(b.value),
   )
 
   // #1403 phase 3: the provider-reported balance for a key, from the same
@@ -803,8 +812,12 @@ export function ProviderList({ onAddKey, initialSearch }: {
         <EmptyState title={t('keys.noFilterMatch')} />
       ) : (
         <div className="space-y-4">
-          {visibleGroups.map(group => {
+          {visibleGroups.map((group, i) => {
             const expanded = isGroupExpanded(group)
+            // Section headings appear only when search keys are on screen;
+            // a Keys page without any reads exactly as it always has.
+            const showSections = visibleGroups.some(g => g.search)
+            const sectionStart = showSections && (i === 0 || !!visibleGroups[i - 1].search !== !!group.search)
             const healthyCount = group.keys.filter(k => statusOf(k) === 'healthy').length
             const issueCount = group.keys.filter(k => statusOf(k) !== 'healthy').length
             // #787: once a selection exists in this group the checkboxes stay
@@ -817,6 +830,14 @@ export function ProviderList({ onAddKey, initialSearch }: {
             const models = enabledModelCount(fallback, group.platform, scopeAccess.get(group.platform))
             return (
               <div key={group.value}>
+                {sectionStart && (
+                  <div className={`pb-2 ${i === 0 ? '' : 'pt-4'}`}>
+                    <h2 className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      {group.search ? t('search.keysSection') : t('search.keysModelsSection')}
+                    </h2>
+                    {group.search && <p className="text-xs text-muted-foreground">{t('search.keysSectionHint')}</p>}
+                  </div>
+                )}
                 {/* Shown for single-key groups too, unlike before: it carries
                     the only disclosure control, and a group that cannot be
                     closed would leave its model table open on arrival. */}
@@ -839,6 +860,11 @@ export function ProviderList({ onAddKey, initialSearch }: {
                     aria-expanded={expanded}
                   >
                     <h3 className="text-sm font-medium">{group.label}</h3>
+                    {group.search && (
+                      <Badge variant="outline" className="border-sky-600/30 text-[10px] text-sky-700 dark:text-sky-300">
+                        {t('search.badge')}
+                      </Badge>
+                    )}
                     <Badge variant="secondary" className="tabular-nums">{group.keys.length}</Badge>
                     {group.customGroup && (
                       <Tooltip text={t('keys.groupHandleHint', { handle: groupHandle(group.customGroup) })}>
@@ -916,7 +942,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                       <DropdownMenuContent align="end" className="w-52">
                         {/* Test every model this provider serves, one real ping each
                             (custom endpoints test per key from the row instead). */}
-                        {group.platform !== 'custom' && (
+                        {group.platform !== 'custom' && !group.search && (
                           <DropdownMenuItem onClick={() => setTestTarget({ platform: group.platform, label: group.label })}>
                             {t('keys.testModels')}
                             <FlaskConical className="ml-auto size-3.5" />
@@ -937,10 +963,12 @@ export function ProviderList({ onAddKey, initialSearch }: {
                             <Copy className="ml-auto size-3.5" />
                           </DropdownMenuItem>
                         )}
-                        <DropdownMenuItem onClick={() => setAddModelTarget({ platform: group.platform })}>
-                          {t('keys.addCustomModel')}
-                          <Sparkles className="ml-auto size-3.5" />
-                        </DropdownMenuItem>
+                        {!group.search && (
+                          <DropdownMenuItem onClick={() => setAddModelTarget({ platform: group.platform })}>
+                            {t('keys.addCustomModel')}
+                            <Sparkles className="ml-auto size-3.5" />
+                          </DropdownMenuItem>
+                        )}
                         {group.url && (
                           <DropdownMenuItem onClick={() => window.open(group.url, '_blank', 'noopener,noreferrer')}>
                             {t('keys.getApiKey')}
@@ -1198,7 +1226,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                               >
                                 <Pencil className="size-3" />
                               </Button>
-                              {!k.keyless && (
+                              {!k.keyless && !isSearchPlatform(k.platform) && (
                                 <Tooltip text={t('keys.editModels')}>
                                   <Button
                                     variant="ghost"

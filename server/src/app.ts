@@ -16,6 +16,7 @@ import { fallbackRouter } from './routes/fallback.js';
 import { profilesRouter } from './routes/profiles.js';
 import { embeddingsRouter } from './routes/embeddings.js';
 import { mediaRouter } from './routes/media.js';
+import { searchRouter } from './routes/search.js';
 import { analyticsRouter } from './routes/analytics.js';
 import { quotaRouter } from './routes/quota.js';
 import { extensionsRouter } from './routes/extensions.js';
@@ -264,6 +265,7 @@ export function createApp(config?: Config) {
   app.use('/api/fallback', requireAuth, fallbackRouter);
   app.use('/api/embeddings', requireAuth, embeddingsRouter);
   app.use('/api/media', requireAuth, mediaRouter);
+  app.use('/api/search', requireAuth, searchRouter);
   app.use('/api/analytics', requireAuth, analyticsRouter);
   app.use('/api/health', requireAuth, healthRouter);
   app.use('/api/free-tier', requireAuth, freeTierRouter);

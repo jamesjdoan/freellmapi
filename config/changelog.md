@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-10-17 — Upstream v0.15.0 merged into the extension
+
+- `--no-ff` merge of tag `v0.15.0` onto `f37e837a`. Covers upstream v0.14.0–v0.15.0: search engines and agent web search, Playground attachments, Auray provider, MCP `provider_list`/`quota_outlook`/`clear_cache`, opt-in transport-error key parking, retention sweeps, ContextWindowExceeded classification, bulk proxy controls and the key-row sweep on delete. Recovery tag: `imperium/pre-v0.15.0-recovery`.
+- None of the new upstream features duplicates an extension, so nothing of ours was retired. Conflicts resolved per the overlay rules:
+  - Kept our typed pool resolver (`provider-quota.ts`, invasive by design) and ported upstream's `auray::monthly-credit` pool into it.
+  - Kept our per-endpoint provider rows and added upstream's Search section ahead of them. Search keys now also lose our "Models & account limits" action.
+  - Took upstream's combobox group headings with our wrapping labels, and its reset-password sign-in plus our failure reset.
+  - Kept upstream's Premium refresh list plus `catalogue-syncs`, and both sides' imports and tests. The roundtrip test still asserts the manifest-driven list.
+  - `20261013_000001_search_engines` is registered after `catalogue_sync_log`, keeping the manifest in filename order.
+  - Locales were three-way merged per key (no key changed on both sides), then filled and checked.
+- Two upstream tests adapted to fork behaviour. The Auray validation mock now refuses a request without a key, which our auth-enforcement probe relies on. The search-key test checks this fork's row actions.
+- Migration rehearsal on a copy of the 2026-10-17 00:33 backup: the first run applied exactly 3 migrations, each creating new empty tables, and every existing table kept identical row hashes. The second run changed nothing.
+
 ## 2026-10-17 — Approved deployment of bonus grants and paid credit windows
 
 - Encryption key hash matched between the running container and compose config before deploying. `bash scripts/deploy.sh` built `jamesjdoan/freellmapi:main-20261017-003343`, took a quiescent backup `backups/freellmapi-data-20261017-003343.tar.gz` and recreated the container on `freellmapi_freellmapi-data`. Rollback tag: `jamesjdoan/freellmapi:provider-routing-before-20261017-003343`.

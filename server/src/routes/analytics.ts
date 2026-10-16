@@ -6,6 +6,7 @@ import { providerIdFor, providerDisplayName } from '../lib/provider-identity.js'
 import { normalizeBaseUrl } from '../lib/endpoint-scope.js';
 import { readRawHorizon, windowExceedsRawHorizon } from '../services/request-retention.js';
 import type { RoutingDecisionTrace } from '../lib/attempt-trace.js';
+import { searchAnalytics, type SearchAnalyticsRange } from '../services/search.js';
 
 /** Decode a stored routing trace. A row from before the column existed, or one
  *  whose JSON is unreadable, yields null — a diagnostic that cannot be parsed
@@ -541,6 +542,16 @@ function readRawTotals(window: AnalyticsWindow, filters: QueryFilter, device: Qu
 }
 
 // Summary stats
+// Web searches (#1174) live in their own log (search_requests), so they never
+// show up in the chat totals above; the dashboard's search cards read this.
+const SEARCH_RANGES: readonly SearchAnalyticsRange[] = ['24h', '7d', '30d', '90d', 'all'];
+
+analyticsRouter.get('/search', (req: Request, res: Response) => {
+  const raw = typeof req.query.range === 'string' ? req.query.range : '7d';
+  const range = (SEARCH_RANGES as readonly string[]).includes(raw) ? raw as SearchAnalyticsRange : '7d';
+  res.json(searchAnalytics(range));
+});
+
 analyticsRouter.get('/summary', (req: Request, res: Response) => {
   const scope = readScope(req);
   if ('error' in scope) {

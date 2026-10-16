@@ -12,6 +12,7 @@ import { useI18n } from '@/i18n'
 import { toast } from '@/lib/toast'
 import type { FallbackEntry } from '@/lib/routing'
 import { scopeCandidates, shouldOfferModelPicker, type ScopeCandidate } from '@/lib/model-scope-selection'
+import { SEARCH_PROVIDERS } from '@/lib/search'
 import { GetKeyLink, PLATFORMS } from './shared'
 import { useRemovedPlatforms } from '@/lib/provider-removals'
 
@@ -59,7 +60,7 @@ export function AddKeyForm({ onSuccess, initialPlatform }: { onSuccess: (offer?:
     queryKey: ['keys'],
     queryFn: () => apiFetch('/api/keys'),
   })
-  const addedPlatforms = useMemo(() => new Set(keys.map(k => k.platform)), [keys])
+  const addedPlatforms = useMemo(() => new Set<string>(keys.map(k => k.platform)), [keys])
   const [hideAdded, setHideAdded] = useState(false)
   // A removed provider is one the operator vetted out; offering it here again
   // would undo that. Restoring it from the removal log brings it back.
@@ -92,8 +93,14 @@ export function AddKeyForm({ onSuccess, initialPlatform }: { onSuccess: (offer?:
     return { keyId, platformLabel: provider.label, candidates }
   }
 
+  // Search providers (#1174) lead the list under their own heading: they hold
+  // keys like any provider but never serve chat, so they must not read as one
+  // more model host further down.
   const platformOptions = useMemo(
-    () => PLATFORMS
+    () => [
+      ...SEARCH_PROVIDERS.map(p => ({ ...p, group: t('search.pickerSearch') })),
+      ...PLATFORMS.map(p => ({ ...p, group: t('search.pickerModels') })),
+    ]
       // The selected provider always stays listed, so hiding added ones never
       // blanks out the trigger label.
       .filter(p => p.value === platform || !removedPlatforms.has(p.value))
@@ -101,6 +108,7 @@ export function AddKeyForm({ onSuccess, initialPlatform }: { onSuccess: (offer?:
       .map(p => ({
         value: p.value,
         label: p.label,
+        group: p.group,
         sub: addedPlatforms.has(p.value) ? t('keys.discoverAlreadyAdded') : undefined,
       })),
     [hideAdded, addedPlatforms, removedPlatforms, platform, t],
@@ -144,7 +152,7 @@ export function AddKeyForm({ onSuccess, initialPlatform }: { onSuccess: (offer?:
   const needsAccountId = platform === 'cloudflare'
   // Key-optional providers (Kilo, OVH, AI Horde) work anonymously, but accept a
   // real key too (#1331): the field stays editable and may be left blank.
-  const isKeyless = PLATFORMS.find(p => p.value === platform)?.keyless ?? false
+  const isKeyless = [...SEARCH_PROVIDERS, ...PLATFORMS].find(p => p.value === platform)?.keyless ?? false
   // Cloudflare pairs each token with an account id, and a key-optional
   // provider keeps a single anonymous row, so neither takes a list.
   const canPasteSeveral = !isKeyless && !needsAccountId
@@ -215,7 +223,7 @@ export function AddKeyForm({ onSuccess, initialPlatform }: { onSuccess: (offer?:
           />
           {addAttempted && <FieldError error={platformError} />}
           {(() => {
-            const sel = PLATFORMS.find(p => p.value === platform)
+            const sel = [...SEARCH_PROVIDERS, ...PLATFORMS].find(p => p.value === platform)
             return sel?.url ? <div className="pt-0.5"><GetKeyLink url={sel.url} /></div> : null
           })()}
         </div>
