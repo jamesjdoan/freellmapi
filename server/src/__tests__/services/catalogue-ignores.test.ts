@@ -9,7 +9,7 @@ import {
 } from '../../services/catalogue-ignores.js';
 import { getCatalogueChanges } from '../../services/catalogue-changes.js';
 import { listCatalogueEvents, recordCatalogueEvent } from '../../services/catalogue-log.js';
-import { getCatalogueSync, listCatalogueSyncs, recordCatalogueSync } from '../../services/catalogue-sync-log.js';
+import { getCatalogueSyncDay, listCatalogueSyncs, recordCatalogueSync } from '../../services/catalogue-sync-log.js';
 
 // Ignoring is the operator saying "never use this, free or not". The contract:
 //   - it switches the provider's keys and the models off — the flags routing
@@ -200,15 +200,16 @@ describe('the catalogue views leave ignored items out', () => {
       },
     });
     const id = (db().prepare("SELECT id FROM catalogue_sync WHERE version = 'ig-v1'").get() as { id: number }).id;
+    db().prepare("UPDATE catalogue_sync SET at = '2099-09-09 12:00:00' WHERE id = ?").run(id);
     db().prepare("INSERT INTO catalogue_ignores (platform, model_id) VALUES ('inferbase', ''), ('sail', 'ig-dead')").run();
 
-    const row = listCatalogueSyncs({ limit: 200 }).syncs.find(s => s.id === id)!;
+    const row = listCatalogueSyncs({ limit: 200, keyedOnly: false }).syncs.find(s => s.ids.includes(id))!;
     expect(row.byPlatform).toEqual({ sail: { a: 1, r: 0, c: 1, off: 1, on: 0 } });
     expect(row).toMatchObject({ docAdded: 1, docChanged: 1, docSwitchedOff: 1 });
 
-    const detail = getCatalogueSync(id)!;
+    const detail = getCatalogueSyncDay([id], db(), { keyedOnly: false })!;
     expect(detail.members!.added.map(m => m.m)).toEqual(['ig-new']);
     expect(detail.details.map(d => d.m)).toEqual(['ig-dead-2', 'ig-kept']);
-    expect(listCatalogueSyncs({}).totals.hiddenIgnored).toBe(3);
+    expect(listCatalogueSyncs({ keyedOnly: false }).totals.hiddenIgnored).toBe(3);
   });
 });

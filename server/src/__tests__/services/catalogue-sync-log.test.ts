@@ -10,7 +10,7 @@ import { diffCatalogs, syncCatalog, type Catalog } from '../../services/catalog-
 import {
   recordCatalogueSync,
   listCatalogueSyncs,
-  getCatalogueSync,
+  getCatalogueSyncDay,
   DETAILS_CAP,
   type CatalogueSyncInput,
 } from '../../services/catalogue-sync-log.js';
@@ -72,6 +72,14 @@ function syncInput(over: Partial<CatalogueSyncInput> = {}): CatalogueSyncInput {
     ...over,
   };
 }
+
+/** Pin a logged document to a moment, so day merging is deterministic. */
+function landAt(version: string, at: string): number {
+  getDb().prepare('UPDATE catalogue_sync SET at = ? WHERE version = ?').run(at, version);
+  return (getDb().prepare('SELECT id FROM catalogue_sync WHERE version = ?').get(version) as { id: number }).id;
+}
+
+const all = { keyedOnly: false } as const;
 
 beforeAll(() => {
   process.env.ENCRYPTION_KEY = '0'.repeat(64);
@@ -196,18 +204,93 @@ describe('catalogue_sync_log storage', () => {
     expect(row.doc_changed).toBe(DETAILS_CAP + 100);
   });
 
-  it('lists newest first with a total, and resolves detail by id', () => {
-    const first = listCatalogueSyncs({}).total;
-    recordCatalogueSync(getDb(), syncInput({ version: '2099.02.02', doc: { added: 2, removed: 1, changed: 3, switchedOff: 0, switchedOn: 0 } }));
-    recordCatalogueSync(getDb(), syncInput({ version: '2099.02.03', doc: { added: 1, removed: 0, changed: 0, switchedOff: 0, switchedOn: 0 } }));
-    const page = listCatalogueSyncs({ limit: 2 });
-    expect(page.total).toBe(first + 2);
-    expect(page.syncs.map(s => s.version)).toEqual(['2099.02.03', '2099.02.02']);
-    const detail = getCatalogueSync(page.syncs[1].id);
-    expect(detail).not.toBeNull();
-    expect(detail!.docAdded).toBe(2);
-    expect(detail!.docRemoved).toBe(1);
+  it('does not record a document that changed nothing', () => {
+    const before = (getDb().prepare('SELECT COUNT(*) AS n FROM catalogue_sync').get() as { n: number }).n;
+    recordCatalogueSync(getDb(), syncInput({ version: '2099.02.00', counts: { updated: 900, inserted: 0, removed: 0, skippedUnknownPlatform: 0, quirks: 3 } }));
+    expect((getDb().prepare('SELECT COUNT(*) AS n FROM catalogue_sync').get() as { n: number }).n).toBe(before);
   });
+
+  it('merges one day of documents into a single net change', () => {
+    recordCatalogueSync(getDb(), syncInput({
+      version: '2099.04.01.a',
+      doc: { added: 1, removed: 0, changed: 1, switchedOff: 0, switchedOn: 0 },
+      byPlatform: { groq: { a: 1, r: 0, c: 1, off: 0, on: 0 } },
+      members: { added: [{ r: 'chat', p: 'groq', m: 'brief', n: 'Brief' }], removed: [] },
+      details: [{ r: 'chat', p: 'groq', m: 'twice', f: 'rpd', o: 10, n: 5 }],
+    }));
+    recordCatalogueSync(getDb(), syncInput({
+      version: '2099.04.01.b',
+      previousVersion: '2099.04.01.a',
+      doc: { added: 0, removed: 1, changed: 2, switchedOff: 1, switchedOn: 0 },
+      byPlatform: { groq: { a: 0, r: 1, c: 2, off: 1, on: 0 } },
+      members: { added: [], removed: [{ r: 'chat', p: 'groq', m: 'brief', n: 'Brief' }] },
+      details: [
+        { r: 'chat', p: 'groq', m: 'twice', f: 'rpd', o: 5, n: 10 },
+        { r: 'chat', p: 'groq', m: 'kept', f: 'rpm', o: 30, n: 20 },
+        { r: 'chat', p: 'groq', m: 'dark', f: 'enabled', o: true, n: false },
+      ],
+    }));
+    const a = landAt('2099.04.01.a', '2099-04-01 02:00:00');
+    const b = landAt('2099.04.01.b', '2099-04-01 20:00:00');
+
+    const day = listCatalogueSyncs({ ...all, limit: 200 }).syncs.find(s => s.day === '2099-04-01')!;
+    // Added then removed cancels; an edit that ends where it began drops out.
+    expect(day).toMatchObject({
+      ids: [a, b], netted: true, version: '2099.04.01.b', previousVersion: '2099.01.00',
+      docAdded: 0, docRemoved: 0, docChanged: 1, docSwitchedOff: 1,
+    });
+    expect(day.byPlatform).toEqual({ groq: { a: 0, r: 0, c: 1, off: 1, on: 0 } });
+    const detail = getCatalogueSyncDay(day.ids, getDb(), all)!;
+    expect(detail.members).toEqual({ added: [], removed: [] });
+    expect(detail.details.map(d => `${d.m}:${d.f}`)).toEqual(['kept:rpm', 'dark:enabled']);
+  });
+
+  it('groups by the requested time zone', () => {
+    recordCatalogueSync(getDb(), syncInput({
+      version: '2099.05.01', doc: { added: 1, removed: 0, changed: 0, switchedOff: 0, switchedOn: 0 },
+      byPlatform: { groq: { a: 1, r: 0, c: 0, off: 0, on: 0 } },
+      members: { added: [{ r: 'chat', p: 'groq', m: 'tz', n: null }], removed: [] },
+    }));
+    landAt('2099.05.01', '2099-05-01 20:00:00');
+    const days = (timeZone: string) => listCatalogueSyncs({ ...all, timeZone, limit: 200 }).syncs.map(s => s.day);
+    expect(days('UTC')).toContain('2099-05-01');
+    expect(days('Australia/Sydney')).toContain('2099-05-02');
+  });
+
+  it('sums a day whose documents were capped, and says it could not net them', () => {
+    recordCatalogueSync(getDb(), syncInput({
+      version: '2099.06.01.a', doc: { added: 2, removed: 0, changed: 0, switchedOff: 0, switchedOn: 0 },
+      byPlatform: { groq: { a: 2, r: 0, c: 0, off: 0, on: 0 } },
+      members: { added: [{ r: 'chat', p: 'groq', m: 'one', n: null }], removed: [] },
+    }));
+    recordCatalogueSync(getDb(), syncInput({
+      version: '2099.06.01.b', doc: { added: 1, removed: 0, changed: 0, switchedOff: 0, switchedOn: 0 },
+      byPlatform: { groq: { a: 1, r: 0, c: 0, off: 0, on: 0 } },
+      members: { added: [{ r: 'chat', p: 'groq', m: 'two', n: null }], removed: [] },
+    }));
+    landAt('2099.06.01.a', '2099-06-01 01:00:00');
+    landAt('2099.06.01.b', '2099-06-01 02:00:00');
+    const day = listCatalogueSyncs({ ...all, limit: 200 }).syncs.find(s => s.day === '2099-06-01')!;
+    expect(day).toMatchObject({ netted: false, docAdded: 3 });
+  });
+
+  it('shows only providers with a key unless asked otherwise', () => {
+    recordCatalogueSync(getDb(), syncInput({
+      version: '2099.07.01', doc: { added: 2, removed: 0, changed: 0, switchedOff: 0, switchedOn: 0 },
+      byPlatform: { keyedprov: { a: 1, r: 0, c: 0, off: 0, on: 0 }, nokeyprov: { a: 1, r: 0, c: 0, off: 0, on: 0 } },
+      members: { added: [{ r: 'chat', p: 'keyedprov', m: 'k', n: null }, { r: 'chat', p: 'nokeyprov', m: 'n', n: null }], removed: [] },
+    }));
+    landAt('2099.07.01', '2099-07-01 12:00:00');
+    getDb().prepare("INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, status, enabled) VALUES ('keyedprov', '', 'x', 'x', 'x', 'healthy', 0)").run();
+
+    const keyed = listCatalogueSyncs({ limit: 200 });
+    expect(keyed.syncs.find(s => s.day === '2099-07-01')!.byPlatform).toEqual({ keyedprov: { a: 1, r: 0, c: 0, off: 0, on: 0 } });
+    expect(keyed.totals.hiddenUnkeyed).toBeGreaterThanOrEqual(1);
+    const everything = listCatalogueSyncs({ ...all, limit: 200 });
+    expect(Object.keys(everything.syncs.find(s => s.day === '2099-07-01')!.byPlatform).sort()).toEqual(['keyedprov', 'nokeyprov']);
+    expect(everything.totals.hiddenUnkeyed).toBe(0);
+  });
+
   it('drops a removed provider from the list and the detail like an ignored one', () => {
     recordCatalogueSync(getDb(), syncInput({
       version: '2099.02.04',
@@ -219,25 +302,21 @@ describe('catalogue_sync_log storage', () => {
       ],
       members: { added: [{ r: 'chat', p: 'removed-prov', m: 'x', n: 'X' }], removed: [] },
     }));
+    landAt('2099.02.04', '2099-08-01 12:00:00');
     getDb().prepare(`
       INSERT INTO provider_removal (platform, reason, note, removed_by, models_removed, key_ids_json, restored_at)
       VALUES ('removed-prov', 'test', NULL, 'test', 0, '[]', NULL)
     `).run();
-    const page = listCatalogueSyncs({ limit: 1 });
-    expect(page.syncs[0]).toMatchObject({
-      version: '2099.02.04',
-      docAdded: 0,
-      docChanged: 1,
-    });
-    expect(page.syncs[0].byPlatform).toEqual({ groq: { a: 0, r: 0, c: 1, off: 0, on: 0 } });
-    const detail = getCatalogueSync(page.syncs[0].id);
-    expect(detail!.details.map(d => d.p)).toEqual(['groq']);
-    expect(detail!.members!.added).toEqual([]);
+    const entry = () => listCatalogueSyncs({ ...all, limit: 200 }).syncs.find(s => s.day === '2099-08-01')!;
+    expect(entry()).toMatchObject({ version: '2099.02.04', docAdded: 0, docChanged: 1 });
+    expect(entry().byPlatform).toEqual({ groq: { a: 0, r: 0, c: 1, off: 0, on: 0 } });
+    const detail = getCatalogueSyncDay(entry().ids, getDb(), all)!;
+    expect(detail.details.map(d => d.p)).toEqual(['groq']);
+    expect(detail.members!.added).toEqual([]);
     // Restoring the provider brings its churn back into view.
     getDb().prepare("UPDATE provider_removal SET restored_at = datetime('now') WHERE platform = 'removed-prov'").run();
-    const restored = listCatalogueSyncs({ limit: 1 });
-    expect(restored.syncs[0].docAdded).toBe(2);
-    expect(restored.syncs[0].byPlatform['removed-prov']).toEqual({ a: 2, r: 0, c: 0, off: 0, on: 0 });
+    expect(entry().docAdded).toBe(2);
+    expect(entry().byPlatform['removed-prov']).toEqual({ a: 2, r: 0, c: 0, off: 0, on: 0 });
   });
 });
 
@@ -402,22 +481,21 @@ describe('syncCatalog writes the log through the signed-feed path', () => {
     // The storage describe above wrote into the same in-memory DB; this file's
     // assertions are relative to that, so the shared table's history cannot
     // leak into them.
-    const before = listCatalogueSyncs({}).total;
     const doc1 = catalogOf([baseModel({ modelId: 'a' }), baseModel({ modelId: 'b' })], { version: '2099.03.01' });
     mockCatalog(doc1);
     expect((await syncCatalog()).action).toBe('applied');
+    landAt('2099.03.01', '2099-03-01 12:00:00');
 
-    let page = listCatalogueSyncs({});
-    expect(page.syncs).toHaveLength(before + 1);
-    expect(page.syncs[0]).toMatchObject({
+    const dayOf = (day: string) => listCatalogueSyncs({ ...all, limit: 200 }).syncs.find(s => s.day === day);
+    expect(dayOf('2099-03-01')).toMatchObject({
       version: '2099.03.01',
       previousVersion: null,
       tier: 'live',
       docAdded: 2,
       docRemoved: 0,
       docChanged: 0,
+      inserted: 2,
     });
-    expect(page.syncs[0].inserted).toBe(2);
 
     const doc2 = catalogOf(
       [baseModel({ modelId: 'a', limits: { rpm: 30, rpd: 500, tpm: 6000, tpd: null } })],
@@ -434,34 +512,28 @@ describe('syncCatalog writes the log through the signed-feed path', () => {
     expect(applied.action).toBe('applied');
     // A manual "check for updates" reports the same quantities the log keeps.
     expect(applied.changes).toEqual({ added: 1, removed: 1, changed: 1, switchedOff: 0, switchedOn: 0 });
+    const secondId = landAt('2099.03.02', '2099-03-02 12:00:00');
 
-    page = listCatalogueSyncs({});
-    expect(page.syncs).toHaveLength(before + 2);
-    expect(page.syncs[0]).toMatchObject({
-      version: '2099.03.02',
-      previousVersion: '2099.03.01',
-      docAdded: 1,
-      docRemoved: 1,
-      docChanged: 1,
-    });
-    expect(page.syncs[0].byPlatform).toEqual({
+    const second = dayOf('2099-03-02')!;
+    expect(second).toMatchObject({ version: '2099.03.02', previousVersion: '2099.03.01', docAdded: 1, docRemoved: 1, docChanged: 1 });
+    expect(second.byPlatform).toEqual({
       groq: { a: 0, r: 1, c: 1, off: 0, on: 0 },
       cohere: { a: 1, r: 0, c: 0, off: 0, on: 0 },
     });
 
-    const total = page.total;
+    const rows = (getDb().prepare('SELECT COUNT(*) AS n FROM catalogue_sync').get() as { n: number }).n;
     mockCatalog(null);
     const upToDate = await syncCatalog();
     expect(upToDate.action).toBe('up_to_date');
     expect(upToDate.changes).toBeUndefined();
-    expect(listCatalogueSyncs({}).total).toBe(total);
+    expect((getDb().prepare('SELECT COUNT(*) AS n FROM catalogue_sync').get() as { n: number }).n).toBe(rows);
 
-    // The dashboard reads the same rows through the authenticated API.
-    const list = await api('/api/models/changes/syncs?limit=10');
+    // The dashboard reads the same entries through the authenticated API.
+    const list = await api('/api/models/changes/syncs?limit=200&keyedOnly=false');
     expect(list.status).toBe(200);
-    const listBody = await list.json() as { syncs: Array<{ id: number; version: string }>; total: number };
-    expect(listBody.total).toBe(total);
-    const detail = await api(`/api/models/changes/syncs/detail?id=${listBody.syncs[0].id}`);
+    const listBody = await list.json() as { syncs: Array<{ day: string; ids: number[] }> };
+    expect(listBody.syncs.find(s => s.day === '2099-03-02')!.ids).toEqual([secondId]);
+    const detail = await api(`/api/models/changes/syncs/detail?ids=${secondId}&keyedOnly=false`);
     expect(detail.status).toBe(200);
     const detailBody = await detail.json() as { version: string; details: Array<{ m: string; f: string }> };
     expect(detailBody.version).toBe('2099.03.02');
@@ -471,7 +543,7 @@ describe('syncCatalog writes the log through the signed-feed path', () => {
       removed: [{ r: 'chat', p: 'groq', m: 'b', n: 'Test Model' }],
     });
 
-    const missing = await api('/api/models/changes/syncs/detail?id=999999');
+    const missing = await api('/api/models/changes/syncs/detail?ids=999999');
     expect(missing.status).toBe(404);
   });
 });

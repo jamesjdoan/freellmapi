@@ -6,22 +6,20 @@ import { Badge } from '@/components/ui/badge'
 import { PlatformDot } from '@/components/platform-dot'
 import { formatStamp } from '@/lib/stamp'
 import { CatalogueIgnoresList, IgnoreButton } from '@/components/catalogue-ignore'
-import { parseSqliteUtc } from '@/lib/time-tree'
 
-// One row per applied catalog document, on the Premium page.
+// Catalog updates that changed something, on the Premium page.
 //
 // The model history below it on the same page records what happened to each
-// MODEL; this records what each catalog UPDATE brought: when the document
-// landed, from which tier, and — diffed against the previously applied
-// document — which providers gained, lost, or quietly changed models. A
-// provider tightening a quota on an existing model never appears in the event
-// log; it appears here.
+// MODEL; this records what catalog UPDATES brought: which providers gained,
+// lost, or quietly changed models. A provider tightening a quota on an existing
+// model never appears in the event log; it appears here.
 //
-// Updates are grouped by local day. Each row names its providers up front;
-// opening it lists the models per provider, each provider a collapsible group.
-// A day's "Expand all" opens every update that day and every provider group in
-// them. Detail is fetched on open: a sync can move hundreds of models and the
-// list view stays cheap.
+// One entry per local day. The server merges a day's documents into one net
+// change (a model added and removed the same day cancels out) and leaves out
+// documents that changed nothing. By default it shows only providers this
+// install holds a key for, and nothing ignored. Opening an entry lists the
+// models per provider, each provider a collapsible group; detail is fetched on
+// open because a day can move hundreds of models.
 
 /** Added, removed, edited, and switched off / back on by the feed. A model the
  *  feed switches off is still listed but no longer served. */
@@ -29,6 +27,12 @@ interface Churn { a: number; r: number; c: number; off?: number; on?: number }
 
 interface CatalogueSync {
   id: number
+  /** YYYY-MM-DD in the browser's time zone. */
+  day: string
+  /** The documents merged into this day, oldest first. */
+  ids: number[]
+  /** False when a document was too large to net per model, so counts are summed. */
+  netted: boolean
   at: string
   version: string
   previousVersion: string | null
@@ -56,9 +60,18 @@ interface CatalogueSyncTotals {
   switchedOn: number
   /** Changes left out because their provider or model is ignored. */
   hiddenIgnored: number
+  /** Changes left out because no key exists for their provider. */
+  hiddenUnkeyed: number
   lastAt: string | null
   lastVersion: string | null
 }
+
+interface Filters { hideIgnored: boolean; keyedOnly: boolean; status: string }
+
+const TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
+
+const filterQuery = (f: Filters) =>
+  `hideIgnored=${f.hideIgnored}&keyedOnly=${f.keyedOnly}&status=${f.status}&timeZone=${encodeURIComponent(TIME_ZONE)}`
 
 type FieldValue = string | number | boolean | null
 interface FieldChange { r: string; p: string; m: string; f: string; o: FieldValue; n: FieldValue }
@@ -73,29 +86,15 @@ const PROVIDERS_SHOWN = 6
 
 const valueOf = (v: FieldValue) => (v === null ? '—' : String(v))
 
-const moved = (s: CatalogueSync) => s.docAdded + s.docRemoved + s.docChanged + s.docSwitchedOff + s.docSwitchedOn > 0
-
 const churnOf = (s: CatalogueSync): Churn =>
   ({ a: s.docAdded, r: s.docRemoved, c: s.docChanged, off: s.docSwitchedOff, on: s.docSwitchedOn })
 
 const weight = (c: Churn) => c.a + c.r + c.c + (c.off ?? 0) + (c.on ?? 0)
 
-/** Local calendar day of a SQLite UTC stamp, as YYYY-MM-DD. */
-export function localDay(at: string): string {
-  const d = parseSqliteUtc(at)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-/** Consecutive days, newest first, keeping the server's row order inside each. */
-export function groupByDay(syncs: CatalogueSync[]): Array<[string, CatalogueSync[]]> {
-  const days: Array<[string, CatalogueSync[]]> = []
-  for (const sync of syncs) {
-    const day = localDay(sync.at)
-    const last = days[days.length - 1]
-    if (last && last[0] === day) last[1].push(sync)
-    else days.push([day, [sync]])
-  }
-  return days
+/** A server day key (YYYY-MM-DD) as a local date, for display. */
+function dayDate(day: string): Date {
+  const [y, m, d] = day.split('-').map(Number)
+  return new Date(y, m - 1, d)
 }
 
 /** Providers busiest first; ties alphabetical so the order is stable. */
@@ -206,13 +205,11 @@ function ProviderGroup({ provider, churn, detail, open }: {
   )
 }
 
-function SyncDetail({ sync, expandAll, hideIgnored, status }: {
-  sync: CatalogueSync; expandAll: boolean; hideIgnored: boolean; status: string
-}) {
+function SyncDetail({ sync, expandAll, filters }: { sync: CatalogueSync; expandAll: boolean; filters: Filters }) {
   const { t } = useI18n()
   const { data, isPending } = useQuery<CatalogueSyncDetail>({
-    queryKey: ['catalogue-sync-detail', sync.id, hideIgnored, status],
-    queryFn: () => apiFetch(`/api/models/changes/syncs/detail?id=${sync.id}&hideIgnored=${hideIgnored}&status=${status}`),
+    queryKey: ['catalogue-sync-detail', sync.ids.join(','), filters],
+    queryFn: () => apiFetch(`/api/models/changes/syncs/detail?ids=${sync.ids.join(',')}&${filterQuery(filters)}`),
   })
   if (isPending) return <p className="pl-5 text-[11px] text-muted-foreground">{t('catalogue.syncsDetailLoading')}</p>
   if (!data) return null
@@ -223,8 +220,8 @@ function SyncDetail({ sync, expandAll, hideIgnored, status }: {
     <div className="mb-2 ml-5 mt-1 space-y-1">
       {namesMissing && <p className="text-[11px] text-muted-foreground">{t('catalogue.syncsNamesMissing')}</p>}
       {providers.map(([provider, churn]) => (
-        // Keyed on expandAll so toggling the day re-opens or re-folds groups
-        // the operator had toggled by hand.
+        // Keyed on expandAll so toggling it re-opens or re-folds groups the
+        // operator had toggled by hand.
         <ProviderGroup
           key={`${provider}:${expandAll}`}
           provider={provider}
@@ -267,44 +264,37 @@ function ProviderSummary({ byPlatform }: { byPlatform: Record<string, Churn> }) 
 
 export function CatalogueSyncs() {
   const { t } = useI18n()
-  const [openIds, setOpenIds] = useState<ReadonlySet<number>>(new Set())
+  const [openDays, setOpenDays] = useState<ReadonlySet<string>>(new Set())
   const [expandedDays, setExpandedDays] = useState<ReadonlySet<string>>(new Set())
+  // Both on by default: providers you hold no key for and anything you have
+  // ignored are noise on a page read for what affects this install.
   const [hideIgnored, setHideIgnored] = useState(true)
+  const [keyedOnly, setKeyedOnly] = useState(true)
   const [status, setStatus] = useState('all')
-  // Most logged documents changed nothing against the one before — a tier
-  // republish, a quirks-only bump — and their "—" rows bury the ones that
-  // did. Filtered here, not in the request: the day grouping and the totals
-  // header are built from the same payload.
-  const [onlyChanged, setOnlyChanged] = useState(false)
+  const filters: Filters = { hideIgnored, keyedOnly, status }
   const { data } = useQuery<{ syncs: CatalogueSync[]; total: number; totals: CatalogueSyncTotals }>({
-    queryKey: ['catalogue-syncs', hideIgnored, status],
-    queryFn: () => apiFetch(`/api/models/changes/syncs?limit=30&hideIgnored=${hideIgnored}&status=${status}`),
+    queryKey: ['catalogue-syncs', filters],
+    queryFn: () => apiFetch(`/api/models/changes/syncs?limit=30&${filterQuery(filters)}`),
   })
   if (!data) return null
-  const shown = onlyChanged ? data.syncs.filter(moved) : data.syncs
   const { totals } = data
+  // "Nothing matches" only when a filter actually hid something; otherwise
+  // the log is simply empty.
+  const filtered = status !== 'all' || totals.hiddenIgnored + totals.hiddenUnkeyed > 0
 
-  const toggleRow = (id: number) => setOpenIds(prev => {
-    const next = new Set(prev)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
+  const toggle = (set: ReadonlySet<string>, day: string) => {
+    const next = new Set(set)
+    if (next.has(day)) next.delete(day)
+    else next.add(day)
     return next
-  })
-  const toggleDay = (day: string, syncs: CatalogueSync[]) => {
+  }
+  const toggleExpandAll = (day: string) => {
     const expanding = !expandedDays.has(day)
-    const ids = syncs.filter(moved).map(s => s.id)
-    setExpandedDays(prev => {
+    setExpandedDays(prev => toggle(prev, day))
+    setOpenDays(prev => {
       const next = new Set(prev)
       if (expanding) next.add(day)
       else next.delete(day)
-      return next
-    })
-    setOpenIds(prev => {
-      const next = new Set(prev)
-      for (const id of ids) {
-        if (expanding) next.add(id)
-        else next.delete(id)
-      }
       return next
     })
   }
@@ -328,11 +318,14 @@ export function CatalogueSyncs() {
       </div>
       <p className="mt-3 text-[11px] text-muted-foreground">{t('catalogue.syncsHint')}</p>
       <CatalogueIgnoresList hidden={totals.hiddenIgnored} />
-      <label className="mt-2 flex w-fit cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
-        <input type="checkbox" checked={onlyChanged} onChange={e => setOnlyChanged(e.target.checked)} />
-        {t('catalogue.syncsOnlyChanged')}
-      </label>
-      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+        <label className="flex cursor-pointer items-center gap-1.5">
+          <input type="checkbox" checked={keyedOnly} onChange={e => setKeyedOnly(e.target.checked)} />
+          {t('catalogue.keyedOnly')}
+          {keyedOnly && totals.hiddenUnkeyed > 0 && (
+            <span className="text-[11px] text-muted-foreground">{t('catalogue.hiddenUnkeyed', { count: totals.hiddenUnkeyed })}</span>
+          )}
+        </label>
         <label className="flex cursor-pointer items-center gap-1.5">
           <input type="checkbox" checked={hideIgnored} onChange={e => setHideIgnored(e.target.checked)} />
           {t('catalogue.hideIgnored')}
@@ -348,68 +341,47 @@ export function CatalogueSyncs() {
         </label>
       </div>
       {status !== 'all' && <p className="mt-2 text-[11px] text-muted-foreground">{t('catalogue.currentStatusHint')}</p>}
-      {shown.length === 0 && <p className="mt-3 text-xs text-muted-foreground">
-        {t(status === 'all' && !onlyChanged ? 'catalogue.syncsEmpty' : 'catalogue.noMatchingUpdates')}
+      {data.syncs.length === 0 && <p className="mt-3 text-xs text-muted-foreground">
+        {t(filtered ? 'catalogue.noMatchingUpdates' : 'catalogue.syncsEmpty')}
       </p>}
-      <div className="mt-2 space-y-3">
-        {groupByDay(shown).map(([day, syncs]) => {
-          const dayChurn = syncs.map(churnOf).reduce<Churn>(
-            (sum, c) => ({ a: sum.a + c.a, r: sum.r + c.r, c: sum.c + c.c, off: (sum.off ?? 0) + (c.off ?? 0), on: (sum.on ?? 0) + (c.on ?? 0) }),
-            { a: 0, r: 0, c: 0, off: 0, on: 0 },
-          )
-          const anyMoved = syncs.some(moved)
-          const dayExpanded = expandedDays.has(day)
+      <ul className="mt-2 divide-y divide-border">
+        {data.syncs.map(s => {
+          const open = openDays.has(s.day)
+          const expandAll = expandedDays.has(s.day)
           return (
-            <section key={day} aria-label={day}>
-              <div className="flex items-baseline gap-2 border-b pb-1 text-xs">
-                <h4 className="font-medium">{formatStamp(parseSqliteUtc(syncs[0].at))}</h4>
-                <span className="text-[11px] text-muted-foreground">{t('catalogue.syncsDayCount', { count: syncs.length })}</span>
-                {anyMoved && <ChurnCounts churn={dayChurn} />}
-                {anyMoved && (
-                  <button
-                    type="button"
-                    onClick={() => toggleDay(day, syncs)}
-                    aria-expanded={dayExpanded}
-                    className="ml-auto text-[11px] text-muted-foreground underline decoration-dotted hover:text-foreground"
-                  >
-                    {dayExpanded ? t('catalogue.syncsCollapseDay') : t('catalogue.syncsExpandDay')}
-                  </button>
-                )}
+            <li key={s.day} aria-label={s.day}>
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 py-1.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setOpenDays(prev => toggle(prev, s.day))}
+                  aria-expanded={open}
+                  className="flex flex-1 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-left"
+                >
+                  <span className="font-medium">{formatStamp(dayDate(s.day))}</span>
+                  <ChurnCounts churn={churnOf(s)} />
+                  {s.ids.length > 1 && (
+                    <span className="text-[11px] text-muted-foreground">{t('catalogue.syncsMerged', { count: s.ids.length })}</span>
+                  )}
+                  <span className="font-mono text-[11px] text-muted-foreground">
+                    {s.previousVersion ? `${s.previousVersion} → ${s.version}` : s.version}
+                  </span>
+                  {!s.netted && <span className="text-[11px] text-amber-600 dark:text-amber-400">{t('catalogue.syncsNotNetted')}</span>}
+                  <ProviderSummary byPlatform={s.byPlatform} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleExpandAll(s.day)}
+                  aria-expanded={expandAll}
+                  className="text-[11px] text-muted-foreground underline decoration-dotted hover:text-foreground"
+                >
+                  {expandAll ? t('catalogue.syncsCollapseDay') : t('catalogue.syncsExpandDay')}
+                </button>
               </div>
-              <ul className="divide-y divide-border">
-                {syncs.map(s => {
-                  const rowMoved = moved(s)
-                  const open = openIds.has(s.id)
-                  return (
-                    <li key={s.id}>
-                      <button
-                        type="button"
-                        onClick={() => rowMoved && toggleRow(s.id)}
-                        aria-expanded={rowMoved ? open : undefined}
-                        className={`flex w-full flex-wrap items-baseline gap-x-2 gap-y-0.5 py-1.5 text-left text-xs ${rowMoved ? '' : 'cursor-default'}`}
-                      >
-                        <Badge variant="outline" className="text-[10px]">{s.tier}</Badge>
-                        <span className="font-mono">
-                          {s.previousVersion ? `${s.previousVersion} → ${s.version}` : s.version}
-                        </span>
-                        {!s.previousVersion && <span className="text-muted-foreground">({t('catalogue.syncsBaseline')})</span>}
-                        {rowMoved
-                          ? <ChurnCounts churn={churnOf(s)} />
-                          : <span className="text-muted-foreground">—</span>}
-                        <span className="ml-auto flex-shrink-0 text-[11px] text-muted-foreground tabular-nums">
-                          {formatStamp(s.at, { time: true })}
-                        </span>
-                        <ProviderSummary byPlatform={s.byPlatform} />
-                      </button>
-                      {open && <SyncDetail sync={s} expandAll={dayExpanded} hideIgnored={hideIgnored} status={status} />}
-                    </li>
-                  )
-                })}
-              </ul>
-            </section>
+              {open && <SyncDetail sync={s} expandAll={expandAll} filters={filters} />}
+            </li>
           )
         })}
-      </div>
+      </ul>
     </div>
   )
 }

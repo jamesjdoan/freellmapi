@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-10-17 — Catalog updates: changes only, one entry per day, keyed providers by default (local, not deployed)
+
+- `catalogue-sync-log.ts`: a document that changed nothing is no longer recorded, and rows already logged that changed nothing are left out of the list.
+- Each local day (browser time zone) is now one entry. Its documents merge into a net change: added then removed cancels, a field keeps its first old and last new value, and an edit that ends where it began drops out. A day whose documents were capped is summed instead and flagged `netted: false`.
+- New default filter: only providers with a key (`api_keys`, any state). It is counted as `hiddenUnkeyed`. Ignored and removed providers stay hidden by default as before.
+- Detail is fetched by the day's `ids`. Days left with no visible change are dropped under every filter.
+- `catalogue-syncs.tsx`: one row per day with "N updates merged", **Only providers with a key** (default on, with its hidden count), **Hide ignored** and **Model status**. The **Only updates that changed models** checkbox is removed. Strings are filled into 60 locales.
+- Supplier identity: every document's `version` (date plus content hash, e.g. `2026.10.16.7388413c`) is unique per document, alongside `generatedAt`.
+- Verified:
+  - Server 388 files / 4,868 tests, client 81 files / 637 tests, both typechecks, build.
+  - A read-only copy of live data showed 3 days with keyed providers by default (32 unkeyed and 14 removed-provider changes hidden). 2026-10-13 and 2026-10-15 each merged 2 documents.
+  - Chrome against that copy showed the merged day expanding into per-provider groups. The copy was deleted afterwards.
+
 ## 2026-10-17 — Upstream v0.15.0 merged into the extension
 
 - `--no-ff` merge of tag `v0.15.0` onto `f37e837a`. Covers upstream v0.14.0–v0.15.0: search engines and agent web search, Playground attachments, Auray provider, MCP `provider_list`/`quota_outlook`/`clear_cache`, opt-in transport-error key parking, retention sweeps, ContextWindowExceeded classification, bulk proxy controls and the key-row sweep on delete. Recovery tag: `imperium/pre-v0.15.0-recovery`.

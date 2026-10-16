@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getCatalogueChanges, acknowledgeDeparture, acknowledgeArrivals, acknowledgeDepartures } from '../services/catalogue-changes.js';
 import { listCatalogueEvents } from '../services/catalogue-log.js';
-import { listCatalogueSyncs, getCatalogueSync } from '../services/catalogue-sync-log.js';
+import { listCatalogueSyncs, getCatalogueSyncDay } from '../services/catalogue-sync-log.js';
 import {
   ignoreInCatalogue,
   listCatalogueIgnores,
@@ -748,17 +748,24 @@ modelsRouter.post('/changes/acknowledge-bulk', (req: Request, res: Response) => 
 });
 
 
+const syncFilters = {
+  hideIgnored: z.enum(['true', 'false']).optional().transform(value => value !== 'false'),
+  keyedOnly: z.enum(['true', 'false']).optional().transform(value => value !== 'false'),
+  status: z.enum(['all', 'enabled', 'disabled']).optional(),
+  timeZone: z.string().min(1).max(64).optional(),
+};
+
 const syncsQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(200).optional(),
   offset: z.coerce.number().int().nonnegative().optional(),
-  hideIgnored: z.enum(['true', 'false']).optional().transform(value => value !== 'false'),
-  status: z.enum(['all', 'enabled', 'disabled']).optional(),
+  ...syncFilters,
 });
 
 /**
- * One row per applied catalog document: when it landed, from which tier, and
- * what it changed against the previously applied document, plus whole-log
- * totals. The field-level diff of one sync comes from `/changes/syncs/detail`.
+ * Catalog updates that changed something, merged per local day of
+ * `timeZone`, with whole-log totals. By default only providers this install
+ * holds a key for, and nothing ignored. The field-level diff of one day comes
+ * from `/changes/syncs/detail`.
  */
 modelsRouter.get('/changes/syncs', (req: Request, res: Response) => {
   const parsed = syncsQuerySchema.safeParse(req.query);
@@ -770,21 +777,22 @@ modelsRouter.get('/changes/syncs', (req: Request, res: Response) => {
 });
 
 const syncDetailSchema = z.object({
-  id: z.coerce.number().int().positive(),
-  hideIgnored: z.enum(['true', 'false']).optional().transform(value => value !== 'false'),
-  status: z.enum(['all', 'enabled', 'disabled']).optional(),
+  /** The day entry's `ids`, comma-separated. */
+  ids: z.string().regex(/^\d+(,\d+)*$/).transform(value => value.split(',').map(Number)),
+  ...syncFilters,
 });
 
-/** The field-level diff behind one sync row. 404 on an id never recorded. */
+/** The merged field-level diff behind one day entry. 404 when none of its
+ *  documents is recorded. */
 modelsRouter.get('/changes/syncs/detail', (req: Request, res: Response) => {
   const parsed = syncDetailSchema.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
     return;
   }
-  const row = getCatalogueSync(parsed.data.id, getDb(), parsed.data);
+  const row = getCatalogueSyncDay(parsed.data.ids, getDb(), parsed.data);
   if (!row) {
-    res.status(404).json({ error: { message: 'No recorded catalog sync with that id' } });
+    res.status(404).json({ error: { message: 'No recorded catalog update with those ids' } });
     return;
   }
   res.json(row);

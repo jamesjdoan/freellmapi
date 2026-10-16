@@ -1,18 +1,18 @@
 // @vitest-environment jsdom
 //
-// The update list answers "what did each catalog update change, and on which
+// The update list answers "what did the catalog change, and on which
 // provider". These tests pin what a server test cannot see: the empty log says
-// so, each row names its providers busiest first, opening a row lists the
-// models per provider, and a row whose model names were never recorded says so
-// instead of showing an empty group. Updates group by day, and a day's Expand
-// all opens every update and provider in it.
+// so, each day names its providers busiest first, opening a day lists the
+// models per provider, a day whose model names were never recorded says so,
+// the default filters (keyed providers, nothing ignored) reach the server, and
+// a day's Expand all opens every provider in it.
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { I18nProvider } from '@/i18n'
 import { apiFetch } from '@/lib/api'
-import { CatalogueSyncs, groupByDay, providersByChurn } from './catalogue-syncs'
+import { CatalogueSyncs, providersByChurn } from './catalogue-syncs'
 
 vi.mock('@/lib/api', () => ({ apiFetch: vi.fn() }))
 
@@ -33,6 +33,9 @@ afterEach(() => {
 
 const update = {
   id: 2,
+  day: '2026-10-13',
+  ids: [2],
+  netted: true,
   at: '2026-10-13 09:40:02',
   version: '2026.10.13.70a95cb9',
   previousVersion: '2026.10.12.daddd7e6',
@@ -47,10 +50,7 @@ const update = {
   byPlatform: { inferbase: { a: 2, r: 0, c: 0, off: 0, on: 0 }, llm7: { a: 1, r: 1, c: 0, off: 0, on: 0 }, sail: { a: 0, r: 0, c: 1, off: 1, on: 0 } },
 }
 
-const baseline = {
-  ...update, id: 1, version: '2026.10.12.daddd7e6', previousVersion: null,
-  docAdded: 0, docRemoved: 0, docChanged: 0, docSwitchedOff: 0, docSwitchedOn: 0, byPlatform: {},
-}
+const earlierDay = { ...update, id: 1, day: '2026-10-10', ids: [1], version: '2026.10.10.aaaa', previousVersion: '2026.10.09.bbbb' }
 
 const detail = {
   ...update,
@@ -68,7 +68,7 @@ const detail = {
   },
 }
 
-async function renderList(syncs: unknown[], detailBody: unknown = detail) {
+async function renderList(syncs: unknown[], detailBody: unknown = detail, hiddenUnkeyed = 0) {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
@@ -85,6 +85,7 @@ async function renderList(syncs: unknown[], detailBody: unknown = detail) {
         switchedOff: list.reduce<number>((n, s) => n + s.docSwitchedOff, 0),
         switchedOn: list.reduce<number>((n, s) => n + s.docSwitchedOn, 0),
         hiddenIgnored: 0,
+        hiddenUnkeyed,
         lastAt: list.length ? '2026-10-13 09:40:02' : null,
         lastVersion: null,
       },
@@ -101,13 +102,16 @@ async function renderList(syncs: unknown[], detailBody: unknown = detail) {
   })
 }
 
+const rowButtons = () => [...host!.querySelectorAll<HTMLButtonElement>('li button')].filter(b => b.textContent !== 'Expand all' && b.textContent !== 'Collapse all')
+
 async function openRow(index = 0) {
-  const row = host!.querySelectorAll<HTMLButtonElement>('li > button')[index]
-  await act(async () => { row.click() })
+  await act(async () => { rowButtons()[index].click() })
   await act(async () => {
     await vi.waitFor(() => { if (!host!.querySelector('details')) throw new Error('detail not rendered yet') })
   })
 }
+
+const requested = () => vi.mocked(apiFetch).mock.calls.map(([p]) => String(p))
 
 describe('providersByChurn', () => {
   it('orders providers busiest first, ties alphabetically', () => {
@@ -117,31 +121,56 @@ describe('providersByChurn', () => {
 })
 
 describe('CatalogueSyncs', () => {
-  it('says the log is empty instead of rendering an empty table', async () => {
+  it('says the log is empty instead of rendering an empty table, and says when filters hid everything', async () => {
     await renderList([])
-    expect(host!.textContent).toContain('No catalog update recorded yet')
+    expect(host!.textContent).toContain('No catalog changes recorded yet')
     expect(host!.querySelector('li')).toBeNull()
+    act(() => root?.unmount())
+    host?.remove()
+    await renderList([], detail, 2)
+    expect(host!.textContent).toContain('No catalogue changes match these filters')
+  })
+
+  it('asks for keyed providers only and nothing ignored by default, in the browser time zone', async () => {
+    await renderList([update], detail, 4)
+    const list = requested().find(p => p.startsWith('/api/models/changes/syncs?'))!
+    expect(list).toContain('keyedOnly=true')
+    expect(list).toContain('hideIgnored=true')
+    expect(list).toContain(`timeZone=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`)
+    expect(host!.textContent).toContain('4 changes from providers without a key hidden')
+
+    const keyed = [...host!.querySelectorAll('label')].find(l => l.textContent?.startsWith('Only providers with a key'))!
+    await act(async () => { keyed.querySelector('input')!.click() })
+    await act(async () => {
+      await vi.waitFor(() => { if (!requested().some(p => p.includes('keyedOnly=false'))) throw new Error('not refetched') })
+    })
   })
 
   it('sums the whole log into the headline quantities', async () => {
-    await renderList([update, baseline])
+    await renderList([update, earlierDay])
     const text = host!.textContent ?? ''
-    expect(text).toMatch(/\+3\s*Models added/)
-    expect(text).toMatch(/−1\s*Models removed/)
-    expect(text).toMatch(/~1\s*Models changed/)
-    expect(text).toMatch(/1\s*Switched off/)
+    expect(text).toMatch(/2\s*Days with changes/)
+    expect(text).toMatch(/\+6\s*Models added/)
+    expect(text).toMatch(/−2\s*Models removed/)
     expect(text).not.toContain('Switched back on')
   })
 
-  it('names each row’s providers with their counts, busiest first', async () => {
-    await renderList([update, baseline])
-    const row = host!.querySelectorAll('li')[0].textContent ?? ''
+  it('names each day’s providers with their counts, busiest first', async () => {
+    await renderList([update])
+    const row = host!.querySelector('li')!.textContent ?? ''
     expect(row).toContain('2026.10.12.daddd7e6 → 2026.10.13.70a95cb9')
     expect(row.indexOf('inferbase')).toBeLessThan(row.indexOf('llm7'))
     expect(row).toMatch(/inferbase\s*\+2/)
     expect(row).toMatch(/llm7\s*\+1\s*−1/)
     expect(row).toMatch(/sail\s*1 off\s*~1/)
-    expect(host!.querySelectorAll('li')[1].textContent).toContain('log starts here')
+    expect(row).not.toContain('updates merged')
+  })
+
+  it('says how many updates a day merged, and when it could only sum them', async () => {
+    await renderList([{ ...update, ids: [5, 6, 7], netted: false }])
+    const row = host!.querySelector('li')!.textContent ?? ''
+    expect(row).toContain('3 updates merged')
+    expect(row).toContain('counts are summed')
   })
 
   it('collapses providers past the sixth into a count', async () => {
@@ -153,19 +182,18 @@ describe('CatalogueSyncs', () => {
     expect(row).toContain('+2 more')
   })
 
-  it('lists added, removed and changed models per provider, each provider collapsible', async () => {
-    await renderList([update])
+  it('lists added, removed and changed models per provider, fetched for every merged update', async () => {
+    await renderList([{ ...update, ids: [5, 6] }])
     await openRow()
+    expect(requested().find(p => p.startsWith('/api/models/changes/syncs/detail'))).toMatch(/ids=5,6&hideIgnored=true&keyedOnly=true/)
     const groups = [...host!.querySelectorAll('details')]
     expect(groups.map(g => g.querySelector('summary')!.textContent)).toEqual([
       expect.stringContaining('inferbase'), expect.stringContaining('llm7'), expect.stringContaining('sail'),
     ])
     expect(groups.every(g => !g.open)).toBe(true)
     expect(groups[0].textContent).toContain('Qwen 3 Max')
-    expect(groups[0].textContent).toContain('glm-5')
     expect(groups[1].textContent).toMatch(/Added.*llm7-new.*Removed.*llm7-old/)
     expect(groups[2].textContent).toMatch(/Switched off by the feed.*sail-pro.*Changed.*sail-lite.*rpd.*1000.*500/)
-    expect(groups[2].textContent).not.toMatch(/Changed.*sail-pro/)
   })
 
   it('opens the group straight away when only one provider moved', async () => {
@@ -181,46 +209,17 @@ describe('CatalogueSyncs', () => {
     expect(host!.textContent).toContain('Model names were not recorded for this update')
   })
 
-  it('does not expand a row that changed nothing', async () => {
-    await renderList([baseline])
-    await act(async () => { host!.querySelector<HTMLButtonElement>('li > button')!.click() })
-    expect(vi.mocked(apiFetch).mock.calls.some(([p]) => String(p).includes('/detail'))).toBe(false)
-  })
-
-  // 06:00 and 06:30 UTC sit on the same local day for any offset between
-  // UTC-6 and UTC+17; the third update is three days earlier.
-  const morning = { ...update, id: 10, at: '2026-10-13 06:00:00' }
-  const later = { ...update, id: 11, at: '2026-10-13 06:30:00', docAdded: 1, docRemoved: 0, docChanged: 0, docSwitchedOff: 0 }
-  const quietSameDay = { ...baseline, id: 12, at: '2026-10-13 06:15:00', previousVersion: 'x' }
-  const earlier = { ...update, id: 13, at: '2026-10-10 06:00:00' }
-
-  it('groups updates by day, newest first, with each day’s totals', async () => {
-    expect(groupByDay([later, quietSameDay, morning, earlier]).map(([, s]) => s.map(x => x.id))).toEqual([[11, 12, 10], [13]])
-    await renderList([later, quietSameDay, morning, earlier])
-    const days = [...host!.querySelectorAll('section')]
-    expect(days).toHaveLength(2)
-    expect(days[0].textContent).toMatch(/Updates: 3\s*\+4\s*−1\s*1 off\s*~1/)
-    expect(days[1].textContent).toMatch(/Updates: 1\s*\+3\s*−1\s*1 off\s*~1/)
-  })
-
-  it('expands every update and provider in a day at once, and only that day', async () => {
-    await renderList([later, quietSameDay, morning, earlier])
-    const [today, before] = [...host!.querySelectorAll('section')]
+  it('expands every provider in one day at once, and only that day', async () => {
+    await renderList([update, earlierDay])
+    const [today, before] = [...host!.querySelectorAll('li')]
     await act(async () => { [...today.querySelectorAll('button')].find(b => b.textContent === 'Expand all')!.click() })
     await act(async () => {
-      await vi.waitFor(() => { if (today.querySelectorAll('details').length < 6) throw new Error('details not all rendered') })
+      await vi.waitFor(() => { if (today.querySelectorAll('details').length < 3) throw new Error('details not all rendered') })
     })
-    const groups = [...today.querySelectorAll('details')]
-    expect(groups).toHaveLength(6)
-    expect(groups.every(g => g.open)).toBe(true)
+    expect([...today.querySelectorAll('details')].every(g => g.open)).toBe(true)
     expect(before.querySelector('details')).toBeNull()
 
     await act(async () => { [...today.querySelectorAll('button')].find(b => b.textContent === 'Collapse all')!.click() })
     expect(today.querySelector('details')).toBeNull()
-  })
-
-  it('offers no Expand all on a day when nothing moved', async () => {
-    await renderList([{ ...baseline, at: '2026-10-12 06:00:00' }])
-    expect([...host!.querySelectorAll('button')].some(b => b.textContent === 'Expand all')).toBe(false)
   })
 })

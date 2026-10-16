@@ -110,7 +110,21 @@ export interface CatalogueSyncRow {
   byPlatform: Record<string, PlatformChurn>;
 }
 
-export interface CatalogueSyncDetailRow extends CatalogueSyncRow {
+/** One local day of catalog updates, merged into a single net change. */
+export interface CatalogueSyncDay extends CatalogueSyncRow {
+  /** YYYY-MM-DD in the requested time zone. */
+  day: string;
+  /** The logged documents merged into this entry, oldest first. */
+  ids: number[];
+  /**
+   * False when a merged document's names or field edits were capped, so the
+   * day's counts are summed per document instead of netted per model: a model
+   * added in the morning and removed at night then counts both ways.
+   */
+  netted: boolean;
+}
+
+export interface CatalogueSyncDetailRow extends CatalogueSyncDay {
   details: CatalogFieldChange[];
   /** Null for a row written before model names were recorded and that the
    *  backfill could not reconstruct exactly: the counts stand, the names are
@@ -120,6 +134,7 @@ export interface CatalogueSyncDetailRow extends CatalogueSyncRow {
 
 /** Whole-log quantities, independent of the page being read. */
 export interface CatalogueSyncTotals {
+  /** Days with a visible change. */
   syncs: number;
   added: number;
   removed: number;
@@ -128,12 +143,14 @@ export interface CatalogueSyncTotals {
   switchedOn: number;
   /** Model changes left out because their provider or model is ignored. */
   hiddenIgnored: number;
+  /** Model changes left out because no key exists for their provider. */
+  hiddenUnkeyed: number;
   lastAt: string | null;
   lastVersion: string | null;
 }
 
 export interface CatalogueSyncPage {
-  syncs: CatalogueSyncRow[];
+  syncs: CatalogueSyncDay[];
   total: number;
   totals: CatalogueSyncTotals;
 }
@@ -144,7 +161,11 @@ export interface CatalogueSyncQuery {
   /** Skip this many, for paging through a long history. */
   offset?: number;
   hideIgnored?: boolean;
+  /** Only providers this install holds a key for. Default true. */
+  keyedOnly?: boolean;
   status?: 'all' | 'enabled' | 'disabled';
+  /** IANA zone whose calendar days updates are merged by. Default UTC. */
+  timeZone?: string;
 }
 
 interface SyncDbRow {
@@ -210,11 +231,15 @@ function toRow(row: SyncDbRow): CatalogueSyncRow {
 }
 
 /**
- * Append one sync row. Never throws into the caller: the call site sits in the
- * sync's aftermath, and losing a log row is strictly better than failing the
- * sync the row describes.
+ * Append one sync row, but only for a document that changed something against
+ * the one before it. A republish with nothing moved is not an update anyone
+ * needs to read, and the applied version is tracked in settings regardless.
+ * Never throws into the caller: the call site sits in the sync's aftermath,
+ * and losing a log row is strictly better than failing the sync it describes.
  */
 export function recordCatalogueSync(db: Db, input: CatalogueSyncInput): void {
+  const { added, removed, changed, switchedOff, switchedOn } = input.doc;
+  if (added + removed + changed + switchedOff + switchedOn === 0) return;
   try {
     db.prepare(`
       INSERT INTO catalogue_sync (
@@ -346,51 +371,227 @@ function enabledCatalogueModels(db: Db): Set<string> {
   return new Set(rows.map(row => `${row.registry}\0${row.platform}\0${row.model_id}`));
 }
 
+/** Platforms this install holds at least one key for, in any state. */
+function keyedPlatforms(db: Db): Set<string> {
+  return new Set((db.prepare('SELECT DISTINCT platform FROM api_keys').all() as Array<{ platform: string }>).map(r => r.platform));
+}
+
+/** Every provider a row mentions, counts or names alike. */
+function platformsIn(row: SyncDbRow): string[] {
+  const out = new Set(Object.keys(parseJson<Record<string, PlatformChurn>>(row.by_platform_json, {})));
+  const members = parseJson<CatalogMembers | null>(row.members_json, null);
+  for (const m of [...(members?.added ?? []), ...(members?.removed ?? [])]) out.add(m.p);
+  for (const d of parseJson<CatalogFieldChange[]>(row.details_json, [])) out.add(d.p);
+  return [...out];
+}
+
+interface Filters {
+  /** What the list hides: ignores (when asked), removals, and unkeyed providers (when asked). */
+  sets: IgnoreSets;
+  /** The same, without the unkeyed providers: what "hidden because ignored" counts against. */
+  ignoreOnly: IgnoreSets;
+  status: NonNullable<CatalogueSyncQuery['status']>;
+  enabled: Set<string> | undefined;
+  timeZone: string;
+}
+
+function filtersFor(query: CatalogueSyncQuery, rows: SyncDbRow[], db: Db): Filters {
+  const ignoreOnly = query.hideIgnored === false
+    ? { providers: new Set<string>(), models: new Set<string>() }
+    : withRemovedPlatforms(loadIgnoreSets(db), db);
+  const sets = { providers: new Set(ignoreOnly.providers), models: new Set(ignoreOnly.models) };
+  if (query.keyedOnly !== false) {
+    const keyed = keyedPlatforms(db);
+    for (const row of rows) for (const p of platformsIn(row)) if (!keyed.has(p)) sets.providers.add(p);
+  }
+  const status = query.status ?? 'all';
+  let timeZone = 'UTC';
+  try {
+    if (query.timeZone) { new Intl.DateTimeFormat('en-CA', { timeZone: query.timeZone }); timeZone = query.timeZone; }
+  } catch {
+    // An unknown zone groups by UTC rather than failing the page.
+  }
+  return { sets, ignoreOnly, status, enabled: status !== 'all' ? enabledCatalogueModels(db) : undefined, timeZone };
+}
+
+interface Part {
+  row: CatalogueSyncRow;
+  members: CatalogMembers | null;
+  details: CatalogFieldChange[];
+  /** Names and field edits were stored in full, so they can be netted. */
+  complete: boolean;
+}
+
+function partOf(raw: SyncDbRow, f: Filters): Part {
+  const filtered = withoutIgnored(raw, f.sets, f.status, f.enabled);
+  const rawMembers = parseJson<CatalogMembers | null>(raw.members_json, null);
+  const rawDetails = parseJson<CatalogFieldChange[]>(raw.details_json, []);
+  const complete = rawMembers !== null
+    && rawMembers.added.length === raw.doc_added
+    && rawMembers.removed.length === raw.doc_removed
+    && rawDetails.length < DETAILS_CAP;
+  return { row: filtered.row, members: filtered.members, details: filtered.details, complete };
+}
+
+function dayOf(at: string, timeZone: string): string {
+  const ms = Date.parse(`${at.replace(' ', 'T')}Z`);
+  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(ms);
+}
+
+const emptyChurn = (): PlatformChurn => ({ a: 0, r: 0, c: 0, off: 0, on: 0 });
+
+/**
+ * Merge one day's documents, oldest first, into a single net change. A model
+ * added then removed the same day cancels out, a field edited twice reports
+ * its first old value and last new one, and a value that ends where it began
+ * drops out. Capped documents cannot be netted, so their counts are summed.
+ */
+interface MergedDay { row: CatalogueSyncDay; members: CatalogMembers | null; details: CatalogFieldChange[] }
+
+function mergeDay(day: string, parts: Part[]): MergedDay {
+  const first = parts[0];
+  const last = parts[parts.length - 1];
+  const total = (k: 'updated' | 'inserted' | 'removed' | 'skippedUnknownPlatform' | 'quirks') => parts.reduce((n, p) => n + p.row[k], 0);
+  const header = {
+    ...last.row,
+    previousVersion: first.row.previousVersion,
+    updated: total('updated'),
+    inserted: total('inserted'),
+    removed: total('removed'),
+    skippedUnknownPlatform: total('skippedUnknownPlatform'),
+    quirks: total('quirks'),
+    day,
+    ids: parts.map(p => p.row.id),
+  };
+  const finish = (byPlatform: Record<string, PlatformChurn>, netted: boolean) => {
+    for (const [p, c] of Object.entries(byPlatform)) if (churnWeight(c) === 0) delete byPlatform[p];
+    const sum = (k: keyof PlatformChurn) => Object.values(byPlatform).reduce((n, c) => n + (c[k] ?? 0), 0);
+    return { ...header, byPlatform, netted, docAdded: sum('a'), docRemoved: sum('r'), docChanged: sum('c'), docSwitchedOff: sum('off'), docSwitchedOn: sum('on') };
+  };
+
+  if (parts.length === 1) {
+    return { row: finish({ ...first.row.byPlatform }, true), members: first.members, details: first.details };
+  }
+  if (!parts.every(p => p.complete && p.members)) {
+    const byPlatform: Record<string, PlatformChurn> = {};
+    for (const p of parts) {
+      for (const [platform, c] of Object.entries(p.row.byPlatform)) {
+        const t = byPlatform[platform] ??= emptyChurn();
+        t.a += c.a; t.r += c.r; t.c += c.c; t.off += c.off ?? 0; t.on += c.on ?? 0;
+      }
+    }
+    const members = parts.every(p => p.members)
+      ? { added: parts.flatMap(p => p.members!.added), removed: parts.flatMap(p => p.members!.removed) }
+      : null;
+    return { row: finish(byPlatform, false), members, details: parts.flatMap(p => p.details) };
+  }
+
+  const key = (r: string, p: string, m: string) => `${r}\0${p}\0${m}`;
+  const added = new Map<string, CatalogMember>();
+  const removed = new Map<string, CatalogMember>();
+  const fields = new Map<string, CatalogFieldChange>();
+  for (const part of parts) {
+    for (const m of part.members!.added) {
+      const k = key(m.r, m.p, m.m);
+      if (removed.has(k)) removed.delete(k); else added.set(k, m);
+    }
+    for (const m of part.members!.removed) {
+      const k = key(m.r, m.p, m.m);
+      if (added.has(k)) added.delete(k); else removed.set(k, m);
+    }
+    for (const d of part.details) {
+      const k = `${key(d.r, d.p, d.m)}\0${d.f}`;
+      const seen = fields.get(k);
+      fields.set(k, seen ? { ...seen, n: d.n } : { ...d });
+    }
+  }
+  // An edit to a model that arrived or left the same day is part of that
+  // arrival or departure, not a change of its own.
+  const details = [...fields.values()].filter(d =>
+    JSON.stringify(d.o) !== JSON.stringify(d.n) && !added.has(key(d.r, d.p, d.m)) && !removed.has(key(d.r, d.p, d.m)));
+
+  const byPlatform: Record<string, PlatformChurn> = {};
+  for (const m of added.values()) (byPlatform[m.p] ??= emptyChurn()).a++;
+  for (const m of removed.values()) (byPlatform[m.p] ??= emptyChurn()).r++;
+  const edited = new Set<string>();
+  for (const d of details) {
+    const churn = byPlatform[d.p] ??= emptyChurn();
+    if (d.f === 'enabled') {
+      if (d.o === true && d.n === false) churn.off++;
+      else if (d.o === false && d.n === true) churn.on++;
+    } else if (!edited.has(key(d.r, d.p, d.m))) {
+      edited.add(key(d.r, d.p, d.m));
+      churn.c++;
+    }
+  }
+  return { row: finish(byPlatform, true), members: { added: [...added.values()], removed: [...removed.values()] }, details };
+}
+
+/** Every logged row, newest first, merged per day with the filters applied.
+ *  Days left with no visible change are dropped. */
+function days(rows: SyncDbRow[], f: Filters): MergedDay[] {
+  const byDay = new Map<string, SyncDbRow[]>();
+  for (const row of rows) {
+    const d = dayOf(row.at, f.timeZone);
+    (byDay.get(d) ?? byDay.set(d, []).get(d)!).push(row);
+  }
+  const out: MergedDay[] = [];
+  for (const [d, dayRows] of byDay) {
+    const oldestFirst = [...dayRows].sort((a, b) => a.at.localeCompare(b.at) || a.id - b.id);
+    const merged = mergeDay(d, oldestFirst.map(r => partOf(r, f)));
+    if (Object.keys(merged.row.byPlatform).length > 0) out.push(merged);
+  }
+  return out.sort((a, b) => b.row.day.localeCompare(a.row.day));
+}
+
+function loadRows(db: Db, ids?: number[]): SyncDbRow[] {
+  if (ids && ids.length === 0) return [];
+  return db.prepare(`
+    SELECT ${ROW_COLUMNS}, details_json, members_json
+      FROM catalogue_sync
+     ${ids ? `WHERE id IN (${ids.map(() => '?').join(', ')})` : ''}
+     ORDER BY at DESC, id DESC
+  `).all(...(ids ?? [])) as SyncDbRow[];
+}
+
 export function listCatalogueSyncs(query: CatalogueSyncQuery = {}, db: Db = getDb()): CatalogueSyncPage {
   const limit = Math.min(Math.max(1, query.limit ?? 50), MAX_LIMIT);
   const offset = Math.max(0, query.offset ?? 0);
-  // Every row, so the totals describe the whole log after ignores are taken
-  // out. The table grows by one row per applied document; this stays small.
-  const rows = db.prepare(`
-    SELECT ${ROW_COLUMNS}, details_json, members_json
-      FROM catalogue_sync
-     ORDER BY at DESC, id DESC
-  `).all() as SyncDbRow[];
-  const sets = query.hideIgnored === false ? { providers: new Set<string>(), models: new Set<string>() }
-    : withRemovedPlatforms(loadIgnoreSets(db), db);
-  const enabled = query.status && query.status !== 'all' ? enabledCatalogueModels(db) : undefined;
-  const filtered = rows.map(r => withoutIgnored(r, sets, query.status ?? 'all', enabled))
-    .filter(f => !query.status || query.status === 'all' || Object.keys(f.row.byPlatform).length > 0);
+  // Every row, so the totals describe the whole log after the filters. The
+  // table grows by one row per changed document; this stays small.
+  const rows = loadRows(db);
+  const f = filtersFor(query, rows, db);
+  const merged = days(rows, f);
   const sum = (k: 'docAdded' | 'docRemoved' | 'docChanged' | 'docSwitchedOff' | 'docSwitchedOn') =>
-    filtered.reduce((n, f) => n + f.row[k], 0);
+    merged.reduce((n, d) => n + d.row[k], 0);
+  const hiddenIgnored = rows.reduce((n, row) => n + withoutIgnored(row, f.ignoreOnly).hidden, 0);
+  const hiddenAll = rows.reduce((n, row) => n + withoutIgnored(row, f.sets).hidden, 0);
 
   return {
-    syncs: filtered.slice(offset, offset + limit).map(f => f.row),
-    total: filtered.length,
+    syncs: merged.slice(offset, offset + limit).map(d => d.row),
+    total: merged.length,
     totals: {
-      syncs: filtered.length,
+      syncs: merged.length,
       added: sum('docAdded'),
       removed: sum('docRemoved'),
       changed: sum('docChanged'),
       switchedOff: sum('docSwitchedOff'),
       switchedOn: sum('docSwitchedOn'),
-      hiddenIgnored: rows.reduce((n, row) => n + withoutIgnored(row, sets).hidden, 0),
+      hiddenIgnored,
+      hiddenUnkeyed: hiddenAll - hiddenIgnored,
       lastAt: rows[0]?.at ?? null,
       lastVersion: rows[0]?.version ?? null,
     },
   };
 }
 
-export function getCatalogueSync(id: number, db: Db = getDb(), query: CatalogueSyncQuery = {}): CatalogueSyncDetailRow | null {
-  const row = db.prepare(`
-    SELECT ${ROW_COLUMNS}, details_json, members_json
-      FROM catalogue_sync
-     WHERE id = ?
-  `).get(id) as SyncDbRow | undefined;
-  if (!row) return null;
-  const sets = query.hideIgnored === false ? { providers: new Set<string>(), models: new Set<string>() }
-    : withRemovedPlatforms(loadIgnoreSets(db), db);
-  const filtered = withoutIgnored(row, sets, query.status ?? 'all',
-    query.status && query.status !== 'all' ? enabledCatalogueModels(db) : undefined);
-  return { ...filtered.row, details: filtered.details, members: filtered.members };
+/** The merged detail behind one day entry, by the ids it listed, with the
+ *  same filters as the list. Null when none of the ids is recorded. */
+export function getCatalogueSyncDay(ids: number[], db: Db = getDb(), query: CatalogueSyncQuery = {}): CatalogueSyncDetailRow | null {
+  const rows = loadRows(db, ids);
+  if (rows.length === 0) return null;
+  const f = filtersFor(query, rows, db);
+  const oldestFirst = [...rows].sort((a, b) => a.at.localeCompare(b.at) || a.id - b.id);
+  const merged = mergeDay(dayOf(oldestFirst[oldestFirst.length - 1].at, f.timeZone), oldestFirst.map(r => partOf(r, f)));
+  return { ...merged.row, details: merged.details, members: merged.members };
 }
