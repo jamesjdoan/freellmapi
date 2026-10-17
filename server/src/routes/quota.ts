@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { listQuotaProbes } from '../services/quota-probe-log.js';
-import { getSetting, setSetting } from '../db/index.js';
+import { getDb, getSetting, setSetting } from '../db/index.js';
 import {
   listQuotaPolicies,
   upsertQuotaPolicy,
@@ -31,6 +31,17 @@ import {
   closePaidCreditWindow,
   PaidCreditInputError,
 } from '../services/paid-credit.js';
+import {
+  USAGE_CREDENTIAL_FIELDS,
+  isUsageCredentialPlatform,
+  normalizeUsageCredential,
+  setUsageCredential,
+  clearUsageCredential,
+  listUsageCredentials,
+  getUsageCredentialStatus,
+  UsageCredentialError,
+} from '../services/usage-credentials.js';
+import { pollProviderUsageForKey } from '../services/provider-usage-api.js';
 
 // Quota policy + effective-state API (ADR ARCH-20260905, W2).
 //
@@ -395,6 +406,51 @@ quotaRouter.delete('/bonuses/:id/allowance', (req: Request, res: Response) => {
   } catch (err) {
     bonusFailure(res, err);
   }
+});
+
+// ── Usage credentials (extension `provider-usage-apis`) ─────────────────────
+// A second, read-only credential per key for providers whose account usage the
+// inference key cannot read. Write-only: secrets are never returned.
+
+const UsageCredentialBody = z.object({ fields: z.record(z.string()) });
+
+quotaRouter.get('/usage-credentials', (_req: Request, res: Response) => {
+  res.json({ supported: USAGE_CREDENTIAL_FIELDS, credentials: listUsageCredentials() });
+});
+
+quotaRouter.put('/usage-credentials/:keyId', async (req: Request, res: Response) => {
+  const keyId = Number(req.params.keyId);
+  const parsed = UsageCredentialBody.safeParse(req.body);
+  if (!Number.isInteger(keyId) || !parsed.success) {
+    res.status(400).json({ error: { message: parsed.success ? 'Invalid key id' : 'Expected { fields: { name: value } }' } });
+    return;
+  }
+  const key = getDb().prepare('SELECT platform FROM api_keys WHERE id = ?').get(keyId) as { platform: string } | undefined;
+  if (!key || !isUsageCredentialPlatform(key.platform)) {
+    res.status(404).json({ error: { message: key ? `${key.platform} has no usage credential` : 'Key not found' } });
+    return;
+  }
+  try {
+    setUsageCredential(keyId, normalizeUsageCredential(key.platform, parsed.data.fields));
+  } catch (err) {
+    if (err instanceof UsageCredentialError) {
+      res.status(400).json({ error: { message: err.message } });
+      return;
+    }
+    throw err;
+  }
+  // Read at once, so the operator learns now whether the provider accepts it.
+  await pollProviderUsageForKey(keyId);
+  res.json({ credential: getUsageCredentialStatus(keyId) });
+});
+
+quotaRouter.delete('/usage-credentials/:keyId', (req: Request, res: Response) => {
+  const keyId = Number(req.params.keyId);
+  if (!Number.isInteger(keyId)) {
+    res.status(400).json({ error: { message: 'Invalid key id' } });
+    return;
+  }
+  res.json({ ok: clearUsageCredential(keyId) });
 });
 
 // ── Paid credit windows (extension `paid-credit-windows`) ───────────────────

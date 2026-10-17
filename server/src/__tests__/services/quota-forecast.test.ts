@@ -266,6 +266,30 @@ describe('a window the provider stopped reporting', () => {
     expect(windows).toContain('ollama::weekly');
     expect(windows).toContain('ollama::session');
   });
+
+  it('shows a pool measured in two units as two rows', () => {
+    // ElectronHub's account pool carries a request limit from its headers and
+    // a weekly dollar credit from /v1/user/me. Keyed by pool alone, the credit
+    // reading was dropped and the card showed only "5 / 5".
+    const db = getDb();
+    db.prepare(`INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, status, enabled)
+                VALUES ('electronhub', 'k', 'x', 'x', 'x', 'active', 1)`).run();
+    const now = new Date().toISOString().replace('T', ' ').replace('Z', '');
+    db.prepare(`
+      INSERT INTO provider_quota_state (platform, key_id, quota_pool_key, metric, unit, limit_value, remaining_value, reset_at, reset_strategy, source, confidence, observed_at)
+      VALUES ('electronhub', 1, 'electronhub::weekly-credit', ?, ?, ?, ?, NULL, 'provider_reported', ?, 0.9, ?)`)
+      .run('requests', null, 5, 4, 'header', now);
+    db.prepare(`
+      INSERT INTO provider_quota_state (platform, key_id, quota_pool_key, metric, unit, limit_value, remaining_value, reset_at, reset_strategy, source, confidence, observed_at)
+      VALUES ('electronhub', 1, 'electronhub::weekly-credit', ?, ?, ?, ?, NULL, 'fixed_calendar', ?, 0.9, ?)`)
+      .run('credits', 'cents', 25, 20, 'quota_api', now);
+
+    const rows = getProviderQuotaOverview().filter(r => r.platform === 'electronhub' && r.limit != null);
+    expect(rows.map(r => [r.metric, r.limit, r.remaining, r.source]).sort()).toEqual([
+      ['credits', 25, 20, 'quota_api'],
+      ['requests', 5, 4, 'header'],
+    ]);
+  });
 });
 
 describe('a provider that publishes nothing', () => {

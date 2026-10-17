@@ -10,7 +10,8 @@ import type {
 import { BaseProvider, providerHttpError, type CompletionOptions, type KeyValidationResult } from './base.js';
 import { contentToString } from '../lib/content.js';
 import { proxyFetch } from '../lib/proxy.js';
-import { recordQuotaObservationsFromResponse, type QuotaObservationContext } from '../services/provider-quota.js';
+import { recordQuotaObservation, recordQuotaObservationsFromResponse, resolveQuotaPolicy, type QuotaObservationContext } from '../services/provider-quota.js';
+import { resolveQuotaWindow } from '../services/quota-clock.js';
 import { providerTimeoutMs, streamStallTimeoutMs } from '../lib/provider-timeout.js';
 import { sanitizeForGemini } from '../lib/gemini-wire.js';
 import { resolveMaxTokens } from '../lib/sampling-params.js';
@@ -33,6 +34,54 @@ function googleHttpError(res: Response, body: any) {
     );
   }
   return err;
+}
+
+/** Free-tier daily requests reset at midnight Pacific
+ *  (ai.google.dev/gemini-api/docs/rate-limits). */
+const GEMINI_DAILY_RESET_ZONE = 'America/Los_Angeles';
+
+/** The daily per-model violation in a 429 body, with its stated limit. */
+export function dailyQuotaViolation(body: unknown): { limit: number; quotaId: string } | null {
+  const details = (body as { error?: { details?: unknown } } | null)?.error?.details;
+  if (!Array.isArray(details)) return null;
+  for (const detail of details) {
+    if (detail?.['@type'] !== 'type.googleapis.com/google.rpc.QuotaFailure' || !Array.isArray(detail.violations)) continue;
+    for (const v of detail.violations) {
+      if (typeof v?.quotaId !== 'string' || !/PerDay/.test(v.quotaId)) continue;
+      const limit = Number(v.quotaValue);
+      if (Number.isFinite(limit) && limit > 0) return { limit, quotaId: v.quotaId };
+    }
+  }
+  return null;
+}
+
+/**
+ * Google has no usage API for an API key (Cloud Monitoring needs OAuth), but a
+ * daily-quota 429 states the model's limit in `QuotaFailure.quotaValue`. Record
+ * it against the model's pool as spent until the next midnight Pacific, so the
+ * card can show the real allowance and when it returns instead of "rate limited".
+ */
+function recordDailyQuota(body: unknown, modelId: string, quotaContext: QuotaObservationContext | undefined): void {
+  const violation = dailyQuotaViolation(body);
+  if (!violation) return;
+  const { resetAtMs } = resolveQuotaWindow({ kind: 'calendar_day', timezone: GEMINI_DAILY_RESET_ZONE }, Date.now());
+  recordQuotaObservation({
+    platform: 'google',
+    keyId: quotaContext?.keyId,
+    providerAccountId: quotaContext?.providerAccountId,
+    modelId,
+    quotaPoolKey: resolveQuotaPolicy('google', modelId).poolKey,
+    metric: 'requests',
+    limit: violation.limit,
+    remaining: 0,
+    resetAt: resetAtMs ? new Date(resetAtMs).toISOString() : null,
+    resetStrategy: 'fixed_calendar',
+    source: 'error_body',
+    confidence: 0.9,
+    notes: `Google free-tier daily limit ${violation.limit} reached (${violation.quotaId}); resets midnight Pacific`,
+    endpoint: 'chat/completions',
+    statusCode: 429,
+  });
 }
 
 // Gemini 3 REQUIRES the `thoughtSignature` that accompanied a function call to
@@ -608,6 +657,7 @@ export class GoogleProvider extends BaseProvider {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
+      if (res.status === 429) recordDailyQuota(err, modelId, quotaContext);
       throw googleHttpError(res, err);
     }
 
@@ -689,6 +739,7 @@ export class GoogleProvider extends BaseProvider {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
+      if (res.status === 429) recordDailyQuota(err, modelId, quotaContext);
       throw googleHttpError(res, err);
     }
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GoogleProvider } from '../../providers/google.js';
+import { GoogleProvider, dailyQuotaViolation } from '../../providers/google.js';
 import { isStreamTruncatedError } from '../../lib/error-classify.js';
+import { initDb, getDb } from '../../db/index.js';
 
 describe('GoogleProvider', () => {
   let provider: GoogleProvider;
@@ -118,6 +119,40 @@ describe('GoogleProvider', () => {
     } }), { status: 429 }));
     await expect(provider.chatCompletion('test-key', [], 'gemini-2.5-pro'))
       .rejects.toMatchObject({ dailyQuotaExhausted: false });
+  });
+
+  it.each([false, true])('learns the model\'s daily limit and its Pacific reset from the 429 body (streaming=%s)', async (stream) => {
+    initDb(':memory:');
+    getDb().prepare('DELETE FROM provider_quota_state').run();
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({ error: {
+      code: 429, status: 'RESOURCE_EXHAUSTED', message: 'You exceeded your current quota.',
+      details: [{ '@type': 'type.googleapis.com/google.rpc.QuotaFailure', violations: [{
+        quotaMetric: 'generativelanguage.googleapis.com/generate_content_free_tier_requests',
+        quotaId: 'GenerateRequestsPerDayPerProjectPerModel-FreeTier',
+        quotaDimensions: { model: 'gemini-2.5-flash', location: 'global' },
+        quotaValue: '250',
+      }] }],
+    } }), { status: 429 }));
+    const messages = [{ role: 'user' as const, content: 'Hi' }];
+    const request = stream
+      ? provider.streamChatCompletion('k', messages, 'gemini-2.5-flash', undefined, { keyId: 22 }).next()
+      : provider.chatCompletion('k', messages, 'gemini-2.5-flash', undefined, { keyId: 22 });
+    await expect(request).rejects.toMatchObject({ status: 429, dailyQuotaExhausted: true });
+
+    const state = getDb().prepare(
+      "SELECT limit_value, remaining_value, reset_at, reset_strategy FROM provider_quota_state WHERE platform = 'google' AND key_id = 22 AND metric = 'requests'",
+    ).get() as { limit_value: number; remaining_value: number; reset_at: string; reset_strategy: string };
+    expect(state).toMatchObject({ limit_value: 250, remaining_value: 0, reset_strategy: 'fixed_calendar' });
+    // Midnight Pacific is 07:00 or 08:00 UTC depending on daylight saving.
+    expect(new Date(state.reset_at).getUTCHours()).toBeOneOf([7, 8]);
+    expect(Date.parse(state.reset_at)).toBeGreaterThan(Date.now());
+  });
+
+  it('reads a limit only from a daily violation that states one', () => {
+    const body = (violations: unknown[]) => ({ error: { details: [{ '@type': 'type.googleapis.com/google.rpc.QuotaFailure', violations }] } });
+    expect(dailyQuotaViolation(body([{ quotaId: 'GenerateRequestsPerMinutePerProjectPerModel-FreeTier', quotaValue: '10' }]))).toBeNull();
+    expect(dailyQuotaViolation(body([{ quotaId: 'GenerateRequestsPerDayPerProjectPerModel-FreeTier' }]))).toBeNull();
+    expect(dailyQuotaViolation(body([{ quotaId: 'GenerateRequestsPerDayPerProjectPerModel-FreeTier', quotaValue: '1000' }]))).toMatchObject({ limit: 1000 });
   });
 
   // #268: Google reports a bad key as HTTP 400 INVALID_ARGUMENT / API_KEY_INVALID,

@@ -1,27 +1,33 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { initDb, getDb } from '../../db/index.js';
 import { encrypt } from '../../lib/crypto.js';
-import { pollProviderUsageApis, platformsWithUsageApi } from '../../services/provider-usage-api.js';
+import {
+  pollProviderUsageApis,
+  platformsWithUsageApi,
+  parseOllamaBalance,
+  parseOpenRouterKey,
+  parseElectronHubMe,
+  parseInferbaseCredits,
+  nextWeeklyUtc,
+  nextMonthUtc,
+} from '../../services/provider-usage-api.js';
 
 /**
- * Ollama Cloud publishes no figure for its free allowance and sends no
- * rate-limit headers, so the ledger was carrying the low end of a documented
- * token range at confidence 0.25. Its undocumented /api/usage endpoint answers
- * directly, in fractions of the real allowance per window:
- *
- *   "limits": { "session": { "usage": 0.121 }, "weekly": { "usage": 0.05 } }
- *
- * These pin the conversion and, more importantly, what happens when an
- * undocumented endpoint changes shape.
+ * Account usage read from each provider's own API. Endpoint shapes were taken
+ * from the providers' docs and a live key on 2026-10-17. Ollama's
+ * undocumented `/api/usage` `limits.*` fractions were withdrawn around
+ * 2026-10-07 — that is why its card went ten days stale — and replaced by the
+ * documented `/api/balance`.
  */
 const realFetch = globalThis.fetch;
+const NOW = Date.UTC(2026, 9, 17, 6, 0, 0); // a Saturday
 
 beforeEach(() => {
   process.env.ENCRYPTION_KEY = '0'.repeat(64);
   initDb(':memory:');
   getDb().prepare('DELETE FROM provider_quota_observations').run();
   getDb().prepare('DELETE FROM provider_quota_state').run();
-  getDb().prepare("DELETE FROM api_keys WHERE platform = 'ollama'").run();
+  getDb().prepare('DELETE FROM api_keys').run();
   const secret = encrypt('ollama-test-key');
   getDb().prepare(`
     INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, status, enabled)
@@ -40,97 +46,94 @@ function stubUsage(body: unknown, ok = true): void {
   })) as unknown as typeof fetch;
 }
 
+const legacy = (session: number, weekly?: number) => ({
+  included: {
+    session: { remaining_percent: session, resets_at: '2026-10-17T10:00:00Z' },
+    ...(weekly == null ? {} : { weekly: { remaining_percent: weekly, resets_at: '2026-10-20T00:00:00Z' } }),
+  },
+});
+
 describe('provider usage APIs', () => {
   const observations = () => getDb().prepare(
-    'SELECT quota_pool_key, metric, limit_value, remaining_value, source, confidence FROM provider_quota_observations ORDER BY quota_pool_key',
-  ).all() as { quota_pool_key: string; metric: string; limit_value: number; remaining_value: number; source: string; confidence: number }[];
+    'SELECT quota_pool_key, metric, unit, limit_value, remaining_value, reset_at, source, confidence FROM provider_quota_observations ORDER BY quota_pool_key',
+  ).all() as { quota_pool_key: string; metric: string; unit: string | null; limit_value: number; remaining_value: number; reset_at: string | null; source: string; confidence: number }[];
 
-  it('turns reported usage fractions into measured remaining quota', async () => {
-    stubUsage({ limits: { session: { usage: 0.121 }, weekly: { usage: 0.05 } } });
+  it('records the current-plan monthly credit with its period end as the reset', async () => {
+    stubUsage({ included: { balance_usd: 1.75, allowance_usd: 2.5, period: { from: '2026-10-10T22:36:46Z', until: '2026-11-10T22:36:46Z' } }, purchased: { balance_usd: 0 } });
+    expect(await pollProviderUsageApis()).toBe(1);
+    expect(observations()).toEqual([expect.objectContaining({
+      quota_pool_key: 'ollama::monthly', metric: 'credits', unit: 'cents', limit_value: 250, remaining_value: 175,
+      reset_at: '2026-11-10T22:36:46Z', source: 'quota_api',
+    })]);
+    expect(globalThis.fetch).toHaveBeenCalledWith('https://ollama.com/api/balance', expect.anything());
+  });
+
+  it('turns legacy-plan windows into a percentage left with their own resets', async () => {
+    stubUsage(legacy(87.9, 95));
     expect(await pollProviderUsageApis()).toBe(2);
-
     const rows = observations();
     expect(rows.map(r => r.quota_pool_key)).toEqual(['ollama::session', 'ollama::weekly']);
-    // 12.1% spent leaves 87.9% — carried at 0.01% resolution.
-    expect(rows[0]!.remaining_value).toBe(8790);
-    expect(rows[1]!.remaining_value).toBe(9500);
-    // The allowance is credit, not requests or tokens: Ollama meters dollars
-    // of usage at per-model token rates.
-    expect(rows[0]!.metric).toBe('credits');
-    // quota_api is a measured source, so it outranks every estimate.
-    expect(rows[0]!.source).toBe('quota_api');
+    expect(rows.map(r => r.remaining_value)).toEqual([8790, 9500]);
+    expect(rows[0]).toMatchObject({ unit: 'per_10k', reset_at: '2026-10-17T10:00:00Z' });
     expect(rows[0]!.confidence).toBeGreaterThan(0.8);
   });
 
-  it('follows the provider when it renames its windows', async () => {
-    // 2026-09-12: the response carries `limits.monthly` alone — no `session`,
-    // no `weekly`. Those two were hardcoded, so the panel kept showing a weekly
-    // balance captured three days earlier, reading "5.4% left, Low" while
-    // Ollama itself reported 29.6% spent. A window that vanishes must not
-    // freeze at its last reading.
-    stubUsage({ limits: { monthly: { usage: 0.296 } } });
+  it('records a freshly reset window rather than treating a full one as missing', async () => {
+    stubUsage(legacy(100));
     expect(await pollProviderUsageApis()).toBe(1);
-
-    const rows = observations();
-    expect(rows.map(r => r.quota_pool_key)).toEqual(['ollama::monthly']);
-    expect(rows[0]!.remaining_value).toBe(7040);
-  });
-
-  it('records a freshly reset window rather than treating zero as missing', async () => {
-    stubUsage({ limits: { session: { usage: 0 }, weekly: { usage: 0 } } });
-    expect(await pollProviderUsageApis()).toBe(2);
     expect(observations()[0]!.remaining_value).toBe(10_000);
   });
 
-  it('writes nothing when the endpoint changes shape', async () => {
-    // Undocumented: it is allowed to disappear or be rewritten. Losing it must
-    // cost the measurement, not the request path.
-    stubUsage({ limits: { session: { usage: 'lots' } }, unexpected: true });
+  it('writes nothing when the endpoint changes shape, errors or throws', async () => {
+    // The old /api/usage history shape: no allowance anywhere in it.
+    stubUsage({ range: '7d', totals: { request_count: 0, usage_usd: 0 }, buckets: [] });
     expect(await pollProviderUsageApis()).toBe(0);
-    expect(observations()).toEqual([]);
-  });
-
-  it('writes nothing on an error response', async () => {
     stubUsage({ error: 'nope' }, false);
     expect(await pollProviderUsageApis()).toBe(0);
-  });
-
-  it('survives a thrown request', async () => {
     globalThis.fetch = vi.fn(async () => { throw new Error('ECONNRESET'); }) as unknown as typeof fetch;
     await expect(pollProviderUsageApis()).resolves.toBe(0);
+    expect(observations()).toEqual([]);
   });
 
   it('skips a disabled key', async () => {
     getDb().prepare("UPDATE api_keys SET enabled = 0 WHERE platform = 'ollama'").run();
-    stubUsage({ limits: { session: { usage: 0.5 } } });
+    stubUsage(legacy(50));
     expect(await pollProviderUsageApis()).toBe(0);
   });
 
   it('only claims the providers it can actually read', () => {
-    // A registry, so adding one is a reader and nothing else. Both of these
-    // were found by probing: Ollama's /api/usage is undocumented, OpenRouter's
-    // /api/v1/credits is not.
-    expect(platformsWithUsageApi().sort()).toEqual(['ollama', 'openrouter']);
+    expect(platformsWithUsageApi().sort()).toEqual(['electronhub', 'inferbase', 'ollama', 'openrouter']);
   });
 });
 
-/**
- * Two providers report the metric 'credits' in units that are not comparable:
- * OpenRouter in cents of account balance, Ollama in ten-thousandths of an
- * allowance it never sizes. Formatting on the metric alone rendered Ollama's
- * 82.9% remaining as "$82.90" against an invented $100.00 limit — worse than a
- * bare integer, because it looked like a fact. The unit is what makes either
- * displayable.
- */
-describe('units', () => {
-  const unitOf = (pool: string) => (getDb().prepare(
-    'SELECT unit FROM provider_quota_state WHERE quota_pool_key = ?',
-  ).get(pool) as { unit: string | null } | undefined)?.unit;
+describe('response parsers', () => {
+  it('reads OpenRouter free-model daily requests as the provider counts them, resetting at UTC midnight', () => {
+    const [row] = parseOpenRouterKey({ data: { is_free_tier: false, free_model_daily_requests: { used: 4, limit: 1000, remaining: 996 } } }, NOW);
+    expect(row).toMatchObject({ quotaPoolKey: 'openrouter::free', metric: 'requests', limit: 1000, remaining: 996, resetAt: '2026-10-18T00:00:00.000Z' });
+    expect(parseOpenRouterKey({ data: { limit: 0, limit_remaining: 0 } }, NOW)).toEqual([]);
+  });
 
-  it('marks a fraction-of-allowance reading as such', async () => {
-    stubUsage({ limits: { session: { usage: 0.121 } } });
-    await pollProviderUsageApis();
-    expect(unitOf('ollama::session')).toBe('per_10k');
+  it('reads ElectronHub weekly credit in cents, refilling Sunday 21:00 UTC', () => {
+    const [row] = parseElectronHubMe({ credits: 0.2499892, weekly_credits: 0.25, subscription: 'free' }, NOW);
+    expect(row).toMatchObject({ quotaPoolKey: 'electronhub::weekly-credit', unit: 'cents', limit: 25, remaining: 25, resetAt: '2026-10-18T21:00:00.000Z' });
+    expect(parseElectronHubMe({ credits: 'x' }, NOW)).toEqual([]);
+  });
+
+  it('counts Inferbase requests this month against the documented free plan, at lower confidence', () => {
+    const [row] = parseInferbaseCredits({ balance_micros: 0, requests_this_month: 120 }, NOW);
+    expect(row).toMatchObject({ quotaPoolKey: 'inferbase::managed-free', metric: 'requests', limit: 5000, remaining: 4880, resetAt: '2026-11-01T00:00:00.000Z' });
+    expect(row!.confidence).toBeLessThan(0.9);
+  });
+
+  it('does not invent an Ollama window that the response does not carry', () => {
+    expect(parseOllamaBalance({ included: { balance_usd: 1 } })).toEqual([]);
+  });
+
+  it('computes calendar resets in UTC', () => {
+    // Saturday 06:00 UTC -> Sunday 21:00; on Sunday after 21:00 -> next Sunday.
+    expect(nextWeeklyUtc(0, 21, NOW)).toBe('2026-10-18T21:00:00.000Z');
+    expect(nextWeeklyUtc(0, 21, Date.UTC(2026, 9, 18, 22))).toBe('2026-10-25T21:00:00.000Z');
+    expect(nextMonthUtc(Date.UTC(2026, 11, 31, 23))).toBe('2027-01-01T00:00:00.000Z');
   });
 });
 
@@ -146,7 +149,7 @@ describe('repeat observations', () => {
   ).get() as { n: number }).n;
 
   it('appends nothing when a poll returns what it returned last time', async () => {
-    stubUsage({ limits: { session: { usage: 0.121 } } });
+    stubUsage(legacy(87.9));
     await pollProviderUsageApis();
     await pollProviderUsageApis();
     await pollProviderUsageApis();
@@ -154,13 +157,8 @@ describe('repeat observations', () => {
   });
 
   it('records an unchanged reading once the series has gone quiet', async () => {
-    // Row spacing is what later tells an idle stretch from an outage: two
-    // guards reject a reset bracketed by distant readings. With repeats
-    // suppressed outright, a quiet afternoon looked exactly like downtime.
-    stubUsage({ limits: { session: { usage: 0.121 } } });
+    stubUsage(legacy(87.9));
     await pollProviderUsageApis();
-    expect(countRows()).toBe(1);
-    // Backdate the only row past the heartbeat.
     getDb().prepare(`
       UPDATE provider_quota_observations
          SET observed_at = datetime('now', '-20 minutes')
@@ -170,29 +168,17 @@ describe('repeat observations', () => {
     expect(countRows()).toBe(2);
   });
 
-  it('appends as soon as the number moves', async () => {
-    stubUsage({ limits: { session: { usage: 0.121 } } });
+  it('appends as soon as the number moves, and keeps the state row fresh', async () => {
+    stubUsage(legacy(87.9));
     await pollProviderUsageApis();
-    stubUsage({ limits: { session: { usage: 0.2 } } });
+    const first = (getDb().prepare("SELECT observed_at FROM provider_quota_state WHERE quota_pool_key='ollama::session'").get() as { observed_at: string }).observed_at;
+    stubUsage(legacy(80));
     await pollProviderUsageApis();
-    expect(countRows()).toBe(2);
-    // The changed row keeps its own timestamp, so the history loses no
-    // resolution about WHEN it moved.
     const rows = getDb().prepare(
       "SELECT remaining_value FROM provider_quota_observations WHERE quota_pool_key='ollama::session' ORDER BY observed_at",
     ).all() as { remaining_value: number }[];
     expect(rows.map(r => r.remaining_value)).toEqual([8790, 8000]);
-  });
-
-  it('keeps the state row fresh even when it appends nothing', async () => {
-    stubUsage({ limits: { session: { usage: 0.121 } } });
-    await pollProviderUsageApis();
-    const first = (getDb().prepare("SELECT observed_at FROM provider_quota_state WHERE quota_pool_key='ollama::session'").get() as { observed_at: string }).observed_at;
-    await pollProviderUsageApis();
-    const state = getDb().prepare("SELECT observed_at, remaining_value FROM provider_quota_state WHERE quota_pool_key='ollama::session'").get() as { observed_at: string; remaining_value: number };
-    // "Last seen" must not go stale just because the value held steady.
-    expect(state.remaining_value).toBe(8790);
+    const state = getDb().prepare("SELECT observed_at FROM provider_quota_state WHERE quota_pool_key='ollama::session'").get() as { observed_at: string };
     expect(state.observed_at >= first).toBe(true);
-    expect(countRows()).toBe(1);
   });
 });

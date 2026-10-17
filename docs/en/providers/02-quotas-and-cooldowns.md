@@ -122,6 +122,36 @@ Headers and error bodies only show quota when a request happens to carry them. P
 
 xKiro registers `GET https://api.xkiro.com/v1/usage` (`free_tokens.limit_per_day` / `free_tokens.remaining`, metric tokens). Its daily allowance resets at 00:00 UTC, so the observation carries that calendar reset. A spec without a stated reset now records none rather than inventing one 24 hours out.
 
+## Account usage sources (verified 2026-10-17)
+
+Polled every 5 minutes by `provider-usage-api.ts` (GET only, never inference), or learned from responses:
+
+| Provider | Source | Reading | Reset |
+|---|---|---|---|
+| Ollama Cloud | `GET ollama.com/api/balance` | included credit in USD (legacy plans: session/weekly % left) | the period end it reports |
+| OpenRouter | `GET /api/v1/key` `free_model_daily_requests`; `GET /api/v1/credits` | `:free` requests used of 50/1000; credit balance | 00:00 UTC |
+| ElectronHub | `GET /v1/user/me` | `credits` of `weekly_credits` | Sunday 21:00 UTC |
+| Inferbase | `GET /api/v1/inference/credits` | `requests_this_month` of 5,000 (limit from its pricing page, confidence 0.75) | 1st of the month, 00:00 UTC |
+| xKiro | `GET /v1/usage` | free tokens of 1,000,000 a day | 00:00 UTC |
+| Google | 429 `QuotaFailure.quotaValue` | the model's daily limit, spent until reset | midnight Pacific |
+| Groq, Mistral, AMD | response headers | per model or per minute | as stated |
+
+No account usage API exists for the inference key on Mistral (the admin API is Enterprise-only), NVIDIA, Groq, Agnes or Zhipu (its quota endpoint answers only for Coding Plan accounts). Their cards show what headers, learned limits and local counts can say.
+
+### Usage credentials (UnoRouter, AMD, Google)
+
+These three report account usage only to a second credential. Connect one per key at **Keys → Quota → the provider's card → Connect account usage**. It is stored encrypted in `provider_usage_credentials`, never returned by the API, deleted with its key, and read once on save and then every 5 minutes. The card shows the last read's outcome, including a refusal.
+
+| Provider | Credential | Request | Reading |
+|---|---|---|---|
+| UnoRouter | user id + System Access Token (Personal Settings → Security Settings) | `GET /api/user/self` with `Authorization: Bearer` and `New-Api-User` | balance `quota` of `quota + used_quota`, converted at `/api/status` `quota_per_unit` (500,000 per $1) |
+| AMD | console session `Cookie` header | `GET developer.amd.com.cn/radeon/api/profile/model-usage` | `daily_cost_*_usd`, reset 00:00 Asia/Shanghai. The `rc-` key is refused with "Login required" despite the docs, and the session lapses when the console signs out. |
+| Google | service-account JSON key in the API key's project, with `roles/cloudquotas.viewer` and `roles/monitoring.viewer` | RS256 JWT-bearer token, then Cloud Quotas `quotaInfos` and Monitoring `quota/rate/net_usage` since midnight Pacific | per-model free-tier daily limits and today's count. A model is recorded only when Monitoring attributes usage to it; otherwise the card line reports the project-wide count. |
+
+UnoRouter's shapes come from new-api source (`controller/user.go` `GetSelf`, `middleware/auth.go`), AMD's from its docs, and Google's from the Cloud Quotas and Monitoring references. None has been read with a real credential yet, so the first connect is the first live test.
+
+Ollama's undocumented `/api/usage` `limits.*` fractions were withdrawn around 2026-10-07; that endpoint now returns usage history only, so the reader moved to the documented `/api/balance`.
+
 ## Temporary bonus grants
 
 A bonus grant is extra provider capacity layered on a normal per-day allowance, for example xKiro's 30M tokens over 30 days on top of 1M a day. It covers the keys that share one account, one metric (tokens or requests), a quantity, and an expiry measured from creation. Grants are configured at **Keys → Quota signals → Bonus grants** and switched by the `bonus-grants` extension.

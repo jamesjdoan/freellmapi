@@ -20,6 +20,7 @@ let container: HTMLDivElement
 let client: QueryClient
 let response: QuotaOutlookResponse
 let raw: ProviderQuotaState[]
+const liveKeys=Array.from({length:25},(_,i)=>({id:i+1,platform:'groq',label:'Saved key '+(i+1),enabled:true,status:'healthy',keyless:false}))
 const pool = (overrides: Partial<QuotaOutlookPool> = {}): QuotaOutlookPool => ({
   platform:'groq',pool:'groq::account',limit:250,remaining:35,remainingPct:14,
   observedAt:'2026-09-14 19:59:00',resetAt:'2026-09-15T00:00:00Z',ratePerMin:.7,
@@ -29,7 +30,7 @@ beforeAll(() => { (globalThis as unknown as {IS_REACT_ACT_ENVIRONMENT:boolean}).
 beforeEach(() => {
   response={generatedAt:'2026-09-14T20:00:00Z',observationWindowMinutes:10,minimumRequests:3,pools:[pool()]}
   raw=Array.from({length:25},(_,i)=>({platform:'groq',keyId:i+1,keyLabel:'Saved key '+(i+1),quotaPoolKey:'groq::account',metric:i===24?'tokens':'requests',limit:250,remaining:35,resetAt:null,resetStrategy:'unknown',source:'header',confidence:1,notes:null,observedAt:'2026-09-14 19:59:00',updatedAt:'2026-09-14 19:59:00'}))
-  vi.mocked(apiFetch).mockReset().mockImplementation(async path=>path==='/api/keys'?[]:path==='/api/health'?{quotaStates:raw}:response)
+  vi.mocked(apiFetch).mockReset().mockImplementation(async path=>path==='/api/keys'?liveKeys:path==='/api/health'?{quotaStates:raw}:response)
   client=new QueryClient({defaultOptions:{queries:{retry:false,gcTime:0}}})
   container=document.createElement('div');document.body.appendChild(container);root=createRoot(container)
 })
@@ -40,10 +41,10 @@ async function mount(){
   await flush()
 }
 async function openQuota(){
-  const tab=[...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(el=>el.textContent==='Quota signals')!
+  const tab=[...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(el=>el.textContent==='Quota')!
   act(()=>tab.click());await flush()
 }
-it('loads forecasts only when the existing Quota signals tab opens and retains every raw signal',async()=>{
+it('loads forecasts only when the Quota tab opens and retains every raw signal',async()=>{
   await mount()
   expect(vi.mocked(apiFetch).mock.calls.some(([path])=>path==='/api/fallback/quota-forecast')).toBe(false)
   await openQuota()
@@ -79,7 +80,7 @@ it('keeps raw observations available on failure and retries the forecast request
   let failed=true
   vi.mocked(apiFetch).mockImplementation(async path=>{
     if(path==='/api/fallback/quota-forecast'&&failed)throw new Error('offline')
-    return path==='/api/keys'?[]:path==='/api/health'?{quotaStates:raw}:response
+    return path==='/api/keys'?liveKeys:path==='/api/health'?{quotaStates:raw}:response
   })
   await mount();await openQuota()
   expect(container.querySelector('[role="alert"]')?.textContent).toContain('Could not load')
@@ -92,7 +93,7 @@ it('keeps raw observations available on failure and retries the forecast request
 it('shows an empty forecast without hiding the raw token observations',async()=>{
   response.pools=[]
   await mount();await openQuota()
-  expect(container.querySelectorAll('article')).toHaveLength(0)
+  expect(container.querySelectorAll(`section[aria-label="Quota outlook"] article`)).toHaveLength(0)
   expect(container.querySelector('details')?.textContent).toContain('Saved key 25')
 })
 
@@ -116,7 +117,7 @@ it('explains missing resets independently of low traffic and shows usable pools 
   response.pools=[pool({platform:'cerebras',pool:'cerebras::shared',status:'unavailable',unavailableReason:'reset_not_reported',
     warning:null,resetAt:null,estimatedExhaustionAt:null,recentRequestCount:10,ratePerMin:1}),pool()]
   await mount();await openQuota()
-  expect(container.querySelector('article')?.getAttribute('aria-label')).toBe('Groq')
+  expect(container.querySelector('section[aria-label="Quota outlook"] article')?.getAttribute('aria-label')).toBe('Groq')
   expect(container.textContent).toContain('Forecasts available for 1 of 2 pools')
   const cerebras=container.querySelector('article[aria-label="Cerebras"]')!
   expect(cerebras.textContent).toContain('did not report a valid reset time')

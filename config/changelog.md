@@ -1,5 +1,54 @@
 # Changelog
 
+## 2026-10-17 — Usage credentials for UnoRouter, AMD and Google (local, not deployed)
+
+- These three report account usage only to a credential other than the inference key. A key can now carry one encrypted usage credential: new table `provider_usage_credentials` (migration `20261017_000002`, cascades with the key) and `services/usage-credentials.ts`.
+- The credential is set from the provider card (Keys → Quota → Connect account usage) and handled by `GET/PUT/DELETE /api/quota/usage-credentials[/:keyId]`. Secrets are write-only. A save reads the provider at once, and every read stores its outcome, so an expired session or a missing role shows on the card.
+- New readers:
+  - **UnoRouter:** `/api/user/self` with access token and `New-Api-User`, balance in cents at the published `quota_per_unit`.
+  - **AMD:** console-cookie `profile/model-usage`, daily cost cap, Shanghai reset.
+  - **Google:** service-account JWT, then Cloud Quotas per-model daily limits and Monitoring usage since midnight Pacific. A model is recorded only when its usage is attributable.
+- Cards: a reading whose reset has passed shows as refilled instead of "used up" forever. Google sends nothing on success, so a learned spent limit would otherwise never clear.
+- **Overview fix:** `getProviderQuotaOverview` deduplicated measured pools by pool alone, so a pool measured in two units lost its second reading. Found in the smoke run:
+  - ElectronHub's $0.25 weekly credit sat behind its 5-a-minute request header.
+  - AMD's header-reported $1.00 daily cost cap was never shown.
+  - Deduplication is now by pool and metric, with a regression test.
+- Unverified against real credentials: all three shapes come from source, docs and unauthenticated probes. The AMD `rc-` key was re-probed and is still refused ("Login required").
+- **Smoke run on a live-data copy:**
+  - Fake UnoRouter and AMD credentials were refused by the real providers: HTTP 401 and "session expired". The cards showed both refusals, and the startup poll re-read them.
+  - Google rejected invalid JSON with a 400, and Groq answered with a 404.
+  - The Google dialog rendered.
+  - The copy was deleted afterwards.
+
+## 2026-10-17 — Quota sources audited and filled in (local, not deployed)
+
+- **Why some cards were stale:**
+  - Ollama's undocumented `/api/usage` `limits.*` shape was withdrawn around 2026-10-07, so its reader silently returned nothing for 10 days.
+  - Agnes, Zhipu and Inferbase only looked fresh because of probe rows with no numbers.
+- **New readers in `provider-usage-api.ts`** (primary-source research, then GET-only probes with the live keys):
+  - Ollama `/api/balance`: $2.50/$2.50 until 10 Nov.
+  - OpenRouter `/api/v1/key` `free_model_daily_requests`: 996/1000, resetting 00:00 UTC.
+  - ElectronHub `/v1/user/me`: $0.25/$0.25, resetting Sunday 21:00 UTC.
+  - Inferbase `/api/v1/inference/credits`: 0 of the documented 5,000 a month.
+  - Readers can now record a metric, a reset and a confidence.
+- **Google:** a daily-quota 429 now records the model's `QuotaFailure.quotaValue` limit as spent until midnight Pacific. Before, it was a bare "rate limited" row with no limit.
+- **Cards:**
+  - Learned and declared limits show as "learned limit" instead of being hidden.
+  - A card's age now counts only readings that carried numbers.
+- **No usage API for a free key:** Google, Mistral, NVIDIA, Groq, Agnes, Zhipu, UnoRouter and AMD.
+- **Verified:**
+  - The new readers wrote 5 current readings against a copy of live data with the real keys.
+  - Server 388 files / 4,872 tests and client 82 files / 646 tests pass, as do both typechecks and the build.
+
+## 2026-10-17 — Keys → Quota: provider allowance cards (local, not deployed)
+
+- Audit of the old Quota signals tab on live data: 165 raw readings, 89 for deleted keys, 143 older than a day, 19 past their reset. No hyperlinks; the "dead" entries were orphaned readings. The per-provider overview (`/api/quota/providers`) had no widget.
+- `client/src/lib/quota-dashboard.ts` and `components/keys/quota-dashboard.tsx`: Atrium-style cards, one per enabled keyed provider, from the existing overview endpoint. Each card shows a bar per allowance, using Atrium's headroom thresholds (≤20 red, ≤50 amber). A spent row fades and gets a waiting-reset badge. The footer shows the next reset and countdown, plus the reading's age with a stale warning after 24h. Zero-allowance pools are counted as paid-only, and local counts are labelled.
+- The tab is renamed **Quota**. Its order is now: cards, AMD capacity, bonus grants, paid credit windows, then **Details** (forecast and raw readings). Raw readings for deleted or disabled keys are hidden with a count, and the rest are marked stale. No data is deleted.
+- Verified:
+  - Client 82 files / 646 tests, typecheck, build.
+  - Against a copy of live data: 14 cards (9 measured, 5 with no reported allowance), Mistral 4 paid-only hidden, Ollama 10 days stale, and raw readings 73 shown with 92 hidden. The copy was deleted afterwards.
+
 ## 2026-10-17 — Catalog updates: changes only, one entry per day, keyed providers by default (local, not deployed)
 
 - `catalogue-sync-log.ts`: a document that changed nothing is no longer recorded, and rows already logged that changed nothing are left out of the list.

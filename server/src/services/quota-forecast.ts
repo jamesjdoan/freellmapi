@@ -396,9 +396,13 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
     // 1. Pools the PROVIDER reported on. Its own remaining figure beats any
     //    local count, so these are taken as-is.
     const reported = measured.filter(m => m.platform === platform);
-    const seenMeasured = new Set<string>(reported.map(r => r.pool ?? ''));
+    // Keyed by pool AND metric: one pool can be measured in two units — AMD
+    // and ElectronHub report a per-minute request limit and a dollar balance
+    // under the same account pool — and keying by pool alone hid the second.
+    const measuredId = (pool: string | null, metric: string) => `${pool ?? ''}\u0000${metric}`;
+    const seenMeasured = new Set<string>(reported.map(r => measuredId(r.pool, 'requests')));
     for (const pool of reported) {
-      const state = states.find(s => s.platform === platform && s.quotaPoolKey === pool.pool);
+      const state = states.find(s => s.platform === platform && s.quotaPoolKey === pool.pool && s.metric === 'requests');
       rows.push({ ...pool, source: state?.source ?? null, confidence: state?.confidence ?? null, metered: true, usedSource: 'provider', inferred: [], members: [], memberModelIds: [], alsoBound: [], refillSeconds: null, unroutedModelIds: [], metric: 'requests', unit: null, derivedAllowance: null, resetSource: pool.reset_at ? 'provider' : null });
     }
 
@@ -412,8 +416,8 @@ export function getProviderQuotaOverview(now: number = Date.now()): ProviderQuot
       if (state.platform !== platform) continue;
       if (state.limit == null || state.remaining == null) continue;
       if (state.source !== 'quota_api' && state.source !== 'header') continue;
-      if (seenMeasured.has(state.quotaPoolKey)) continue;
-      seenMeasured.add(state.quotaPoolKey);
+      if (seenMeasured.has(measuredId(state.quotaPoolKey, state.metric))) continue;
+      seenMeasured.add(measuredId(state.quotaPoolKey, state.metric));
       const predicted = predictedResetFor(platform, state.quotaPoolKey, state.metric, now);
       const remainingPct = Math.max(0, Math.min(100, Math.round((state.remaining / state.limit) * 100)));
       rows.push({
