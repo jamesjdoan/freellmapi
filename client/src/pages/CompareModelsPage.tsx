@@ -20,6 +20,8 @@ import { PageHeader } from '@/components/page-header'
 import { ChainMinimumsButton } from '@/components/chain-minimums-panel'
 import { ChainFit } from '@/components/chain-fit'
 import { scoreRowOf, useScoreTone, type ScoreRow } from '@/lib/chain-minimums'
+import type { ScoreMetric, Scores } from '@/lib/score-provenance'
+import { EditableScore } from '@/components/score-value'
 import { PlatformDot, PlatformLegend, type PlatformScope } from '@/components/platform-dot'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tooltip } from '@/components/tooltip'
@@ -70,6 +72,8 @@ interface CompareRow {
     medianTimeToFirstTokenSeconds: number | null
   } | null
   link: { slug: string | null; source: 'auto' | 'manual' | 'proxy'; matchReason: string | null; unresolved: boolean; proxyDelta: { intelligence: number; coding: number; agentic: number; speed: number } } | null
+  /** Intelligence, coding and agentic as printed, with where each came from. */
+  scores: Scores
 }
 
 interface CompareGroup {
@@ -80,6 +84,8 @@ interface CompareGroup {
   members: CompareRow[]
   analysis: CompareRow['analysis']
   analysisSource: 'inherited' | 'own' | null
+  /** Per metric, the strongest member evidence. */
+  scores: Scores
   /** Routes on a platform we hold a usable key for. Zero means the entry
    *  cannot serve a request however it is configured. */
   keyedMembers?: number
@@ -112,6 +118,10 @@ interface ComparePayload {
 }
 
 type Metric = 'intelligenceIndex' | 'codingIndex' | 'agenticIndex'
+/** The resolved score behind each index column: AA's measurement, or a typed
+ *  or borrowed score when AA has none (ADR ARCH-20261018). */
+const SCORE_OF: Record<Metric, ScoreMetric> = { intelligenceIndex: 'intelligence', codingIndex: 'coding', agenticIndex: 'agentic' }
+const indexOf = (g: { scores: Scores }, key: Metric): number | null => g.scores[SCORE_OF[key]].value
 /** What the chart plots. The three indices are one scale and can share an axis;
  *  cost is a different quantity in different units, so it gets its own view
  *  rather than a fourth bar nobody could compare against the others. */
@@ -549,10 +559,10 @@ export default function CompareModelsPage() {
     // your task, and null means AA has not run it, which is not free.
     if (metric === 'price') return priceBasis === 'task' ? g.analysis?.indexCostPerTask ?? null : priceOf(g.analysis)?.input ?? null
     if (metric === 'all') {
-      const parts = OVERLAY.map(o => g.analysis?.[o.key]).filter((v): v is number => v != null)
+      const parts = OVERLAY.map(o => indexOf(g, o.key)).filter((v): v is number => v != null)
       return parts.length > 0 ? parts.reduce((a, b) => a + b, 0) / parts.length : null
     }
-    return (g.analysis?.[metric] as number | null) ?? null
+    return indexOf(g, metric)
   }, [metric, priceBasis])
 
   const scored = useMemo(
@@ -568,7 +578,7 @@ export default function CompareModelsPage() {
   // they are.
   const peak = scored.length > 0
     ? Math.max(...scored.map(g => {
-      if (metric === 'all') return Math.max(...OVERLAY.map(o => g.analysis?.[o.key] ?? 0))
+      if (metric === 'all') return Math.max(...OVERLAY.map(o => indexOf(g, o.key) ?? 0))
       // Both halves share one axis, so the dearer output price sets the scale —
       // otherwise every output bar clips at full width and the comparison the
       // two bars exist for disappears.
@@ -903,7 +913,7 @@ export default function CompareModelsPage() {
                       // live on separate screens.
                       <div className="flex min-w-0 flex-1 flex-col gap-px">
                         {OVERLAY.map(o => {
-                          const v = g.analysis?.[o.key]
+                          const v = indexOf(g, o.key)
                           return (
                             <div key={o.key} className="h-1 rounded-sm bg-muted" title={`${t(o.labelKey)}: ${v?.toFixed(1) ?? '—'}`}>
                               {v != null && (
@@ -1226,15 +1236,21 @@ export default function CompareModelsPage() {
                           The signs say a human moved it and which way, in the
                           same green/red as the Keys panel — this is the table
                           people actually rank models in. */}
-                      <TableCell className={`text-right tabular-nums ${tone('general', g.analysis?.intelligenceIndex)}`}>
-                        {score(g.analysis?.intelligenceIndex)}<DeltaMark delta={proxyDeltaOf(g, 'intelligence')} />
-                      </TableCell>
-                      <TableCell className={`text-right tabular-nums ${tone('coding', g.analysis?.codingIndex)}`}>
-                        {score(g.analysis?.codingIndex)}<DeltaMark delta={proxyDeltaOf(g, 'coding')} />
-                      </TableCell>
-                      <TableCell className={`text-right tabular-nums ${tone('agentic', g.analysis?.agenticIndex)}`}>
-                        {score(g.analysis?.agenticIndex)}<DeltaMark delta={proxyDeltaOf(g, 'agentic')} />
-                      </TableCell>
+                      {(['intelligence', 'coding', 'agentic'] as const).map(metric => (
+                        <TableCell key={metric} className="text-right tabular-nums">
+                          <EditableScore
+                            cell={g.scores[metric]}
+                            metric={metric}
+                            // A typed score goes to every route of the model that has
+                            // no measurement of its own; a baseline takes none.
+                            routes={g.reference ? [] : g.members
+                              .filter(m => m.scores[metric].editable)
+                              .map(m => ({ platform: m.platform, modelId: m.modelId }))}
+                            toneClass={tone(metric === 'intelligence' ? 'general' : metric, g.scores[metric].value)}
+                            suffix={<DeltaMark delta={proxyDeltaOf(g, metric)} />}
+                          />
+                        </TableCell>
+                      ))}
                       {/* Measured by Artificial Analysis, so they are blank
                           exactly where the scores are: an unmapped row shows
                           dashes rather than inventing a number from our own
@@ -1382,21 +1398,14 @@ function DeltaMark({ delta }: { delta: number }) {
   )
 }
 
-/** A dash, not a zero: their nulls mean "not measured". */
-/** One logical model's grading input: its AA scores, estimated only when every
- *  link is a proxy, and the tools/vision any of its routes can offer. */
+/** One logical model's grading input: its resolved scores, with per-metric
+ *  estimation from their provenance, and the tools/vision any route offers. */
 function groupScore(g: CompareGroup): ScoreRow {
-  const base = scoreRowOf({ ...g.members[0], analysis: g.analysis })
-  return {
-    ...base,
-    estimated: g.members.length > 0 && g.members.every(m => m.link?.source === 'proxy'),
+  return scoreRowOf({
+    scores: g.scores,
     supportsTools: g.members.some(m => m.supportsTools),
     supportsVision: g.members.some(m => m.supportsVision),
-  }
-}
-
-function score(value: number | null | undefined) {
-  return value == null ? <span className="text-muted-foreground">–</span> : value.toFixed(1)
+  })
 }
 
 /**

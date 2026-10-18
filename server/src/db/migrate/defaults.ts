@@ -85,6 +85,7 @@ import * as catalogueIgnores from '../migrations/20261014_000006_catalogue_ignor
 import * as bonusGrants from '../migrations/20261016_000001_bonus_grants.js';
 import * as paidCreditWindows from '../migrations/20261017_000001_paid_credit_windows.js';
 import * as usageCredentials from '../migrations/20261017_000002_usage_credentials.js';
+import * as modelBenchmarkEntries from '../migrations/20261018_000001_model_benchmark_entries.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -258,4 +259,5 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: '20261016_000001_bonus_grants.ts', module: bonusGrants },
   { filename: '20261017_000001_paid_credit_windows.ts', module: paidCreditWindows },
   { filename: '20261017_000002_usage_credentials.ts', module: usageCredentials },
+  { filename: '20261018_000001_model_benchmark_entries.ts', module: modelBenchmarkEntries },
 ];

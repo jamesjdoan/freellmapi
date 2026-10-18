@@ -2205,5 +2205,19 @@
     "analyticsToday": "Today",
     "agentsBadgeClaude": "Web search: WebSearch tool served by your search keys",
     "agentsBadgeCodex": "Web search: web_search tool served by your search keys"
+  },
+  "scoreProvenance": {
+    "tested": "tested",
+    "family": "related family",
+    "approximated": "approximated",
+    "testedHelp": "You measured it yourself.",
+    "familyHelp": "Borrowed from a related model in the same family.",
+    "approximatedHelp": "Your estimate.",
+    "enter": "Enter {metric} score",
+    "value": "Score (0–100)",
+    "source": "Where it came from",
+    "save": "Save",
+    "clear": "Clear",
+    "superseded": "Your {value} ({provenance}) was replaced by a measurement."
   }
 }

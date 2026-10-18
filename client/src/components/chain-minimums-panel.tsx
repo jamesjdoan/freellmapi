@@ -6,11 +6,13 @@ import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import { useExtensionEnabled } from '@/lib/use-extension'
 import {
+  anyEstimated,
   GRADED_CHAINS, METRICS, evaluate, scoreRowOf, setCompareAgainst, setDraft, setPanelOpen, setPanelTab,
   useChainMinimums, useChainMinimumsView,
   type ChainMinimums, type ChainMinimumsDoc, type ChainRequirement, type Evaluation, type GradedChain, type Metric,
 } from '@/lib/chain-minimums'
 import { blockedReason } from '@/lib/route-blockers'
+import { provenanceClass, type ScoreMetric, type Scores } from '@/lib/score-provenance'
 
 // The one place chain minimums are set. Docked, not modal: the point is to
 // watch the Compare and Keys numbers re-grade while a stepper moves, so the
@@ -30,12 +32,12 @@ interface CompareRow {
   chains: string[]
   /** Priority in each of `chains`, same order. */
   chainRanks: number[]
-  analysis: { slug: string; name: string; intelligenceIndex: number | null; codingIndex: number | null; agenticIndex: number | null } | null
-  link: { source: 'auto' | 'manual' | 'proxy' } | null
+  analysis: { slug: string; name: string } | null
+  scores: Scores
 }
 
-const METRIC_FIELD: Record<Metric, 'intelligenceIndex' | 'codingIndex' | 'agenticIndex'> = {
-  general: 'intelligenceIndex', coding: 'codingIndex', agentic: 'agenticIndex',
+const METRIC_FIELD: Record<Metric, ScoreMetric> = {
+  general: 'intelligence', coding: 'coding', agentic: 'agentic',
 }
 // Where a metric starts when switched on: the middle of the draft audit's
 // bands, so it lands somewhere meaningful rather than at zero.
@@ -90,13 +92,16 @@ function PanelBody() {
   })
 
   // One entry per AA model, so a model on six providers counts once and every
-  // route of it grades the same.
+  // route of it grades the same. A route AA does not know but the operator has
+  // scored counts on its own.
   const canonical = useMemo(() => {
-    const bySlug = new Map<string, { name: string; row: CompareRow }>()
+    const byKey = new Map<string, { name: string; row: CompareRow }>()
     for (const r of compare?.rows ?? []) {
-      if (r.analysis && !bySlug.has(r.analysis.slug)) bySlug.set(r.analysis.slug, { name: r.analysis.name, row: r })
+      const key = r.analysis ? r.analysis.slug
+        : Object.values(r.scores).some(c => c.value != null) ? `route:${r.platform}:${r.modelId}` : null
+      if (key && !byKey.has(key)) byKey.set(key, { name: r.analysis?.name ?? r.displayName, row: r })
     }
-    return [...bySlug.values()]
+    return [...byKey.values()]
   }, [compare?.rows])
 
   if (!draft) return null
@@ -175,7 +180,7 @@ function PanelBody() {
           const line = metric ? (() => {
             const min = mins[metric]!
             const scored = canonical
-              .map(c => ({ name: c.name, v: c.row.analysis![METRIC_FIELD[metric]] }))
+              .map(c => ({ name: c.name, v: c.row.scores[METRIC_FIELD[metric]].value }))
               .filter((x): x is { name: string; v: number } => x.v != null)
             const above = scored.filter(x => x.v >= min).sort((a, b) => a.v - b.v)[0]
             const below = scored.filter(x => x.v < min).sort((a, b) => b.v - a.v)[0]
@@ -309,8 +314,8 @@ function MembersView({ rows, draft, requirement }: {
                         <span className="ml-1 text-muted-foreground">{providerOf(r)}</span>
                       </span>
                       {why && <span className="shrink-0 text-[10px] text-muted-foreground">{t(`keys.${why}`)}</span>}
-                      <span className="shrink-0 tabular-nums text-muted-foreground">{r.analysis?.intelligenceIndex?.toFixed(1) ?? '–'}</span>
-                      {e && <span className={`w-14 shrink-0 text-right text-[10px] ${FIT_CLASS[e.status]}`}>{fitLabel(e, scoreRowOf(r).estimated)}</span>}
+                      <span className={`shrink-0 tabular-nums ${provenanceClass(r.scores.intelligence.provenance) ?? 'text-muted-foreground'}`}>{r.scores.intelligence.value?.toFixed(1) ?? '–'}</span>
+                      {e && <span className={`w-14 shrink-0 text-right text-[10px] ${FIT_CLASS[e.status]}`}>{fitLabel(e, anyEstimated(scoreRowOf(r)))}</span>}
                     </li>
                   )
                 })}

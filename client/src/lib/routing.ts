@@ -2,6 +2,8 @@
 // FallbackPage so the Models page, the per-model detail page, and the command
 // palette share one module instead of importing from a page component.
 
+import type { ScoreProvenance } from '@/lib/score-provenance'
+
 export interface FallbackEntry {
   modelDbId: number
   priority: number
@@ -57,15 +59,17 @@ export interface FallbackEntry {
   // Override keys that folded rows into this row's group. Server-computed: the
   // finished group does not carry enough to work them out (see #790).
   mergedKeys?: string[]
-  /** Measured benchmark scores for this route, proxy adjustments applied.
-   *  Same numbers Compare and the Keys panel show — one server-side source, so
-   *  no screen disagrees with another about a model they both display. */
+  /** Benchmark scores for this route as Compare prints them: measured, typed
+   *  or borrowed, proxy adjustments applied. One server-side source, so no
+   *  screen disagrees with another about a model they both display. */
   analysis?: {
     intelligence: number | null
     coding: number | null
     agentic: number | null
-    source: 'auto' | 'manual' | 'proxy'
-    name: string
+    /** The benchmark link behind AA figures; null when only typed scores exist. */
+    source: 'auto' | 'manual' | 'proxy' | null
+    name: string | null
+    provenance: Record<'intelligence' | 'coding' | 'agentic', ScoreProvenance | null>
   } | null
 }
 

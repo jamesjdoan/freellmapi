@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { useExtensionEnabled } from '@/lib/use-extension'
+import { isEstimate, type Scores } from '@/lib/score-provenance'
 
 // Operator-set AA minimums per chain, and the recommendation they imply.
 // Recommendation only: nothing here changes chain membership or routing.
@@ -46,8 +47,9 @@ export interface ScoreRow {
   general: number | null
   coding: number | null
   agentic: number | null
-  /** An operator-set proxy estimate, not an AA measurement. */
-  estimated: boolean
+  /** Per metric: the score is an estimate (a related model's, or the
+   *  operator's approximation), not a measurement or the operator's own test. */
+  estimated: Record<Metric, boolean>
   supportsTools: boolean
   supportsVision: boolean
 }
@@ -55,18 +57,26 @@ export interface ScoreRow {
 interface CompareLike {
   supportsTools: boolean
   supportsVision: boolean
-  analysis: { intelligenceIndex: number | null; codingIndex: number | null; agenticIndex: number | null } | null
-  link: { source: 'auto' | 'manual' | 'proxy' } | null
+  scores: Scores
 }
 export function scoreRowOf(r: CompareLike): ScoreRow {
   return {
-    general: r.analysis?.intelligenceIndex ?? null,
-    coding: r.analysis?.codingIndex ?? null,
-    agentic: r.analysis?.agenticIndex ?? null,
-    estimated: r.link?.source === 'proxy',
+    general: r.scores.intelligence.value,
+    coding: r.scores.coding.value,
+    agentic: r.scores.agentic.value,
+    estimated: {
+      general: isEstimate(r.scores.intelligence.provenance),
+      coding: isEstimate(r.scores.coding.provenance),
+      agentic: isEstimate(r.scores.agentic.provenance),
+    },
     supportsTools: r.supportsTools,
     supportsVision: r.supportsVision,
   }
+}
+
+/** Some score on the row is an estimate. */
+export function anyEstimated(row: ScoreRow): boolean {
+  return METRICS.some(m => row.estimated[m])
 }
 
 export interface Evaluation {
@@ -92,7 +102,7 @@ export function evaluate(row: ScoreRow, mins: ChainMinimums, req: Pick<ChainRequ
     const value = row[metric]
     // Unmeasured is not zero, and an estimate is not a measurement unless the
     // chain says it will take one.
-    if (value == null || (row.estimated && !mins.acceptEstimated)) { unknown.push(metric); continue }
+    if (value == null || (row.estimated[metric] && !mins.acceptEstimated)) { unknown.push(metric); continue }
     if (value < min) shortfalls.push({ metric, value, min })
   }
   const status = missing.length > 0 ? 'structural' : shortfalls.length > 0 ? 'below' : unknown.length > 0 ? 'unknown' : 'fits'

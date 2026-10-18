@@ -25,6 +25,7 @@ import {
   type Row,
 } from '@/lib/routing'
 import { ProviderModelCapacityIndicator } from './provider-capacity'
+import { PROVENANCE_LABEL_KEY, provenanceClass } from '@/lib/score-provenance'
 
 // The unified model/provider table pieces, extracted from FallbackPage so the
 // Models page and the per-model detail page share one module.
@@ -607,19 +608,25 @@ export function SortableGroupRow({ group, rank, editableRank, onMoveRank, onTogg
 }
 
 /**
- * The benchmark index for a route, or nothing when it has no match. Deliberately
- * small and muted: it sits beside our own ordering bar without competing with
- * it, and a column of numbers is not what this table is for.
+ * The benchmark index for a route, or nothing when it has no score. Deliberately
+ * small: it sits beside our own ordering bar without competing with it, and a
+ * column of numbers is not what this table is for. A score that is not a
+ * measurement takes its provenance colour and an italic note, inline because
+ * this row has no height to spare (ADR ARCH-20261018).
  */
 function MeasuredIndex({ analysis }: { analysis?: Row['analysis'] }) {
+  const { t } = useI18n()
   if (!analysis || analysis.intelligence == null) return null
-  const estimate = analysis.source === 'proxy'
+  const provenance = analysis.provenance.intelligence
+  const colour = provenanceClass(provenance)
+  const note = provenance && provenance !== 'measured' ? t(PROVENANCE_LABEL_KEY[provenance]) : null
   return (
     <span
-      className="text-[10px] tabular-nums text-muted-foreground"
-      title={`${estimate ? 'Estimated from ' : 'Measured as '}${analysis.name}`}
+      className={`text-[10px] tabular-nums ${colour ?? 'text-muted-foreground'}`}
+      title={note ?? (analysis.name ? `Measured as ${analysis.name}` : undefined)}
     >
-      {estimate ? '≈' : ''}{analysis.intelligence.toFixed(1)}
+      {analysis.intelligence.toFixed(1)}
+      {note && <span className="ml-0.5 italic">{note}</span>}
     </span>
   )
 }

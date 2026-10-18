@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { evaluate, scoreTone, type ChainMinimums, type ScoreRow } from '@/lib/chain-minimums'
+import { evaluate, scoreRowOf, scoreTone, type ChainMinimums, type ScoreRow } from '@/lib/chain-minimums'
+import type { ScoreCell, ScoreProvenance } from '@/lib/score-provenance'
 
+const measuredOnly = { general: false, coding: false, agentic: false }
 const row = (over: Partial<ScoreRow> = {}): ScoreRow => ({
-  general: 30, coding: 50, agentic: 35, estimated: false, supportsTools: true, supportsVision: false, ...over,
+  general: 30, coding: 50, agentic: 35, estimated: measuredOnly, supportsTools: true, supportsVision: false, ...over,
 })
 const mins = (over: Partial<ChainMinimums> = {}): ChainMinimums => ({
   general: null, coding: null, agentic: null, acceptEstimated: false, ...over,
@@ -25,9 +27,23 @@ describe('chain minimums evaluation', () => {
   })
 
   it('only accepts a proxy estimate where the chain opts in', () => {
-    const estimate = row({ general: 40, estimated: true })
+    const estimate = row({ general: 40, estimated: { ...measuredOnly, general: true } })
     expect(evaluate(estimate, mins({ general: 35 }), tools).status).toBe('unknown')
     expect(evaluate(estimate, mins({ general: 35, acceptEstimated: true }), tools).status).toBe('fits')
+  })
+
+  it('grades a tested score like a measurement and an approximated one as an estimate, per metric', () => {
+    const cell = (value: number, provenance: ScoreProvenance): ScoreCell => ({ value, provenance, entry: null, editable: true })
+    const scored = scoreRowOf({
+      supportsTools: true, supportsVision: false,
+      scores: { intelligence: cell(40, 'measured'), coding: cell(50, 'approximated'), agentic: cell(35, 'tested') },
+    })
+    // The approximated coding score alone makes the coding minimum unknown;
+    // the measured and tested ones still grade.
+    const e = evaluate(scored, mins({ general: 35, coding: 45, agentic: 30 }), tools)
+    expect(e).toMatchObject({ status: 'unknown', unknown: ['coding'], shortfalls: [] })
+    expect(evaluate(scored, mins({ general: 35, agentic: 30 }), tools).status).toBe('fits')
+    expect(evaluate(scored, mins({ coding: 45, acceptEstimated: true }), tools).status).toBe('fits')
   })
 
   it('refuses a chain whose contract the model cannot meet, whatever its scores', () => {

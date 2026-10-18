@@ -1,6 +1,24 @@
 # Changelog
 
-## 2026-10-17 — Usage credentials for UnoRouter, AMD and Google (local, not deployed)
+## 2026-10-18 — Typed benchmark scores with provenance (local, not deployed)
+
+- ADR `ARCH-20261018-manual-benchmark-scores` (D1–D5 approved). On live data, 28 of 142 keyed models had no scores, 24 linked ones had no coding score and 32 no agentic score. Nothing could fill them.
+- A typed intelligence, coding or agentic score (0–100) is now stored per route and metric with a required provenance: related family, approximated or tested. New table `model_benchmark_entry` (migration `20261018_000001`), and `PUT`/`DELETE /api/analysis/score`. A route that already has a measurement for that metric gets 409.
+- One resolution rule, `resolveScore`, feeds Compare rows, groups (`groupScore`: measured > tested > family > approximated) and `getAdjustedScores`. A measurement wins and keeps the typed score as superseded. Otherwise the typed score applies, then a proxy's borrowed figure, read as related family. Routes scored only by typed entries now reach the router's score view.
+- **Client:**
+  - The Compare index cells, sorting and chart read the resolved scores.
+  - An empty cell offers **+**, which opens an entry form: a value from 0 to 100 and a required choice of Related family, Approximated or Tested. A typed score can be edited or cleared.
+  - Non-measured scores print in cyan (tested), indigo (related family) or fuchsia (approximated), with an italic note under the number. The note runs inline in the cramped model table.
+  - The Keys provider panel, the chain-minimums panel and the model table show the same.
+  - Chain grading is now per metric: approximated and related-family scores count as estimates, while tested scores grade like measurements.
+  - New `lib/score-provenance.ts`, `components/score-value.tsx`, and `scoreProvenance.*` strings filled across 60 locales.
+- **Verified:**
+  - Server: 390 files / 4,894 tests. Client: 84 files / 658 tests. Both typechecks and the build pass. Lint on the new and changed files is clean; the three large files carry the same pre-existing errors as `HEAD` (40, 2 and 1).
+  - On a live-data copy, the API refused a score without a provenance (400) and a score typed over a measurement (409).
+  - It took `custom/coding-glm-5-free` coding 19.4 as tested, and `custom/cat-jam-free` intelligence 15 as approximated. The approximated score reached `/api/fallback` with `source: null` and provenance `approximated`.
+  - Chrome showed the cyan "tested" and fuchsia "approximated" cells, seven existing proxies in indigo, and the entry form with Save disabled. The copy was deleted afterwards.
+
+## 2026-10-17 — Usage credentials for UnoRouter, AMD and Google (deployed `main-20261017-232211`)
 
 - These three report account usage only to a credential other than the inference key. A key can now carry one encrypted usage credential: new table `provider_usage_credentials` (migration `20261017_000002`, cascades with the key) and `services/usage-credentials.ts`.
 - The credential is set from the provider card (Keys → Quota → Connect account usage) and handled by `GET/PUT/DELETE /api/quota/usage-credentials[/:keyId]`. Secrets are write-only. A save reads the provider at once, and every read stores its outcome, so an expired session or a missing role shows on the card.
@@ -20,7 +38,7 @@
   - The Google dialog rendered.
   - The copy was deleted afterwards.
 
-## 2026-10-17 — Quota sources audited and filled in (local, not deployed)
+## 2026-10-17 — Quota sources audited and filled in (deployed `main-20261017-232211`)
 
 - **Why some cards were stale:**
   - Ollama's undocumented `/api/usage` `limits.*` shape was withdrawn around 2026-10-07, so its reader silently returned nothing for 10 days.
@@ -40,7 +58,7 @@
   - The new readers wrote 5 current readings against a copy of live data with the real keys.
   - Server 388 files / 4,872 tests and client 82 files / 646 tests pass, as do both typechecks and the build.
 
-## 2026-10-17 — Keys → Quota: provider allowance cards (local, not deployed)
+## 2026-10-17 — Keys → Quota: provider allowance cards (deployed `main-20261017-232211`)
 
 - Audit of the old Quota signals tab on live data: 165 raw readings, 89 for deleted keys, 143 older than a day, 19 past their reset. No hyperlinks; the "dead" entries were orphaned readings. The per-provider overview (`/api/quota/providers`) had no widget.
 - `client/src/lib/quota-dashboard.ts` and `components/keys/quota-dashboard.tsx`: Atrium-style cards, one per enabled keyed provider, from the existing overview endpoint. Each card shows a bar per allowance, using Atrium's headroom thresholds (≤20 red, ≤50 amber). A spent row fades and gets a waiting-reset badge. The footer shows the next reset and countdown, plus the reading's age with a stale warning after 24h. Zero-allowance pools are counted as paid-only, and local counts are labelled.
@@ -49,7 +67,7 @@
   - Client 82 files / 646 tests, typecheck, build.
   - Against a copy of live data: 14 cards (9 measured, 5 with no reported allowance), Mistral 4 paid-only hidden, Ollama 10 days stale, and raw readings 73 shown with 92 hidden. The copy was deleted afterwards.
 
-## 2026-10-17 — Catalog updates: changes only, one entry per day, keyed providers by default (local, not deployed)
+## 2026-10-17 — Catalog updates: changes only, one entry per day, keyed providers by default (deployed; included in `main-20261017-232211`)
 
 - `catalogue-sync-log.ts`: a document that changed nothing is no longer recorded, and rows already logged that changed nothing are left out of the list.
 - Each local day (browser time zone) is now one entry. Its documents merge into a net change: added then removed cancels, a field keeps its first old and last new value, and an edit that ends where it began drops out. A day whose documents were capped is summed instead and flagged `netted: false`.

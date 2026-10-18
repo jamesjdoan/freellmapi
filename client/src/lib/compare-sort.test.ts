@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { matchesCompareQuery, sortEntries, sortValue, type SortableEntry } from './compare-sort'
 
+type Indices = { intelligenceIndex: number | null; codingIndex: number | null; agenticIndex: number | null }
 const entry = (
   name: string,
-  analysis: Partial<NonNullable<SortableEntry['analysis']>> | null,
+  analysis: Partial<NonNullable<SortableEntry['analysis']> & Indices> | null,
   members: { contextWindow: number | null; intelligenceRank: number }[] = [{ contextWindow: 131072, intelligenceRank: 5 }],
   chains: string[] = [],
 ): SortableEntry => ({
@@ -11,13 +12,15 @@ const entry = (
   chains,
   members,
   analysis: analysis && {
-    intelligenceIndex: null,
-    codingIndex: null,
-    agenticIndex: null,
     medianOutputTokensPerSecond: null,
     medianTimeToFirstTokenSeconds: null,
     price1mOutput: null,
     ...analysis,
+  },
+  scores: {
+    intelligence: { value: analysis?.intelligenceIndex ?? null },
+    coding: { value: analysis?.codingIndex ?? null },
+    agentic: { value: analysis?.agenticIndex ?? null },
   },
 })
 

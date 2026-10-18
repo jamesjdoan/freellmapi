@@ -16,13 +16,12 @@ export interface SortableEntry {
   chains: string[]
   members: { contextWindow: number | null; intelligenceRank: number; platform?: string; modelId?: string }[]
   analysis: {
-    intelligenceIndex: number | null
-    codingIndex: number | null
-    agenticIndex: number | null
     medianOutputTokensPerSecond: number | null
     medianTimeToFirstTokenSeconds: number | null
     price1mOutput: number | null
   } | null
+  /** The index columns sort on the printed score, typed or measured. */
+  scores: Record<'intelligence' | 'coding' | 'agentic', { value: number | null }>
 }
 
 /** The value a column sorts on; null means "nothing measured here". */
@@ -32,9 +31,9 @@ export function sortValue(entry: SortableEntry, key: SortKey): number | string |
     case 'name': return entry.name.toLowerCase()
     case 'routes': return entry.members.length
     case 'chains': return entry.chains.length
-    case 'intelligenceIndex': return a?.intelligenceIndex ?? null
-    case 'codingIndex': return a?.codingIndex ?? null
-    case 'agenticIndex': return a?.agenticIndex ?? null
+    case 'intelligenceIndex': return entry.scores.intelligence.value
+    case 'codingIndex': return entry.scores.coding.value
+    case 'agenticIndex': return entry.scores.agentic.value
     case 'speed': return a?.medianOutputTokensPerSecond ?? null
     case 'latency': return a?.medianTimeToFirstTokenSeconds ?? null
     case 'price': return a?.price1mOutput ?? null

@@ -18,6 +18,8 @@ import { churnByPlatform, useCatalogueChanges } from '@/lib/catalogue-changes'
 import { markArrivalsSeen, useUnseenArrivals } from '@/lib/seen-arrivals'
 import { ChainFit } from '@/components/chain-fit'
 import { scoreRowOf, useScoreTone } from '@/lib/chain-minimums'
+import type { ScoreCell, Scores } from '@/lib/score-provenance'
+import { ScoreValue } from '@/components/score-value'
 import { ProviderModelCapacityIndicator } from '@/components/provider-capacity'
 
 // Every model this provider serves, with the measured scores beside the two
@@ -145,6 +147,8 @@ interface Row {
     unresolved: boolean
     proxyDelta: { intelligence: number; coding: number; agentic: number; speed: number }
   } | null
+  /** Intelligence, coding and agentic as printed, with where each came from. */
+  scores: Scores
 }
 
 interface RateUsageWindow { used: number; limit: number }
@@ -473,9 +477,9 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
     const value = (r: Row) =>
       sort === 'name' ? null
       : sort === 'speed' ? r.analysis?.medianOutputTokensPerSecond ?? null
-      : sort === 'coding' ? r.analysis?.codingIndex ?? null
-      : sort === 'agentic' ? r.analysis?.agenticIndex ?? null
-      : r.analysis?.intelligenceIndex ?? null
+      : sort === 'coding' ? r.scores.coding.value
+      : sort === 'agentic' ? r.scores.agentic.value
+      : r.scores.intelligence.value
     const sorted = [...mine]
       // The filter now asks whether the row can serve a request at all, which
       // is the union of the two old tests: switched on in the catalogue AND
@@ -834,9 +838,9 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
                     </button>
                   )}
                 </td>
-                <Num v={r.analysis?.intelligenceIndex} row={r} metric="intelligence" onNudge={nudge.mutate} busy={busy} tone={tone('general', r.analysis?.intelligenceIndex)} />
-                <Num v={r.analysis?.codingIndex} row={r} metric="coding" onNudge={nudge.mutate} busy={busy} tone={tone('coding', r.analysis?.codingIndex)} />
-                <Num v={r.analysis?.agenticIndex} row={r} metric="agentic" onNudge={nudge.mutate} busy={busy} tone={tone('agentic', r.analysis?.agenticIndex)} />
+                <Num cell={r.scores.intelligence} row={r} metric="intelligence" onNudge={nudge.mutate} busy={busy} tone={tone('general', r.scores.intelligence.value)} />
+                <Num cell={r.scores.coding} row={r} metric="coding" onNudge={nudge.mutate} busy={busy} tone={tone('coding', r.scores.coding.value)} />
+                <Num cell={r.scores.agentic} row={r} metric="agentic" onNudge={nudge.mutate} busy={busy} tone={tone('agentic', r.scores.agentic.value)} />
                 <Num v={r.analysis?.medianOutputTokensPerSecond} digits={0} row={r} metric="speed" onNudge={nudge.mutate} busy={busy} />
                 <td className="py-1 pr-2 text-right tabular-nums text-muted-foreground">
                   {r.contextWindow ? `${Math.round(r.contextWindow / 1000)}K` : '–'}
@@ -985,8 +989,10 @@ function SortTh({ active, onClick, right, children }: {
  * that is one signed number, green up or red down and nothing when level; the
  * − and + appear on hover so the column stays readable.
  */
-function Num({ v, digits = 1, row, metric, onNudge, busy, tone }: {
-  v: number | null | undefined
+function Num({ v, cell, digits = 1, row, metric, onNudge, busy, tone }: {
+  v?: number | null | undefined
+  /** A resolved score: printed with its provenance colour and note. */
+  cell?: ScoreCell
   /** Highlight against the chain-minimums panel's chosen chain. */
   tone?: string
   digits?: number
@@ -996,11 +1002,15 @@ function Num({ v, digits = 1, row, metric, onNudge, busy, tone }: {
   busy?: boolean
 }) {
   const { t } = useI18n()
-  const adjustable = row?.link?.source === 'proxy' && metric != null && onNudge != null && v != null
+  const value = cell ? cell.value : v
+  // Only a proxy's borrowed figure takes a nudge; a typed score is edited on
+  // Compare and a measurement never.
+  const adjustable = row?.link?.source === 'proxy' && metric != null && onNudge != null && value != null
+    && (cell == null || cell.provenance === 'family' && cell.entry == null)
   const delta = adjustable ? row.link!.proxyDelta[metric] : 0
 
   return (
-    <td className={`group/num py-1 pr-2 text-right tabular-nums ${tone ?? ''}`}>
+    <td className={`group/num py-1 pr-2 text-right tabular-nums ${cell ? '' : tone ?? ''}`}>
       <span className="inline-flex items-center justify-end gap-1">
         {adjustable && (
           <button
@@ -1012,7 +1022,8 @@ function Num({ v, digits = 1, row, metric, onNudge, busy, tone }: {
             className="opacity-0 transition-opacity group-hover/num:opacity-100 focus-visible:opacity-100"
           >−</button>
         )}
-        {v == null ? <span className="text-muted-foreground">–</span> : v.toFixed(digits)}
+        {cell ? <ScoreValue cell={cell} toneClass={tone} />
+          : value == null ? <span className="text-muted-foreground">–</span> : value.toFixed(digits)}
         {/* Signs, not a number: the scale is three coarse steps each way, and
             "+++" reads as a judgement where "+3" reads as a measurement. */}
         {delta !== 0 && (

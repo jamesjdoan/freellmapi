@@ -409,6 +409,9 @@ export interface CompareRow {
   chainRanks: number[];
   /** The operator's note on this model (model_note), e.g. why it is parked. */
   note: { text: string; recheckAt: string | null; updatedAt: string } | null;
+  /** The three capability scores as every surface should print them, each with
+   *  where it came from (ARCH-20261018). `analysis` stays AA's data alone. */
+  scores: Record<ScoreMetric, ScoreCell>;
   /** Null when unlinked, or linked to a slug the last sync no longer returned. */
   analysis: {
     slug: string;
@@ -439,6 +442,62 @@ export interface CompareRow {
      *  it, or the operator mapped to a stale one. Distinct from unlinked. */
     unresolved: boolean;
   } | null;
+}
+
+export type ScoreMetric = 'intelligence' | 'coding' | 'agentic';
+export const SCORE_METRICS: readonly ScoreMetric[] = ['intelligence', 'coding', 'agentic'];
+export type EntryProvenance = 'family' | 'approximated' | 'tested';
+export type ScoreProvenance = 'measured' | EntryProvenance;
+
+export interface ScoreCell {
+  /** The number every table prints, sorts and grades on. */
+  value: number | null;
+  /** Null exactly when `value` is. */
+  provenance: ScoreProvenance | null;
+  /** The operator's typed score, kept even once a measurement supersedes it. */
+  entry: { value: number; provenance: EntryProvenance; enteredAt: string; superseded: boolean } | null;
+  /** False when the value is a measurement: a typed score never replaces one. */
+  editable: boolean;
+}
+
+interface BenchmarkEntry { value: number; provenance: EntryProvenance; enteredAt: string }
+
+/** Typed scores keyed `platform\0modelId` → metric. */
+function loadBenchmarkEntries(db: Db): Map<string, Partial<Record<ScoreMetric, BenchmarkEntry>>> {
+  const out = new Map<string, Partial<Record<ScoreMetric, BenchmarkEntry>>>();
+  for (const e of db.prepare('SELECT platform, model_id, metric, value, provenance, entered_at FROM model_benchmark_entry')
+    .all() as { platform: string; model_id: string; metric: ScoreMetric; value: number; provenance: EntryProvenance; entered_at: string }[]) {
+    const key = `${e.platform}\u0000${e.model_id}`;
+    const metrics = out.get(key) ?? {};
+    metrics[e.metric] = { value: e.value, provenance: e.provenance, enteredAt: e.entered_at };
+    out.set(key, metrics);
+  }
+  return out;
+}
+
+/**
+ * One metric for one route. A measurement wins and supersedes any typed score;
+ * otherwise the typed score; otherwise a proxy's borrowed figure, which is a
+ * related model's number (D2); otherwise nothing.
+ */
+export function resolveScore(aaValue: number | null, proxy: boolean, entry: BenchmarkEntry | undefined): ScoreCell {
+  const measured = aaValue != null && !proxy;
+  const kept = entry ? { value: entry.value, provenance: entry.provenance, enteredAt: entry.enteredAt, superseded: measured } : null;
+  if (measured) return { value: aaValue, provenance: 'measured', entry: kept, editable: false };
+  if (entry) return { value: entry.value, provenance: entry.provenance, entry: kept, editable: true };
+  if (aaValue != null) return { value: aaValue, provenance: 'family', entry: null, editable: true };
+  return { value: null, provenance: null, entry: null, editable: true };
+}
+
+const PROVENANCE_RANK: Record<ScoreProvenance, number> = { measured: 0, tested: 1, family: 2, approximated: 3 };
+
+/** A group's cell: the strongest member evidence, members' own order breaking ties. */
+export function groupScore(cells: ScoreCell[]): ScoreCell {
+  const withValue = cells.filter(c => c.value != null && c.provenance != null);
+  const best = withValue.reduce<ScoreCell | null>((acc, c) =>
+    acc == null || PROVENANCE_RANK[c.provenance!] < PROVENANCE_RANK[acc.provenance!] ? c : acc, null);
+  const editable = cells.some(c => c.editable);
+  return best ? { ...best, editable } : { value: null, provenance: null, entry: null, editable };
 }
 
 export interface ComparePayload {
@@ -564,6 +623,16 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
      ORDER BY intelligence_index IS NULL, intelligence_index DESC, name
   `).all() as { slug: string; name: string; creator: string | null; intelligence_index: number | null }[];
 
+  const entries = loadBenchmarkEntries(db);
+  const AA_COLUMN: Record<ScoreMetric, string> = { intelligence: 'intelligence_index', coding: 'coding_index', agentic: 'agentic_index' };
+  const scoresOf = (r: Record<string, unknown>): Record<ScoreMetric, ScoreCell> => {
+    const typed = entries.get(pairKey(String(r.platform), String(r.model_id))) ?? {};
+    const proxy = r.link_source === 'proxy';
+    return Object.fromEntries(SCORE_METRICS.map(metric => [metric, resolveScore(
+      r.aa_present ? nudge(numberOrNull(r[AA_COLUMN[metric]]), r, metric) : null, proxy, typed[metric],
+    )])) as Record<ScoreMetric, ScoreCell>;
+  };
+
   return {
     rows: rows.map(r => ({
       modelDbId: Number(r.model_db_id ?? r.id),
@@ -590,6 +659,7 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
         recheckAt: r.note_recheck_at == null ? null : String(r.note_recheck_at),
         updatedAt: String(r.note_updated_at),
       },
+      scores: scoresOf(r),
       analysis: r.aa_present
         ? {
           slug: String(r.aa_slug),
@@ -663,6 +733,8 @@ export interface CompareGroup {
    *  merged sibling. A reader deciding on an unmatched provider route needs to
    *  know the number is not that route's own measurement. */
   analysisSource: 'inherited' | 'own' | null;
+  /** Per metric, the strongest member evidence (ARCH-20261018). */
+  scores: Record<ScoreMetric, ScoreCell>;
   /** True when members carry links to DIFFERENT slugs. The group still shows
    *  one score, but silently picking one of two would be a fabrication. */
   conflicted: boolean;
@@ -738,6 +810,10 @@ export function getReferenceGroups(db: Db = getDb()): CompareGroup[] {
       userDefined: false,
       members: [],
       analysis,
+      // A baseline we do not serve: nothing to type a score against.
+      scores: Object.fromEntries(([
+        ['intelligence', analysis.intelligenceIndex], ['coding', analysis.codingIndex], ['agentic', analysis.agenticIndex],
+      ] as const).map(([metric, value]) => [metric, { ...resolveScore(value, false, undefined), editable: false }])) as Record<ScoreMetric, ScoreCell>,
       analysisSource: 'own' as const,
       conflicted: false,
       chains: [],
@@ -777,6 +853,8 @@ export function getGroupedCompare(db: Db = getDb()): CompareGroup[] {
       members,
       analysis: inherited,
       analysisSource: inherited ? (solo ? 'own' as const : 'inherited' as const) : null,
+      scores: Object.fromEntries(SCORE_METRICS.map(metric =>
+        [metric, groupScore(members.map(m => m.scores[metric]))])) as Record<ScoreMetric, ScoreCell>,
       conflicted: linkedSlugs.length > 1,
       chains: [...new Set(members.flatMap(m => m.chains))],
       // Position per chain, and WHICH member holds it. A group can span several
@@ -927,23 +1005,29 @@ export function setModelKeyScope(platform: string, modelId: string, allow: boole
   return { changed, refused };
 }
 
-/**
- * Measured (or estimated) scores per route, keyed `platform:modelId`.
- *
- * The single place any screen gets these numbers. The Models page used to show
- * only our own hand-tuned rank while Compare showed the measured index, so the
- * two disagreed about the same model by construction — and a proxy adjustment
- * made on Keys reached neither. Proxy deltas are applied here, so every caller
- * sorts and prints the same figure.
- */
-export function getAdjustedScores(db: Db = getDb()): Map<string, {
+export interface AdjustedScores {
   intelligence: number | null;
   coding: number | null;
   agentic: number | null;
   speed: number | null;
-  source: 'auto' | 'manual' | 'proxy';
-  name: string;
-}> {
+  /** The benchmark link behind the AA figures; null for a route scored only by
+   *  typed entries. */
+  source: 'auto' | 'manual' | 'proxy' | null;
+  name: string | null;
+  provenance: Record<ScoreMetric, ScoreProvenance | null>;
+}
+
+/**
+ * Scores per route, keyed `platform:modelId`, resolved exactly as Compare
+ * resolves them: measurement, then typed entry, then a proxy's borrowed figure.
+ *
+ * The single place any screen gets these numbers. The Models page used to show
+ * only our own hand-tuned rank while Compare showed the measured index, so the
+ * two disagreed about the same model by construction — and a proxy adjustment
+ * made on Keys reached neither. Proxy deltas and typed entries are applied
+ * here, so every caller sorts and prints the same figure.
+ */
+export function getAdjustedScores(db: Db = getDb()): Map<string, AdjustedScores> {
   const rows = db.prepare(`
     SELECT l.platform, l.model_id, l.source,
            a.name, a.intelligence_index, a.coding_index, a.agentic_index,
@@ -951,23 +1035,80 @@ export function getAdjustedScores(db: Db = getDb()): Map<string, {
            l.proxy_delta_intelligence, l.proxy_delta_coding, l.proxy_delta_agentic, l.proxy_delta_speed
       FROM aa_model_link l JOIN aa_model a ON a.slug = l.aa_slug
   `).all() as Record<string, unknown>[];
+  const entries = loadBenchmarkEntries(db);
 
-  const out = new Map<string, {
-    intelligence: number | null; coding: number | null; agentic: number | null; speed: number | null;
-    source: 'auto' | 'manual' | 'proxy'; name: string;
-  }>();
-  for (const r of rows) {
-    const source = r.source === 'manual' || r.source === 'proxy' ? r.source : 'auto';
-    out.set(`${String(r.platform)}:${String(r.model_id)}`, {
-      intelligence: nudge(numberOrNull(r.intelligence_index), { ...r, link_source: source }, 'intelligence'),
-      coding: nudge(numberOrNull(r.coding_index), { ...r, link_source: source }, 'coding'),
-      agentic: nudge(numberOrNull(r.agentic_index), { ...r, link_source: source }, 'agentic'),
-      speed: nudge(numberOrNull(r.median_output_tokens_per_second), { ...r, link_source: source }, 'speed'),
+  const out = new Map<string, AdjustedScores>();
+  const put = (platform: string, modelId: string, r: Record<string, unknown> | null) => {
+    const source = r == null ? null : r.source === 'manual' || r.source === 'proxy' ? r.source : 'auto' as const;
+    const linkRow: Record<string, unknown> | null = r == null ? null : { ...r, link_source: source };
+    const typed = entries.get(`${platform}\u0000${modelId}`) ?? {};
+    const cell = (metric: ScoreMetric, column: string) =>
+      resolveScore(linkRow ? nudge(numberOrNull(linkRow[column]), linkRow, metric) : null, source === 'proxy', typed[metric]);
+    const intelligence = cell('intelligence', 'intelligence_index');
+    const coding = cell('coding', 'coding_index');
+    const agentic = cell('agentic', 'agentic_index');
+    out.set(`${platform}:${modelId}`, {
+      intelligence: intelligence.value,
+      coding: coding.value,
+      agentic: agentic.value,
+      speed: linkRow ? nudge(numberOrNull(linkRow.median_output_tokens_per_second), linkRow, 'speed') : null,
       source,
-      name: String(r.name),
+      name: r == null ? null : String(r.name),
+      provenance: { intelligence: intelligence.provenance, coding: coding.provenance, agentic: agentic.provenance },
     });
+  };
+  for (const r of rows) put(String(r.platform), String(r.model_id), r);
+  // Routes AA never measured but the operator scored: without these the router
+  // would go on ranking them as unknown (ADR D1).
+  for (const key of entries.keys()) {
+    const [platform, modelId] = key.split('\u0000') as [string, string];
+    if (!out.has(`${platform}:${modelId}`)) put(platform, modelId, null);
   }
   return out;
+}
+
+/** Routes named in a score write that do not exist as chat models. */
+export function unknownRoutes(routes: { platform: string; modelId: string }[], db: Db = getDb()): { platform: string; modelId: string }[] {
+  const exists = db.prepare('SELECT 1 FROM models WHERE platform = ? AND model_id = ?');
+  return routes.filter(r => !exists.get(r.platform, r.modelId));
+}
+
+/** Routes that already carry an AA measurement for `metric`; a typed score
+ *  never replaces one (ADR D4). */
+export function measuredRoutes(routes: { platform: string; modelId: string }[], metric: ScoreMetric, db: Db = getDb()): { platform: string; modelId: string }[] {
+  const column = { intelligence: 'intelligence_index', coding: 'coding_index', agentic: 'agentic_index' }[metric];
+  const measured = db.prepare(`
+    SELECT 1 FROM aa_model_link l JOIN aa_model a ON a.slug = l.aa_slug
+     WHERE l.platform = ? AND l.model_id = ? AND l.source != 'proxy' AND a.${column} IS NOT NULL
+  `);
+  return routes.filter(r => measured.get(r.platform, r.modelId));
+}
+
+export function setBenchmarkEntry(
+  routes: { platform: string; modelId: string }[], metric: ScoreMetric, value: number, provenance: EntryProvenance, db: Db = getDb(),
+): number {
+  const write = db.prepare(`
+    INSERT INTO model_benchmark_entry (platform, model_id, metric, value, provenance)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(platform, model_id, metric) DO UPDATE SET
+      value = excluded.value, provenance = excluded.provenance, entered_at = datetime('now')
+  `);
+  // One decimal, like every AA index on this page.
+  const rounded = Math.round(value * 10) / 10;
+  let written = 0;
+  db.transaction(() => {
+    for (const r of routes) written += write.run(r.platform, r.modelId, metric, rounded, provenance).changes;
+  })();
+  return written;
+}
+
+export function clearBenchmarkEntry(routes: { platform: string; modelId: string }[], metric: ScoreMetric, db: Db = getDb()): number {
+  const remove = db.prepare('DELETE FROM model_benchmark_entry WHERE platform = ? AND model_id = ? AND metric = ?');
+  let removed = 0;
+  db.transaction(() => {
+    for (const r of routes) removed += remove.run(r.platform, r.modelId, metric).changes;
+  })();
+  return removed;
 }
 
 export interface ProxyUpgrade {

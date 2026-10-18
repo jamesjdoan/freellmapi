@@ -17,6 +17,10 @@ import {
   acceptProxyUpgrade,
   getReferenceSlugs,
   setReferenceSlugs,
+  setBenchmarkEntry,
+  clearBenchmarkEntry,
+  unknownRoutes,
+  measuredRoutes,
 } from '../services/analysis.js';
 
 // Artificial Analysis benchmark data. Read-only against routing: nothing here
@@ -217,6 +221,51 @@ analysisRouter.delete('/link', (req: Request, res: Response) => {
  */
 analysisRouter.get('/grouped', (_req: Request, res: Response) => {
   res.json({ groups: getGroupedCompare() });
+});
+
+// Typed benchmark scores (ADR ARCH-20261018). A set of routes for the same
+// reason as /link: a logical model is however many routes the router unified.
+const scoreRoutes = z.array(z.object({ platform: z.string().min(1), modelId: z.string().min(1) })).min(1).max(100);
+const scoreMetric = z.enum(['intelligence', 'coding', 'agentic']);
+const scoreSchema = z.object({
+  routes: scoreRoutes,
+  metric: scoreMetric,
+  value: z.number().finite().min(0).max(100),
+  // Required, never defaulted: a typed number without its provenance is the
+  // thing this exists to prevent.
+  provenance: z.enum(['family', 'approximated', 'tested']),
+});
+
+analysisRouter.put('/score', (req: Request, res: Response) => {
+  const parsed = scoreSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ') } });
+    return;
+  }
+  const { routes, metric, value, provenance } = parsed.data;
+  const unknown = unknownRoutes(routes);
+  if (unknown.length > 0) {
+    res.status(404).json({ error: { message: `No such model: ${unknown.map(r => `${r.platform}/${r.modelId}`).join(', ')}` } });
+    return;
+  }
+  const measured = measuredRoutes(routes, metric);
+  if (measured.length > 0) {
+    res.status(409).json({ error: {
+      message: `Already measured, so a typed ${metric} score would never show: ${measured.map(r => `${r.platform}/${r.modelId}`).join(', ')}`,
+      type: 'invalid_request_error',
+    } });
+    return;
+  }
+  res.json({ success: true, written: setBenchmarkEntry(routes, metric, value, provenance) });
+});
+
+analysisRouter.delete('/score', (req: Request, res: Response) => {
+  const parsed = z.object({ routes: scoreRoutes, metric: scoreMetric }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ') } });
+    return;
+  }
+  res.json({ success: true, removed: clearBenchmarkEntry(parsed.data.routes, parsed.data.metric) });
 });
 
 

@@ -12,12 +12,21 @@ import { ConfirmButton } from '@/components/confirm-button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
 const score = z.number().finite().nullable()
+const Cell = z.object({
+  value: score,
+  provenance: z.enum(['measured', 'family', 'approximated', 'tested']).nullable(),
+  entry: z.object({
+    value: z.number().finite(), provenance: z.enum(['family', 'approximated', 'tested']), enteredAt: z.string(), superseded: z.boolean(),
+  }).nullable(),
+  editable: z.boolean(),
+})
 const Route = z.object({
   modelDbId: z.number().int().positive(), platform: z.string(), modelId: z.string(),
   enabled: z.boolean(), keyScope: z.enum(['none', 'disabled', 'unscoped', 'in', 'out']),
   supportsTools: z.boolean(), supportsVision: z.boolean(), chains: z.array(z.string()),
-  analysis: z.object({ intelligenceIndex: score, codingIndex: score, agenticIndex: score }).nullable(),
-  link: z.object({ source: z.enum(['auto', 'manual', 'proxy']) }).nullable(),
+  // Typed scores grade here too (ADR D1), with their provenance deciding
+  // whether a chain that refuses estimates will take them.
+  scores: z.object({ intelligence: Cell, coding: Cell, agentic: Cell }),
 })
 const Minimums = z.object({ general: score, coding: score, agentic: score, acceptEstimated: z.boolean() })
 const Evidence = z.object({

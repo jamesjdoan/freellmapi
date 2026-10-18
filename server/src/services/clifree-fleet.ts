@@ -15,7 +15,7 @@
 
 import type { Db } from '../db/types.js';
 import type { CompareGroup } from './analysis.js';
-import { lookupAa, nudge, setManualLink } from './analysis.js';
+import { lookupAa, nudge, resolveScore, setManualLink } from './analysis.js';
 
 /** One route as a reporting machine observed it. */
 export type FleetRoute = {
@@ -379,6 +379,12 @@ export function getFleetGroups(db: Db): CompareGroup[] {
       userDefined: false,
       members: [],
       analysis,
+      // Fleet rows are reference-only: scored from their link, never typed.
+      scores: Object.fromEntries(([
+        ['intelligence', analysis?.intelligenceIndex ?? null],
+        ['coding', analysis?.codingIndex ?? null],
+        ['agentic', analysis?.agenticIndex ?? null],
+      ] as const).map(([metric, value]) => [metric, { ...resolveScore(value, Boolean(proxy), undefined), editable: false }])) as CompareGroup['scores'],
       analysisSource: analysis ? ('own' as const) : null,
       conflicted: false,
       chains: [],
