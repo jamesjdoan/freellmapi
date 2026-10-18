@@ -13,7 +13,7 @@ import { toast } from '@/lib/toast'
 import type { FallbackEntry } from '@/lib/routing'
 import { scopeCandidates, shouldOfferModelPicker, type ScopeCandidate } from '@/lib/model-scope-selection'
 import { SEARCH_PROVIDERS } from '@/lib/search'
-import { GetKeyLink, PLATFORMS } from './shared'
+import { GetKeyLink, LISTED_PLATFORMS, PLATFORMS } from './shared'
 import { useRemovedPlatforms } from '@/lib/provider-removals'
 
 /** A key that just landed, plus the models the picker should offer for it.
@@ -99,7 +99,7 @@ export function AddKeyForm({ onSuccess, initialPlatform }: { onSuccess: (offer?:
   const platformOptions = useMemo(
     () => [
       ...SEARCH_PROVIDERS.map(p => ({ ...p, group: t('search.pickerSearch') })),
-      ...PLATFORMS.map(p => ({ ...p, group: t('search.pickerModels') })),
+      ...LISTED_PLATFORMS.map(p => ({ ...p, group: t('search.pickerModels') })),
     ]
       // The selected provider always stays listed, so hiding added ones never
       // blanks out the trigger label.

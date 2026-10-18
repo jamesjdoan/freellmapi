@@ -9,7 +9,7 @@ import { ChainMinimumsButton } from '@/components/chain-minimums-panel'
 import type { ApiKey, Platform } from '../../../shared/types'
 import { Plus, Download } from 'lucide-react'
 import { useI18n } from '@/i18n'
-import type { HealthData } from '@/components/keys/shared'
+import { LISTED_PLATFORMS, type HealthData } from '@/components/keys/shared'
 import { QuotaSignalsSection } from '@/components/keys/quota-signals-section'
 import { QuotaLimitsSection } from '@/components/keys/quota-limits-section'
 import { UnifiedKeySection } from '@/components/keys/unified-key-section'
@@ -48,10 +48,19 @@ export default function KeysPage() {
   // `quota-capacity-dashboard` off: the overview and policy panels are hidden,
   // which here means the whole Quota signals tab. Collection continues server-side.
   const quotaDashboard = useExtensionEnabled('quota-capacity-dashboard')
-  const [addOpen, setAddOpen] = useState(false)
+  // `/keys?add=<platform>` opens Add key preselected to that provider, so other
+  // pages can send the user straight to the one key they need (e.g. the
+  // Decision routing setup guide, #1354). Unknown values are ignored.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const linkedPlatform = LISTED_PLATFORMS.find(p => p.value === searchParams.get('add'))?.value
+  const [addOpen, setAddOpen] = useState(linkedPlatform !== undefined)
   // Provider the Add key dialog opens preselected to, when the add flow was
-  // entered from a checklist chip rather than the generic Add key button.
-  const [addPlatform, setAddPlatform] = useState<Platform | ''>('')
+  // entered from a checklist chip (or a link) rather than the generic Add key button.
+  const [addPlatform, setAddPlatform] = useState<Platform | ''>(linkedPlatform ?? '')
+  // Drop the param once read, so closing the dialog and reloading does not reopen it.
+  useEffect(() => {
+    if (searchParams.has('add')) setSearchParams(prev => { prev.delete('add'); return prev }, { replace: true })
+  }, [searchParams, setSearchParams])
   // Null until the operator touches the disclosure: their click outranks the
   // default, and reading the default straight into state would latch `false`
   // from the query's empty first render.
@@ -63,24 +72,16 @@ export default function KeysPage() {
     setAddOpen(true)
   }
 
-  // /keys?add=<platform> opens the add dialog preselected. Compare links here
-  // from a provider that serves a model we hold no key for, and arriving on a
-  // generic Keys page would make the reader find the provider again.
-  const [searchParams, setSearchParams] = useSearchParams()
-  // ?platform=<p> focuses an EXISTING key instead. Compare sends a provider
-  // whose key is switched off here rather than to the add dialog: they already
-  // have the key, and turning it off was a decision.
+  // ?platform=<p> focuses an EXISTING key. Compare sends a provider whose key
+  // is switched off here rather than to the add dialog: they already have the
+  // key, and turning it off was a decision. (`?add=` is upstream's, above.)
   const [focusPlatform, setFocusPlatform] = useState('')
   useEffect(() => {
-    const add = searchParams.get('add')
     const focus = searchParams.get('platform')
-    if (!add && !focus) return
-    if (add) openAddKey(add as Platform)
-    if (focus) setFocusPlatform(focus)
+    if (!focus) return
+    setFocusPlatform(focus)
     // Consumed, so a refresh or a back-navigation does not repeat it.
-    searchParams.delete('add')
-    searchParams.delete('platform')
-    setSearchParams(searchParams, { replace: true })
+    setSearchParams(prev => { prev.delete('platform'); return prev }, { replace: true })
   }, [searchParams, setSearchParams])
 
   // Kept at page level for the header's "Check all" gate; ProviderList runs the
@@ -174,6 +175,7 @@ export default function KeysPage() {
               onValueChange={setTab}
               options={KEYS_TABS.filter(tb => quotaDashboard || tb.id !== 'quotaSignals').map(tb => ({ value: tb.id, label: t(tb.labelKey) }))}
               ariaLabel={t('keys.pageTitle')}
+              className="w-full sm:w-auto"
             />
           </>
         }

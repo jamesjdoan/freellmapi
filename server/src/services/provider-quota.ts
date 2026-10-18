@@ -223,7 +223,6 @@ export function resolveQuotaPolicy(
       ? policy('mistral::codestral', 'shared_pool', 'metered', ['requests', 'tokens'], 'provider_reported')
       : policy(modelPool(platform, modelId), 'model', 'metered', ['requests', 'tokens'], 'provider_reported');
   }
-  if (platform === 'github') return policy('github::account', 'account', 'metered', ['requests'], 'provider_reported');
   if (platform === 'cohere') return policy('cohere::trial-pool', 'shared_pool', 'metered', ['requests', 'tokens'], 'provider_reported');
   if (platform === 'cloudflare') return policy('cloudflare::account', 'account', 'metered', ['neurons'], 'provider_reported');
   if (platform === 'zhipu') return policy('zhipu::account', 'account', 'metered', ['tokens'], 'provider_reported');
@@ -273,6 +272,9 @@ export function resolveQuotaPolicy(
   if (platform === 'plugsky') return policy('plugsky::fair-use', 'shared_pool', 'unknown', [], 'unknown');
   if (platform === 'inferbase') return policy('inferbase::managed-free', 'shared_pool', 'unknown', [], 'unknown');
   if (platform === 'simplellm') return policy('simplellm::free', 'shared_pool', 'unknown', [], 'unknown');
+  // Upstream v0.16.3 (#1578): APINex. Pool NAME is upstream's; nothing
+  // readable reports the allowance yet, so accounting stays unknown.
+  if (platform === 'apinex') return policy('apinex::daily-free', 'shared_pool', 'unknown', [], 'unknown');
   // AI Horde: anonymous requests share one queue priority (the 0000000000 key),
   // so they pool together; a registered key has its own kudos priority but we
   // still bucket per-platform here.

@@ -1,6 +1,32 @@
 # Changelog
 
-## 2026-10-18 — Typed benchmark scores with provenance (local, not deployed)
+## 2026-10-19 — Merge upstream v0.16.3
+
+- `--no-ff` merge of tag `v0.16.3` onto `21160d04`. Covers upstream v0.16.0–v0.16.3, 28 commits:
+  - Decision models and the Decision routing strategy.
+  - Opt-in provider-moment failure attribution, and a min-context-window pool floor.
+  - Learned output caps keyed per endpoint.
+  - APINex, BeatAPI and SerpSearch.
+  - GitHub Models removed, LLMTR keys re-enabled, Auray no longer offered to new users.
+  - Bulk delete of custom models, plus retention sweeps.
+- Recovery tag: `imperium/pre-v0.16.3-recovery`. `main` fast-forwarded to `v0.16.3`.
+- **Conflict resolutions (13 code files):**
+  - **Additive, both kept:** migration manifest (re-sorted by filename), fallback route imports, `add-key-form`, provider-list bulk delete, KeysPage state.
+  - **Combined:** `request-log` writes both `unlimited` and `failure_attribution`. Router stats exclude burn tests and opted-out moments.
+  - **`openai-compat` key validation:** upstream's "/models must answer JSON" check, then our unauthenticated-request check.
+  - **`provider-quota`:** our typed resolver kept (measured per-model metering, see `routing-curation.ts`). Upstream's APINex pool ported; the retired GitHub pool dropped.
+  - **`catalog-sync`:** upstream's decision models and shape-problem reporter, with `Catalog`/`isCatalog` still exported for our callers.
+  - **KeysPage `?add=`:** convergent. Upstream's validated version kept; ours reduced to `?platform=` focus only.
+  - **Provider list:** our one-group-open behaviour kept.
+  - **Tests:** roundtrip stays manifest-driven, and both checklist tests are kept.
+  - **Locales:** three-way JSON merge (upstream text wins; our added keys carried), then English fill.
+- **Data:**
+  - The new migrations writing existing rows were checked against this install before merging. `llmtr_reenable_keys` (no LLMTR keys) and `remove_github_provider` (no GitHub rows) are no-ops here.
+  - Rehearsed on a copy of the live volume: only the four upstream migrations applied, and a second run applied nothing. All 18 keys decrypt.
+  - `requests` gained an empty `failure_attribution` column with every original column byte-identical. Two settings record empty change lists.
+- **Verified:** server 406 files / 5,130 tests, client 90 files / 680 tests, both typechecks, i18n (60 locales / 2,166 keys). Lint is unchanged from the pre-merge counts on every touched file.
+
+## 2026-10-18 — Typed benchmark scores with provenance (deployed `main-20261018-153526`)
 
 - ADR `ARCH-20261018-manual-benchmark-scores` (D1–D5 approved). On live data, 28 of 142 keyed models had no scores, 24 linked ones had no coding score and 32 no agentic score. Nothing could fill them.
 - A typed intelligence, coding or agentic score (0–100) is now stored per route and metric with a required provenance: related family, approximated or tested. New table `model_benchmark_entry` (migration `20261018_000001`), and `PUT`/`DELETE /api/analysis/score`. A route that already has a measurement for that metric gets 409.

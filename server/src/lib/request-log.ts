@@ -108,6 +108,11 @@ export function logRequest(
   // without a migration. NULL for call sites that pass no caller — notably
   // the shared fallback loop's 'canceled' row, which is surface-agnostic.
   caller: string | null = null,
+  // #1347 (PR 1): 'provider_moment' when a failed attempt is attributed to
+  // the provider's minute (429 / 5xx / timeout / transport) instead of the
+  // model — written only when the failure-attribution setting is on; NULL
+  // everywhere else, including every success row and every historical row.
+  failureAttribution: string | null = null,
 ) {
   try {
     const db = getDb();
@@ -116,12 +121,13 @@ export function logRequest(
     const client = getClientContext();
     const tx = db.transaction(() => {
       const insert = db.prepare(`
-        INSERT INTO requests (platform, model_id, key_id, status, input_tokens, output_tokens, latency_ms, error, ttfb_ms, requested_model, served_model, client_ip, client_user_agent, client_agent, caller, model_db_id, unlimited)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO requests (platform, model_id, key_id, status, input_tokens, output_tokens, latency_ms, error, ttfb_ms, requested_model, served_model, client_ip, client_user_agent, client_agent, caller, model_db_id, unlimited, failure_attribution)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(platform, modelId, keyId, status, inputTokens, outputTokens, latencyMs, error, ttfbMs, requestedModel, servedModel, client.ip, client.userAgent, client.agent, caller, resolveModelDbId(db, platform, modelId, keyId),
         // Decided now, so this row stays out of every counter even after the
         // model starts charging (services/unlimited-models.ts).
-        isUnlimitedModel(platform, modelId) ? 1 : 0);
+        isUnlimitedModel(platform, modelId) ? 1 : 0,
+        failureAttribution);
 
       // Report the row id back to the fallback loop's attempt trace (if one is
       // active): the LAST id noted during a loop run is the terminal row the

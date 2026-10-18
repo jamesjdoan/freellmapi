@@ -86,6 +86,10 @@ import * as bonusGrants from '../migrations/20261016_000001_bonus_grants.js';
 import * as paidCreditWindows from '../migrations/20261017_000001_paid_credit_windows.js';
 import * as usageCredentials from '../migrations/20261017_000002_usage_credentials.js';
 import * as modelBenchmarkEntries from '../migrations/20261018_000001_model_benchmark_entries.js';
+import * as decisionRequests from '../migrations/20261016_000001_decision_requests.js';
+import * as llmtrReenableKeys from '../migrations/20261017_000001_llmtr_reenable_keys.js';
+import * as removeGithubProvider from '../migrations/20261017_000002_remove_github_provider.js';
+import * as requestFailureAttribution from '../migrations/20261017_233153_request_failure_attribution.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -167,6 +171,10 @@ export const KEY_MONTHLY_USAGE_FILENAME = '20260914_000001_key_monthly_usage.ts'
 export const QUOTA_SNAPSHOT_FRESHNESS_FILENAME = '20260915_000001_quota_snapshot_freshness.ts';
 export const CATALOGUE_ACK_FILENAME = '20261001_000001_catalogue_ack.ts';
 export const SEARCH_ENGINES_FILENAME = '20261013_000001_search_engines.ts';
+export const DECISION_REQUESTS_FILENAME = '20261016_000001_decision_requests.ts';
+export const LLMTR_REENABLE_KEYS_FILENAME = '20261017_000001_llmtr_reenable_keys.ts';
+export const REMOVE_GITHUB_PROVIDER_FILENAME = '20261017_000002_remove_github_provider.ts';
+export const REQUEST_FAILURE_ATTRIBUTION_FILENAME = '20261017_233153_request_failure_attribution.ts';
 
 export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: LEGACY_BASELINE_FILENAME, module: legacyBaseline },
@@ -257,7 +265,11 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: '20261014_000005_catalogue_sync_switches.ts', module: catalogueSyncSwitches },
   { filename: '20261014_000006_catalogue_ignores.ts', module: catalogueIgnores },
   { filename: '20261016_000001_bonus_grants.ts', module: bonusGrants },
+  { filename: DECISION_REQUESTS_FILENAME, module: decisionRequests },
+  { filename: LLMTR_REENABLE_KEYS_FILENAME, module: llmtrReenableKeys },
   { filename: '20261017_000001_paid_credit_windows.ts', module: paidCreditWindows },
+  { filename: REMOVE_GITHUB_PROVIDER_FILENAME, module: removeGithubProvider },
   { filename: '20261017_000002_usage_credentials.ts', module: usageCredentials },
+  { filename: REQUEST_FAILURE_ATTRIBUTION_FILENAME, module: requestFailureAttribution },
   { filename: '20261018_000001_model_benchmark_entries.ts', module: modelBenchmarkEntries },
 ];

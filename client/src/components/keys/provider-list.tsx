@@ -17,7 +17,7 @@ import {
   DropdownMenuItem,
   DropdownMenuCheckboxItem,
 } from '@/components/ui/dropdown-menu'
-import { ChevronDown, CircleAlert, Copy, ExternalLink, FlaskConical, KeyRound, Layers, ListFilter, ListPlus, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, Zap } from 'lucide-react'
+import { ChevronDown, CircleAlert, Copy, ExternalLink, FlaskConical, Info, KeyRound, Layers, ListFilter, ListPlus, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, Zap } from 'lucide-react'
 import type { ApiKey, ApiKeyModel } from '../../../../shared/types'
 import { formatSqliteUtcToLocalTime } from '@/lib/utils'
 import type { FallbackEntry } from '@/lib/routing'
@@ -410,6 +410,9 @@ export function ProviderList({ onAddKey, initialSearch }: {
   const [modelEditorKeyId, setModelEditorKeyId] = useState<number | null>(null)
   // #787: keys selected for bulk enable/disable/delete within a group.
   const [selectedKeyIds, setSelectedKeyIds] = useState<Set<number>>(new Set())
+  // #1504: custom models selected for bulk delete, keyed by kind:id so ids
+  // from the chat/embedding/media tables can never collide.
+  const [selectedModelKeys, setSelectedModelKeys] = useState<Set<string>>(new Set())
   // Provider (or, for a custom endpoint, key) whose models are being test-fired,
   // and the target a hand-typed model is being added to. Both came over from
   // the retired Providers page; everything else that page did already lived here.
@@ -473,7 +476,10 @@ export function ProviderList({ onAddKey, initialSearch }: {
 
   const checkKey = useMutation({
     mutationFn: (keyId: number) => apiFetch(`/api/health/check/${keyId}`, { method: 'POST' }),
-    onSuccess: () => {
+    onSuccess: (_data, keyId) => {
+      // #1459: the server sends no probe for these keys, so say why instead
+      // of letting the button look broken.
+      if (keys.find(k => k.id === keyId)?.autoHealthCheck === false) toast.info(t('keys.noAutoCheckHint'))
       queryClient.invalidateQueries({ queryKey: ['health'] })
       queryClient.invalidateQueries({ queryKey: ['keys'] })
     },
@@ -593,6 +599,30 @@ export function ProviderList({ onAddKey, initialSearch }: {
       toast.error(error instanceof Error ? error.message : String(error))
     },
   })
+  // #1504: bulk delete for custom models — mirrors bulkKeys: no bulk endpoint,
+  // one DELETE per model against the existing per-model routes, the global
+  // MutationCache toast silenced, and one summary line for the whole batch.
+  const bulkModels = useMutation({
+    meta: { silenceToast: true },
+    mutationFn: async (models: ApiKeyModel[]) => {
+      const results = await Promise.allSettled(models.map(model =>
+        apiFetch(customModelDeletePath(model), { method: 'DELETE' }),
+      ))
+      return {
+        done: results.filter(r => r.status === 'fulfilled').length,
+        failed: results.filter(r => r.status === 'rejected').length,
+      }
+    },
+    onSuccess: ({ done, failed }) => {
+      for (const key of ['keys', 'health', 'fallback', 'models', 'embeddings', 'media']) {
+        queryClient.invalidateQueries({ queryKey: [key] })
+      }
+      const summary = t('keys.bulkDeleteResult', { done, failed })
+      if (failed > 0) toast.error(summary)
+      else toast.success(summary)
+    },
+  })
+
   const toggleBypass = useMutation({
     mutationFn: (platform: string) => {
       const next = bypassPlatforms.includes(platform)
@@ -640,6 +670,9 @@ export function ProviderList({ onAddKey, initialSearch }: {
   const healthKeyMap = new Map<number, { status: string; lastCheckedAt: string | null; lastHealthError: string | null }>()
   for (const k of healthData?.keys ?? []) healthKeyMap.set(k.id, k)
   const statusOf = (k: ApiKey) => healthKeyMap.get(k.id)?.status ?? k.status
+  // "unchecked" is not a problem (#1459): a new key sits there until its
+  // first check, and an LLMTR key until its first served request.
+  const isIssue = (status: string) => status !== 'healthy' && status !== 'unknown'
 
   // One row per catalogue provider, and one row per OpenAI-compatible
   // ACCOUNT. Custom endpoints all share platform 'custom', but each is its own
@@ -712,7 +745,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
 
   function matchStatus(group: (typeof grouped)[number]): boolean {
     const enabled = group.keys.some(k => k.enabled)
-    const hasIssue = group.keys.some(k => statusOf(k) !== 'healthy')
+    const hasIssue = group.keys.some(k => isIssue(statusOf(k)))
     switch (statusFilter) {
       case 'healthy': return enabled && !hasIssue
       case 'issues': return hasIssue
@@ -819,7 +852,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
             const showSections = visibleGroups.some(g => g.search)
             const sectionStart = showSections && (i === 0 || !!visibleGroups[i - 1].search !== !!group.search)
             const healthyCount = group.keys.filter(k => statusOf(k) === 'healthy').length
-            const issueCount = group.keys.filter(k => statusOf(k) !== 'healthy').length
+            const issueCount = group.keys.filter(k => isIssue(statusOf(k))).length
             // #787: once a selection exists in this group the checkboxes stay
             // visible, so the rest of the selection can be built without hunting.
             const groupHasSelection = group.keys.some(k => selectedKeyIds.has(k.id))
@@ -1361,6 +1394,15 @@ export function ProviderList({ onAddKey, initialSearch }: {
                               </ConfirmButton>
                             </div>
                           </div>
+                          {k.autoHealthCheck === false && status === 'unknown' && !lastHealthError && (
+                            <div className="flex items-start gap-2 px-4 pb-3 pl-8 text-xs text-muted-foreground" role="status">
+                              <Info className="mt-0.5 size-3.5 flex-shrink-0" />
+                              <span>
+                                {t('keys.noAutoCheckHint')}
+                                {k.modelsAvailable === 0 && <> {t('keys.noModelsYetHint')}</>}
+                              </span>
+                            </div>
+                          )}
                           {lastHealthError && (
                             <div className="flex items-start gap-2 px-4 pb-3 pl-8 text-xs text-destructive" role="status">
                               <CircleAlert className="mt-0.5 size-3.5 flex-shrink-0" />
@@ -1368,34 +1410,81 @@ export function ProviderList({ onAddKey, initialSearch }: {
                             </div>
                           )}
                           {hasCustomModels && isExpanded && (
-                            <div className="flex flex-wrap gap-2 border-t bg-muted/20 px-4 py-3 pl-12">
-                              {customModels.map(model => {
-                                const modelKey = customModelDeleteKey(model)
+                            <div className="border-t bg-muted/20 px-4 py-3 pl-12">
+                              {/* #1504: batch bar for the model chips of THIS key —
+                                  same arm-then-fire idiom as the #787 key bar above.
+                                  One DELETE per model against the existing per-model
+                                  routes, outcome reported once. */}
+                              {(() => {
+                                const keySelected = customModels.filter(m => selectedModelKeys.has(customModelDeleteKey(m)))
+                                if (keySelected.length === 0) return null
+                                const clearModels = () => setSelectedModelKeys(prev => {
+                                  const next = new Set(prev)
+                                  keySelected.forEach(m => next.delete(customModelDeleteKey(m)))
+                                  return next
+                                })
                                 return (
-                                  <div key={modelKey} className="inline-flex min-w-0 items-center gap-2 rounded-md border bg-background px-2 py-1 text-[11px]">
-                                    <span className="rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                                      {t(CUSTOM_MODEL_KIND_LABEL[model.kind])}
-                                    </span>
-                                    <span className="max-w-[180px] truncate font-medium" title={model.modelId}>
-                                      {model.displayName}
-                                    </span>
-                                    {model.family && (
-                                      <code className="max-w-[160px] truncate text-muted-foreground" title={model.family}>
-                                        {model.family}
-                                      </code>
-                                    )}
+                                  <div className="mb-2 flex items-center gap-2 text-xs">
+                                    <span className="text-muted-foreground">{t('keys.bulkSelected', { count: keySelected.length })}</span>
                                     <ConfirmButton
-                                      className="h-5 px-1 text-muted-foreground hover:text-destructive"
-                                      disabled={deleteCustomModel.isPending}
-                                      onConfirm={() => deleteCustomModel.mutate(model)}
-                                      title={t('common.remove')}
-                                      aria-label={t('common.remove')}
+                                      variant="outline"
+                                      size="xs"
+                                      className="text-muted-foreground hover:text-destructive"
+                                      confirmLabel={t('keys.bulkDeleteConfirm', { count: keySelected.length })}
+                                      onConfirm={() => {
+                                        bulkModels.mutate(keySelected)
+                                        clearModels()
+                                      }}
+                                      disabled={bulkModels.isPending}
                                     >
-                                      <Trash2 className="size-3" />
+                                      {t('keys.bulkDelete')}
                                     </ConfirmButton>
                                   </div>
                                 )
-                              })}
+                              })()}
+                              <div className="flex flex-wrap gap-2">
+                                {customModels.map(model => {
+                                  const modelKey = customModelDeleteKey(model)
+                                  return (
+                                    <div key={modelKey} className="inline-flex min-w-0 items-center gap-2 rounded-md border bg-background px-2 py-1 text-[11px]">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedModelKeys.has(modelKey)}
+                                        onChange={(e) => {
+                                          setSelectedModelKeys(prev => {
+                                            const next = new Set(prev)
+                                            if (e.target.checked) next.add(modelKey)
+                                            else next.delete(modelKey)
+                                            return next
+                                          })
+                                        }}
+                                        aria-label={t('keys.selectModel')}
+                                        className="size-3 flex-shrink-0 accent-foreground cursor-pointer"
+                                      />
+                                      <span className="rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                                        {t(CUSTOM_MODEL_KIND_LABEL[model.kind])}
+                                      </span>
+                                      <span className="max-w-[180px] truncate font-medium" title={model.modelId}>
+                                        {model.displayName}
+                                      </span>
+                                      {model.family && (
+                                        <code className="max-w-[160px] truncate text-muted-foreground" title={model.family}>
+                                          {model.family}
+                                        </code>
+                                      )}
+                                      <ConfirmButton
+                                        className="h-5 px-1 text-muted-foreground hover:text-destructive"
+                                        disabled={deleteCustomModel.isPending}
+                                        onConfirm={() => deleteCustomModel.mutate(model)}
+                                        title={t('common.remove')}
+                                        aria-label={t('common.remove')}
+                                      >
+                                        <Trash2 className="size-3" />
+                                      </ConfirmButton>
+                                    </div>
+                                  )
+                                })}
+                              </div>
                             </div>
                           )}
                         </div>

@@ -74,6 +74,10 @@ export type Platform =
   | 'speka'
   // Built-in chat and embeddings share free monthly credits; catalog only.
   | 'auray'
+  // Decision-only JEV adapter; promotional availability is catalog-managed.
+  | 'beatapi'
+  // Free-category chat and decisions share one weighted daily allowance.
+  | 'apinex'
   // Ongoing free research API for chat and speech recognition; catalog only.
   | 'typhoon'
   // Permanent free chat aliases, shared fair-use quota; signed catalog only.
@@ -126,7 +130,6 @@ export type Platform =
   | 'mistral'
   | 'sambanova'
   | 'openrouter'
-  | 'github'
   | 'cohere'
   // Web search APIs (#1174), not chat providers. Their keys serve POST
   // /v1/search (and the agents' web_search tools) through the catalog's
@@ -137,6 +140,7 @@ export type Platform =
   | 'firecrawl'
   | 'linkup'
   | 'parallel'
+  | 'serpsearch'
   | 'cloudflare'
   | 'zhipu'
   | 'ollama'
@@ -265,7 +269,7 @@ export type Platform =
  *  web_search tools), never chat. Search engine rows arrive through the
  *  catalog's `searchEngines` registry. The server keeps its own runtime copy in
  *  server/src/lib/search-platforms.ts (shared is type-only on the server). */
-export const SEARCH_PLATFORMS = ['tavily', 'exa', 'firecrawl', 'linkup', 'parallel'] as const;
+export const SEARCH_PLATFORMS = ['tavily', 'exa', 'firecrawl', 'linkup', 'parallel', 'serpsearch'] as const;
 export type SearchPlatform = (typeof SEARCH_PLATFORMS)[number];
 
 export function isSearchPlatform(platform: string): platform is SearchPlatform {
@@ -387,6 +391,12 @@ export interface ApiKey {
   /** True for a built-in provider key whose platform the catalog carries no
    *  models for, so the dashboard offers Fetch models on it (#1348). */
   modelDiscovery?: boolean;
+  /** False for a provider that forbids automated key checks (LLMTR, #1459):
+   *  its keys turn healthy on their first served request, not on a probe. */
+  autoHealthCheck?: boolean;
+  /** Only sent when autoHealthCheck is false: how many of the provider's
+   *  models this install can route to (0 = nothing to serve yet). */
+  modelsAvailable?: number;
 }
 
 export interface ApiKeyCreate {

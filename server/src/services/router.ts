@@ -30,15 +30,17 @@ import {
   observedSpeedRank, TIMEOUT_LATENCY_CAP_MS,
   type HeadroomThresholds,
 } from './scoring.js';
-import { TIMEOUT_ERROR_MARKERS } from '../lib/error-classify.js';
+import { TIMEOUT_ERROR_MARKERS, isProviderMomentFailure } from '../lib/error-classify.js';
 import { checkMonthlyBudget, reserveMonthlyBudget } from './key-budget.js';
 import { isUnlimitedModel } from './unlimited-models.js';
 import { applyModelWeightOverride, getModelWeightOverrides } from './model-weight-overrides.js';
 import { modelsWithOverriddenField, getCatalogModelTombstone } from './model-state.js';
 import { parseBudget } from '../lib/budget.js';
 import { platformDropsResponseFormat } from '../lib/sampling-params.js';
+import { passesContextWindowFloor } from '../lib/min-context-window.js';
 import { isUnifyEnabled, getModelGroups, resolveRequestedIdForDispatch, getProviderPreferences, routingMemberId } from './model-groups.js';
 import { getActiveProfileId } from './profile-models.js';
+import { getClientContext } from '../lib/client-context.js';
 import { customEndpointKeyIds } from './custom-endpoint.js';
 import { isDegraded } from './degradation.js';
 import { modelStatsKey, endpointScopeForBaseUrl } from '../lib/endpoint-scope.js';
@@ -477,6 +479,45 @@ export function setMinReliabilityFloor(floor?: number | null): void {
   setSetting(MIN_RELIABILITY_FLOOR_KEY, String(floor));
 }
 
+// ── Provider-moment failure attribution (opt-in, #1347) ────────────────────
+// When on, a failed attempt whose cause is a provider moment (429 / 5xx /
+// timeout / transport) is tagged `failure_attribution = 'provider_moment'`
+// instead of being scored as model evidence: it still steers the key (the
+// cooldown ladder is untouched), but it drops out of the reliability stats
+// and the model-level failure penalties. Off by default, so existing
+// installs keep the exact current scoring. The env var wins over the
+// dashboard setting so a self-host can pin the behaviour without the UI.
+export const PROVIDER_MOMENT_ATTRIBUTION_KEY = 'routing_provider_moment_attribution';
+
+export function isProviderMomentAttributionEnabled(): boolean {
+  const env = process.env.ROUTER_PROVIDER_MOMENT_ATTRIBUTION;
+  if (env !== undefined && env.trim() !== '') {
+    const v = env.trim().toLowerCase();
+    if (v === '1' || v === 'true' || v === 'on') return true;
+    if (v === '0' || v === 'false' || v === 'off') return false;
+  }
+  return getSetting(PROVIDER_MOMENT_ATTRIBUTION_KEY) === '1';
+}
+
+export function setProviderMomentAttribution(enabled: boolean): void {
+  if (enabled) {
+    setSetting(PROVIDER_MOMENT_ATTRIBUTION_KEY, '1');
+  } else {
+    getDb().prepare('DELETE FROM settings WHERE key = ?').run(PROVIDER_MOMENT_ATTRIBUTION_KEY);
+  }
+  // The stats cache bakes the attribution filter into its SQL, so a toggle
+  // must not wait for the cache TTL to change routing.
+  refreshStatsCache(getDb(), true);
+}
+
+// The failure_attribution value for one attempt error, or null when the
+// feature is off or the error is not a provider-moment failure. Route call
+// sites pass this straight through to logRequest.
+export function failureAttributionFor(err: any): string | null {
+  if (!isProviderMomentAttributionEnabled()) return null;
+  return isProviderMomentFailure(err) ? 'provider_moment' : null;
+}
+
 // ── Task-type weight share (persisted) ─────────────────────────────────────
 // #1127 follow-up: the bandit bias applied for a declared/derived task type
 // moves `share` of one axis onto the other (code: speed → intelligence; chat:
@@ -512,7 +553,7 @@ export const EXPLORE_CHANCE = 0.1;
 /** A model counts as "has data" once its decay-weighted success+failure
  *  pseudo-count reaches this many samples. */
 export const EXPLORE_MIN_SAMPLES = 5;
-const VALID_STRATEGIES: RoutingStrategy[] = ['priority', 'balanced', 'smartest', 'fastest', 'reliable', 'custom'];
+const VALID_STRATEGIES: RoutingStrategy[] = ['priority', 'balanced', 'smartest', 'fastest', 'reliable', 'custom', 'decision'];
 
 export function getRoutingStrategy(): RoutingStrategy {
   const raw = getSetting(STRATEGY_KEY);
@@ -788,7 +829,19 @@ export function setCommunityPriors(priors: CommunityPriorMap): number {
 function weightsWithPeak(strategy: RoutingStrategy): { weights: RoutingWeights | null; adjusted: boolean } {
   if (strategy === 'priority') return { weights: null, adjusted: false };
   if (strategy === 'custom') return { weights: getCustomWeights(), adjusted: false };
+  // 'decision' outside a picked request (display, fusion, background) scores
+  // as Balanced, the same preset an unsure or unavailable decision falls to.
+  if (strategy === 'decision') return weightsWithPeak('balanced');
   return peakAdjustedWeights(BANDIT_PRESETS[strategy], strategy, getPeakHoursConfig());
+}
+
+/** The strategy THIS request routes with. Under 'decision' (#1354) that is the
+ *  preset the decision model picked for the request, else Balanced; every
+ *  other strategy is used as set. */
+export function effectiveRoutingStrategy(): RoutingStrategy {
+  const strategy = getRoutingStrategy();
+  if (strategy !== 'decision') return strategy;
+  return getClientContext().routingStrategy ?? 'balanced';
 }
 
 function weightsFor(strategy: RoutingStrategy): RoutingWeights | null {
@@ -881,6 +934,13 @@ export function refreshStatsCache(db: Db, force = false): void {
   // count × ≤7 day buckets — so the finer grain keeps the same one-query,
   // 60s-cached shape. Aggregated two ways below: rolled up per model (ordering)
   // and per key (in-model key selection, #580).
+  // #1347 (PR 1): with provider-moment attribution on, tagged rows are the
+  // provider's bad minute, not the model — keep them out of every aggregate
+  // here (reliability denominator, timeouts, speed) exactly like 'canceled'
+  // rows are kept out today.
+  const pmExcluded = isProviderMomentAttributionEnabled()
+    ? " AND (failure_attribution IS NULL OR failure_attribution <> 'provider_moment')"
+    : '';
   const buckets = db.prepare(`
     SELECT platform, model_id, key_id,
       CAST((julianday('now') - julianday(created_at)) AS INTEGER) AS age_days,
@@ -897,7 +957,7 @@ export function refreshStatsCache(db: Db, force = false): void {
     -- how reliable or fast a provider is, and left in it would demote the very
     -- provider the operator was measuring. Its usage still counts against
     -- quota (rate_limit_usage), which is a different question.
-    WHERE created_at >= ? AND status <> 'canceled' AND request_type <> 'burn_test'
+    WHERE created_at >= ? AND status <> 'canceled' AND request_type <> 'burn_test'${pmExcluded}
     GROUP BY platform, model_id, key_id, age_days
   `).all(since) as Array<{
     platform: string; model_id: string; key_id: number | null; age_days: number; total: number; successes: number;
@@ -2248,30 +2308,28 @@ function getModelChainRow(db: Db, modelDbId: number): ChainRow | undefined {
  */
 export const CONTEXT_WINDOW_SAFETY_FACTOR = 1.25;
 
-// Platforms whose pre-dispatch trim guard already caps the dispatched input
-// below the live context ceiling (lib/content.ts truncateMessagesForGithub):
-// the guard — not the routing estimate — is what guarantees the fit there, so
-// applying the factor too would only make that guard unreachable. The margin
-// checks below treat these platforms as strict comparisons.
-const TRIM_GUARDED_PLATFORMS = new Set(['github']);
-
 /** True when `estimatedTokens` fits the RAW advertised window (null window =
  * unknown, never filtered — same convention as the auto-router). This is the
- * comparison /v1/models publishes and the soft-preference fallback tier. */
+ * comparison /v1/models publishes and the soft-preference fallback tier.
+ * The operator's min-context-window floor applies here too: the fallback tier
+ * must not reintroduce a model the floor excluded from the main chain. */
 export function fitsContextWindowStrict(contextWindow: number | null | undefined, estimatedTokens: number): boolean {
+  if (!passesContextWindowFloor(contextWindow)) return false;
   return contextWindow == null || estimatedTokens <= contextWindow;
 }
 
 /** True when `estimatedTokens` plausibly fits `contextWindow` WITH the safety
  * margin. The chars/4 heuristic portion is scaled by the factor; an explicit
  * output reserve derived from the client's max_tokens (`routingReserveTokens`)
- * is already an exact count and is added UNSCALED (#956 review). Trim-guarded
- * platforms compare strictly — their guard guarantees the fit. */
-export function fitsContextWindow(platform: string, contextWindow: number | null | undefined, estimatedTokens: number, exactOutputReserve = 0): boolean {
+ * is already an exact count and is added UNSCALED (#956 review). Also enforces
+ * the operator's min-context-window floor (lib/min-context-window.ts): a model
+ * below the configured preset is excluded from every chain, while an unknown
+ * window (null) always passes. */
+export function fitsContextWindow(_platform: string, contextWindow: number | null | undefined, estimatedTokens: number, exactOutputReserve = 0): boolean {
+  if (!passesContextWindowFloor(contextWindow)) return false;
   if (contextWindow == null) return true;
   // Raw advertised comparison first — the margin can only shrink eligibility.
   if (estimatedTokens > contextWindow) return false;
-  if (TRIM_GUARDED_PLATFORMS.has(platform)) return true;
   const reserve = Math.max(0, exactOutputReserve);
   const heuristic = Math.max(0, estimatedTokens - reserve);
   return heuristic * CONTEXT_WINDOW_SAFETY_FACTOR + reserve <= contextWindow;
@@ -2339,7 +2397,7 @@ export function resolveModelGroupCandidates(
   demotedDbIds?: ReadonlySet<number>,
 ): ChainRow[] {
   const db = getDb();
-  const strategy = getRoutingStrategy();
+  const strategy = effectiveRoutingStrategy();
   if (strategy !== 'priority') refreshStatsCache(db);
 
   const activeProfileId = getActiveProfileId(db);
@@ -2580,7 +2638,7 @@ export function resolveFusionCandidate(modelId: string): FusionCandidate | null 
 export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, preferredModelDbId?: number, requireVision = false, requireTools = false, skipModels?: Set<number>, prefetchedChain?: ChainRow[], requireStructured = false, skipPlatforms?: Set<string>, exactOutputReserve = 0, task?: 'code' | 'chat'): RouteResult {
   const db = getDb();
 
-  const strategy = getRoutingStrategy();
+  const strategy = effectiveRoutingStrategy();
   if (strategy !== 'priority') refreshStatsCache(db);
 
   const chain = (prefetchedChain ?? getActiveChain(db)).filter(e => e.enabled);
@@ -2817,9 +2875,7 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
       // false (#956 review): e.g. `context 131072 < estimated 106000 x1.25 = 132500`.
       const reserve = Math.max(0, exactOutputReserve);
       const requiredWithMargin = Math.ceil(Math.max(0, estimatedTokens - reserve) * CONTEXT_WINDOW_SAFETY_FACTOR + reserve);
-      diag.push(TRIM_GUARDED_PLATFORMS.has(entry.platform)
-        ? `${label}: context ${entry.context_window} < estimated ${estimatedTokens}`
-        : `${label}: context ${entry.context_window} < estimated ${estimatedTokens} x${CONTEXT_WINDOW_SAFETY_FACTOR} = ${requiredWithMargin}`);
+      diag.push(`${label}: context ${entry.context_window} < estimated ${estimatedTokens} x${CONTEXT_WINDOW_SAFETY_FACTOR} = ${requiredWithMargin}`);
       continue;
     }
 

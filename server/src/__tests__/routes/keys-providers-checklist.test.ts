@@ -97,4 +97,15 @@ describe('GET /api/keys/providers — provider checklist (#543)', () => {
     expect(restored.providers.some((p: { platform: string }) => p.platform === 'speechify')).toBe(true);
     expect(restored.summary.total).toBe(before.summary.total);
   });
+
+  it('stops suggesting an unlisted provider (Auray, #1563) but still shows it to a user who has a key', async () => {
+    const before = await request(app, '/api/keys/providers');
+    expect(before.body.providers.some((p: { platform: string }) => p.platform === 'auray')).toBe(false);
+
+    addKey('auray');
+    const after = await request(app, '/api/keys/providers');
+    expect(after.body.providers.find((p: { platform: string }) => p.platform === 'auray'))
+      .toMatchObject({ platform: 'auray', configured: true, keyCount: 1 });
+    expect(after.body.summary.total).toBe(before.body.summary.total + 1);
+  });
 });
