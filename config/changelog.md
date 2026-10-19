@@ -1,5 +1,46 @@
 # Changelog
 
+## 2026-10-18 — Model screening benchmark (CLI only; nothing to deploy)
+
+- Added `server/src/services/model-bench/` (fixtures, sandbox, grade, runner, passport), the CLI `server/src/scripts/model-bench.ts` (`npm run model:bench -w server`) and `docs/en/operations/model-bench.md`.
+- **What it does:**
+  - Six fixed scenarios (A1–A3 tool use, C1–C3 Python) run straight at one provider route, with no router or chain fallback.
+  - Stage 1 (A1, C1, C3) screens. Stage 2 runs per capability, so a coding-only model is kept.
+  - Grading is deterministic: assertions, hidden unit tests in an OS sandbox, and fixed rubrics. No model grades another.
+  - A token budget is checked before every call. Results are cached per bench version, route and configuration.
+  - Model Passports in JSON and Markdown, plus a ranking that keeps published AA scores, typed estimates and internal 0–100 scores apart.
+- **Safety:**
+  - Runs on a temp copy of `--db`, refuses paid routes and routes on cooldown, and binds custom routes to their own key.
+  - No table, no migration and no runtime change.
+- **Found while testing:**
+  - A1 passed a reversed currency conversion; direction is now one decisive check.
+  - Dead endpoints counted as promising.
+  - A failed internal screen read as provisional role support.
+  - The first stub run picked another relay's custom key. Before this was fixed, 24 calls went to aihubmix with a stub model id; all were refused 400, with 0 tokens spent.
+- **Verified:**
+  - 19 bench tests, including a correct and a defective reply per scenario and a sandbox escape attempt. The full server suite passes (391 files / 4,913 tests).
+  - CLI against a local stub endpoint on a live-data copy: a good model passed 6/6 on 3,050 tokens, and a weak one stopped after stage 1 on 670.
+  - **First live run (2026-10-19):** `xkiro/mistralai/mistral-large-4-0`, 6/6 PASS. Agentic 100, coding 87.3 (C2 parser rejected `"45s"`, a real defect), 9/9 calls, 7,897 tokens. It found one more classification bug: an estimate below a role threshold read as provisional support. It now reads "insufficient evidence", with a regression test (19 bench tests pass).
+
+## 2026-10-19 — xKiro Mistral Large 4 added; OpenCode Big Pickle ignored (live data, no code change)
+
+- **xKiro:** already a registered provider (key 41), so it was not re-added.
+  - Verified against the docs and the live key: free plan, no card. 500K tokens a day, or 1M after Telegram verification (this account), plus a one-time 30M bonus for 30 days. One account-wide counter that resets 00:00 UTC; exhaustion is a 429.
+  - Plan `null`, wallet `$0.000000`, so nothing can be billed. Details are in `docs/en/providers/02-quotas-and-cooldowns.md`.
+- **Mistral Large 4:** `mistralai/mistral-large-4-0` is listed `access_tier: free`.
+  - Verified live: plain, tool call, JSON mode and high reasoning all returned 200 with the wallet unchanged.
+  - Added through `POST /api/models` as row 1700 ("Mistral Large 4 (xKiro)"), 524K context, tools and vision. Enabled, but in no chain (no profile auto-includes new models).
+  - Benchmark link: proxy to AA `mistral-large-4` (Mistral Large 4 Preview, 38.4), read as related family.
+- **Bonus grant (live, grant id 1).** At first the router held xKiro back (`observed-quota-exhausted`), because the daily figure read exhausted while the account drew on the 30M bonus, which `/v1/usage` does not expose. Now configured:
+  - Pool: 2,020,250 tokens. That is 30M minus the 27,979,750 xKiro served above 1M a day on 16–19 Oct (15,318,072 / 7,587,190 / 3,574,129 / 1,500,359). Normal limit 1,000,000 a day, UTC.
+  - Start date: Telegram verification on 2026-10-16, confirmed by James and matching the ADR's `limit_per_day: 1000000` reading that day. Our local override had never been enabled, but xKiro spends the bonus whenever it serves past the daily limit. That traffic got through before the router saw a 429, because the quota poll runs every 5 minutes.
+  - First created from an 18 Oct start (24.9M), then corrected the same morning.
+  - Grant expires 2026-11-14 23:23 UTC, inside the 15 Nov end of the 30 days. The spending window covers the remaining 2,019,700 until 21:35 the same day.
+  - A routed request to `mistralai/mistral-large-4-0` that had been refused then returned 200 through xKiro.
+- **OpenCode Big Pickle (`big-pickle`):** catalogue-ignored on the operator's report that it is no longer free.
+  - It was already off, unused and in no chain, so the ignore switched off 0 keys and 0 models. It only keeps the row off across syncs.
+  - OpenCode's docs, its live `/v1/models` and models.dev still listed it at $0 on 2026-10-19.
+
 ## 2026-10-19 — Merge upstream v0.16.3
 
 - `--no-ff` merge of tag `v0.16.3` onto `21160d04`. Covers upstream v0.16.0–v0.16.3, 28 commits:

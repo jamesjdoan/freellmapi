@@ -152,6 +152,22 @@ UnoRouter's shapes come from new-api source (`controller/user.go` `GetSelf`, `mi
 
 Ollama's undocumented `/api/usage` `limits.*` fractions were withdrawn around 2026-10-07; that endpoint now returns usage history only, so the reader moved to the documented `/api/balance`.
 
+### xKiro free tier (verified 2026-10-19)
+
+Sources: [xkiro.com pricing](https://xkiro.com/#pricing), [Pricing & billing](https://docs.xkiro.com/guides/pricing/), [Access tiers](https://docs.xkiro.com/models/tiers/), [Rate limits](https://docs.xkiro.com/api/rate-limits/), [Usage](https://docs.xkiro.com/api/usage/), and the live key.
+
+- **Allowance.** 500,000 free-model tokens a day, no card. Telegram verification raises it to 1,000,000 a day, plus a **one-time** 30,000,000-token bonus for 30 days. This account reads `limit_per_day: 1000000`, so it is verified. The daily allowance is recurring; the bonus is promotional and expires.
+- **Scope.** One account-wide counter across every free-tier model and every key on the account, which is `xkiro::free` here.
+- **Reset.** `/v1/usage` counts `used_today` from 00:00 UTC, and that is what gates requests. The pricing page's "sliding window" wording is not what this endpoint reports.
+- **Exhaustion.** `429 rate_limit_error`, "You've reached today's free-model token quota", seen in production on 2026-10-16 to 10-18. Free-tier usage never draws on the wallet.
+- **Tiers.** `free` works on any account. `paid` needs a plan or positive wallet, and `premium` needs a real deposit. Calling either from a free account returns `403 permission_denied`, never a charge. `GET /v1/models` carries `access_tier` per model.
+- **Spend exposure today.** `plan: null`, wallet `0.000000`. Nothing can be billed. If a wallet is ever funded, set a monthly limit per key in the xKiro console first.
+- **Bonus is not visible.** `/v1/usage` exposes neither the bonus balance nor its expiry. On 2026-10-19 the account had used 2.5M against a 1M day, and xKiro still served free models from the bonus. The router's ledger reads the daily figure as exhausted and holds xKiro back until 00:00 UTC unless a bonus grant (below) covers the excess.
+- **Rate limits.** Per-plan requests per minute, unpublished for the free plan. Hammering after a 429 can earn an IP cooldown.
+- **Prompt overhead.** Each chat call reported about 540 prompt tokens for a 6-token user message. Budget accordingly.
+
+`mistralai/mistral-large-4-0` (Mistral Large 4) is `access_tier: free`, 524,288 context, 65,536 max output, with tools, vision and reasoning (`reasoning_effort` `none` or `high`, default `none`). It was verified live on the free tier with the wallet at $0: plain, tool call, JSON mode and high reasoning all returned 200 under the requested model id.
+
 ## Temporary bonus grants
 
 A bonus grant is extra provider capacity layered on a normal per-day allowance, for example xKiro's 30M tokens over 30 days on top of 1M a day. It covers the keys that share one account, one metric (tokens or requests), a quantity, and an expiry measured from creation. Grants are configured at **Keys → Quota signals → Bonus grants** and switched by the `bonus-grants` extension.

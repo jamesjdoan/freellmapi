@@ -14,6 +14,7 @@
     "lint": "eslint .",
     "export-catalog": "tsx src/scripts/export-catalog.ts",
     "quota:harness": "tsx src/scripts/quota-harness.ts",
+    "model:bench": "tsx src/scripts/model-bench.ts",
     "rotate-encryption-key": "tsx src/scripts/rotate-encryption-key.ts",
     "db:migration:up": "tsx src/db/migrate/cli.ts up",
     "db:migration:down": "tsx src/db/migrate/cli.ts down",
