@@ -5,6 +5,8 @@ import type { Db } from '../db/types.js';
 import { encrypt, decrypt } from '../lib/crypto.js';
 import { matchAaModel, type AaCandidate } from './analysis-match.js';
 import { getModelGroups } from './model-groups.js';
+import type { TokenEfficiency } from '@freellmapi/shared/types.js';
+import { aaTokenEstimates, loadBenchResults, resolveTokenEfficiency } from './token-efficiency.js';
 
 // Artificial Analysis benchmark data, cached locally and mapped to our models.
 //
@@ -412,6 +414,9 @@ export interface CompareRow {
   /** The three capability scores as every surface should print them, each with
    *  where it came from (ARCH-20261018). `analysis` stays AA's data alone. */
   scores: Record<ScoreMetric, ScoreCell>;
+  /** How many tokens this model spends per task, with the source it came
+   * from (ADR ARCH-20261020). Null when nothing measures it. */
+  tokenEfficiency: TokenEfficiency | null;
   /** Null when unlinked, or linked to a slug the last sync no longer returned. */
   analysis: {
     slug: string;
@@ -633,6 +638,22 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
     )])) as Record<ScoreMetric, ScoreCell>;
   };
 
+  // Token efficiency (ADR ARCH-20261020). The AA estimate comes from the
+  // model's own benchmark link; a screen result is imported per route. The
+  // estimate wins where both exist, because it is measured on a common
+  // workload and the screen is not.
+  const aaEstimates = aaTokenEstimates(db);
+  const benchResults = loadBenchResults(db);
+  const tokenEfficiencyOf = (r: Record<string, unknown>): TokenEfficiency | null => {
+    const slug = r.aa_present ? String(r.aa_slug) : null;
+    const screen = benchResults.get(pairKey(String(r.platform), String(r.model_id)));
+    return resolveTokenEfficiency(
+      slug ? aaEstimates.get(slug) : undefined,
+      screen,
+      r.link_source === 'proxy',
+    );
+  };
+
   return {
     rows: rows.map(r => ({
       modelDbId: Number(r.model_db_id ?? r.id),
@@ -660,6 +681,7 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
         updatedAt: String(r.note_updated_at),
       },
       scores: scoresOf(r),
+      tokenEfficiency: tokenEfficiencyOf(r),
       analysis: r.aa_present
         ? {
           slug: String(r.aa_slug),
@@ -735,6 +757,9 @@ export interface CompareGroup {
   analysisSource: 'inherited' | 'own' | null;
   /** Per metric, the strongest member evidence (ARCH-20261018). */
   scores: Record<ScoreMetric, ScoreCell>;
+  /** How many tokens this logical model spends per task, with the source it
+   * came from (ADR ARCH-20261020). Null when nothing measures it. */
+  tokenEfficiency: TokenEfficiency | null;
   /** True when members carry links to DIFFERENT slugs. The group still shows
    *  one score, but silently picking one of two would be a fabrication. */
   conflicted: boolean;
@@ -800,9 +825,11 @@ export function getReferenceGroups(db: Db = getDb()): CompareGroup[] {
     if (y == null) return -1;
     return y - x || (a.analysis?.slug ?? '').localeCompare(b.analysis?.slug ?? '');
   };
+  const aaEstimates = aaTokenEstimates(db);
   return getReferenceSlugs().flatMap(slug => {
     const analysis = lookupAa(db, slug);
     if (!analysis) return [];
+    const estimate = aaEstimates.get(slug);
     return [{
       groupKey: `ref:${slug}`,
       canonicalId: `ref:${slug}`,
@@ -814,6 +841,10 @@ export function getReferenceGroups(db: Db = getDb()): CompareGroup[] {
       scores: Object.fromEntries(([
         ['intelligence', analysis.intelligenceIndex], ['coding', analysis.codingIndex], ['agentic', analysis.agenticIndex],
       ] as const).map(([metric, value]) => [metric, { ...resolveScore(value, false, undefined), editable: false }])) as Record<ScoreMetric, ScoreCell>,
+      // A baseline we do not serve still has an AA estimate: the rank is a
+      // fact about the model, and the yardstick has to be readable on the
+      // same scale as the models it is read against.
+      tokenEfficiency: estimate ? resolveTokenEfficiency(estimate, undefined) : null,
       analysisSource: 'own' as const,
       conflicted: false,
       chains: [],
@@ -843,6 +874,20 @@ export function getGroupedCompare(db: Db = getDb()): CompareGroup[] {
     )] as string[];
     const inherited = members.find(m => m.analysis)?.analysis ?? null;
     const solo = members.length === 1;
+    // Token efficiency for the LOGICAL model (ADR ARCH-20261020). An AA
+    // estimate on any member wins: it is measured on a common workload. Only
+    // where no member has one does a screen result apply, and then the most
+    // recent run — an older measurement of the same model says less than a
+    // newer one.
+    const tokenEfficiency = (() => {
+      const aa = members.find(m => m.tokenEfficiency?.source === 'aa')?.tokenEfficiency ?? null;
+      if (aa) return aa;
+      const screens = members
+        .map(m => m.tokenEfficiency)
+        .filter((t): t is TokenEfficiency => t?.source === 'screen');
+      if (screens.length === 0) return null;
+      return screens.reduce((best, s) => ((s.runAt ?? '') > (best.runAt ?? '') ? s : best));
+    })();
     return {
       groupKey: g.groupKey,
       canonicalId: g.canonicalId,
@@ -855,6 +900,7 @@ export function getGroupedCompare(db: Db = getDb()): CompareGroup[] {
       analysisSource: inherited ? (solo ? 'own' as const : 'inherited' as const) : null,
       scores: Object.fromEntries(SCORE_METRICS.map(metric =>
         [metric, groupScore(members.map(m => m.scores[metric]))])) as Record<ScoreMetric, ScoreCell>,
+      tokenEfficiency,
       conflicted: linkedSlugs.length > 1,
       chains: [...new Set(members.flatMap(m => m.chains))],
       // Position per chain, and WHICH member holds it. A group can span several

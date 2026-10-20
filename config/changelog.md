@@ -1,6 +1,20 @@
 # Changelog
 
-## 2026-10-20 — Keys page fits a phone (local, not deployed)
+## 2026-10-20 — Token efficiency stat (local, not deployed)
+
+- New base stat "Tokens/task" next to Speed on Compare, Keys → provider model table and the CLI-free fleet (ADR `ARCH-20261020-task-efficiency-column`, approved by James).
+- **AA estimate:** AA's cost per Intelligence Index task ÷ the model's prices, shown as a token range from all-output to all-input price. AA publishes no input/output split, so the range is what the data supports. The column sorts on the 3:1 blend, shown in the tooltip. A proxied model is marked `≈`. Changed from a rank on James's call, the same day.
+- **Screen:** benchmark tokens ÷ scenarios that reached a verdict, shown as a number marked "screen". It is used only where AA has no estimate, and only after `POST /api/analysis/bench-results` imports a passport. `DELETE` removes it. New table `model_bench_result` (migration `20261020_000001`, reversible).
+- Verified on a live-data copy through a local server:
+  - MiniMax M3.1 Flash reads `366.8K–1.5M` (838.5K at 3:1). Its imported screen result (1,150.5) is not shown, because AA wins.
+  - Mistral Large 4 reads `271.3K–833.9K ≈` (proxy).
+  - Across the 107 groups with an AA estimate, the range runs from Mistral Large 3 at `20.7K–62.2K` to Nemotron 3 Super at `1.8M–5.5M`.
+  - Qwen3-32B read "screen" 601.5 after import and "—" after delete.
+  - A Zhipu run with no verdicts was refused (400).
+  - Compare sorts ascending by the 3:1 estimate, with AA rows before screen rows.
+- Checks: the server typechecks, and the new and analysis/migration suites pass (17 files / 137 tests). The client typechecks and builds, the full suite passes (92 files / 693 tests), and lint shows no new errors. i18n: 5 keys, filled into 59 locales.
+
+## 2026-10-20 — Keys page fits a phone (deployed `main-20261020-164618`)
 
 - At 390px the Providers tab was 874px wide: each provider row put the switch, name, chips, key, status, time and actions on one line.
 - Provider rows now wrap on phones. Line 1 has the switch, name, menu and chevron. Chips and the inline key drop to line 2, and the key actions to line 3. From `sm` up, the wrapper uses `display: contents`, so desktop is unchanged (checked at 1280px).

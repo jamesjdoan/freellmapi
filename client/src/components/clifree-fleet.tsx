@@ -10,6 +10,9 @@ import { useExtensionEnabled } from '@/lib/use-extension'
 import { vendorTint } from '@/lib/vendor-tint'
 import { ModelCombobox, type ModelComboOption } from '@/components/model-combobox'
 import { ModelName } from '@/components/model-name'
+import { TokenEfficiencyCell } from '@/components/token-efficiency'
+import { compareTokenEfficiency } from '@/lib/token-efficiency'
+import type { TokenEfficiency } from '@freellmapi/shared/types'
 
 // What each MACHINE can reach on the free CLI rosters, and what it has spent.
 //
@@ -56,6 +59,9 @@ export interface FleetGroup {
   fleetSpecs?: string[]
   /** 'proxy' when the scores are a closest match's, nudged: an estimate. */
   fleetLinkSource?: 'manual' | 'proxy' | null
+  /** Token efficiency of the benchmark this route is matched to
+   * (ADR ARCH-20261020). */
+  tokenEfficiency?: TokenEfficiency | null
 }
 
 /** One machine's consumption and what that inference was worth. Per machine,
@@ -96,6 +102,8 @@ interface BaselineGroup {
   groupKey: string
   name: string
   analysis: FleetAnalysis | null
+  /** Token efficiency of the baseline, if it has one. */
+  tokenEfficiency?: TokenEfficiency | null
 }
 
 /** The combobox works in option values, so "no counterpart" needs one of its
@@ -122,7 +130,7 @@ const MARK_CLASS: Record<string, string> = {
  *  another agent's route to it refuses tools. */
 const REACH_RANK: Record<string, number> = { ok: 3, unprobed: 2, fail: 1, notools: 0 }
 
-type Col = 'name' | 'class' | 'intelligence' | 'coding' | 'agentic' | 'routes' | 'reached' | 'available' | 'mapped'
+type Col = 'name' | 'class' | 'intelligence' | 'coding' | 'agentic' | 'tokens' | 'routes' | 'reached' | 'available' | 'mapped'
 
 export function useFleet(enabled: boolean) {
   return useQuery({
@@ -188,6 +196,8 @@ interface Entry {
   baseline?: boolean
   /** Scores borrowed from a closest match, not measured for this model. */
   proxy?: boolean
+  /** Token efficiency of the matched benchmark, if it has one. */
+  tokenEfficiency: TokenEfficiency | null
 }
 
 export function ClifreeFleet() {
@@ -267,6 +277,7 @@ export function ClifreeFleet() {
         cls: mine[0]?.class ?? null,
         analysis: g.analysis,
         proxy: g.fleetLinkSource === 'proxy',
+        tokenEfficiency: g.tokenEfficiency ?? null,
         matchQuality: mine[0]?.matchQuality ?? null,
         specs,
         marks: Object.keys(marks).sort(),
@@ -285,6 +296,7 @@ export function ClifreeFleet() {
           key: b.groupKey, name: b.analysis?.name ?? b.name, cls: null,
           analysis: b.analysis, matchQuality: null, specs: [], marks: [], machines: [],
           reached: '', coolingMins: null, coolingReason: null, baseline: true,
+          tokenEfficiency: b.tokenEfficiency ?? null,
         })
       }
     }
@@ -302,6 +314,10 @@ export function ClifreeFleet() {
         case 'intelligence': return e.analysis?.intelligenceIndex ?? -Infinity
         case 'coding': return e.analysis?.codingIndex ?? -Infinity
         case 'agentic': return e.analysis?.agenticIndex ?? -Infinity
+        // Token efficiency sorts by source, not by one merged number: an AA
+        // rank and a screen token count are different measures (see
+        // lib/token-efficiency). The comparison below handles it.
+        case 'tokens': return -Infinity
         case 'routes': return e.specs.length
         case 'reached': return REACH_RANK[e.reached] ?? -1
         case 'available': return e.coolingMins ?? 0
@@ -309,6 +325,12 @@ export function ClifreeFleet() {
       }
     }
     return [...entries].sort((a, b) => {
+      // Token efficiency: AA first, then the screen measurements, then the
+      // unknown ones, and within a source the most efficient model first.
+      if (sort === 'tokens') {
+        const cmp = compareTokenEfficiency(a.tokenEfficiency, b.tokenEfficiency, dir === 'asc' ? 'asc' : 'desc')
+        return cmp === 0 ? a.name.localeCompare(b.name) : cmp
+      }
       const ka = key(a), kb = key(b)
       if (typeof ka === 'string' || typeof kb === 'string') return String(ka).localeCompare(String(kb)) * mul
       return (ka - kb) * mul
@@ -319,7 +341,7 @@ export function ClifreeFleet() {
 
   const onSort = (c: Col) => {
     if (c === sort) setDir(d => (d === 'asc' ? 'desc' : 'asc'))
-    else { setSort(c); setDir(c === 'name' || c === 'mapped' || c === 'class' ? 'asc' : 'desc') }
+    else { setSort(c); setDir(c === 'name' || c === 'mapped' || c === 'class' || c === 'tokens' ? 'asc' : 'desc') }
   }
 
   const reportedAt = new Map<string, number>()
@@ -413,15 +435,16 @@ export function ClifreeFleet() {
           <Table className="w-full table-fixed">
             <TableHeader>
               <TableRow>
-                <Head col="name" sort={sort} dir={dir} onSort={onSort} className="w-[24%]">{t('compare.colModel')}</Head>
-                <Head col="class" sort={sort} dir={dir} onSort={onSort} className="w-[11%]">{t('compare.fleet.class')}</Head>
-                <Head col="intelligence" sort={sort} dir={dir} onSort={onSort} right className="w-[9%]">{t('compare.intelligence')}</Head>
-                <Head col="coding" sort={sort} dir={dir} onSort={onSort} right className="w-[8%]">{t('compare.coding')}</Head>
-                <Head col="agentic" sort={sort} dir={dir} onSort={onSort} right className="w-[8%]">{t('compare.agentic')}</Head>
-                <Head col="routes" sort={sort} dir={dir} onSort={onSort} className="w-[10%]">{t('compare.fleet.colRoutes')}</Head>
+                <Head col="name" sort={sort} dir={dir} onSort={onSort} className="w-[20%]">{t('compare.colModel')}</Head>
+                <Head col="class" sort={sort} dir={dir} onSort={onSort} className="w-[10%]">{t('compare.fleet.class')}</Head>
+                <Head col="intelligence" sort={sort} dir={dir} onSort={onSort} right className="w-[8%]">{t('compare.intelligence')}</Head>
+                <Head col="coding" sort={sort} dir={dir} onSort={onSort} right className="w-[7%]">{t('compare.coding')}</Head>
+                <Head col="agentic" sort={sort} dir={dir} onSort={onSort} right className="w-[7%]">{t('compare.agentic')}</Head>
+                <Head col="tokens" sort={sort} dir={dir} onSort={onSort} right className="w-[9%]">{t('compare.colTokensPerTask')}</Head>
+                <Head col="routes" sort={sort} dir={dir} onSort={onSort} className="w-[9%]">{t('compare.fleet.colRoutes')}</Head>
                 <Head col="reached" sort={sort} dir={dir} onSort={onSort} className="w-[10%]">{t('compare.fleet.reachability')}</Head>
-                <Head col="available" sort={sort} dir={dir} onSort={onSort} className="w-[7%]">{t('compare.fleet.availability')}</Head>
-                <Head col="mapped" sort={sort} dir={dir} onSort={onSort} className="w-[13%]">{t('compare.colMatch')}</Head>
+                <Head col="available" sort={sort} dir={dir} onSort={onSort} className="w-[6%]">{t('compare.fleet.availability')}</Head>
+                <Head col="mapped" sort={sort} dir={dir} onSort={onSort} className="w-[14%]">{t('compare.colMatch')}</Head>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -445,6 +468,9 @@ export function ClifreeFleet() {
                   <TableCell className="text-right tabular-nums">{score(e.analysis?.intelligenceIndex)}</TableCell>
                   <TableCell className="text-right tabular-nums">{score(e.analysis?.codingIndex)}</TableCell>
                   <TableCell className="text-right tabular-nums">{score(e.analysis?.agenticIndex)}</TableCell>
+                  <TableCell className="text-right tabular-nums" title={t('compare.tokensPerTaskHint')}>
+                    <TokenEfficiencyCell value={e.tokenEfficiency} />
+                  </TableCell>
                   <TableCell>
                     <span className="flex items-center gap-1" title={e.specs.join('\n')}>
                       {e.marks.map(m => (

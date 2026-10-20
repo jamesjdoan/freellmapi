@@ -90,6 +90,7 @@ import * as decisionRequests from '../migrations/20261016_000001_decision_reques
 import * as llmtrReenableKeys from '../migrations/20261017_000001_llmtr_reenable_keys.js';
 import * as removeGithubProvider from '../migrations/20261017_000002_remove_github_provider.js';
 import * as requestFailureAttribution from '../migrations/20261017_233153_request_failure_attribution.js';
+import * as modelBenchResults from '../migrations/20261020_000001_model_bench_results.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -272,4 +273,5 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: '20261017_000002_usage_credentials.ts', module: usageCredentials },
   { filename: REQUEST_FAILURE_ATTRIBUTION_FILENAME, module: requestFailureAttribution },
   { filename: '20261018_000001_model_benchmark_entries.ts', module: modelBenchmarkEntries },
+  { filename: '20261020_000001_model_bench_results.ts', module: modelBenchResults },
 ];

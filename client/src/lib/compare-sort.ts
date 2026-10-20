@@ -6,10 +6,14 @@
 // nothing. Missing values therefore sink to the bottom in both directions,
 // which no single comparator expression gives you for free.
 
+import type { TokenEfficiency } from '@freellmapi/shared/types'
+import { compareTokenEfficiency } from './token-efficiency'
+
 export type SortKey =
   | 'name' | 'routes' | 'chains'
   | 'intelligenceIndex' | 'codingIndex' | 'agenticIndex'
   | 'speed' | 'latency' | 'price' | 'context' | 'ourRank'
+  | 'tokensPerTask'
 
 export interface SortableEntry {
   name: string
@@ -22,6 +26,8 @@ export interface SortableEntry {
   } | null
   /** The index columns sort on the printed score, typed or measured. */
   scores: Record<'intelligence' | 'coding' | 'agentic', { value: number | null }>
+  /** Token efficiency, with the source it came from (ADR ARCH-20261020). */
+  tokenEfficiency?: TokenEfficiency | null
 }
 
 /** The value a column sorts on; null means "nothing measured here". */
@@ -47,6 +53,11 @@ export function sortValue(entry: SortableEntry, key: SortKey): number | string |
       const ranks = entry.members.map(m => m.intelligenceRank).filter(n => Number.isFinite(n))
       return ranks.length === 0 ? null : Math.min(...ranks)
     }
+    // Token efficiency sorts within its own source, and the sources are never
+    // mixed: an AA estimate and a screen token count are different measures on
+    // different workloads. The full ordering lives in lib/token-efficiency,
+    // and sortEntries uses it below.
+    case 'tokensPerTask': return entry.tokenEfficiency?.tokensPerTask ?? null
   }
 }
 
@@ -58,6 +69,14 @@ export function sortValue(entry: SortableEntry, key: SortKey): number | string |
 export function sortEntries<T extends SortableEntry>(entries: readonly T[], key: SortKey, dir: 'asc' | 'desc'): T[] {
   const sign = dir === 'asc' ? 1 : -1
   return [...entries].sort((x, y) => {
+    // Token efficiency is the one column whose order is not a plain number
+    // comparison: the AA estimates and the screen token counts are different
+    // measures on different workloads, so they are ordered by source first
+    // (see lib/token-efficiency).
+    if (key === 'tokensPerTask') {
+      const cmp = compareTokenEfficiency(x.tokenEfficiency, y.tokenEfficiency, dir)
+      return cmp === 0 ? x.name.localeCompare(y.name) : cmp
+    }
     const a = sortValue(x, key)
     const b = sortValue(y, key)
     if (a == null && b == null) return x.name.localeCompare(y.name)

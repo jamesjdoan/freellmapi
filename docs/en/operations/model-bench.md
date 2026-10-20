@@ -83,6 +83,30 @@ The passport keeps four kinds of evidence apart:
 
 Internal scores are never compared with AA thresholds and never written back as typed scores.
 
+**Token efficiency** (tokens per task, ADR `ARCH-20261020-task-efficiency-column`) is a sixth base stat, shown next to Speed on Compare, the Keys provider model table and the CLI-free fleet. It comes from one of two sources and they are never mixed:
+- **AA estimate, shown as a token range.** It is AA's cost per Intelligence Index task ÷ the model's prices: all billed at the output price gives the low end, all at the input price the high end. AA publishes no input/output split, so the true figure is somewhere inside. The column sorts on the 3:1 blend, shown in the tooltip, and `≈` marks a proxied model.
+- **Screen, shown as a number marked "screen".** It is total tokens ÷ scenarios that reached PASS or FAIL. It is used only when no AA estimate exists, and only after an explicit import (below).
+
+## Giving a model a score: the intake process
+
+Run this for every model added to the catalogue, and for any model Compare shows without a score. Stop at the first step that applies. Steps 1–4 use the existing stores (`aa_model_link`, `model_benchmark_entry`), so no new table is needed.
+
+1. **Measured match.** The matcher runs when a model is added and on every AA sync. Check Compare: a model AA publishes shows its score with no provenance mark. Nothing more to do. An AA sync (`POST /api/analysis/sync`) followed by `POST /api/analysis/relink` re-runs it after AA publishes something new.
+2. **Manual match.** AA publishes the same model under a name the matcher can't reduce to the same key, for example a vendor alias or a dated snapshot id. Map it on Compare (`PUT /api/analysis/link`, source `manual`). This is a claim that it IS that model, so only use it when the provider names the AA model.
+3. **Proxy.** AA doesn't publish it, but publishes a close relative: a predecessor, a sibling size, or the base the provider fine-tuned. Map it as a proxy (`PUT /api/analysis/link` with `proxy: true`). Set a per-metric adjustment (`PUT /api/analysis/proxy-delta`, at most three steps each way) where the model is clearly better or worse than its proxy.
+   - Pick the nearest relative by version, not the strongest one.
+   - The internal screen may inform an adjustment as supporting evidence, for example a C-scenario failure against a proxy that codes well. It never sets the number.
+   - A proxy is never evidence that two routes are the same model, and nothing merges on it.
+4. **Typed score.** There is no relative, but a figure exists somewhere else. Type it per metric (`PUT /api/analysis/score`) with its provenance:
+   - `family`: the family's published figure, read across.
+   - `approximated`: an operator estimate from a vendor table or a third-party leaderboard.
+   - `tested`: a measurement on AA's scale from a source you trust.
+   Internal screen scores are never typed in: they are on a different scale.
+5. **Not scored.** This covers models with no general-purpose chat role: safety and guard classifiers, translation, speech, fill-in-the-middle code completion, embedding and robotics models. Leave them unmapped. Chain minimums and OMP thresholds then refuse them, which is correct.
+6. **Revisit.** When AA starts publishing a proxied model, Compare prompts to swap the proxy for the measured score (`GET /api/analysis/proxy-upgrades`). Accept it there. Typed scores are not upgraded automatically, so re-check them after an AA sync that adds the model's family.
+
+Benchmark a model (this tool) whenever steps 3–4 apply, and before it joins a chain. The passport then shows the estimate and the internal screen side by side.
+
 ## Recommendations
 
 **Chains** use the existing `CHAIN_CONTRACTS` tool and vision requirements and the saved chain minimums. Minimums are checked only against published or typed scores. Estimates count only where the chain accepts them, and Fast-Lane stays reserved. A tools-required chain needs a native A1 PASS to be `qualified`; a catalogue claim alone makes it `provisional`.
@@ -127,6 +151,20 @@ ENCRYPTION_KEY=… npx tsx src/scripts/model-bench.ts --db /tmp/fla.db --model g
 ```
 
 Output: `server/data/model-bench/passports/<platform>__<model>.{json,md}` and `server/data/model-bench/ranking.md`.
+
+To show a model's screen figure on the dashboard, import its passport. This is the only path from a benchmark run to the live database, and it is never automatic:
+
+```bash
+curl -X POST http://127.0.0.1:3001/api/analysis/bench-results \
+  -H 'Authorization: Bearer <dashboard session>' -H 'Content-Type: application/json' \
+  --data @server/data/model-bench/passports/<platform>__<model>.json
+# Remove it again:
+curl -X DELETE http://127.0.0.1:3001/api/analysis/bench-results \
+  -H 'Authorization: Bearer <dashboard session>' -H 'Content-Type: application/json' \
+  -d '{"platform":"<platform>","modelId":"<model id>"}'
+```
+
+Re-importing a route replaces its row. The import refuses a route with no catalogue row (404), and a run where no scenario reached a verdict (400).
 
 ## Limitations
 

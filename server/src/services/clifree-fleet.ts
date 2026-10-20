@@ -16,6 +16,7 @@
 import type { Db } from '../db/types.js';
 import type { CompareGroup } from './analysis.js';
 import { lookupAa, nudge, resolveScore, setManualLink } from './analysis.js';
+import { aaTokenEstimates, resolveTokenEfficiency } from './token-efficiency.js';
 
 /** One route as a reporting machine observed it. */
 export type FleetRoute = {
@@ -354,6 +355,7 @@ export function getFleetGroups(db: Db): CompareGroup[] {
     if (list) list.push(s);
     else byBenchmark.set(key, [s]);
   }
+  const aaEstimates = aaTokenEstimates(db);
 
   return [...byBenchmark.entries()].map(([key, group]) => {
     const first = group[0];
@@ -369,6 +371,12 @@ export function getFleetGroups(db: Db): CompareGroup[] {
           medianOutputTokensPerSecond: nudge(borrowed.medianOutputTokensPerSecond, proxy.row, 'speed'),
         }
       : borrowed;
+    // Token efficiency (ADR ARCH-20261020): the AA estimate of the benchmark
+    // this route is matched to. A fleet route carries no bench result of its
+    // own — the screen runs against a route we serve.
+    const tokenEfficiency = first.benchmarkSlug
+      ? resolveTokenEfficiency(aaEstimates.get(first.benchmarkSlug), undefined, Boolean(proxy))
+      : null;
     return {
       groupKey: `fleet:${key}`,
       canonicalId: `fleet:${key}`,
@@ -385,6 +393,7 @@ export function getFleetGroups(db: Db): CompareGroup[] {
         ['coding', analysis?.codingIndex ?? null],
         ['agentic', analysis?.agenticIndex ?? null],
       ] as const).map(([metric, value]) => [metric, { ...resolveScore(value, Boolean(proxy), undefined), editable: false }])) as CompareGroup['scores'],
+      tokenEfficiency,
       analysisSource: analysis ? ('own' as const) : null,
       conflicted: false,
       chains: [],

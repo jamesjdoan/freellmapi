@@ -19,6 +19,9 @@ import { markArrivalsSeen, useUnseenArrivals } from '@/lib/seen-arrivals'
 import { ChainFit } from '@/components/chain-fit'
 import { scoreRowOf, useScoreTone } from '@/lib/chain-minimums'
 import type { ScoreCell, Scores } from '@/lib/score-provenance'
+import type { TokenEfficiency } from '@freellmapi/shared/types'
+import { TokenEfficiencyCell } from '@/components/token-efficiency'
+import { compareTokenEfficiency } from '@/lib/token-efficiency'
 import { ScoreValue } from '@/components/score-value'
 import { ProviderModelCapacityIndicator } from '@/components/provider-capacity'
 
@@ -149,6 +152,9 @@ interface Row {
   } | null
   /** Intelligence, coding and agentic as printed, with where each came from. */
   scores: Scores
+  /** How many tokens this model spends per task, with the source it came
+   * from (ADR ARCH-20261020). */
+  tokenEfficiency: TokenEfficiency | null
 }
 
 interface RateUsageWindow { used: number; limit: number }
@@ -179,7 +185,7 @@ interface CatalogueEntry {
   intelligenceIndex: number | null
 }
 
-type SortKey = 'intelligence' | 'coding' | 'agentic' | 'speed' | 'name'
+type SortKey = 'intelligence' | 'coding' | 'agentic' | 'speed' | 'tokens' | 'name'
 
 /**
  * What this route may still spend today, and where the number came from.
@@ -488,6 +494,14 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
       // Unmeasured last in every ordering: a model with no score is not a zero.
       .sort((a, b) => {
         if (sort === 'name') return a.displayName.localeCompare(b.displayName)
+        // Token efficiency reads the other way round: the most efficient model
+        // is the one that spends the FEWEST tokens, so it comes first. The AA
+        // ranks and the screen measurements are ordered by source and never
+        // compared with each other (ADR ARCH-20261020).
+        if (sort === 'tokens') {
+          const cmp = compareTokenEfficiency(a.tokenEfficiency, b.tokenEfficiency, 'asc')
+          return cmp === 0 ? a.displayName.localeCompare(b.displayName) : cmp
+        }
         const x = value(a); const y = value(b)
         if (x == null && y == null) return a.displayName.localeCompare(b.displayName)
         if (x == null) return 1
@@ -682,6 +696,7 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
             <SortTh active={sort === 'coding'} onClick={() => setSort('coding')} right>{t('compare.coding')}</SortTh>
             <SortTh active={sort === 'agentic'} onClick={() => setSort('agentic')} right>{t('compare.agentic')}</SortTh>
             <SortTh active={sort === 'speed'} onClick={() => setSort('speed')} right>{t('compare.colSpeed')}</SortTh>
+            <SortTh active={sort === 'tokens'} onClick={() => setSort('tokens')} right>{t('compare.colTokensPerTask')}</SortTh>
             <th className="py-1 pr-2 text-right font-normal">{t('compare.colContext')}</th>
             <th className="py-1 pr-2 text-right font-normal">{t('keys.panelColAllowance')}</th>
             <th className="py-1 pr-2 text-left font-normal">{t('keys.panelColChains')}</th>
@@ -696,7 +711,7 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
               <Fragment key={r.modelDbId}>
               {parkedStart && (
                 <tr className="border-t-2">
-                  <td colSpan={10} className="bg-muted/40 px-2 py-1.5 text-[11px]">
+                  <td colSpan={11} className="bg-muted/40 px-2 py-1.5 text-[11px]">
                     <span className="font-semibold">{t('keys.parkedTitle', { count: rows.length - i })}</span>
                     <span className="ml-2 text-muted-foreground">{t('keys.parkedHint')}</span>
                   </td>
@@ -844,6 +859,12 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
                 <Num cell={r.scores.coding} row={r} metric="coding" onNudge={nudge.mutate} busy={busy} tone={tone('coding', r.scores.coding.value)} />
                 <Num cell={r.scores.agentic} row={r} metric="agentic" onNudge={nudge.mutate} busy={busy} tone={tone('agentic', r.scores.agentic.value)} />
                 <Num v={r.analysis?.medianOutputTokensPerSecond} digits={0} row={r} metric="speed" onNudge={nudge.mutate} busy={busy} />
+                {/* Tokens per task (ADR ARCH-20261020). The AA range and the
+                    screen measurement are different measures, so each carries
+                    its own mark and they are never compared as one column. */}
+                <td className="py-1 pr-2 text-right tabular-nums" title={t('compare.tokensPerTaskHint')}>
+                  <TokenEfficiencyCell value={r.tokenEfficiency} />
+                </td>
                 <td className="py-1 pr-2 text-right tabular-nums text-muted-foreground">
                   {r.contextWindow ? `${Math.round(r.contextWindow / 1000)}K` : '–'}
                 </td>

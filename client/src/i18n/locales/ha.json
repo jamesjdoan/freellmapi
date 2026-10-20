@@ -1871,7 +1871,12 @@
     "scopeClifreeHint": "Routes a free CLI agent can actually drive, as reported by your machines. Not a platform filter: a catalogue route no machine reports is excluded, and Cline's free models appear only in the fleet table below — FreeLLM cannot call them.",
     "reset": "Reset",
     "resetHint": "Back to defaults: intelligence chart, routed scope, no search, nothing pinned.",
-    "chainNoRoutable": "No models in this group have a usable key for this provider. Add a key or enable an existing one first."
+    "chainNoRoutable": "No models in this group have a usable key for this provider. Add a key or enable an existing one first.",
+    "colTokensPerTask": "Tokens/task",
+    "tokensPerTaskHint": "How many tokens the model spends to finish one task. An AA range is derived from their published cost per task: all billed at the output price (fewest) to all at the input price (most). A screen figure is what our own benchmark measured.",
+    "tokensPerTaskAaTooltip": "≈{tokens} tokens per AA task at a 3:1 input:output mix (the sort value)",
+    "tokensPerTaskScreen": "screen",
+    "tokensPerTaskScreenTooltip": "{tokens} tokens per task, measured by our screening benchmark ({scenarios} scenarios, bench v{version})"
   },
   "catalogue": {
     "changesTitle": "Catalogue changes",

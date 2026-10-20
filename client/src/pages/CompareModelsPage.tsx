@@ -21,6 +21,8 @@ import { ChainMinimumsButton } from '@/components/chain-minimums-panel'
 import { ChainFit } from '@/components/chain-fit'
 import { scoreRowOf, useScoreTone, type ScoreRow } from '@/lib/chain-minimums'
 import type { ScoreMetric, Scores } from '@/lib/score-provenance'
+import { TokenEfficiencyCell } from '@/components/token-efficiency'
+import type { TokenEfficiency } from '@freellmapi/shared/types'
 import { EditableScore } from '@/components/score-value'
 import { PlatformDot, PlatformLegend, type PlatformScope } from '@/components/platform-dot'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -74,6 +76,9 @@ interface CompareRow {
   link: { slug: string | null; source: 'auto' | 'manual' | 'proxy'; matchReason: string | null; unresolved: boolean; proxyDelta: { intelligence: number; coding: number; agentic: number; speed: number } } | null
   /** Intelligence, coding and agentic as printed, with where each came from. */
   scores: Scores
+  /** How many tokens this model spends per task, with the source it came
+   * from (ADR ARCH-20261020). */
+  tokenEfficiency: TokenEfficiency | null
 }
 
 interface CompareGroup {
@@ -84,6 +89,9 @@ interface CompareGroup {
   members: CompareRow[]
   analysis: CompareRow['analysis']
   analysisSource: 'inherited' | 'own' | null
+  /** How many tokens this logical model spends per task, with the source it
+   * came from (ADR ARCH-20261020). */
+  tokenEfficiency: TokenEfficiency | null
   /** Per metric, the strongest member evidence. */
   scores: Scores
   /** Routes on a platform we hold a usable key for. Zero means the entry
@@ -494,11 +502,11 @@ export default function CompareModelsPage() {
     setQuery(RESET.query); setSelected(new Set())
   }
   // Second click reverses; moving to a new column starts descending, except for
-  // the three where "low is good" (name A-Z, latency, price).
+  // the four where "low is good" (name A-Z, latency, price, tokens per task).
   const sortBy = (key: SortKey) =>
     setSort(prev => prev.key === key
       ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' }
-      : { key, dir: key === 'name' || key === 'latency' || key === 'price' ? 'asc' : 'desc' })
+      : { key, dir: key === 'name' || key === 'latency' || key === 'price' || key === 'tokensPerTask' ? 'asc' : 'desc' })
   const entries = useMemo(
     () => sortEntries(
       [
@@ -1061,6 +1069,7 @@ export default function CompareModelsPage() {
                   <SortHead sort={sort} onSort={sortBy} col="codingIndex" right>{t('compare.coding')}</SortHead>
                   <SortHead sort={sort} onSort={sortBy} col="agenticIndex" right>{t('compare.agentic')}</SortHead>
                   <SortHead sort={sort} onSort={sortBy} col="speed" right>{t('compare.colSpeed')}</SortHead>
+                  <SortHead sort={sort} onSort={sortBy} col="tokensPerTask" right>{t('compare.colTokensPerTask')}</SortHead>
                   <SortHead sort={sort} onSort={sortBy} col="latency" right>{t('compare.colLatency')}</SortHead>
                   <SortHead sort={sort} onSort={sortBy} col="price" right>{t('compare.colPrice')}</SortHead>
                   <SortHead sort={sort} onSort={sortBy} col="context" right>{t('compare.colContext')}</SortHead>
@@ -1257,6 +1266,13 @@ export default function CompareModelsPage() {
                           catalogue. Context is ours — it comes from the routes. */}
                       <TableCell className="text-right tabular-nums" title={t('compare.speedHint')}>
                         {stat(g.analysis?.medianOutputTokensPerSecond, 0)}<DeltaMark delta={proxyDeltaOf(g, 'speed')} />
+                      </TableCell>
+                      {/* Tokens per task (ADR ARCH-20261020). An AA range and a
+                          screen measurement are different measures, so each
+                          carries its own mark and they are never compared as
+                          one column of numbers. */}
+                      <TableCell className="text-right tabular-nums" title={t('compare.tokensPerTaskHint')}>
+                        <TokenEfficiencyCell value={g.tokenEfficiency} />
                       </TableCell>
                       <TableCell className="text-right tabular-nums" title={t('compare.latencyHint')}>
                         {stat(g.analysis?.medianTimeToFirstTokenSeconds, 2)}

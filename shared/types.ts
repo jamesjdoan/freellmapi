@@ -300,6 +300,42 @@ export interface Model {
   endpointScope?: string | null;
 }
 
+// ---- Token efficiency (ADR ARCH-20261020) ----
+
+/**
+ * How many tokens a model spends to finish a task.
+ *
+ * Two sources, and never mixed inside one number:
+ *   - `aa`: an estimate derived from Artificial Analysis's own cost per task
+ *     and the model's published prices. AA gives no input/output split of the
+ *     cost, so it is shown as a RANGE of tokens: all-output (fewest) to
+ *     all-input (most), with the 3:1 blend as the sort value.
+ *   - `screen`: what our own screening benchmark measured on this route. It
+ *     is shown as a token count and is never ranked against the AA estimate.
+ */
+export type TokenEfficiencySource = 'aa' | 'screen';
+
+export interface TokenEfficiency {
+  source: TokenEfficiencySource;
+  /** AA only: the token range the cost allows. `tokensLow` assumes every
+   *  token was billed at the output price, `tokensHigh` at the input price.
+   *  Null for a screen measurement, which is a single measured count. */
+  tokensLow: number | null;
+  tokensHigh: number | null;
+  /** Tokens per task: the 3:1 blended estimate for `aa`, the measurement for
+   *  `screen`. The sort value. */
+  tokensPerTask: number;
+  /** Screen only: the bench version the measurement came from. */
+  benchVersion: string | null;
+  /** Screen only: how many scenarios the measurement covers. */
+  scenariosCompleted: number | null;
+  /** Screen only: when the bench run that measured it started. */
+  runAt: string | null;
+  /** True when the AA estimate comes from a STAND-IN model (a proxy link):
+   *  the figure describes a related model, not this one. */
+  proxied: boolean;
+}
+
 // ---- Quirks ----
 // Structured, reusable notes about catalog models. One quirk is applied to many
 // models via selector parameters (see quirk_targets / services/quirks.ts).

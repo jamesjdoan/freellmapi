@@ -22,6 +22,12 @@ import {
   unknownRoutes,
   measuredRoutes,
 } from '../services/analysis.js';
+import {
+  benchPassportSchema,
+  countCompletedScenarios,
+  deleteBenchResult,
+  saveBenchResult,
+} from '../services/token-efficiency.js';
 
 // Artificial Analysis benchmark data. Read-only against routing: nothing here
 // changes what the router does. It exists so a human can compare models on
@@ -266,6 +272,69 @@ analysisRouter.delete('/score', (req: Request, res: Response) => {
     return;
   }
   res.json({ success: true, removed: clearBenchmarkEntry(parsed.data.routes, parsed.data.metric) });
+});
+
+/**
+ * Import a screening benchmark run (ADR ARCH-20261020).
+ *
+ * The body is a Model Passport file, exactly as the CLI writes it. The
+ * benchmark itself never writes to the live database — it runs against a copy
+ * and leaves the file behind — so this is the one deliberate way a screen
+ * result reaches the dashboard, one route at a time.
+ *
+ * A route that is not in the catalogue is refused: a result for a model we
+ * cannot serve has nothing to attach to, and storing it anyway would leave a
+ * number on screen that no row can explain.
+ */
+analysisRouter.post('/bench-results', (req: Request, res: Response) => {
+  const parsed = benchPassportSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ') } });
+    return;
+  }
+  const run = parsed.data.run;
+  const platform = run.config.platform;
+  const modelId = run.config.modelId;
+  const unknown = unknownRoutes([{ platform, modelId }]);
+  if (unknown.length > 0) {
+    res.status(404).json({ error: { message: `No such model: ${platform}/${modelId}` } });
+    return;
+  }
+  const scenariosCompleted = countCompletedScenarios(run.results);
+  if (scenariosCompleted === 0) {
+    res.status(400).json({ error: { message: 'No scenario reached a verdict, so there are no tokens per task to show.' } });
+    return;
+  }
+  saveBenchResult({
+    platform,
+    modelId,
+    benchVersion: run.benchVersion,
+    promptTokens: run.usage.promptTokens,
+    completionTokens: run.usage.completionTokens,
+    reasoningTokens: run.usage.reasoningTokens,
+    calls: run.usage.calls,
+    scenariosCompleted,
+    reasoningEffort: run.config.reasoningEffort ?? null,
+    runAt: run.startedAt,
+  });
+  res.json({
+    success: true,
+    platform,
+    modelId,
+    scenariosCompleted,
+    tokensPerTask: (run.usage.promptTokens + run.usage.completionTokens) / scenariosCompleted,
+  });
+});
+
+/** Remove one route's imported screen result. */
+analysisRouter.delete('/bench-results', (req: Request, res: Response) => {
+  const parsed = z.object({ platform: z.string().min(1), modelId: z.string().min(1) }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ') } });
+    return;
+  }
+  const { platform, modelId } = parsed.data;
+  res.json({ success: true, removed: deleteBenchResult(platform, modelId) });
 });
 
 
