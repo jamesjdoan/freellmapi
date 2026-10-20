@@ -20,6 +20,9 @@ export interface ChainMinimums {
   coding: number | null
   agentic: number | null
   acceptEstimated: boolean
+  /** Alternatives: the model needs every set minimum NOT listed here, plus at
+   *  least ONE that is. Empty = every set minimum is required. */
+  either: Metric[]
 }
 export interface ChainMinimumsDoc {
   version: 1
@@ -94,18 +97,36 @@ export function evaluate(row: ScoreRow, mins: ChainMinimums, req: Pick<ChainRequ
   const missing: Evaluation['missing'] = []
   if (req?.requiresTools && !row.supportsTools) missing.push('tools')
   if (req?.requiresVision && !row.supportsVision) missing.push('vision')
+  const either = new Set(mins.either)
   const shortfalls: Evaluation['shortfalls'] = []
   const unknown: Metric[] = []
+  let below = false
+  let open = false
+  const group: { metric: Metric; result: 'pass' | 'below' | 'unknown'; value: number | null; min: number }[] = []
   for (const metric of METRICS) {
     const min = mins[metric]
     if (min == null) continue
     const value = row[metric]
     // Unmeasured is not zero, and an estimate is not a measurement unless the
     // chain says it will take one.
-    if (value == null || (row.estimated[metric] && !mins.acceptEstimated)) { unknown.push(metric); continue }
-    if (value < min) shortfalls.push({ metric, value, min })
+    const result = value == null || (row.estimated[metric] && !mins.acceptEstimated) ? 'unknown'
+      : value < min ? 'below' : 'pass'
+    if (either.has(metric)) { group.push({ metric, result, value, min }); continue }
+    if (result === 'unknown') { unknown.push(metric); open = true }
+    if (result === 'below') { shortfalls.push({ metric, value: value!, min }); below = true }
   }
-  const status = missing.length > 0 ? 'structural' : shortfalls.length > 0 ? 'below' : unknown.length > 0 ? 'unknown' : 'fits'
+  // One passing alternative clears the group. Otherwise every alternative is
+  // reported, and the group is a miss only when all of them are measured below
+  // — an unscored one could still carry it.
+  if (group.length > 0 && !group.some(g => g.result === 'pass')) {
+    for (const g of group) {
+      if (g.result === 'unknown') unknown.push(g.metric)
+      else shortfalls.push({ metric: g.metric, value: g.value!, min: g.min })
+    }
+    if (group.every(g => g.result === 'below')) below = true
+    else open = true
+  }
+  const status = missing.length > 0 ? 'structural' : below ? 'below' : open ? 'unknown' : 'fits'
   return { status, shortfalls, unknown, missing }
 }
 

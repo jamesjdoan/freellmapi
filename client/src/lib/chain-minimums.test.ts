@@ -7,7 +7,7 @@ const row = (over: Partial<ScoreRow> = {}): ScoreRow => ({
   general: 30, coding: 50, agentic: 35, estimated: measuredOnly, supportsTools: true, supportsVision: false, ...over,
 })
 const mins = (over: Partial<ChainMinimums> = {}): ChainMinimums => ({
-  general: null, coding: null, agentic: null, acceptEstimated: false, ...over,
+  general: null, coding: null, agentic: null, acceptEstimated: false, either: [], ...over,
 })
 const tools = { requiresTools: true, requiresVision: false }
 
@@ -59,5 +59,47 @@ describe('chain minimums evaluation', () => {
     expect(scoreTone(24.2, 25)).toBe('near')
     expect(scoreTone(23.9, 25)).toBe('below')
     expect(scoreTone(null, 25)).toBeNull()
+  })
+
+  describe('alternatives (OR)', () => {
+    // general AND (coding OR agentic)
+    const orMins = mins({ general: 25, coding: 60, agentic: 30, either: ['coding', 'agentic'] })
+
+    it('fits on any one alternative, with the required one met', () => {
+      expect(evaluate(row({ general: 30, coding: 50, agentic: 35 }), orMins, tools).status).toBe('fits')
+      expect(evaluate(row({ general: 30, coding: 70, agentic: 10 }), orMins, tools).status).toBe('fits')
+    })
+
+    it('still fails on a required metric whatever the alternatives say', () => {
+      const e = evaluate(row({ general: 20, coding: 70, agentic: 50 }), orMins, tools)
+      expect(e.status).toBe('below')
+      expect(e.shortfalls).toEqual([{ metric: 'general', value: 20, min: 25 }])
+    })
+
+    it('is below only when every alternative is measured below', () => {
+      const e = evaluate(row({ general: 30, coding: 50, agentic: 20 }), orMins, tools)
+      expect(e.status).toBe('below')
+      expect(e.shortfalls.map(s => s.metric)).toEqual(['coding', 'agentic'])
+    })
+
+    it('is unknown when no alternative passes but one is unscored', () => {
+      // Agentic could still carry it once scored, so this is not a miss.
+      const e = evaluate(row({ general: 30, coding: 50, agentic: null }), orMins, tools)
+      expect(e.status).toBe('unknown')
+      expect(e.unknown).toEqual(['agentic'])
+    })
+
+    it('fits on a measured alternative even when another is an unaccepted estimate', () => {
+      const e = evaluate(
+        row({ general: 30, coding: 70, agentic: 50, estimated: { general: false, coding: false, agentic: true } }),
+        orMins, tools,
+      )
+      expect(e.status).toBe('fits')
+    })
+
+    it('reads every set minimum as required when nothing is an alternative', () => {
+      expect(evaluate(row({ general: 30, coding: 70, agentic: 10 }), mins({ general: 25, coding: 60, agentic: 30 }), tools).status)
+        .toBe('below')
+    })
   })
 })

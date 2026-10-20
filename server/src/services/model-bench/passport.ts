@@ -32,7 +32,7 @@ export interface PublishedEvidence {
 }
 
 export interface ChainRule { name: string; requiresTools: boolean; requiresVision: boolean; reserved: boolean }
-export interface ChainMinimum { general: number | null; coding: number | null; agentic: number | null; acceptEstimated: boolean }
+export interface ChainMinimum { general: number | null; coding: number | null; agentic: number | null; acceptEstimated: boolean; either?: ('general' | 'coding' | 'agentic')[] }
 
 export type Evidence = 'complete' | 'partial' | 'none';
 
@@ -170,17 +170,44 @@ export function recommendChains(p: Pick<Passport, 'internal' | 'route' | 'publis
       provisional = true;
     }
     const m = mins[rule.name];
+    const either = new Set(m?.either ?? []);
     let unknown = false;
+    // Alternatives: one passing member clears the group; otherwise the group
+    // fails if every set member is measured below, and is unknown if any
+    // could still pass once scored.
+    const group: { key: string; result: 'pass' | 'below' | 'unknown'; reason: string; measured: boolean }[] = [];
     for (const key of ['general', 'coding', 'agentic'] as const) {
       const min = m?.[key];
       if (min == null) continue;
       const cell = p.published[METRIC_OF[key]];
-      if (cell.value == null) { unknown = true; reasons.push(`${key}: no published or typed score (minimum ${min})`); continue; }
-      const estimate = cell.provenance === 'family' || cell.provenance === 'approximated';
-      if (estimate && !m.acceptEstimated) { unknown = true; reasons.push(`${key}: ${cell.value} is ${cell.provenance}; chain does not accept estimates`); continue; }
-      if (cell.value < min) return { target: rule.name, status: 'not qualified' as const, reasons: [...reasons, `${key}: ${cell.value} (${cell.provenance}) below minimum ${min}`] };
-      if (cell.provenance !== 'measured') provisional = true;
-      reasons.push(`${key}: ${cell.value} (${cell.provenance}) meets ${min}`);
+      let result: 'pass' | 'below' | 'unknown';
+      let reason: string;
+      if (cell.value == null) { result = 'unknown'; reason = `${key}: no published or typed score (minimum ${min})`; }
+      else if ((cell.provenance === 'family' || cell.provenance === 'approximated') && !m.acceptEstimated) {
+        result = 'unknown'; reason = `${key}: ${cell.value} is ${cell.provenance}; chain does not accept estimates`;
+      } else if (cell.value < min) { result = 'below'; reason = `${key}: ${cell.value} (${cell.provenance}) below minimum ${min}`; }
+      else { result = 'pass'; reason = `${key}: ${cell.value} (${cell.provenance}) meets ${min}`; }
+      const measured = cell.provenance === 'measured';
+      if (either.has(key)) { group.push({ key, result, reason, measured }); continue; }
+      if (result === 'pass' && !measured) provisional = true;
+      if (result === 'below') return { target: rule.name, status: 'not qualified' as const, reasons: [...reasons, reason] };
+      if (result === 'unknown') unknown = true;
+      reasons.push(reason);
+    }
+    if (group.length > 0) {
+      // A measured pass beats an estimated one: only the alternative that
+      // actually carries the group decides whether the result is provisional.
+      const passed = group.find(g => g.result === 'pass' && g.measured) ?? group.find(g => g.result === 'pass');
+      if (passed) {
+        if (!passed.measured) provisional = true;
+        reasons.push(`${passed.reason} (one of ${group.map(g => g.key).join(' / ')})`);
+      }
+      else {
+        const why = `none of ${group.map(g => g.key).join(' / ')} met: ${group.map(g => g.reason).join('; ')}`;
+        if (group.every(g => g.result === 'below')) return { target: rule.name, status: 'not qualified' as const, reasons: [...reasons, why] };
+        unknown = true;
+        reasons.push(why);
+      }
     }
     if (unknown) return { target: rule.name, status: 'insufficient evidence' as const, reasons };
     return { target: rule.name, status: provisional ? 'provisional' as const : 'qualified' as const, reasons };

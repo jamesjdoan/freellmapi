@@ -6,7 +6,7 @@ import type { ChatCompletionResponse, ChatMessage } from '@freellmapi/shared/typ
 import { SCENARIOS, type ScenarioId } from '../../services/model-bench/fixtures.js';
 import { grade, type Transcript } from '../../services/model-bench/grade.js';
 import { runBenchmark, type Caller, type CallOptions, type RunConfig } from '../../services/model-bench/runner.js';
-import { buildPassport, recommendRoles, type ChainRule } from '../../services/model-bench/passport.js';
+import { buildPassport, recommendChains, recommendRoles, type ChainRule } from '../../services/model-bench/passport.js';
 import { sandboxAvailable } from '../../services/model-bench/sandbox.js';
 import type { ScoreCell } from '../../services/analysis.js';
 
@@ -343,5 +343,23 @@ describe('classification', () => {
     // Mistral Large 4 on xKiro, 2026-10-19: a related-family 38.4 against slow's
     // 45 read as provisional support. An estimate below the bar settles nothing.
     expect(roles(cell(38.4, 'family'), cell(40, 'measured')).find(r => r.target === 'slow')!.status).toBe('insufficient evidence');
+  });
+
+  it('grades a chain whose coding and agentic minimums are alternatives', () => {
+    // Coding chain: coding 60 OR agentic 30, tools required.
+    const mins = { Coding: { general: null, coding: 60, agentic: 30, acceptEstimated: false, either: ['coding', 'agentic'] as ('coding' | 'agentic')[] } };
+    const internal = { scenarios: { A1: { status: 'PASS' } }, toolReliability: { nativeSupport: 'native' } };
+    const codingChain = (coding: ScoreCell, agentic: ScoreCell) => recommendChains(
+      { internal, route, published: { intelligence: cell(40, 'measured'), coding, agentic, source: null, methodology: null, outputTokensPerSecond: null, timeToFirstTokenSeconds: null } } as unknown as Parameters<typeof recommendChains>[0],
+      RULES, mins,
+    ).find(r => r.target === 'Coding')!;
+    // One alternative is enough.
+    expect(codingChain(cell(50, 'measured'), cell(35, 'measured')).status).toBe('qualified');
+    // Both measured below: a miss.
+    expect(codingChain(cell(50, 'measured'), cell(20, 'measured')).status).toBe('not qualified');
+    // One below, one unscored: it could still pass, so not a miss.
+    expect(codingChain(cell(50, 'measured'), cell(null, null)).status).toBe('insufficient evidence');
+    // A measured pass carries it, so an estimate on the other side does not make it provisional.
+    expect(codingChain(cell(70, 'measured'), cell(50, 'tested')).status).toBe('qualified');
   });
 });

@@ -198,16 +198,38 @@ function PanelBody() {
                 </span>
               </div>
               <div className="mt-2 space-y-1.5">
-                {METRICS.map(m => (
-                  <Stepper
-                    key={m}
-                    label={t(`chainMinimums.metric_${m}`)}
-                    value={mins[m]}
-                    onChange={v => update(chain, { [m]: v })}
-                    enableAt={ENABLE_AT[m]}
-                  />
-                ))}
+                {METRICS.map(m => {
+                  const isEither = mins.either.includes(m)
+                  return (
+                    <Stepper
+                      key={m}
+                      label={t(`chainMinimums.metric_${m}`)}
+                      value={mins[m]}
+                      onChange={v => update(chain, v == null
+                        // Switching a metric off also drops it from the alternatives.
+                        ? { [m]: v, either: mins.either.filter(x => x !== m) }
+                        : { [m]: v })}
+                      enableAt={ENABLE_AT[m]}
+                      either={isEither}
+                      onToggleEither={() => update(chain, {
+                        either: isEither ? mins.either.filter(x => x !== m) : [...mins.either, m],
+                      })}
+                    />
+                  )
+                })}
               </div>
+              {mins.either.some(m => mins[m] != null) && (() => {
+                const label = (m: Metric) => t(`chainMinimums.metric_${m}`)
+                const required = METRICS.filter(m => mins[m] != null && !mins.either.includes(m)).map(label)
+                const either = METRICS.filter(m => mins[m] != null && mins.either.includes(m)).map(label).join(t('chainMinimums.eitherJoin'))
+                return (
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    {required.length > 0
+                      ? t('chainMinimums.eitherRule', { required: required.join(' + '), either })
+                      : t('chainMinimums.eitherRuleOnly', { either })}
+                  </p>
+                )
+              })()}
               <label className="mt-2 flex items-center gap-1.5 text-[10px] text-muted-foreground">
                 <input type="checkbox" checked={mins.acceptEstimated} onChange={e => update(chain, { acceptEstimated: e.target.checked })} className="size-3 accent-primary" />
                 {t('chainMinimums.acceptEstimated')}
@@ -328,11 +350,14 @@ function MembersView({ rows, draft, requirement }: {
   )
 }
 
-function Stepper({ label, value, onChange, enableAt }: {
+function Stepper({ label, value, onChange, enableAt, either, onToggleEither }: {
   label: string
   value: number | null
   onChange: (v: number | null) => void
   enableAt: number
+  /** This metric is one of the chain's alternatives rather than required. */
+  either: boolean
+  onToggleEither: () => void
 }) {
   const { t } = useI18n()
   const clamp = (v: number) => Math.max(0, Math.min(100, Math.round(v * 10) / 10))
@@ -358,6 +383,16 @@ function Stepper({ label, value, onChange, enableAt }: {
             aria-label={label}
           />
           <button type="button" onClick={e => step(e, 1)} className="size-6 rounded-md border hover:bg-muted" aria-label={`${label} +`} title={t('chainMinimums.shiftHint')}>+</button>
+          {/* AND / OR: required on its own, or one of the alternatives. */}
+          <button
+            type="button"
+            onClick={onToggleEither}
+            aria-pressed={either}
+            title={t(either ? 'chainMinimums.eitherOnHint' : 'chainMinimums.eitherOffHint')}
+            className={`rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${either ? 'border-sky-500/60 bg-sky-500/10 text-sky-700 dark:text-sky-300' : 'text-muted-foreground hover:bg-muted'}`}
+          >
+            {t(either ? 'chainMinimums.eitherOr' : 'chainMinimums.eitherAnd')}
+          </button>
           <button type="button" onClick={() => onChange(null)} className="ml-auto text-[10px] text-muted-foreground hover:text-foreground" title={t('chainMinimums.turnOff')}>
             {t('chainMinimums.turnOffShort')}
           </button>

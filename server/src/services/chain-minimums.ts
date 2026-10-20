@@ -22,6 +22,8 @@ export type GradedChain = Exclude<ChainName, 'Fast-Lane'>;
 export const GRADED_CHAINS: readonly GradedChain[] = ['Apex', 'Frontier', 'Workhorse', 'Default', 'Coding', 'Vision', 'Extra-Tier'];
 
 const score = z.number().min(0).max(100).nullable();
+export const MINIMUM_METRICS = ['general', 'coding', 'agentic'] as const;
+export type MinimumMetric = typeof MINIMUM_METRICS[number];
 const chainMinimums = z.object({
   /** AA Intelligence Index floor; null = no requirement on this metric. */
   general: score,
@@ -29,6 +31,11 @@ const chainMinimums = z.object({
   agentic: score,
   /** Whether an operator-set proxy estimate may satisfy a minimum. */
   acceptEstimated: z.boolean(),
+  /** Metrics that are alternatives rather than requirements: a model needs
+   *  every set minimum NOT listed here, plus at least ONE that is ("general
+   *  AND (coding OR agentic)"). Empty = every set minimum is required, which
+   *  is how a document saved before this field reads. */
+  either: z.array(z.enum(MINIMUM_METRICS)).max(MINIMUM_METRICS.length).default([]),
 }).strict();
 export type ChainMinimums = z.infer<typeof chainMinimums>;
 
@@ -44,7 +51,7 @@ export interface ChainMinimumsDoc {
 
 // Starting points from the 2026-09-25 distribution audit of AA v4.3. They are
 // a draft to tune, not a policy: revision 0 is marked as never saved.
-const off = { general: null, coding: null, agentic: null, acceptEstimated: false };
+const off = { general: null, coding: null, agentic: null, acceptEstimated: false, either: [] };
 export const DEFAULT_CHAINS: Record<GradedChain, ChainMinimums> = {
   Apex: { ...off, general: 45 },
   Frontier: { ...off, general: 35 },

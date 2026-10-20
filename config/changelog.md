@@ -1,6 +1,18 @@
 # Changelog
 
-## 2026-10-20 — "no tools" mark beside agentic (local, not deployed)
+## 2026-10-21 — Chain minimums: AND / OR per metric (local, not deployed)
+
+- Each metric on a chain in the Chain minimums panel has an AND/OR button. AND (the default) means the model must meet that minimum. OR metrics are alternatives: the model must meet every AND minimum, plus at least one OR minimum. Example: intelligence AND (coding OR agentic).
+- A line under the chain spells the rule out, for example "Needs at least one of Coding or Agentic."
+- Grading is the same everywhere: Compare and Keys highlights, chain fit chips, Apply recommendations and the benchmark passport.
+  - An OR group fails only when every alternative is measured below its minimum.
+  - When none passes but one is unscored, the result is "unknown", not a miss.
+  - A measured passing alternative beats an estimated one when deciding whether the result is provisional.
+- Stored as `either` on each chain in `imperium_chain_minimums`. A document saved before this reads `either: []`, so every existing minimum stays required. Checked on a live-data copy: revision 6 read with `either: []`.
+- On the copy, setting Coding to coding OR agentic raised Coding qualifiers from 36 to 57, and saving round-tripped `either: ["coding","agentic"]` (revision 8). The live minimums are untouched.
+- Checks: the full server suite passes (408 files / 5,169 tests) and the client suite passes (92 files / 699 tests), including new AND/OR cases on both sides. Typecheck, build and lint are clean. 7 new strings, filled into 59 locales.
+
+## 2026-10-20 — "no tools" mark beside agentic (deployed `main-20261021-071815`)
 
 - Tool support is a route fact, usually the provider's catalogue. 14 providers advertise no tools on any route, and 25 linked models have tools on some routes but not others. Vision is unrelated.
 - So the agentic score stays as the model's own figure, and a small "no tools" mark now sits beside it, with a tooltip explaining why:

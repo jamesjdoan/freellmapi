@@ -2205,7 +2205,14 @@
     "fitUnknown": "unscored",
     "fitNoTools": "no tools",
     "fitNoVision": "no vision",
-    "fitEstimated": "estimate"
+    "fitEstimated": "estimate",
+    "eitherAnd": "AND",
+    "eitherOr": "OR",
+    "eitherOffHint": "Required: the model must meet this one. Click to make it one of the alternatives (OR).",
+    "eitherOnHint": "One of the alternatives: meeting any one OR score is enough. Click to make it required (AND).",
+    "eitherRule": "Needs {required}, plus at least one of {either}.",
+    "eitherJoin": " or ",
+    "eitherRuleOnly": "Needs at least one of {either}."
   },
   "chainFit": {
     "fits": "fits: {chains}",

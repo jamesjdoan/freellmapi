@@ -28,7 +28,10 @@ const Route = z.object({
   // whether a chain that refuses estimates will take them.
   scores: z.object({ intelligence: Cell, coding: Cell, agentic: Cell }),
 })
-const Minimums = z.object({ general: score, coding: score, agentic: score, acceptEstimated: z.boolean() })
+const Minimums = z.object({
+  general: score, coding: score, agentic: score, acceptEstimated: z.boolean(),
+  either: z.array(z.enum(['general', 'coding', 'agentic'])).default([]),
+})
 const Evidence = z.object({
   doc: z.object({
     revision: z.number().int().nonnegative(),
@@ -76,6 +79,7 @@ export function ApplyChainRecommendations({ models }: { models: Models }) {
   const { draft } = useChainMinimumsView()
   const unsaved = draft != null && (!saved || GRADED_CHAINS.some(chain =>
     draft.chains[chain].acceptEstimated !== saved.chains[chain].acceptEstimated
+    || [...draft.chains[chain].either].sort().join() !== [...saved.chains[chain].either].sort().join()
     || METRICS.some(metric => draft.chains[chain][metric] !== saved.chains[chain][metric])))
   const [open, setOpen] = useState(false)
   const [working, setWorking] = useState(false)
