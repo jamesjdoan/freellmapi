@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-20 — Keys page fits a phone (local, not deployed)
+
+- At 390px the Providers tab was 874px wide: each provider row put the switch, name, chips, key, status, time and actions on one line.
+- Provider rows now wrap on phones. Line 1 has the switch, name, menu and chevron. Chips and the inline key drop to line 2, and the key actions to line 3. From `sm` up, the wrapper uses `display: contents`, so desktop is unchanged (checked at 1280px).
+- Multi-key rows wrap the same way. Model tables scroll sideways inside their panel instead of widening the page.
+- Checked against live data through a local dev server: the page is 390px wide on all five tabs with every provider expanded. Client typecheck passes, the Keys and pages tests pass (28 files / 139 tests), and lint shows the same 41 errors as `HEAD`.
+
 ## 2026-10-18 — Model screening benchmark (CLI only; nothing to deploy)
 
 - Added `server/src/services/model-bench/` (fixtures, sandbox, grade, runner, passport), the CLI `server/src/scripts/model-bench.ts` (`npm run model:bench -w server`) and `docs/en/operations/model-bench.md`.

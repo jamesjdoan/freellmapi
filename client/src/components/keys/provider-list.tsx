@@ -874,7 +874,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                 {/* Shown for single-key groups too, unlike before: it carries
                     the only disclosure control, and a group that cannot be
                     closed would leave its model table open on arrival. */}
-                <div className="group/krow flex items-center gap-2 pb-2">
+                <div className="group/krow flex flex-wrap items-center gap-x-2 gap-y-1.5 pb-2 sm:flex-nowrap">
                   <Switch
                     checked={group.keys.some(k => k.enabled)}
                     onCheckedChange={(checked) =>
@@ -889,7 +889,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                   <button
                     type="button"
                     onClick={() => toggleGroup(group.value, expanded)}
-                    className={`flex min-w-0 items-center gap-2 text-left ${single ? '' : 'flex-1'}`}
+                    className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-left sm:flex-nowrap ${single ? 'max-sm:flex-1' : 'flex-1'}`}
                     aria-expanded={expanded}
                   >
                     <h3 className="text-sm font-medium">{group.label}</h3>
@@ -938,6 +938,11 @@ export function ProviderList({ onAddKey, initialSearch }: {
                   {/* What is happening with this credential, beside what its
                       catalogue has been doing. Silent unless it needs a
                       decision. */}
+                  {/* Phones: chips and the inline key drop to their own line
+                      under the name, so the switch, name, menu and chevron keep
+                      the first. `sm:contents` removes the wrapper on wider
+                      screens, where everything sits on one row as before. */}
+                  <div className="flex basis-full flex-wrap items-center gap-x-2 gap-y-1 pl-11 empty:hidden max-sm:order-last sm:contents">
                   <ProviderDiagnosisChip diagnosis={group.endpointScope === undefined ? diagnosisByPlatform.get(group.platform) : undefined} />
                   <ProviderChurnChip
                     churn={group.endpointScope === undefined ? churn.get(group.platform) : undefined}
@@ -965,6 +970,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                       balance: balanceOf.get(k.id),
                     })
                   })()}
+                  </div>
                   <DropdownMenu>
                       <DropdownMenuTrigger
                         className={buttonVariants({ variant: 'ghost', size: 'icon-xs' })}
@@ -1138,7 +1144,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                       const isChecking = checkKey.isPending && checkKey.variables === k.id
                       return (
                         <div key={k.id} className="bg-card">
-                          <div className="group/krow flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors">
+                          <div className="group/krow flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3 hover:bg-muted/40 transition-colors sm:flex-nowrap">
                             {/* #787: bulk-select checkbox — enabling the row-level
                                 batch bar below. Deliberately secondary: the switch
                                 stays the primary per-key control, and a checkbox on

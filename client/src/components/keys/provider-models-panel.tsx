@@ -672,6 +672,8 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
         )}
       </div>
 
+      {/* Scrolls sideways on its own on a phone, rather than widening the page. */}
+      <div className="max-w-full overflow-x-auto">
       <table className="w-full text-xs">
         <thead className="text-[10px] text-muted-foreground">
           <tr>
@@ -938,6 +940,7 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
           )}
         </tbody>
       </table>
+      </div>
       {/* Every row filtered out. Said here rather than in place of the panel,
           so the chip that hid them stays on screen and the state is one click
           from reversible — and phrased as what it is, not as "nothing
