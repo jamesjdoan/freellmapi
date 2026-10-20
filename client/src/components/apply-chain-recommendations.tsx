@@ -37,8 +37,8 @@ const Evidence = z.object({
     revision: z.number().int().nonnegative(),
     chains: z.record(Minimums).refine(chains => GRADED_CHAINS.every(chain => Object.hasOwn(chains, chain))),
   }),
-  requirements: z.array(z.object({ name: z.string(), requiresTools: z.boolean(), requiresVision: z.boolean(), reserved: z.boolean() }))
-    .refine(requirements => GRADED_CHAINS.every(chain => requirements.some(req => req.name === chain && !req.reserved))),
+  requirements: z.array(z.object({ name: z.string(), requiresTools: z.boolean(), requiresVision: z.boolean() }))
+    .refine(requirements => GRADED_CHAINS.every(chain => requirements.some(req => req.name === chain))),
 })
 const Profiles = z.array(z.object({ name: z.string() }))
 const Membership = z.object({ success: z.literal(true), changed: z.number().int().nonnegative() })

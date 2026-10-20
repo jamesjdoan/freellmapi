@@ -113,7 +113,7 @@ Benchmark a model (this tool) whenever steps 3–4 apply, and before it joins a 
 
 ## Recommendations
 
-**Chains** use the existing `CHAIN_CONTRACTS` tool and vision requirements and the saved chain minimums. Minimums are checked only against published or typed scores. Estimates count only where the chain accepts them, and Fast-Lane stays reserved. A tools-required chain needs a native A1 PASS to be `qualified`; a catalogue claim alone makes it `provisional`.
+**Chains** use the existing `CHAIN_CONTRACTS` tool and vision requirements and the saved chain minimums. Minimums are checked only against published or typed scores. Estimates count only where the chain accepts them. Every chain is graded, Fast-Lane included, and OR metrics are alternatives. A tools-required chain needs a native A1 PASS to be `qualified`; a catalogue claim alone makes it `provisional`.
 
 **OMP roles** use these working thresholds on published AA scores. They are not AA categories.
 

@@ -2188,7 +2188,6 @@
     "acceptEstimated": "Accept estimated (proxy) scores",
     "needsTools": "needs tool calling",
     "needsVision": "needs vision",
-    "fastLaneReserved": "Fast-Lane is system reserved and not graded",
     "reset": "Reset",
     "off": "off - set a minimum",
     "shiftHint": "Shift-click for ±5",

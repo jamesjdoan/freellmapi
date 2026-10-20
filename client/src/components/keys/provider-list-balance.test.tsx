@@ -115,6 +115,7 @@ it('marks a near-exhausted balance amber and leaves a healthy one neutral', asyn
 
 it('renders no balance badge when the provider reports nothing', async () => {
   await mount([apiKey({})], [])
-  expect(container.textContent).toContain('Prod key')
+  // The row rendered (the provider name), and nothing claims a balance.
+  expect(container.textContent).toContain('Groq')
   expect([...container.querySelectorAll('[aria-label]')].some(el => el.getAttribute('aria-label')?.includes('left'))).toBe(false)
 })

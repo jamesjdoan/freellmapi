@@ -23,8 +23,7 @@ export function ChainFit({ score, chains, models }: {
   const req = (c: GradedChain) => requirements.find(r => r.name === c)
   const results = GRADED_CHAINS.map(c => ({ chain: c, e: evaluate(score, doc.chains[c], req(c)) }))
   const fits = results.filter(r => r.e.status === 'fits').map(r => r.chain)
-  // Current memberships that the minimums would not recommend. Fast-Lane is
-  // not graded, so it never appears here.
+  // Current memberships that the minimums would not recommend.
   const misfits = results.filter(r => chains.includes(r.chain) && r.e.status !== 'fits')
   const why = (r: (typeof results)[number]) =>
     r.e.status === 'structural' ? t(`chainFit.missing_${r.e.missing[0]}`)

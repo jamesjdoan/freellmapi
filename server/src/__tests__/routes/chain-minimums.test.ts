@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { Express } from 'express';
 import { createApp } from '../../app.js';
-import { initDb } from '../../db/index.js';
+import { getDb, initDb } from '../../db/index.js';
 import { mintDashboardToken } from '../helpers/auth.js';
 
 let dashToken = '';
@@ -36,9 +36,8 @@ describe('chain minimums', () => {
     // Never saved: the defaults are a draft, not a decision.
     expect(first.body.doc.revision).toBe(0);
     expect(first.body.doc.savedAt).toBeNull();
-    // Fast-Lane is listed as reserved and never offered minimums.
-    expect(first.body.requirements.find((r: { name: string }) => r.name === 'Fast-Lane').reserved).toBe(true);
-    expect(first.body.doc.chains['Fast-Lane']).toBeUndefined();
+    // Fast-Lane takes minimums like every other chain.
+    expect(first.body.doc.chains['Fast-Lane']).toMatchObject({ general: 15, either: [] });
 
     const chains = { ...first.body.doc.chains, Apex: { ...first.body.doc.chains.Apex, general: 40 } };
     const saved = await request(app, 'PUT', '/api/chain-minimums', { expectedRevision: 0, chains });
@@ -66,7 +65,7 @@ describe('chain minimums', () => {
     expect((await request(app, 'GET', '/api/chain-minimums/revisions/1')).body.doc.chains.Apex.general).toBe(40);
   });
 
-  it('rejects scores outside the AA scale and minimums for the reserved chain', async () => {
+  it('rejects scores outside the AA scale', async () => {
     const { body } = await request(app, 'GET', '/api/chain-minimums');
     const chains = body.doc.chains;
     const outOfRange = await request(app, 'PUT', '/api/chain-minimums', {
@@ -74,10 +73,33 @@ describe('chain minimums', () => {
       chains: { ...chains, Coding: { ...chains.Coding, coding: 101 } },
     });
     expect(outOfRange.status).toBe(400);
-    const reserved = await request(app, 'PUT', '/api/chain-minimums', {
-      expectedRevision: body.doc.revision,
-      chains: { ...chains, 'Fast-Lane': { general: 10, coding: null, agentic: null, acceptEstimated: false } },
+  });
+
+  it('reads a document saved before Fast-Lane was graded, keeping every saved minimum', async () => {
+    // The live document on 2026-10-21: seven chains, no `either`, no Fast-Lane.
+    const off = { general: null, coding: null, agentic: null, acceptEstimated: false };
+    const legacy = {
+      version: 1, revision: 6, savedAt: '2026-10-01T00:00:00.000Z',
+      chains: {
+        Apex: { ...off, general: 40 }, Frontier: off, Workhorse: off, Default: off,
+        Coding: { ...off, coding: 30, agentic: 20 }, Vision: off, 'Extra-Tier': off,
+      },
+    };
+    getDb().prepare(`INSERT INTO settings (key, value) VALUES ('imperium_chain_minimums', ?)
+                     ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(JSON.stringify(legacy));
+
+    const { body } = await request(app, 'GET', '/api/chain-minimums');
+    expect(body.doc.revision).toBe(6);
+    expect(body.doc.chains.Apex.general).toBe(40);
+    expect(body.doc.chains.Coding).toMatchObject({ coding: 30, agentic: 20, either: [] });
+    expect(body.doc.chains['Fast-Lane']).toMatchObject({ general: 15 });
+
+    // And it saves forward with Fast-Lane set.
+    const saved = await request(app, 'PUT', '/api/chain-minimums', {
+      expectedRevision: 6,
+      chains: { ...body.doc.chains, 'Fast-Lane': { ...body.doc.chains['Fast-Lane'], general: 18 } },
     });
-    expect(reserved.status).toBe(400);
+    expect(saved.status).toBe(200);
+    expect(saved.body.doc.chains['Fast-Lane'].general).toBe(18);
   });
 });

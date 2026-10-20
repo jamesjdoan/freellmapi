@@ -16,10 +16,11 @@ import { CHAIN_CONTRACTS, type ChainName } from '../data/routing-curation.js';
 
 export const SETTING_KEY = 'imperium_chain_minimums';
 
-/** System reserved: shown, never graded, never given minimums. */
-export const RESERVED_CHAINS: readonly ChainName[] = ['Fast-Lane'];
-export type GradedChain = Exclude<ChainName, 'Fast-Lane'>;
-export const GRADED_CHAINS: readonly GradedChain[] = ['Apex', 'Frontier', 'Workhorse', 'Default', 'Coding', 'Vision', 'Extra-Tier'];
+/** Every chain takes minimums. Fast-Lane was once reserved because it is
+ *  ordered on measured latency rather than capability; it takes floors now so
+ *  its members can be compared on capability too (James, 2026-10-21). */
+export type GradedChain = ChainName;
+export const GRADED_CHAINS: readonly GradedChain[] = ['Apex', 'Frontier', 'Workhorse', 'Default', 'Coding', 'Vision', 'Extra-Tier', 'Fast-Lane'];
 
 const score = z.number().min(0).max(100).nullable();
 export const MINIMUM_METRICS = ['general', 'coding', 'agentic'] as const;
@@ -60,10 +61,21 @@ export const DEFAULT_CHAINS: Record<GradedChain, ChainMinimums> = {
   Coding: { ...off, coding: 45, agentic: 30 },
   Vision: { ...off, general: 25 },
   'Extra-Tier': { ...off, general: 20 },
+  // Short, bounded work (commit messages, summaries): a low general floor
+  // keeps a fast but weak route out without ruling out small models.
+  'Fast-Lane': { ...off, general: 15 },
 };
 
 function defaults(): ChainMinimumsDoc {
   return { version: 1, revision: 0, savedAt: null, chains: structuredClone(DEFAULT_CHAINS) };
+}
+
+/** Parse a stored chains object. A chain the document predates (Fast-Lane,
+ *  before 2026-10-21) takes its default rather than invalidating the rest. */
+function readChains(raw: unknown): Record<GradedChain, ChainMinimums> | null {
+  if (raw == null || typeof raw !== 'object') return null;
+  const parsed = chainsSchema.safeParse({ ...structuredClone(DEFAULT_CHAINS), ...raw });
+  return parsed.success ? parsed.data : null;
 }
 
 export function getChainMinimums(db: Db): ChainMinimumsDoc {
@@ -71,9 +83,9 @@ export function getChainMinimums(db: Db): ChainMinimumsDoc {
   if (!row) return defaults();
   try {
     const parsed = JSON.parse(row.value) as ChainMinimumsDoc;
-    const chains = chainsSchema.safeParse(parsed.chains);
-    if (parsed.version === 1 && chains.success && Number.isInteger(parsed.revision)) {
-      return { version: 1, revision: parsed.revision, savedAt: parsed.savedAt ?? null, chains: chains.data };
+    const chains = readChains(parsed.chains);
+    if (parsed.version === 1 && chains && Number.isInteger(parsed.revision)) {
+      return { version: 1, revision: parsed.revision, savedAt: parsed.savedAt ?? null, chains };
     }
   } catch { /* unreadable document: fall through to defaults, loudly below */ }
   console.warn(`[chain-minimums] ${SETTING_KEY} is unreadable; showing defaults until the next save`);
@@ -116,16 +128,17 @@ export function listRevisions(db: Db, limit = 50): { revision: number; savedAt: 
 
 export function getRevision(db: Db, revision: number): ChainMinimumsDoc | null {
   const row = db.prepare('SELECT doc_json FROM chain_minimum_revision WHERE revision = ?').get(revision) as { doc_json: string } | undefined;
-  return row ? JSON.parse(row.doc_json) as ChainMinimumsDoc : null;
+  if (!row) return null;
+  const doc = JSON.parse(row.doc_json) as ChainMinimumsDoc;
+  return { ...doc, chains: readChains(doc.chains) ?? doc.chains };
 }
 
 /** What each chain structurally requires, from the curation contracts, so a
  *  recommendation never says "fits Apex" for a model that cannot call tools. */
-export function chainRequirements(): { name: ChainName; requiresTools: boolean; requiresVision: boolean; reserved: boolean }[] {
+export function chainRequirements(): { name: ChainName; requiresTools: boolean; requiresVision: boolean }[] {
   return CHAIN_CONTRACTS.map(c => ({
     name: c.name,
     requiresTools: c.requiresTools,
     requiresVision: c.requiresVision,
-    reserved: RESERVED_CHAINS.includes(c.name),
   }));
 }

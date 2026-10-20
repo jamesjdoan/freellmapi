@@ -31,7 +31,7 @@ export interface PublishedEvidence {
   } | null;
 }
 
-export interface ChainRule { name: string; requiresTools: boolean; requiresVision: boolean; reserved: boolean }
+export interface ChainRule { name: string; requiresTools: boolean; requiresVision: boolean }
 export interface ChainMinimum { general: number | null; coding: number | null; agentic: number | null; acceptEstimated: boolean; either?: ('general' | 'coding' | 'agentic')[] }
 
 export type Evidence = 'complete' | 'partial' | 'none';
@@ -155,7 +155,7 @@ function toolEvidence(p: Pick<Passport, 'internal' | 'route'>): { ok: boolean | 
 }
 
 export function recommendChains(p: Pick<Passport, 'internal' | 'route' | 'published'>, rules: ChainRule[], mins: Record<string, ChainMinimum>): Recommendation[] {
-  return rules.filter(r => !r.reserved).map(rule => {
+  return rules.map(rule => {
     const reasons: string[] = [];
     let provisional = false;
     if (rule.requiresTools) {

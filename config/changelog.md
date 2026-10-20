@@ -1,6 +1,18 @@
 # Changelog
 
-## 2026-10-21 — Chain minimums: AND / OR per metric (local, not deployed)
+## 2026-10-21 — Fast-Lane takes minimums; collapsed Keys rows cleaned up (local, not deployed)
+
+- **Fast-Lane in Chain minimums.** It was hard-coded as reserved because it is ordered on measured latency, not capability. It now takes General, Coding and Agentic floors like every chain, with AND/OR, so its members can be compared on capability. The default is General 15.
+  - A saved document that predates this reads Fast-Lane at its default and keeps every saved minimum. A regression test covers the 7-chain document as it is live today (revision 6).
+  - On a live-data copy at General 15, Fast-Lane showed 71 qualifiers and 4 of 11 members passing. GPT-OSS 20B (9.0), Nemotron 3.5 Lightning (12.9) and Ministral 3B (4.8) are below.
+  - The "reserved" flag is gone from `/api/chain-minimums` requirements, the bench passport, Apply recommendations and the Members view.
+- **Collapsed Keys rows.** A collapsed provider now shows its name, one health dot and only what needs attention: the diagnosis (`Access denied E403`, `rate limited E429`, `key off`), new models, and the balance (`84% tokens`).
+  - Moved to the expanded view: the masked key, label, base URL, last-check time, "N/M in key scope" and the churn history chip.
+  - The "1" key count on single-key providers and the "1 healthy" text are gone. Issues still say so in words.
+  - On a live-data copy, all 18 collapsed rows are one 32px line at desktop width, and the page stays 390px wide on a phone.
+- Checks: the server suite and the client suite (92 files / 699 tests) pass, typecheck and build are clean, and lint shows the same single pre-existing error in `provider-list.tsx` as `HEAD`. Two Keys tests now expand the provider before checking key actions.
+
+## 2026-10-21 — Chain minimums: AND / OR per metric (deployed `main-20261021-080939`)
 
 - Each metric on a chain in the Chain minimums panel has an AND/OR button. AND (the default) means the model must meet that minimum. OR metrics are alternatives: the model must meet every AND minimum, plus at least one OR minimum. Example: intelligence AND (coding OR agentic).
 - A line under the chain spells the rule out, for example "Needs at least one of Coding or Agentic."

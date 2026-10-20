@@ -114,6 +114,33 @@ export function ProviderList({ onAddKey, initialSearch }: {
    *  auto-expands the groups it matches. */
   initialSearch?: string
 }) {
+  /** #1403 phase 3: the provider-reported balance. Amber at ≤20% left — the
+   *  same low-balance signal the Quota outlook panel gives, but visible where
+   *  the operator actually scans keys instead of on a second tab. Shared by
+   *  the expanded key details and the collapsed provider row. */
+  function renderBalance(k: ApiKey, balance: KeyBalance | undefined) {
+    if (!balance || k.platform === 'radeon') return null
+    return (
+      <Tooltip
+        text={balance.limit != null
+          ? t('keys.quotaBalanceHint', { remaining: new Intl.NumberFormat(locale).format(balance.remaining), limit: new Intl.NumberFormat(locale).format(balance.limit), metric: t(METRIC_LABEL_KEY[balance.metric]) })
+          : t('keys.quotaBalanceLeft', { remaining: new Intl.NumberFormat(locale).format(balance.remaining) })}
+      >
+        <Badge
+          variant="outline"
+          aria-label={t('keys.quotaBalanceLeft', { remaining: new Intl.NumberFormat(locale).format(balance.remaining) })}
+          className={`text-[10px] tabular-nums ${balance.fraction != null && balance.fraction <= 0.2
+            ? 'border-amber-600/30 text-amber-700 dark:text-amber-300'
+            : 'text-muted-foreground'} ${k.enabled ? '' : 'opacity-50'}`}
+        >
+          {balance.limit != null && balance.fraction != null
+            ? `${Math.round(balance.fraction * 100)}% ${t(METRIC_LABEL_KEY[balance.metric])}`
+            : `${new Intl.NumberFormat(locale).format(balance.remaining)} ${t(METRIC_LABEL_KEY[balance.metric])}`}
+        </Badge>
+      </Tooltip>
+    )
+  }
+
   /**
    * One definition of a key's own controls: status, masked key, editable
    * label, badges, last check and the hover action cluster.
@@ -196,29 +223,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                 {t('keys.accountLimits')}
               </Badge>
             )}
-            {/* #1403 phase 3: the provider-reported balance. Amber at ≤20%
-                left — the same low-balance signal the Quota outlook panel
-                gives, but visible where the operator actually scans keys
-                instead of on a second tab. */}
-            {balance && k.platform !== 'radeon' && (
-              <Tooltip
-                text={balance.limit != null
-                  ? t('keys.quotaBalanceHint', { remaining: new Intl.NumberFormat(locale).format(balance.remaining), limit: new Intl.NumberFormat(locale).format(balance.limit), metric: t(METRIC_LABEL_KEY[balance.metric]) })
-                  : t('keys.quotaBalanceLeft', { remaining: new Intl.NumberFormat(locale).format(balance.remaining) })}
-              >
-                <Badge
-                  variant="outline"
-                  aria-label={t('keys.quotaBalanceLeft', { remaining: new Intl.NumberFormat(locale).format(balance.remaining) })}
-                  className={`text-[10px] tabular-nums ${balance.fraction != null && balance.fraction <= 0.2
-                    ? 'border-amber-600/30 text-amber-700 dark:text-amber-300'
-                    : 'text-muted-foreground'} ${k.enabled ? '' : 'opacity-50'}`}
-                >
-                  {balance.limit != null && balance.fraction != null
-                    ? `${Math.round(balance.fraction * 100)}% ${t(METRIC_LABEL_KEY[balance.metric])}`
-                    : `${new Intl.NumberFormat(locale).format(balance.remaining)} ${t(METRIC_LABEL_KEY[balance.metric])}`}
-                </Badge>
-              </Tooltip>
-            )}
+            {renderBalance(k, balance)}
             <ProviderKeyCapacityIndicator platform={k.platform} keyId={k.id} />
             <div className="flex-1" />
             {lastChecked && (
@@ -889,7 +894,9 @@ export function ProviderList({ onAddKey, initialSearch }: {
                   <button
                     type="button"
                     onClick={() => toggleGroup(group.value, expanded)}
-                    className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-left sm:flex-nowrap ${single ? 'max-sm:flex-1' : 'flex-1'}`}
+                    // Collapsed, the name takes the slack so the few signals
+                    // left sit together on the right.
+                    className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-left sm:flex-nowrap ${single && expanded ? 'max-sm:flex-1' : 'flex-1'}`}
                     aria-expanded={expanded}
                   >
                     <h3 className="text-sm font-medium">{group.label}</h3>
@@ -898,7 +905,8 @@ export function ProviderList({ onAddKey, initialSearch }: {
                         {t('search.badge')}
                       </Badge>
                     )}
-                    <Badge variant="secondary" className="tabular-nums">{group.keys.length}</Badge>
+                    {/* A "1" on every single-key provider said nothing. */}
+                    {!single && <Badge variant="secondary" className="tabular-nums">{group.keys.length}</Badge>}
                     {group.customGroup && (
                       <Tooltip text={t('keys.groupHandleHint', { handle: groupHandle(group.customGroup) })}>
                         <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
@@ -906,11 +914,14 @@ export function ProviderList({ onAddKey, initialSearch }: {
                         </code>
                       </Tooltip>
                     )}
+                    {/* Collapsed, a single key's health is one dot; text only
+                        when something is wrong. Expanded, the key row below
+                        says it in full, so the counts stay for multi-key groups. */}
                     <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
                       {healthyCount > 0 && (
-                        <span className="inline-flex items-center gap-1">
+                        <span className="inline-flex items-center gap-1" title={single ? t('keys.summaryHealthy', { count: healthyCount }) : undefined}>
                           <span className="size-1.5 rounded-full bg-emerald-500" />
-                          {t('keys.summaryHealthy', { count: healthyCount })}
+                          {!single && t('keys.summaryHealthy', { count: healthyCount })}
                         </span>
                       )}
                       {issueCount > 0 && (
@@ -920,7 +931,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                         </span>
                       )}
                     </span>
-                    {models.total > 0 && (
+                    {expanded && models.total > 0 && (
                       <Badge variant="secondary" className="tabular-nums text-[10px] font-normal text-muted-foreground">
                         {t('keys.modelsInScope', { enabled: models.enabled, total: models.total })}
                       </Badge>
@@ -944,11 +955,17 @@ export function ProviderList({ onAddKey, initialSearch }: {
                       screens, where everything sits on one row as before. */}
                   <div className="flex basis-full flex-wrap items-center gap-x-2 gap-y-1 pl-11 empty:hidden max-sm:order-last sm:contents">
                   <ProviderDiagnosisChip diagnosis={group.endpointScope === undefined ? diagnosisByPlatform.get(group.platform) : undefined} />
-                  <ProviderChurnChip
-                    churn={group.endpointScope === undefined ? churn.get(group.platform) : undefined}
-                    expanded={single ? churnOpenKeyIds.has(group.keys[0].id) : undefined}
-                    onToggle={single ? () => toggleChurnOpen(group.keys[0].id) : undefined}
-                  />
+                  {/* Collapsed: only what needs a decision (diagnosis, new
+                      models) and the one number worth scanning (balance).
+                      The churn history, the key itself and its last check
+                      open with the group. */}
+                  {expanded && (
+                    <ProviderChurnChip
+                      churn={group.endpointScope === undefined ? churn.get(group.platform) : undefined}
+                      expanded={single ? churnOpenKeyIds.has(group.keys[0].id) : undefined}
+                      onToggle={single ? () => toggleChurnOpen(group.keys[0].id) : undefined}
+                    />
+                  )}
                   <NewArrivalsTag churn={group.endpointScope === undefined ? churn.get(group.platform) : undefined} />
                   {/* The single key, inline. It used to sit in its own bordered
                       box below, which repeated the provider it belongs to and
@@ -960,6 +977,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
                       which for one key is the same act. */}
                   {single && (() => {
                     const k = group.keys[0]
+                    if (!expanded) return renderBalance(k, balanceOf.get(k.id))
                     const health = healthKeyMap.get(k.id)
                     return renderKeyDetails(k, {
                       status: statusOf(k),

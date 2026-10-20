@@ -69,14 +69,22 @@ it('keeps the old layout when no search key exists', async () => {
 // "Models & account limits"; a multi-key provider opens to per-key rows with
 // "Edit models". Neither may appear on a search key.
 const modelActions = () => container.querySelectorAll('[aria-label="Models & account limits"], [aria-label="Edit models"]')
+// A collapsed provider shows only its name and signals; the key's actions
+// open with it.
+async function expandAll() {
+  for (const b of container.querySelectorAll<HTMLButtonElement>('button[aria-label="Show"]')) act(() => b.click())
+  await flush()
+}
 
 it('hides the edit-models action on a search key', async () => {
   await mount([apiKey({ id: 2, platform: 'tavily' as Platform, label: 'Search key' })])
+  await expandAll()
   expect(container.querySelector('[aria-label="Edit key"]')).not.toBeNull()
   expect(modelActions()).toHaveLength(0)
   // A chat key still offers it.
   act(() => root.unmount())
   root = createRoot(container)
   await mount([apiKey({ id: 1, platform: 'groq' })])
+  await expandAll()
   expect(modelActions().length).toBeGreaterThan(0)
 })

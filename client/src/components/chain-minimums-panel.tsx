@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { SlidersHorizontal, X, Lock } from 'lucide-react'
+import { SlidersHorizontal, X } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
@@ -249,10 +249,6 @@ function PanelBody() {
             </section>
           )
         })}
-        <section className="flex items-center gap-2 rounded-xl border border-dashed p-2.5 text-[11px] text-muted-foreground">
-          <Lock className="size-3.5" />
-          {t('chainMinimums.fastLaneReserved')}
-        </section>
       </div>
 
       <footer className="space-y-2 border-t p-3">
@@ -276,7 +272,8 @@ function PanelBody() {
 // them. An effective unlimited model goes first in every chain it is in
 // (router.ts unlimitedFirst), then chain priority. Health, cooldowns and quota
 // can still skip a member at request time; this is the order, not a promise.
-const MEMBER_CHAINS = [...GRADED_CHAINS, 'Fast-Lane'] as const
+// Every chain is graded, so the members view lists the same chains.
+const MEMBER_CHAINS = GRADED_CHAINS
 const FIT_CLASS: Record<Evaluation['status'], string> = {
   fits: 'text-emerald-700 dark:text-emerald-400',
   below: 'text-rose-700 dark:text-rose-400',
@@ -306,19 +303,19 @@ function MembersView({ rows, draft, requirement }: {
   return (
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
       {MEMBER_CHAINS.map(chain => {
-        const graded = (GRADED_CHAINS as readonly string[]).includes(chain) ? chain as GradedChain : null
+        const graded: GradedChain = chain
         const members = rows
           .filter(r => r.chains.includes(chain))
           .map(r => ({ r, rank: r.chainRanks[r.chains.indexOf(chain)] ?? 0 }))
           .sort((a, b) => Number(!a.r.unlimited?.effective) - Number(!b.r.unlimited?.effective) || a.rank - b.rank)
-        const rated = members.map(m => ({ ...m, e: graded ? evaluate(scoreRowOf(m.r), draft.chains[graded], requirement(graded)) : null }))
-        const fits = rated.filter(m => m.e?.status === 'fits').length
+        const rated = members.map(m => ({ ...m, e: evaluate(scoreRowOf(m.r), draft.chains[graded], requirement(graded)) }))
+        const fits = rated.filter(m => m.e.status === 'fits').length
         return (
           <section key={chain} className="rounded-xl border p-2.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold">{chain}</span>
               <span className="text-[10px] tabular-nums text-muted-foreground">
-                {graded ? t('chainMinimums.membersCount', { count: members.length, fits }) : t('chainMinimums.fastLaneReserved')}
+                {t('chainMinimums.membersCount', { count: members.length, fits })}
               </span>
             </div>
             {members.length === 0 ? (
@@ -337,7 +334,7 @@ function MembersView({ rows, draft, requirement }: {
                       </span>
                       {why && <span className="shrink-0 text-[10px] text-muted-foreground">{t(`keys.${why}`)}</span>}
                       <span className={`shrink-0 tabular-nums ${provenanceClass(r.scores.intelligence.provenance) ?? 'text-muted-foreground'}`}>{r.scores.intelligence.value?.toFixed(1) ?? '–'}</span>
-                      {e && <span className={`w-14 shrink-0 text-right text-[10px] ${FIT_CLASS[e.status]}`}>{fitLabel(e, anyEstimated(scoreRowOf(r)))}</span>}
+                      <span className={`w-14 shrink-0 text-right text-[10px] ${FIT_CLASS[e.status]}`}>{fitLabel(e, anyEstimated(scoreRowOf(r)))}</span>
                     </li>
                   )
                 })}

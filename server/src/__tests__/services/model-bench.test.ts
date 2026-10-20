@@ -310,10 +310,13 @@ describe('classification of an unpublished model', () => {
 
 const cell = (value: number | null, provenance: ScoreCell['provenance']): ScoreCell => ({ value, provenance, entry: null, editable: provenance !== 'measured' });
 const RULES: ChainRule[] = [
-  { name: 'Coding', requiresTools: true, requiresVision: false, reserved: false },
-  { name: 'Fast-Lane', requiresTools: true, requiresVision: false, reserved: true },
+  { name: 'Coding', requiresTools: true, requiresVision: false },
+  { name: 'Fast-Lane', requiresTools: true, requiresVision: false },
 ];
-const MINS = { Coding: { general: null, coding: 45, agentic: null, acceptEstimated: false } };
+const MINS = {
+  Coding: { general: null, coding: 45, agentic: null, acceptEstimated: false },
+  'Fast-Lane': { general: 15, coding: null, agentic: null, acceptEstimated: false },
+};
 const route = { platform: 'groq', modelId: 'm', displayName: 'M', contextWindow: 131072, supportsTools: true, supportsVision: false };
 
 describe('classification', () => {
@@ -323,8 +326,12 @@ describe('classification', () => {
     const p = buildPassport(run, route, { scores: { intelligence: cell(null, null), coding: cell(null, null), agentic: cell(null, null) }, aa: null }, RULES, MINS);
     expect(p.published.coding).toMatchObject({ value: null, provenance: null });
     expect(p.missing).toContain('published coding score');
-    // Coding chain needs a coding score; internal A1 does not stand in for it.
-    expect(p.chains).toEqual([expect.objectContaining({ target: 'Coding', status: 'insufficient evidence' })]);
+    // Coding chain needs a coding score, Fast-Lane a general one; internal A1
+    // does not stand in for either.
+    expect(p.chains).toEqual([
+      expect.objectContaining({ target: 'Coding', status: 'insufficient evidence' }),
+      expect.objectContaining({ target: 'Fast-Lane', status: 'insufficient evidence' }),
+    ]);
     const task = p.ompRoles.find(r => r.target === 'task')!;
     // Only A1 ran, so nothing internal speaks to coding either.
     expect(task.status).toBe('insufficient evidence');
