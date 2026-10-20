@@ -1876,7 +1876,10 @@
     "scopeClifreeHint": "Routes a free CLI agent can actually drive, as reported by your machines. Not a platform filter: a catalogue route no machine reports is excluded, and Cline's free models appear only in the fleet table below — FreeLLM cannot call them.",
     "reset": "Reset",
     "resetHint": "Back to defaults: intelligence chart, routed scope, no search, nothing pinned.",
-    "chainNoRoutable": "No models in this group have a usable key for this provider. Add a key or enable an existing one first."
+    "chainNoRoutable": "No models in this group have a usable key for this provider. Add a key or enable an existing one first.",
+    "noToolsMark": "no tools",
+    "noToolsRouteHint": "This provider does not advertise tool calling on this route, so chains that need tools skip it. The agentic score describes the model, measured with tools.",
+    "noToolsModelHint": "None of this model's routes advertise tool calling, so chains that need tools skip it. The agentic score describes the model, measured with tools."
   },
   "catalogue": {
     "changesTitle": "Catalogue changes",

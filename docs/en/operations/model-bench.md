@@ -101,6 +101,10 @@ Run this for every model added to the catalogue, and for any model Compare shows
    - `family`: the family's published figure, read across.
    - `approximated`: an operator estimate from a vendor table or a third-party leaderboard.
    - `tested`: a measurement on AA's scale from a source you trust.
+   - **AA sub-score fit, as `tested`.** AA often publishes a model's Intelligence and its sub-benchmarks (SciCode, Terminal-Bench v4, LCR, HLE) before computing its Coding and Agentic indices. Fit each index by least squares on the AA models that have both. Then type the fitted value onto every route linked to that slug, and never overwrite a typed score. It is `tested`, not `approximated`, because it is calculated from AA's measured sub-tests rather than guessed (James, 2026-10-20), so it counts toward chain minimums. The fits on 2026-10-20 (leave-one-out error):
+     - Coding from SciCode, Terminal-Bench v4 and Intelligence: R² 0.95, typical error ±3.2, 90% within ±8.9.
+     - Agentic from Terminal-Bench v4, LCR, HLE, SciCode and Intelligence: R² 0.97, typical error ±2.2, 90% within ±5.6.
+     - Agentic from Intelligence only, where the sub-scores are missing: R² 0.92, typical error ±3.3, 90% within ±8.0.
    Internal screen scores are never typed in: they are on a different scale.
 5. **Not scored.** This covers models with no general-purpose chat role: safety and guard classifiers, translation, speech, fill-in-the-middle code completion, embedding and robotics models. Leave them unmapped. Chain minimums and OMP thresholds then refuse them, which is correct.
 6. **Revisit.** When AA starts publishing a proxied model, Compare prompts to swap the proxy for the measured score (`GET /api/analysis/proxy-upgrades`). Accept it there. Typed scores are not upgraded automatically, so re-check them after an AA sync that adds the model's family.

@@ -1876,7 +1876,10 @@
     "tokensPerTaskHint": "How many tokens the model spends to finish one task. An AA range is derived from their published cost per task: all billed at the output price (fewest) to all at the input price (most). A screen figure is what our own benchmark measured.",
     "tokensPerTaskAaTooltip": "≈{tokens} tokens per AA task at a 3:1 input:output mix (the sort value)",
     "tokensPerTaskScreen": "screen",
-    "tokensPerTaskScreenTooltip": "{tokens} tokens per task, measured by our screening benchmark ({scenarios} scenarios, bench v{version})"
+    "tokensPerTaskScreenTooltip": "{tokens} tokens per task, measured by our screening benchmark ({scenarios} scenarios, bench v{version})",
+    "noToolsMark": "no tools",
+    "noToolsRouteHint": "This provider does not advertise tool calling on this route, so chains that need tools skip it. The agentic score describes the model, measured with tools.",
+    "noToolsModelHint": "None of this model's routes advertise tool calling, so chains that need tools skip it. The agentic score describes the model, measured with tools."
   },
   "catalogue": {
     "changesTitle": "Catalogue changes",

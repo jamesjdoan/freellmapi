@@ -23,7 +23,7 @@ import { scoreRowOf, useScoreTone, type ScoreRow } from '@/lib/chain-minimums'
 import type { ScoreMetric, Scores } from '@/lib/score-provenance'
 import { TokenEfficiencyCell } from '@/components/token-efficiency'
 import type { TokenEfficiency } from '@freellmapi/shared/types'
-import { EditableScore } from '@/components/score-value'
+import { EditableScore, NoToolsMark } from '@/components/score-value'
 import { PlatformDot, PlatformLegend, type PlatformScope } from '@/components/platform-dot'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tooltip } from '@/components/tooltip'
@@ -1256,7 +1256,14 @@ export default function CompareModelsPage() {
                               .filter(m => m.scores[metric].editable)
                               .map(m => ({ platform: m.platform, modelId: m.modelId }))}
                             toneClass={tone(metric === 'intelligence' ? 'general' : metric, g.scores[metric].value)}
-                            suffix={<DeltaMark delta={proxyDeltaOf(g, metric)} />}
+                            // Tools are a route fact, so the mark only shows when NO
+                            // route of this model offers them; one that does is the
+                            // one a tool-requiring chain would take.
+                            suffix={<>
+                              <DeltaMark delta={proxyDeltaOf(g, metric)} />
+                              {metric === 'agentic' && !g.reference && g.scores.agentic.value != null && g.members.length > 0
+                                && g.members.every(m => !m.supportsTools) && <NoToolsMark scope="model" />}
+                            </>}
                           />
                         </TableCell>
                       ))}

@@ -1,6 +1,27 @@
 # Changelog
 
-## 2026-10-20 — Token efficiency stat (local, not deployed)
+## 2026-10-20 — "no tools" mark beside agentic (local, not deployed)
+
+- Tool support is a route fact, usually the provider's catalogue. 14 providers advertise no tools on any route, and 25 linked models have tools on some routes but not others. Vision is unrelated.
+- So the agentic score stays as the model's own figure, and a small "no tools" mark now sits beside it, with a tooltip explaining why:
+  - **Keys → provider model table:** on each route without tool support.
+  - **Compare:** only when none of the model's routes offer tools.
+- Checked against the live API through a local client:
+  - Compare marked 4 rows: Step 5 Preview, Ling 3.1 Flash, Agnes 2.5 Pro and Agnes 3.0 Flash. MiniMax M3.1 Flash is unmarked because its OpenRouter route has tools.
+  - The Inferbase model table marked 31 of 64 rows.
+- Checks: the client typechecks and builds, and the full suite passes (92 files / 693 tests). 3 new strings, filled into 59 locales.
+
+## 2026-10-20 — Coding and agentic filled from AA sub-scores (live data, no code change)
+
+- AA publishes Intelligence plus SciCode, Terminal-Bench v4, LCR and HLE for its newest models, but not their Coding or Agentic index. 25 enabled models were missing one or both.
+- The gap was fitted from AA's own data with least squares on the models that have every input. Coding fit: R² 0.95, typical error ±3.2. Agentic fit: R² 0.97, typical error ±2.2. Where the sub-scores are missing, agentic falls back to an Intelligence-only fit: R² 0.92, typical error ±3.3.
+- Written through `PUT /api/analysis/score`: 34 values, 96 route rows, 0 failures. They were first marked `approximated`, then switched to `tested` the same day on James's call, because they are calculated from AA's measured sub-tests, not guessed. `tested` counts toward chain minimums and role thresholds, which `approximated` does not. The table had no typed scores before this. The empty-table snapshot is `backups/model_benchmark_entry-20261020-before-aa-derived.json`.
+  - Coding and agentic for the 9 newest models, including MiniMax M3.1 Flash at C 74.2 / A 46, Step 5 at 75.2 / 43.4 and Mistral Large 4 at 67.5 / 40.5.
+  - Agentic only, from the Intelligence-only fit, for 16 older models. Their coding stays empty because AA's API carries no sub-scores for them.
+- Read back through the live API: MiniMax M3.1 Flash shows I 42.7 (measured), C 74.2 and A 46 (approximated).
+- These are typed scores, so an AA sync won't replace them. Re-check after a sync that publishes the real indices. The method is in `docs/en/operations/model-bench.md`, intake step 4.
+
+## 2026-10-20 — Token efficiency stat (deployed `main-20261020-205740`)
 
 - New base stat "Tokens/task" next to Speed on Compare, Keys → provider model table and the CLI-free fleet (ADR `ARCH-20261020-task-efficiency-column`, approved by James).
 - **AA estimate:** AA's cost per Intelligence Index task ÷ the model's prices, shown as a token range from all-output to all-input price. AA publishes no input/output split, so the range is what the data supports. The column sorts on the 3:1 blend, shown in the tooltip. A proxied model is marked `≈`. Changed from a rank on James's call, the same day.

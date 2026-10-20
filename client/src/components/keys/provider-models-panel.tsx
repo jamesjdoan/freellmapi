@@ -22,7 +22,7 @@ import type { ScoreCell, Scores } from '@/lib/score-provenance'
 import type { TokenEfficiency } from '@freellmapi/shared/types'
 import { TokenEfficiencyCell } from '@/components/token-efficiency'
 import { compareTokenEfficiency } from '@/lib/token-efficiency'
-import { ScoreValue } from '@/components/score-value'
+import { NoToolsMark, ScoreValue } from '@/components/score-value'
 import { ProviderModelCapacityIndicator } from '@/components/provider-capacity'
 
 // Every model this provider serves, with the measured scores beside the two
@@ -1048,6 +1048,7 @@ function Num({ v, cell, digits = 1, row, metric, onNudge, busy, tone }: {
         )}
         {cell ? <ScoreValue cell={cell} toneClass={tone} />
           : value == null ? <span className="text-muted-foreground">–</span> : value.toFixed(digits)}
+        {metric === 'agentic' && row != null && !row.supportsTools && value != null && <NoToolsMark scope="route" />}
         {/* Signs, not a number: the scale is three coarse steps each way, and
             "+++" reads as a judgement where "+3" reads as a measurement. */}
         {delta !== 0 && (

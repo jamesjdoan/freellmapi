@@ -39,6 +39,24 @@ export function ScoreValue({ cell, toneClass, suffix }: { cell: ScoreCell; toneC
 }
 
 /**
+ * Beside an agentic score where tool calling isn't available. The score
+ * describes the MODEL (AA measured it with tools); tool support is a fact
+ * about the ROUTE — usually the provider's catalogue — so the number stays
+ * and the mark says why a tool-requiring chain will pass this one by.
+ */
+export function NoToolsMark({ scope }: { scope: 'route' | 'model' }) {
+  const { t } = useI18n()
+  return (
+    <span
+      className="rounded border border-muted-foreground/30 px-1 text-[9px] font-normal not-italic leading-tight text-muted-foreground"
+      title={t(scope === 'route' ? 'compare.noToolsRouteHint' : 'compare.noToolsModelHint')}
+    >
+      {t('compare.noToolsMark')}
+    </span>
+  )
+}
+
+/**
  * A score cell that can take a typed score: empty and editable shows a "+",
  * a typed score opens the same form to change or clear it. A measurement, a
  * proxy's borrowed figure and a superseded entry print read-only.
