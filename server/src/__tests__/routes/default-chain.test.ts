@@ -107,7 +107,9 @@ describe('plain auto routes through the default chain (#1409)', () => {
     const db = getDb();
     const fallbackId = defaultProfileId();
     // The chain the operator opened to edit, and the chain routing still uses.
-    const editingId = await createChain('extra-tier');
+    // Not Extra-Tier: that chain is now every chain's overflow tail (ADR
+    // ARCH-20261022), which would add its rows here for a different reason.
+    const editingId = await createChain('scratch');
     await request('POST', '/api/profiles/active', { profileId: editingId });
     await request('POST', '/api/profiles/default-chain', { profileId: fallbackId });
 

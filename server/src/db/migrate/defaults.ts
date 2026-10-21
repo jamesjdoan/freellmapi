@@ -92,6 +92,7 @@ import * as removeGithubProvider from '../migrations/20261017_000002_remove_gith
 import * as requestFailureAttribution from '../migrations/20261017_233153_request_failure_attribution.js';
 import * as modelBenchResults from '../migrations/20261020_000001_model_bench_results.js';
 import * as defaultChainProfile from '../migrations/20261021_000001_default_chain_profile.js';
+import * as extraTierOverflow from '../migrations/20261022_000001_extra_tier_overflow.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -178,6 +179,7 @@ export const LLMTR_REENABLE_KEYS_FILENAME = '20261017_000001_llmtr_reenable_keys
 export const REMOVE_GITHUB_PROVIDER_FILENAME = '20261017_000002_remove_github_provider.ts';
 export const REQUEST_FAILURE_ATTRIBUTION_FILENAME = '20261017_233153_request_failure_attribution.ts';
 export const DEFAULT_CHAIN_PROFILE_FILENAME = '20261021_000001_default_chain_profile.ts';
+export const EXTRA_TIER_OVERFLOW_FILENAME = '20261022_000001_extra_tier_overflow.ts';
 
 export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: LEGACY_BASELINE_FILENAME, module: legacyBaseline },
@@ -277,4 +279,5 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: '20261018_000001_model_benchmark_entries.ts', module: modelBenchmarkEntries },
   { filename: '20261020_000001_model_bench_results.ts', module: modelBenchResults },
   { filename: DEFAULT_CHAIN_PROFILE_FILENAME, module: defaultChainProfile },
+  { filename: EXTRA_TIER_OVERFLOW_FILENAME, module: extraTierOverflow },
 ];

@@ -67,7 +67,7 @@ import { creditAllowanceResetAt, resolveEffectiveQuotas } from '../services/quot
 import { DAY_MS } from '../services/quota-clock.js';
 import { countRequestsInWindow, countPlatformUsageInWindow } from '../services/ratelimit.js';
 import { newBreaker, recordBreakerFailure } from './guardrails.js';
-import { getRequestTrace, newRequestTrace, noteSkippedCandidates, runWithRequestTrace, type AttemptOutcome, type AttemptTraceRecord, type RequestTrace } from './attempt-trace.js';
+import { getRequestTrace, newRequestTrace, noteOverflowServed, noteSkippedCandidates, runWithRequestTrace, type AttemptOutcome, type AttemptTraceRecord, type RequestTrace } from './attempt-trace.js';
 import { logRequest, persistRequestAttempts } from './request-log.js';
 import { withKeyProxy } from './proxy.js';
 import { getEndpointTimeBudgetMs } from './ttfb-budget.js';
@@ -835,6 +835,13 @@ export interface AttemptRecord {
   modelId: string;
   keyOrdinal: number;
   errorClass: AttemptErrorClass;
+  /**
+   * True when the hop was served from the Extra-Tier overflow tail rather
+   * than from the chain the client asked for (ADR
+   * ARCH-20261022-extra-tier-overflow). Set from the route, so the trail
+   * says which hops leaned on Extra-Tier.
+   */
+  overflow?: boolean;
 }
 
 export function classifyAttemptError(err: any): AttemptErrorClass {
@@ -1687,6 +1694,11 @@ async function runFallbackLoopAttempts(hooks: FallbackHooks, trace: RequestTrace
         startOffsetMs: attemptStartedAt - startedAt,
         durationMs: Date.now() - attemptStartedAt,
         errorSummary: err != null ? summarizeAttemptError(err?.message) : null,
+        // Whether this hop came from the Extra-Tier overflow tail rather than
+        // from the chain the client asked for (ADR
+        // ARCH-20261022-extra-tier-overflow). Read off the route, which is
+        // where the chain row still exists.
+        overflow: route.overflow === true,
       });
     };
 
@@ -1721,6 +1733,13 @@ async function runFallbackLoopAttempts(hooks: FallbackHooks, trace: RequestTrace
         }, remaining);
       }
     }
+    // Mark the request as served from the Extra-Tier overflow tail BEFORE the
+    // dispatch, because the surface's logRequest() call happens inside it and
+    // must see the flag (ADR ARCH-20261022-extra-tier-overflow). The flag
+    // sticks once set: a request that failed over from the chain's own
+    // members into the tail is an overflow request even if a later attempt
+    // found its way back.
+    if (route.overflow === true) noteOverflowServed(true);
     let outcome: DispatchOutcome;
     try {
       // #590 (per-key proxy): if THIS key carries its own proxy URL, route the
@@ -1790,7 +1809,7 @@ async function runFallbackLoopAttempts(hooks: FallbackHooks, trace: RequestTrace
         // KEY-fatal, not request-fatal: rotate past the bad key and revalidate
         // it immediately instead of 502-ing while healthy routes sit idle.
         recordAuthFailure(route, hooks.state, err);
-        attempts.push({ platform: route.platform, modelId: route.modelId, keyOrdinal: keyOrdinal(route), errorClass: 'auth' });
+        attempts.push({ platform: route.platform, modelId: route.modelId, keyOrdinal: keyOrdinal(route), errorClass: 'auth', overflow: route.overflow === true ? true : undefined });
         traceAttempt('auth', err);
         lastError = err;
         if (stopIfBreakerTripped()) return;
@@ -1818,7 +1837,7 @@ async function runFallbackLoopAttempts(hooks: FallbackHooks, trace: RequestTrace
           console.warn(`[FallbackLoop] ${route.platform}/${route.modelId}: in-band provider error after ${((Date.now() - attemptStartedAt) / 1000).toFixed(1)}s silent — benching the route ${Math.round(TRUNCATION_BENCH_MS / 1000)}s (#1218 Gap 3)`);
         }
         const errorClass = classifyAttemptError(err);
-        attempts.push({ platform: route.platform, modelId: route.modelId, keyOrdinal: keyOrdinal(route), errorClass });
+        attempts.push({ platform: route.platform, modelId: route.modelId, keyOrdinal: keyOrdinal(route), errorClass, overflow: route.overflow === true ? true : undefined });
         traceAttempt(errorClass, err);
         lastError = err;
         // A still-exempt skipBench failure (format ignored, hidden-reasoning

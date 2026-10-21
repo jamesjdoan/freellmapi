@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-10-22 — Extra-Tier is every chain's overflow (local, not deployed)
+
+- When a chain runs out, Extra-Tier's enabled routes that are not already in that chain are tried last, before `routing_exhausted`. Only routes that meet the chain's tools or vision requirement are added, in Extra-Tier's order. The chain's own members always come first, and the sticky preference, exploration and bandit can never move an overflow route ahead of them. Plain `auto`, `auto:<name>` and the aliases get it. Global sorts, Extra-Tier itself and explicit model ids do not.
+- Switch: extension `extra-tier-overflow`, on by default. Answers are marked in new columns `requests.overflow` and `request_attempts.overflow` (migration `20261022_000001`, reversible), and shown in the analytics request detail.
+- Measured on a live-data copy:
+  - With Fast-Lane forced out of routes, the request went to Extra-Tier, and the row and attempt were marked `overflow: 1`.
+  - The tail is small, because 2026-10-22 filled every chain with its qualifying routes: Apex 21, Default 18, Coding 18, Fast-Lane 1 and Vision 1 extra routes.
+  - Most of those are Inferera custom routes whose quota is spent. With Apex forced out, all 21 were checked and refused ("17 quota allowance spent, 3 cooldown"). So today the overflow adds capacity only when Extra-Tier gains routes that the chains don't already hold.
+- Fixed in review: the subagent's build had dropped `route.routingTrace = trace` from `routeRequest`, which removed the routing trace from every served request (8 failing tests). Restored. Two tests were updated for the intended behaviour: an `overflow` field on attempts, and a fixture chain no longer named Extra-Tier.
+- Checks: the server typechecks. The full suite: 410 of 411 files pass (5,193 tests). The one failure, `router-bandit` "exploration toggle", is a random-draw test. It passed 3 of 3 runs on its own, and it involves no Extra-Tier rows.
+
+## 2026-10-22 — Every qualifying route added to its chain (live data, no code change)
+
+- Each chain now holds every enabled route that a key can reach and that meets its revision-7 minimums. Enabled members per chain: Apex 13 → 18, Default 13 → 27, Coding 19 → 30, Vision 12 → 15, Extra-Tier 29 → 78, Fast-Lane 11 → 58.
+- Order: the existing qualifying members keep their place. New routes follow: proven first (at least 20 calls at 80% or better over 14 days), then those with some working evidence, then untested. Fast-Lane orders them by measured latency, the others by the chain's lead score.
+- Members that no longer meet the minimums stay at the tail, still enabled. Examples: Mistral Large 4 and Groq Qwen3.8 27B in Apex, Codestral in Coding, and GPT-OSS 20B/120B and the Ministrals in Fast-Lane.
+- Left out as measurably failing (at least 10 calls, under 30% success): every Inferera "coding-*" route (Kimi K3 0%/152, GLM-4.7 0%/53, MiniMax M3 0%/69, K2.6 0%/60, Kimi for coding 0%/70), MiMo V2.6 Pro on Inferera (15%/33), and Nemotron 3 Ultra (custom 0%/59, NVIDIA 6%/18).
+- Applied through `PUT /api/profiles/:id/reorder`. The backup of every chain's rows beforehand is `backups/chain-fill-backup-2026-10-21T14-12-01-793Z.json`. After the change, `auto`, `auto:apex`, `auto:coding`, `auto:fast-lane` and `auto:extra-tier` each returned 200.
+- The overflow design (Extra-Tier as the tail of every chain) is proposed in `docs/adr/ARCH-20261022-extra-tier-overflow.md`, not built.
+
 ## 2026-10-21 — Editing a chain no longer changes plain-auto routing (deployed `main-20261022-010730`)
 
 - Live after deploy: `default-chain` and `active` both read Default (1), plain `auto` returned 200, and all 19 keys decrypt.

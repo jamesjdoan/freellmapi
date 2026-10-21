@@ -125,6 +125,14 @@ export interface AttemptTraceRecord {
    */
   routing: RoutingDecisionTrace | null;
   errorSummary: string | null;
+  /**
+   * True when this hop was served from the Extra-Tier overflow tail rather
+   * than from the chain the client asked for (ADR
+   * ARCH-20261022-extra-tier-overflow). The dashboard reads it to show how
+   * often a chain leaned on Extra-Tier — a chain that overflows often is a
+   * chain that needs more of its own depth.
+   */
+  overflow: boolean;
 }
 
 export interface RequestTrace {
@@ -145,12 +153,31 @@ export interface RequestTrace {
   // Rowid of the most recent `requests` row logged during this trace's run;
   // null until the first logRequest lands (e.g. a client abort on attempt 1).
   lastRequestRowId: number | null;
+  /**
+   * Whether the request now being logged leaned on the Extra-Tier overflow
+   * tail (ADR ARCH-20261022-extra-tier-overflow).
+   *
+   * Set by the fallback loop when it dispatches an attempt, and read by
+   * `logRequest()` when the surface writes the request row for that attempt.
+   * The two never share a parameter today — the surfaces call `logRequest`
+   * from their own dispatch hook, deep inside the loop — so the trace is the
+   * channel, exactly as it already is for the row id.
+   */
+  overflow: boolean;
 }
 
 const storage = new AsyncLocalStorage<RequestTrace>();
 
 export function newRequestTrace(): RequestTrace {
-  return { records: [], skipped: [], lastRequestRowId: null };
+  return { records: [], skipped: [], lastRequestRowId: null, overflow: false };
+}
+
+/** Note that the attempt now being dispatched was served from the Extra-Tier
+ *  overflow tail. No-op outside a trace. */
+export function noteOverflowServed(overflow: boolean): void {
+  const trace = storage.getStore();
+  if (!trace) return;
+  if (overflow) trace.overflow = true;
 }
 
 /** Record candidates passed over before the route about to be dispatched.

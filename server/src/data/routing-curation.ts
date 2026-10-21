@@ -461,6 +461,13 @@ export const CHAIN_CONTRACTS: ChainContract[] = [
   },
 ];
 
+/**
+ * The chain every other chain overflows into (ADR
+ * ARCH-20261022-extra-tier-overflow). Named here rather than spelled out at
+ * the call site so the overflow and the contract can never drift apart.
+ */
+export const CHAIN_EXTRA_TIER: ChainName = 'Extra-Tier';
+
 /** Ordered members of one chain, as the applier will write them. */
 export function chainMembers(chain: ChainName): { platform: string; modelId: string; priority: number; classification: ModelClassification }[] {
   return CURATED_ROUTES

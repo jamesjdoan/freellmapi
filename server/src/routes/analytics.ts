@@ -334,6 +334,43 @@ interface RecentCallDbRow {
   created_at_iso: string;
   attempt_count: number;
   key_label: string | null;
+  overflow: number;
+}
+
+/** One row of the per-request drill-down, in its database column names. */
+interface RequestDetailDbRow {
+  id: number;
+  platform: string;
+  model_id: string;
+  requested_model: string | null;
+  served_model: string | null;
+  request_type: string | null;
+  status: string;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  latency_ms: number | null;
+  ttfb_ms: number | null;
+  error: string | null;
+  client_ip: string | null;
+  client_user_agent: string | null;
+  client_agent: string | null;
+  created_at_iso: string;
+  overflow: number;
+}
+
+/** One dispatched attempt of the per-request drill-down. */
+interface RequestAttemptDbRow {
+  ordinal: number;
+  platform: string;
+  model_id: string;
+  key_ordinal: number | null;
+  key_label: string | null;
+  outcome: string;
+  start_offset_ms: number | null;
+  duration_ms: number | null;
+  error_summary: string | null;
+  routing_json: string | null;
+  overflow: number;
 }
 
 
@@ -1270,7 +1307,7 @@ analyticsRouter.get('/requests', (req: Request, res: Response) => {
            r.client_ip, r.client_user_agent, r.client_agent,
            strftime('%Y-%m-%dT%H:%M:%SZ', r.created_at) as created_at_iso,
            (SELECT COUNT(*) FROM request_attempts a WHERE a.request_id = r.id) as attempt_count,
-           k.label as key_label
+           k.label as key_label, r.overflow
     FROM requests r
     LEFT JOIN api_keys k ON k.id = r.key_id
     WHERE r.created_at >= ?${scopeSql(window, filters, device)}
@@ -1303,6 +1340,9 @@ analyticsRouter.get('/requests', (req: Request, res: Response) => {
       // Failover-ladder length for this row. Attempts hang off the TERMINAL
       // row of a proxied request; mid-ladder failure rows report 0.
       attemptCount: r.attempt_count,
+      // Whether this request leaned on the Extra-Tier overflow tail
+      // (ADR ARCH-20261022-extra-tier-overflow).
+      overflow: r.overflow === 1,
     })),
   });
 });
@@ -1325,22 +1365,22 @@ analyticsRouter.get('/requests/:id', (req: Request, res: Response) => {
   const r = db.prepare(`
     SELECT id, platform, model_id, requested_model, served_model, request_type, status,
            input_tokens, output_tokens, latency_ms, ttfb_ms, error,
-           client_ip, client_user_agent, client_agent,
+           client_ip, client_user_agent, client_agent, overflow,
            strftime('%Y-%m-%dT%H:%M:%SZ', created_at) as created_at_iso
     FROM requests
     WHERE id = ?
-  `).get(id) as any;
+  `).get(id) as RequestDetailDbRow | undefined;
   if (!r) {
     res.status(404).json({ error: 'request not found' });
     return;
   }
 
   const attempts = db.prepare(`
-    SELECT ordinal, platform, model_id, key_ordinal, key_label, outcome, start_offset_ms, duration_ms, error_summary, routing_json
+    SELECT ordinal, platform, model_id, key_ordinal, key_label, outcome, start_offset_ms, duration_ms, error_summary, routing_json, overflow
     FROM request_attempts
     WHERE request_id = ?
     ORDER BY ordinal ASC
-  `).all(id) as any[];
+  `).all(id) as RequestAttemptDbRow[];
 
   res.json({
     id: r.id,
@@ -1361,6 +1401,10 @@ analyticsRouter.get('/requests/:id', (req: Request, res: Response) => {
     clientUserAgent: r.client_user_agent,
     clientAgent: r.client_agent,
     createdAt: r.created_at_iso,
+    // Whether this request leaned on the Extra-Tier overflow tail
+    // (ADR ARCH-20261022-extra-tier-overflow). True when at least one
+    // dispatched hop came from Extra-Tier rather than from the chain.
+    overflow: r.overflow === 1,
     attempts: attempts.map(a => ({
       ordinal: a.ordinal,
       platform: a.platform,
@@ -1378,6 +1422,9 @@ analyticsRouter.get('/requests/:id', (req: Request, res: Response) => {
       // Short, redacted per-hop error text (null for successful hops and for
       // rows written before the error_summary migration).
       errorSummary: a.error_summary ?? null,
+      // Whether THIS hop was served from the Extra-Tier overflow tail, so the
+      // drill-down shows the exact hop that left the chain.
+      overflow: a.overflow === 1,
     })),
   });
 });

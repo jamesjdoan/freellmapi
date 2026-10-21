@@ -2,7 +2,7 @@ import { isUnlimitedModel } from '../services/unlimited-models.js';
 import { getDb } from '../db/index.js';
 import { pruneRequestAnalytics } from '../services/request-retention.js';
 import { getClientContext } from './client-context.js';
-import { noteRequestRowId, type RequestTrace } from './attempt-trace.js';
+import { getRequestTrace, noteRequestRowId, type RequestTrace } from './attempt-trace.js';
 import { isExtensionEnabled } from '../services/extension-state.js';
 
 type LogTx = ReturnType<typeof getDb>;
@@ -121,13 +121,20 @@ export function logRequest(
     const client = getClientContext();
     const tx = db.transaction(() => {
       const insert = db.prepare(`
-        INSERT INTO requests (platform, model_id, key_id, status, input_tokens, output_tokens, latency_ms, error, ttfb_ms, requested_model, served_model, client_ip, client_user_agent, client_agent, caller, model_db_id, unlimited, failure_attribution)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO requests (platform, model_id, key_id, status, input_tokens, output_tokens, latency_ms, error, ttfb_ms, requested_model, served_model, client_ip, client_user_agent, client_agent, caller, model_db_id, unlimited, failure_attribution, overflow)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(platform, modelId, keyId, status, inputTokens, outputTokens, latencyMs, error, ttfbMs, requestedModel, servedModel, client.ip, client.userAgent, client.agent, caller, resolveModelDbId(db, platform, modelId, keyId),
         // Decided now, so this row stays out of every counter even after the
         // model starts charging (services/unlimited-models.ts).
         isUnlimitedModel(platform, modelId) ? 1 : 0,
-        failureAttribution);
+        failureAttribution,
+        // Whether this request was served from the Extra-Tier overflow tail
+        // rather than from the chain it asked for (ADR
+        // ARCH-20261022-extra-tier-overflow). The fallback loop notes it on
+        // the trace as it dispatches each attempt; the surface's own
+        // logRequest call happens inside that dispatch, so the trace already
+        // carries the answer.
+        getRequestTrace()?.overflow === true ? 1 : 0);
 
       // Report the row id back to the fallback loop's attempt trace (if one is
       // active): the LAST id noted during a loop run is the terminal row the
@@ -182,8 +189,8 @@ export function persistRequestAttempts(trace: RequestTrace): void {
   try {
     const db = getDb();
     const insert = db.prepare(`
-      INSERT INTO request_attempts (request_id, ordinal, platform, model_id, key_ordinal, key_label, outcome, start_offset_ms, duration_ms, error_summary, routing_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO request_attempts (request_id, ordinal, platform, model_id, key_ordinal, key_label, outcome, start_offset_ms, duration_ms, error_summary, routing_json, overflow)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const tx = db.transaction(() => {
       for (const r of trace.records) {
@@ -193,6 +200,7 @@ export function persistRequestAttempts(trace: RequestTrace): void {
           trace.lastRequestRowId, r.ordinal, r.platform, r.modelId, r.keyOrdinal, r.keyLabel,
           r.outcome, r.startOffsetMs, r.durationMs, r.errorSummary,
           r.routing ? JSON.stringify(r.routing) : null,
+          r.overflow === true ? 1 : 0,
         );
       }
     });

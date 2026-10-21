@@ -30,6 +30,9 @@ export const PAID_SPEND_CONFIRMATION = 'ALLOW PAID SPEND';
 
 export const PAID_BALANCE_GUARD_ID = 'paid-balance-guard';
 
+/** The overflow switch: Extra-Tier is the tail of every other chain. */
+export const EXTRA_TIER_OVERFLOW_ID = 'extra-tier-overflow';
+
 export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
   // ── Routing ───────────────────────────────────────────────────────────────
   {
@@ -102,6 +105,23 @@ export const IMPERIUM_EXTENSIONS: readonly ImperiumExtension[] = [
     offBehaviour: 'Both quota-economy terms go neutral at both ordering sites, so routes order on capability and health alone. Admission is unaffected — the hard quota gate belongs to quota-ledger-precedence. Quota observations, policies and their history are untouched.',
     takesEffect: 'Next request.',
     codeLocations: ['server/src/services/quota-pressure.ts', 'server/src/services/router.ts (score path gate, isExtensionEnabled call ~1163)', 'server/src/services/router.ts (priority path gate, ~1282)'],
+    disableConfirmation: 'none',
+  },
+  {
+    id: 'extra-tier-overflow',
+    title: 'Extra-Tier overflow',
+    summary: 'When a chain runs out of routes, try Extra-Tier\'s routes before refusing the request. The overflow keeps the chain\'s own contract, so a Coding request never lands on a model that cannot call tools.',
+    settingsLocation: 'Automatic; chain membership at Models → Fallback chains',
+    destinations: [{ kind: 'internal', label: 'Open fallback chains', href: '/fallback' }],
+    category: 'routing',
+    defaultEnabled: true,
+    offBehaviour: 'A chain that runs out returns routing_exhausted, as before. Chain membership, the Extra-Tier rows and the recorded overflow counts are all kept.',
+    takesEffect: 'Next request.',
+    codeLocations: [
+      'server/src/services/router.ts (appendExtraTierOverflow)',
+      'server/src/lib/fallback-loop.ts (AttemptRecord.overflow)',
+      'server/src/db/migrations/20261022_000001_extra_tier_overflow.ts',
+    ],
     disableConfirmation: 'none',
   },
   {

@@ -47,7 +47,7 @@ import { modelStatsKey, endpointScopeForBaseUrl } from '../lib/endpoint-scope.js
 import { isToolBenched } from '../lib/tool-capability.js';
 import { parseModelScope, scopeAllows } from '../lib/model-scope.js';
 import { isExtensionEnabled } from './extension-state.js';
-import { PAID_BALANCE_GUARD_ID } from '../data/extension-registry.js';
+import { PAID_BALANCE_GUARD_ID, EXTRA_TIER_OVERFLOW_ID } from '../data/extension-registry.js';
 import { getKeyQuotaHeadroom, inferQuotaPoolKey, isQuotaPoolAvailable, resolveQuotaPolicy, consumesPaidBalance } from './provider-quota.js';
 import { effectiveRouteLimits } from './quota-policy.js';
 import { normalizeGroupKey } from './model-groups.js';
@@ -55,6 +55,7 @@ import { quotaPressure, quotaDomainsAdmit, inFlightPoolShare } from './quota-pre
 import { evaluateBonusAdmission, bonusCoversExhaustion, reserveBonusLease, releaseBonusLease } from './bonus.js';
 import { paidCreditActive, evaluatePaidCredit, holdPaidCredit, releasePaidCredit } from './paid-credit.js';
 import type { RoutingDecisionTrace } from '../lib/attempt-trace.js';
+import { CHAIN_CONTRACTS, CHAIN_EXTRA_TIER } from '../data/routing-curation.js';
 import type { BaseProvider } from '../providers/base.js';
 import type { Platform } from '@freellmapi/shared/types.js';
 import type { Db } from '../db/types.js';
@@ -210,6 +211,13 @@ export interface ChainRow {
    * free route, and admitted only through an open credit window on its key.
    */
   paid_credit?: boolean;
+  /**
+   * Added by the Extra-Tier overflow (`extra-tier-overflow`): this row was
+   * appended to a chain from Extra-Tier rather than being a member of it.
+   * The mark is what lets the fallback loop record that a hop was served
+   * from the overflow tail, so a chain that leans on Extra-Tier is visible.
+   */
+  overflow?: boolean;
 }
 
 export interface RouteResult {
@@ -279,6 +287,12 @@ export interface RouteResult {
   /** Rate-limit lease this attempt holds; bonus settlement finds its
    *  reservation by it. Absent on test doubles. */
   leaseId?: number;
+  /**
+   * True when this route came from the Extra-Tier overflow tail rather than
+   * from the chain the client asked for. Carried on the route so the fallback
+   * loop can mark the attempt and the request log without re-deriving it.
+   */
+  overflow?: boolean;
 }
 
 // ── Routing token estimate: cap the reserved OUTPUT, not the full max_tokens ──
@@ -1650,18 +1664,11 @@ const CHAIN_ALIASES: Record<string, string> = {
  *  effect on the next dispatch — including a retry of a request already in
  *  flight. It cannot recall a call already sent. */
 function withoutAutorouteDisabled(rows: ChainRow[]): ChainRow[] {
-  const excluded = getAutorouteDisabledPlatforms();
-  const guarded = isExtensionEnabled(PAID_BALANCE_GUARD_ID);
-  const allowed = rows.filter(row =>
-    !excluded.includes(row.platform.toLowerCase())
-    // An unlimited model is exempt only while its provider prices it at $0
-    // (isUnlimitedModel re-checks that), so the exemption cannot outlive a
-    // stealth period.
-    && (!guarded || !consumesPaidBalance(row.platform as Platform, row.model_id) || isUnlimitedModel(row.platform, row.model_id)),
-  );
+  const allowed = excludedFromAutoroute(rows);
   // The one bounded exception to the guard: paid models the operator selected
   // for a credit window, appended as a tier routeRequest walks last. The
   // window, not this list, is what authorises spend (selectKeyForModel).
+  const excluded = getAutorouteDisabledPlatforms();
   const present = new Set(allowed.map(r => r.model_db_id));
   for (const row of paidCreditTierRows()) {
     if (!present.has(row.model_db_id) && !excluded.includes(row.platform.toLowerCase())) allowed.push(row);
@@ -1669,6 +1676,27 @@ function withoutAutorouteDisabled(rows: ChainRow[]): ChainRow[] {
   return allowed;
 }
 
+/**
+ * The provider policy every automatic-selection chain obeys: a provider the
+ * operator excluded from autoroute stays out, and the paid-balance guard
+ * keeps a paid route out of automatic selection while it is on.
+ *
+ * Split out of `withoutAutorouteDisabled` because the Extra-Tier overflow tail
+ * needs the same policy WITHOUT the paid-credit tier appended to it: that tier
+ * is added to the chain itself, so a tail copy of it would be a second
+ * candidate for the same model.
+ */
+function excludedFromAutoroute(rows: ChainRow[]): ChainRow[] {
+  const excluded = getAutorouteDisabledPlatforms();
+  const guarded = isExtensionEnabled(PAID_BALANCE_GUARD_ID);
+  return rows.filter(row =>
+    !excluded.includes(row.platform.toLowerCase())
+    // An unlimited model is exempt only while its provider prices it at $0
+    // (isUnlimitedModel re-checks that), so the exemption cannot outlive a
+    // stealth period.
+    && (!guarded || !consumesPaidBalance(row.platform as Platform, row.model_id) || isUnlimitedModel(row.platform, row.model_id)),
+  );
+}
 function paidCreditTierRows(): ChainRow[] {
   // Guard off: paid models already route on their chain rows, unbounded, by
   // the operator's acknowledged decision; there is nothing for a window to add.
@@ -1777,6 +1805,29 @@ function getChainByProfileName(db: Db, name: string): ChainRow[] | null {
   `).all(profile.id) as ChainRow[]);
 }
 
+/**
+ * Extra-Tier's own chain rows, in Extra-Tier's own order.
+ *
+ * The overflow source, and deliberately NOT `getChainByProfileName`: that one
+ * applies the provider policy AND appends the paid-credit tier, which the
+ * chain already carries. This one applies the policy only, so the tail can
+ * never hold a second copy of a model the chain already offers.
+ */
+function extraTierChainRows(db: Db): ChainRow[] {
+  const profile = db.prepare("SELECT id FROM profiles WHERE LOWER(name) = ?").get(CHAIN_EXTRA_TIER.toLowerCase()) as { id: number } | undefined;
+  if (!profile) return [];
+  return excludedFromAutoroute(db.prepare(`
+    SELECT pm.model_db_id, pm.priority, pm.enabled,
+           m.platform, m.model_id, m.display_name, m.intelligence_rank,
+           m.size_label, m.monthly_token_budget,
+           m.rpm_limit, m.rpd_limit, m.tpm_limit, m.tpd_limit, m.supports_vision,
+           m.supports_tools, m.context_window, m.key_id, m.endpoint_scope
+    FROM profile_models pm
+    JOIN models m ON m.id = pm.model_db_id AND m.enabled = 1
+    WHERE pm.profile_id = ?
+    ORDER BY pm.priority ASC
+  `).all(profile.id) as ChainRow[]);
+}
 function getChainByGlobalSort(db: Db, globalAxis: string): ChainRow[] {
   // A global sort ignores the chain's ORDER, not its enable flags: a model the
   // operator switched off — in the catalog or just for auto routing — stays off
@@ -1838,21 +1889,103 @@ function activeChainOrThrow(db: Db): ChainRow[] {
   throw err;
 }
 
+/**
+ * The Extra-Tier overflow tail (ADR ARCH-20261022-extra-tier-overflow).
+ *
+ * Extra-Tier's contract has always said "overflow and experimental capacity",
+ * and until this ADR nothing sent a request to it unless a client named
+ * `auto:extra-tier` — so a chain that ran out of routes returned
+ * `routing_exhausted` while 78 enabled routes sat unreachable (3,789 refusals
+ * in the 14 days to 2026-10-21).
+ *
+ * The tail is built here, in chain RESOLUTION, and nowhere else:
+ *
+ *  - Every resolved chain gets it except Extra-Tier itself, which would
+ *    otherwise append itself to itself. That covers plain `auto` (whatever the
+ *    routing-default chain is), `auto:<name>`, and the Frontier/Workhorse
+ *    aliases, because they all resolve through this function.
+ *  - Global sorts (`auto:smart`, `auto:fast` …) never get it: they already
+ *    span the whole catalogue, so Extra-Tier would add rows they already walk.
+ *  - An explicit model id never gets it: naming one model is the client's own
+ *    instruction, and those requests resolve through
+ *    `resolveModelGroupCandidates`, not through here.
+ *  - Only rows that meet the ORIGINAL chain's contract are appended — tools
+ *    when it requires tools, vision when it requires vision — so a Coding
+ *    request can never overflow onto a model that cannot call tools. The
+ *    per-request `requireTools`/`requireVision` gates in `routeRequest` still
+ *    apply on top of this.
+ *  - Rows already in the chain are not duplicated, Extra-Tier's own order is
+ *    kept, and `routeRequest` walks the tail AFTER the chain's own members:
+ *    overflow is a tail, never a re-rank.
+ *
+ * Every bound that already exists still applies — the fallback time budget,
+ * `maxRetries`, the circuit breaker, cooldowns, the quota gates and the
+ * paid-balance guard (`withoutAutorouteDisabled` runs over Extra-Tier's rows
+ * exactly as it does over the chain's own). This adds candidates, not attempts
+ * beyond those limits.
+ *
+ * Switch: `extra-tier-overflow`, on by default; read per call from the
+ * in-memory snapshot, so switching it off takes effect on the next request
+ * including a retry already in flight. Off, a chain that runs out returns
+ * `routing_exhausted`, as before — no row and no chain membership changes.
+ */
+function appendExtraTierOverflow(db: Db, chain: ChainRow[], chainName: string): ChainRow[] {
+  if (!isExtensionEnabled(EXTRA_TIER_OVERFLOW_ID)) return chain;
+  // Extra-Tier itself gets no tail.
+  if (chainName.trim().toLowerCase() === CHAIN_EXTRA_TIER.toLowerCase()) return chain;
+
+  const extraTier = extraTierChainRows(db);
+  if (extraTier.length === 0) return chain;
+
+  // The contract is the curated chain's promise, matched case-insensitively
+  // against the profile name (`auto:coding` → Coding). A chain the catalogue
+  // knows nothing about declares nothing, so nothing is filtered here beyond
+  // the per-request capability gates that always apply.
+  const contract = CHAIN_CONTRACTS.find(c => c.name.toLowerCase() === chainName.trim().toLowerCase());
+  const present = new Set(chain.map(row => row.model_db_id));
+  const tail: ChainRow[] = [];
+  for (const row of extraTier) {
+    // A member the operator switched off in Extra-Tier is not overflow
+    // capacity for anybody.
+    if (!row.enabled || present.has(row.model_db_id)) continue;
+    if (contract?.requiresTools && row.supports_tools !== 1) continue;
+    if (contract?.requiresVision && row.supports_vision !== 1) continue;
+    tail.push({ ...row, overflow: true });
+  }
+  return tail.length > 0 ? [...chain, ...tail] : chain;
+}
+
+/** The name whose chain contract plain `auto` carries: the routing-default
+ *  chain's (#1409). Null when the install has no profiles at all, which is the
+ *  legacy shape where `fallback_config` IS the chain and no contract exists. */
+function defaultChainName(db: Db): string | null {
+  const profileId = getDefaultChainProfileId(db);
+  if (profileId == null) return null;
+  const row = db.prepare('SELECT name FROM profiles WHERE id = ?').get(profileId) as { name: string } | undefined;
+  return row?.name ?? null;
+}
+
+/** `resolveRoutingChain`'s result, with the overflow tail appended. A null
+ *  chain name means "no contract to keep" — the legacy no-profiles install. */
+function withOverflow(db: Db, chain: ChainRow[], chainName: string | null, strategyKey: string): ResolvedChain {
+  return { chain: appendExtraTierOverflow(db, chain, chainName ?? ''), strategyKey };
+}
+
 export function resolveRoutingChain(modelString: string | undefined): ResolvedChain {
   const db = getDb();
 
   if (!modelString || modelString.toLowerCase() === 'auto') {
-    return { chain: activeChainOrThrow(db), strategyKey: 'auto' };
+    return withOverflow(db, activeChainOrThrow(db), defaultChainName(db), 'auto');
   }
 
   const lower = modelString.toLowerCase();
   if (!lower.startsWith('auto:')) {
-    return { chain: activeChainOrThrow(db), strategyKey: 'auto' };
+    return withOverflow(db, activeChainOrThrow(db), defaultChainName(db), 'auto');
   }
 
   const suffix = lower.slice('auto:'.length).trim();
   if (!suffix) {
-    return { chain: activeChainOrThrow(db), strategyKey: 'auto' };
+    return withOverflow(db, activeChainOrThrow(db), defaultChainName(db), 'auto');
   }
 
   // Canonicalise first (see CHAIN_ALIASES): a stale Frontier/Workhorse profile
@@ -1884,7 +2017,7 @@ export function resolveRoutingChain(modelString: string | undefined): ResolvedCh
     throw err;
   }
 
-  return { chain, strategyKey: `auto:${canonical}` };
+  return withOverflow(db, chain, canonical, `auto:${canonical}`);
 }
 
 // Weights for the in-model key score (#580). Reliability dominates: the point
@@ -2662,14 +2795,31 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
   const strategy = effectiveRoutingStrategy();
   if (strategy !== 'priority') refreshStatsCache(db);
 
-  const chain = (prefetchedChain ?? getActiveChain(db)).filter(e => e.enabled);
-
+  const enabledRows = (prefetchedChain ?? getActiveChain(db)).filter(e => e.enabled);
+  // The overflow tail (ADR ARCH-20261022): Extra-Tier's rows arrive appended
+  // AFTER the chain's own, and they must STAY after it — "The chain's own
+  // members always come first. Overflow is a tail, never a re-rank." So the
+  // tail is held out of every ordering pass below (`orderChain`'s bandit draw,
+  // the exploration probe, a sticky promotion, the AMD capacity sort), which
+  // would otherwise interleave it among the chain's own members on a score,
+  // and put back on the end in Extra-Tier's own order. It is NOT exempt from
+  // anything else: the keyless-platform drop, the per-request capability
+  // filters, the context-window and TPM fast paths and every key gate in
+  // `selectKeyForModel` apply to it exactly as they do to a chain member.
+  const overflowRows = enabledRows.filter(e => e.overflow);
+  const chain = overflowRows.length > 0
+    ? enabledRows.filter(e => !e.overflow)
+    : enabledRows;
   // One trace per candidate, written during ordering. Held for the whole
   // routeRequest call because the route that finally clears the gates may not
   // be the one ordering put first.
   const traces = new Map<number, RoutingDecisionTrace>();
   const capacityPressure = freshAmdRoutingPressure();
   const sortedChain = orderChain(chain, strategy, true, task, traces, capacityPressure);
+  // The overflow rows ride along here so the keyless-platform drop below
+  // classifies them like any other candidate; they go back on the end after
+  // the last re-ranking pass (see the tail restore before the paid tier).
+  if (overflowRows.length > 0) sortedChain.push(...overflowRows);
 
   // Exploration toggle (#685/#707 follow-up): when enabled, give a model with
   // no reliability/speed samples a guaranteed chance to be tried, so it stops
@@ -2703,6 +2853,10 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
       if ((stats?.successes ?? 0) + (stats?.failures ?? 0) >= EXPLORE_MIN_SAMPLES) return false;
       // A paid route is never an exploration probe: it is a last resort.
       if (e.paid_credit) return false;
+      // An overflow row is never an exploration probe either: it is a last
+      // resort, and promoting one ahead of the chain's own members would be
+      // exactly the re-rank the ADR rules out.
+      if (e.overflow) return false;
       // Mirror the main loop's gates below so exploration only samples
       // candidates that can actually serve this request.
       if (skipModels?.has(e.model_db_id)) return false;
@@ -2732,8 +2886,11 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
   if (preferredModelDbId) {
     const idx = sortedChain.findIndex(e => e.model_db_id === preferredModelDbId);
     if (idx >= 0) {
-      // A paid route served last turn stays a last resort this turn.
-      if (idx > 0 && !sortedChain[idx].paid_credit) {
+      // A paid route served last turn stays a last resort this turn, and an
+      // overflow row stays in the tail: the chain's own members come first
+      // whatever a session stuck to, so a sticky hit must not promote
+      // Extra-Tier above a healthy member.
+      if (idx > 0 && !sortedChain[idx].paid_credit && !sortedChain[idx].overflow) {
         const [preferred] = sortedChain.splice(idx, 1);
         sortedChain.unshift(preferred);
         noteSelectionOverride(traces, preferred, 'sticky');
@@ -2839,6 +2996,19 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
     servingChain.length = 0;
     servingChain.push(...free, ...paid);
   }
+  // The overflow tail, back on the end. Every pass above ranks by a number —
+  // bandit score, a 429 penalty, context-window fit, tool benching, AMD fleet
+  // pressure — and any of them would interleave Extra-Tier's rows among the
+  // chain's own members. Ordering them last is the ADR's rule, and filtering
+  // (rather than re-sorting) is what keeps the tail in Extra-Tier's own order,
+  // so its proven routes are still tried before its experimental ones.
+  // Paid credit stays last: it is the only tier behind the overflow.
+  if (overflowRows.length > 0) {
+    const own = servingChain.filter(e => !e.overflow);
+    const tail = servingChain.filter(e => e.overflow);
+    servingChain.length = 0;
+    servingChain.push(...own, ...tail);
+  }
 
   // 1-based position in the walk, counting every candidate looked at — so a
   // route reached third says so even when the two before it were rejected by
@@ -2926,7 +3096,12 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
         trace.selectionRank = considered;
         trace.skipped = diag.slice(0, MAX_TRACED_SKIPS);
       }
+      // The record that this hop came from the overflow tail rather than from
+      // the chain the client asked for. It rides the route because this is the
+      // only place the chain row still exists: the surfaces, the fallback loop
+      // and the request log all see a RouteResult.
       route.routingTrace = trace;
+      if (entry.overflow) route.overflow = true;
       // Shadow only (W3): the route above is already decided and is returned
       // untouched whatever this concludes. It runs after selection precisely so
       // it CANNOT influence it — there is no code path from here back into the
@@ -3065,7 +3240,10 @@ export function getRoutingScores(): { strategy: RoutingStrategy; keySelectionStr
 export function resolveStickyPreference(stickyModelDbId: number | undefined, chain?: ChainRow[]): number | undefined {
   if (stickyModelDbId == null) return undefined;
   const rows = chain ?? getActiveChain(getDb());
-  return rows.some(entry => entry.model_db_id === stickyModelDbId && entry.enabled)
+  // An overflow row is never a sticky preference: the tail is a last resort,
+  // and a session that stuck to it must fall back to the chain's own members
+  // once they are healthy again (ADR ARCH-20261022-extra-tier-overflow).
+  return rows.some(entry => entry.model_db_id === stickyModelDbId && entry.enabled && !entry.overflow)
     ? stickyModelDbId
     : undefined;
 }
