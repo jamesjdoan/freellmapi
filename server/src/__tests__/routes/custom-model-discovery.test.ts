@@ -69,6 +69,7 @@ describe('custom endpoint model discovery (#488)', () => {
     process.env.ENCRYPTION_KEY = '0'.repeat(64);
     initDb(':memory:');
     getDb().prepare("DELETE FROM settings WHERE key = 'active_profile_id'").run();
+    getDb().prepare("DELETE FROM settings WHERE key = 'default_chain_profile_id'").run();
     app = createApp();
     dashToken = mintDashboardToken();
   });
@@ -179,6 +180,7 @@ describe('bulk registration of discovered models (#488)', () => {
     process.env.ENCRYPTION_KEY = '0'.repeat(64);
     initDb(':memory:');
     getDb().prepare("DELETE FROM settings WHERE key = 'active_profile_id'").run();
+    getDb().prepare("DELETE FROM settings WHERE key = 'default_chain_profile_id'").run();
     app = createApp();
     dashToken = mintDashboardToken();
   });
@@ -262,6 +264,7 @@ describe('median seeding for custom models (#488)', () => {
     process.env.ENCRYPTION_KEY = '0'.repeat(64);
     initDb(':memory:');
     getDb().prepare("DELETE FROM settings WHERE key = 'active_profile_id'").run();
+    getDb().prepare("DELETE FROM settings WHERE key = 'default_chain_profile_id'").run();
     seedCatalog();
     app = createApp();
     dashToken = mintDashboardToken();

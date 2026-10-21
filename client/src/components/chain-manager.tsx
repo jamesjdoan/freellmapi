@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, Layers, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, Layers, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useI18n } from '@/i18n'
 import { apiFetch, type ApiError } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -11,8 +11,13 @@ import { Tooltip } from '@/components/tooltip'
 // Named fallback chains (#960/#895). The backend /api/profiles CRUD is
 // complete and every chain is listed as an `auto:<name>` model in /v1/models;
 // this panel is the missing dashboard surface: list chains, create new ones,
-// switch the active chain (the fallback table below then edits that chain),
-// and delete custom ones.
+// choose which chain the table below edits, and delete custom ones.
+//
+// Two settings, and conflating them is the bug this panel used to ship (#1409):
+// `active_profile_id` is the chain being EDITED, `default_chain_profile_id` is
+// the chain a request that names no chain (`auto`) ROUTES to. Selecting a chain
+// here is an editing action; only "Use for plain auto" moves live traffic, and
+// it asks first.
 //
 // Deliberately a secondary, collapsed-by-default accordion on the Fallback
 // page rather than its own nav entry: most installs use one chain forever, and
@@ -59,6 +64,9 @@ export function ChainManager() {
   const [renamingId, setRenamingId] = useState<number | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
   const [renameError, setRenameError] = useState('')
+  // Which row's "use for plain auto" write failed, so the message sits on the
+  // row it belongs to instead of at the bottom of the panel.
+  const [plainAutoError, setPlainAutoError] = useState<{ id: number; message: string } | null>(null)
 
   const { data: chains = [] } = useQuery<Chain[]>({
     queryKey: ['profiles'],
@@ -68,6 +76,10 @@ export function ChainManager() {
     queryKey: ['profiles', 'active'],
     queryFn: () => apiFetch('/api/profiles/active'),
   })
+  const { data: defaultChain } = useQuery<{ defaultChainProfileId: number | null }>({
+    queryKey: ['profiles', 'default-chain'],
+    queryFn: () => apiFetch('/api/profiles/default-chain'),
+  })
 
   const invalidate = async () => {
     // Resolve WHICH chain is active before refreshing anything keyed on it
@@ -76,6 +88,9 @@ export function ChainManager() {
     // poisoned the old chain's cache entry with the new chain's rows.
     await queryClient.refetchQueries({ queryKey: ['profiles', 'active'], exact: true })
     queryClient.invalidateQueries({ queryKey: ['profiles'] })
+    // Deleting a chain moves the routing default too, so the plain-auto answer
+    // has to be re-read rather than assumed.
+    queryClient.invalidateQueries({ queryKey: ['profiles', 'default-chain'] })
     // The fallback table renders the active chain; refresh it too. The prefix
     // covers the chain, routing, token-usage and rate-limit queries.
     queryClient.invalidateQueries({ queryKey: ['fallback'] })
@@ -99,6 +114,23 @@ export function ChainManager() {
       apiFetch('/api/profiles/active', { method: 'POST', body: JSON.stringify({ profileId }) }),
     onSuccess: invalidate,
   })
+  // The one write here that changes live routing, so the row asks before it
+  // fires (#1409).
+  const setPlainAuto = useMutation({
+    mutationFn: (profileId: number) =>
+      apiFetch('/api/profiles/default-chain', { method: 'POST', body: JSON.stringify({ profileId }) }),
+    onSuccess: () => {
+      setPlainAutoError(null)
+      queryClient.invalidateQueries({ queryKey: ['profiles', 'default-chain'] })
+      // The Fallback header states which chain plain auto uses; scores are
+      // computed over that chain too.
+      queryClient.invalidateQueries({ queryKey: ['fallback'] })
+    },
+    // A silently-failing button is worse than a wrong one: this is the write an
+    // operator would most dislike losing quietly.
+    onError: (error: ApiError, profileId: number) =>
+      setPlainAutoError({ id: profileId, message: error.message || t('chains.plainAutoFailed') }),
+  })
   const deleteChain = useMutation({
     mutationFn: (profileId: number) =>
       apiFetch(`/api/profiles/${profileId}`, { method: 'DELETE' }),
@@ -118,6 +150,8 @@ export function ChainManager() {
   })
 
   if (chains.length === 0) return null
+
+  const plainAutoId = defaultChain?.defaultChainProfileId ?? null
 
   const activeId = active?.activeProfileId ?? null
 
@@ -158,6 +192,7 @@ export function ChainManager() {
           <div className="space-y-2">
             {chains.map(chain => {
               const isActive = chain.id === activeId
+              const isPlainAuto = chain.id === plainAutoId
               const isProtected = chain.type === 'default' || chain.type === 'builtin'
               const isRenaming = renamingId === chain.id
               if (isRenaming) {
@@ -211,6 +246,14 @@ export function ChainManager() {
                   <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
                     auto:{chain.name.toLowerCase()}
                   </code>
+                  {isPlainAuto && (
+                    <Tooltip text={t('chains.plainAutoHint')}>
+                      <Badge variant="secondary" className="gap-1">
+                        <ArrowRight className="size-3" />
+                        {t('chains.plainAuto')}
+                      </Badge>
+                    </Tooltip>
+                  )}
                   {isActive && (
                     <Badge variant="secondary" className="gap-1">
                       <Check className="size-3" />
@@ -228,6 +271,26 @@ export function ChainManager() {
                     </Tooltip>
                   )}
                   <span className="flex-1" />
+                  {/* Two buttons, two settings, and the difference is the whole
+                      point (#1409): "Edit" moves the table below, "Use for
+                      plain auto" moves live traffic — and asks first. */}
+                  {!isPlainAuto && (
+                    <Tooltip text={t('chains.makePlainAutoHint')}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        disabled={setPlainAuto.isPending}
+                        onClick={() => {
+                          if (!window.confirm(t('chains.plainAutoConfirm', { name: chain.name }))) return
+                          setPlainAutoError(null)
+                          setPlainAuto.mutate(chain.id)
+                        }}
+                      >
+                        {t('chains.makePlainAuto')}
+                      </Button>
+                    </Tooltip>
+                  )}
                   {!isActive && (
                     <Tooltip text={t('chains.activateHint')}>
                       <Button
@@ -276,6 +339,11 @@ export function ChainManager() {
                         <Trash2 className="size-3.5" />
                       </Button>
                     </Tooltip>
+                  )}
+                  {plainAutoError?.id === chain.id && (
+                    <span className="w-full text-right text-xs text-rose-600 dark:text-rose-400">
+                      {plainAutoError.message}
+                    </span>
                   )}
                 </div>
               )

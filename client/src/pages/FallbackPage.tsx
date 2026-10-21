@@ -130,16 +130,31 @@ export default function FallbackPage() {
     }
   })
 
-  // The table edits the ACTIVE chain, so it is part of this query's identity
-  // (#1021): keyed on 'fallback' alone, switching chains in the manager below
-  // re-rendered the previous chain's rows from cache, and a save then wrote
-  // them into the newly activated one. Held back until the active chain is
-  // known so the first paint is already the right chain's.
+  // The table edits the chain named by `activeProfileId`, so that id is part of
+  // this query's identity (#1021): keyed on 'fallback' alone, switching chains
+  // in the manager below re-rendered the previous chain's rows from cache, and a
+  // save then wrote them into the newly activated one. Held back until the
+  // active chain is known so the first paint is already the right chain's.
   const { data: active, isPending: activePending } = useQuery<{ activeProfileId: number | null }>({
     queryKey: ['profiles', 'active'],
     queryFn: () => apiFetch('/api/profiles/active'),
   })
   const activeProfileId = active?.activeProfileId ?? null
+
+  // The chain plain `auto` routes to, which is a DIFFERENT setting from the one
+  // above (#1409): `activeProfileId` is the chain this table edits, and the two
+  // only agree until an operator opens another chain to look at it.
+  const { data: defaultChain } = useQuery<{ defaultChainProfileId: number | null }>({
+    queryKey: ['profiles', 'default-chain'],
+    queryFn: () => apiFetch('/api/profiles/default-chain'),
+  })
+  const plainAutoId = defaultChain?.defaultChainProfileId ?? null
+  // Names for the line under the table. Shares the chain manager's query.
+  const { data: chainList = [] } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ['profiles'],
+    queryFn: () => apiFetch('/api/profiles'),
+  })
+  const chainName = (id: number | null) => chainList.find(c => c.id === id)?.name ?? null
 
   const { data: entries = [], isLoading: entriesLoading } = useQuery<FallbackEntry[]>({
     queryKey: ['fallback', 'chain', activeProfileId],
@@ -701,8 +716,9 @@ export default function FallbackPage() {
             reason you are here. Renders nothing when neither happened. */}
         <CatalogueChangesPanel />
 
-        {/* Named fallback chains (#960/#895): list/create/activate/delete.
-            Activating a chain makes the table below edit that chain. */}
+        {/* Named fallback chains (#960/#895): list/create/rename/delete.
+            Choosing a chain here points the table below at it — it does not
+            change where plain `auto` requests go (#1409). */}
         <ChainManager />
 
         <PenaltyInspector />
@@ -723,6 +739,18 @@ export default function FallbackPage() {
           />
         ) : (
           <>
+            {/* Which chain this table is. The two settings part company the
+                moment another chain is opened to edit (#1409), and a table of
+                "the routing chain" that was really the chain under the cursor is
+                the confusion that moved live traffic before. */}
+            {activeProfileId != null && plainAutoId != null && plainAutoId !== activeProfileId && (
+              <p className="-mb-1 text-xs text-muted-foreground">
+                {t('chains.editingOtherChain', {
+                  editing: chainName(activeProfileId) ?? String(activeProfileId),
+                  auto: chainName(plainAutoId) ?? String(plainAutoId),
+                })}
+              </p>
+            )}
             {/* Catalog toolbar: search + capability/context filters (#343) */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="relative w-full sm:max-w-xs">

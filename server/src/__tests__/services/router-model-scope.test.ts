@@ -18,6 +18,7 @@ describe('Router model scope (#657)', () => {
     setRoutingStrategy('priority');
     db.prepare('DELETE FROM api_keys').run();
     db.prepare("DELETE FROM settings WHERE key = 'active_profile_id'").run();
+    db.prepare("DELETE FROM settings WHERE key = 'default_chain_profile_id'").run();
     const models = db.prepare('SELECT id FROM models ORDER BY intelligence_rank ASC').all() as any[];
     const update = db.prepare('UPDATE fallback_config SET priority = ? WHERE model_db_id = ?');
     for (let i = 0; i < models.length; i++) {

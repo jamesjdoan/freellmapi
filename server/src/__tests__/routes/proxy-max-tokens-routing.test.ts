@@ -65,6 +65,7 @@ describe('max_tokens no longer starves routing (#470)', () => {
     const db = getDb();
     setRoutingStrategy('priority');
     db.prepare("DELETE FROM settings WHERE key = 'active_profile_id'").run();
+    db.prepare("DELETE FROM settings WHERE key = 'default_chain_profile_id'").run();
 
     const { encrypted, iv, authTag } = encrypt('groq-key');
     db.prepare(`

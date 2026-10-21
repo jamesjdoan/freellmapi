@@ -1646,7 +1646,14 @@
     "renameHint": "Bu zinciri yeniden adlandır",
     "renameConfirm": "\"{oldName}\" zincirinin adı \"{name}\" olarak değiştirilsin mi? auto:{oldName} kullanan istemcilerin auto:{name} değerine geçmesi gerekir.",
     "renamePlaceholder": "Yeni zincir adı",
-    "renameFailed": "Zincir yeniden adlandırılamadı."
+    "renameFailed": "Zincir yeniden adlandırılamadı.",
+    "plainAuto": "plain auto",
+    "plainAutoHint": "A request that names no chain (model: \"auto\") routes through this chain.",
+    "makePlainAuto": "Use for plain auto",
+    "makePlainAutoHint": "Route requests that name no chain through this chain. This is the one choice here that changes live routing.",
+    "plainAutoConfirm": "Route plain auto through \"{name}\"? Every request that names no chain switches to this chain.",
+    "plainAutoFailed": "Could not change the plain-auto chain.",
+    "editingOtherChain": "The table below is the chain you are editing ({editing}). Requests that name no chain route through {auto}."
   },
   "updates": {
     "versionAvailable": "{version} sürümü kullanılabilir",

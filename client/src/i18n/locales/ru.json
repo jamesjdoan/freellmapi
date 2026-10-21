@@ -1646,7 +1646,14 @@
     "renameHint": "Переименовать эту цепочку",
     "renameConfirm": "Переименовать цепочку \"{oldName}\" в \"{name}\"? Клиенты, обращающиеся к auto:{oldName}, должны перейти на auto:{name}.",
     "renamePlaceholder": "Новое имя цепочки",
-    "renameFailed": "Не удалось переименовать цепочку."
+    "renameFailed": "Не удалось переименовать цепочку.",
+    "plainAuto": "plain auto",
+    "plainAutoHint": "A request that names no chain (model: \"auto\") routes through this chain.",
+    "makePlainAuto": "Use for plain auto",
+    "makePlainAutoHint": "Route requests that name no chain through this chain. This is the one choice here that changes live routing.",
+    "plainAutoConfirm": "Route plain auto through \"{name}\"? Every request that names no chain switches to this chain.",
+    "plainAutoFailed": "Could not change the plain-auto chain.",
+    "editingOtherChain": "The table below is the chain you are editing ({editing}). Requests that name no chain route through {auto}."
   },
   "updates": {
     "versionAvailable": "Доступна версия {version}",

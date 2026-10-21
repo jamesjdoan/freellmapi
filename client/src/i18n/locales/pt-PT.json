@@ -1646,7 +1646,14 @@
     "renameHint": "Mudar o nome desta cadeia",
     "renameConfirm": "Mudar o nome da cadeia \"{oldName}\" para \"{name}\"? Os clientes que chamam auto:{oldName} devem passar para auto:{name}.",
     "renamePlaceholder": "Novo nome da cadeia",
-    "renameFailed": "Não foi possível mudar o nome da cadeia."
+    "renameFailed": "Não foi possível mudar o nome da cadeia.",
+    "plainAuto": "plain auto",
+    "plainAutoHint": "A request that names no chain (model: \"auto\") routes through this chain.",
+    "makePlainAuto": "Use for plain auto",
+    "makePlainAutoHint": "Route requests that name no chain through this chain. This is the one choice here that changes live routing.",
+    "plainAutoConfirm": "Route plain auto through \"{name}\"? Every request that names no chain switches to this chain.",
+    "plainAutoFailed": "Could not change the plain-auto chain.",
+    "editingOtherChain": "The table below is the chain you are editing ({editing}). Requests that name no chain route through {auto}."
   },
   "updates": {
     "versionAvailable": "A versão {version} está disponível",

@@ -9,6 +9,7 @@ import type { EffectiveQuota } from './quota-policy.js';
 import { resolveQuotaPolicy, consumesPaidBalance, legacyPoolKey, inferQuotaPoolKey } from './provider-quota.js';
 import type { Platform } from '@freellmapi/shared/types.js';
 import { countRequestsInWindow, countPlatformUsageInWindow } from './ratelimit.js';
+import { getDefaultChainProfileId } from './profile-models.js';
 
 // Daily free-tier balance forecast (#1104). Free tiers reset on a per-account
 // window (usually UTC midnight) and the only way to know how much headroom is
@@ -942,27 +943,32 @@ function addMemberSumRows(rows: ProviderQuotaOverviewRow[], now: number): void {
 }
 
 /**
- * Enabled models the active chain excludes, per platform.
+ * Enabled models the routed chain excludes, per platform.
  *
  * The exact complement of `routedMembers`: same `models.enabled = 1` filter,
  * opposite answer on the chain predicate. Kept as its own query rather than
  * derived by subtraction so the two cannot drift into disagreeing about which
- * profile is active.
+ * chain plain `auto` routes over — the routing default, never the chain the
+ * dashboard happens to have open.
  */
 function unroutedByPlatform(): Map<string, string[]> {
   const out = new Map<string, string[]>();
   try {
-    const rows = getDb().prepare(`
+    const db = getDb();
+    // -1 when no chain is resolved: a profile_models row can never match it,
+    // so the predicate falls through to fallback_config, as it does with no
+    // chain at all.
+    const rows = db.prepare(`
       SELECT m.platform, m.model_id
         FROM models m
         LEFT JOIN profile_models pm
                ON pm.model_db_id = m.id
-              AND pm.profile_id = (SELECT CAST(value AS INTEGER) FROM settings WHERE key = 'active_profile_id')
+              AND pm.profile_id = ?
         LEFT JOIN fallback_config fc ON fc.model_db_id = m.id
        WHERE m.enabled = 1
          AND COALESCE(pm.enabled, fc.enabled, 1) = 0
        ORDER BY m.model_id
-    `).all() as { platform: string; model_id: string }[];
+    `).all(getDefaultChainProfileId(db) ?? -1) as { platform: string; model_id: string }[];
     for (const row of rows) {
       const list = out.get(row.platform);
       if (list) list.push(row.model_id);
@@ -980,16 +986,17 @@ function routedMembers(): { byPool: Map<string, PlatformMember[]>; byPlatform: M
   // credit pool needs the model id the predicate is written against.
   const byPlatform = new Map<string, PlatformMember[]>();
   try {
-    const rows = getDb().prepare(`
+    const db = getDb();
+    const rows = db.prepare(`
       SELECT m.platform, m.model_id, m.display_name
         FROM models m
         LEFT JOIN profile_models pm
                ON pm.model_db_id = m.id
-              AND pm.profile_id = (SELECT CAST(value AS INTEGER) FROM settings WHERE key = 'active_profile_id')
+              AND pm.profile_id = ?
         LEFT JOIN fallback_config fc ON fc.model_db_id = m.id
        WHERE m.enabled = 1
          AND COALESCE(pm.enabled, fc.enabled, 1) = 1
-    `).all() as { platform: string; model_id: string; display_name: string }[];
+    `).all(getDefaultChainProfileId(db) ?? -1) as { platform: string; model_id: string; display_name: string }[];
     for (const row of rows) {
       const poolKey = resolveQuotaPolicy(row.platform as Platform, row.model_id).poolKey;
       const member: PlatformMember = { platform: row.platform, modelId: row.model_id, displayName: row.display_name };

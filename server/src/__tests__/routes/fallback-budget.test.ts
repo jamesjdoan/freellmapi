@@ -61,6 +61,7 @@ describe('Chat monthly capacity', () => {
     db.prepare('UPDATE models SET enabled = 0').run();
     db.prepare('UPDATE fallback_config SET enabled = 1').run();
     db.prepare("DELETE FROM settings WHERE key = 'active_profile_id'").run();
+    db.prepare("DELETE FROM settings WHERE key = 'default_chain_profile_id'").run();
   });
 
   it('excludes disabled chain routes, inaccessible scopes and invalid credentials', async () => {

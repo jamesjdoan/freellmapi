@@ -9,6 +9,31 @@ export function getActiveProfileId(db: Db): number | null {
   return profile ? profileId : null;
 }
 
+/**
+ * The chain a plain `auto` request routes to (#1409).
+ *
+ * `default_chain_profile_id` is the ROUTING setting; `active_profile_id` is the
+ * chain the dashboard shows and edits. They used to be the same row, so
+ * selecting a chain to edit it silently moved live traffic.
+ *
+ * A pointer that names a deleted profile resolves to the Default-type chain —
+ * routing always means a real chain when one exists, never the global table.
+ * A missing setting keeps the legacy meaning of "no chain is configured":
+ * `fallback_config` is the chain for an install that has no profiles at all.
+ */
+export function getDefaultChainProfileId(db: Db): number | null {
+  const setting = db.prepare("SELECT value FROM settings WHERE key = 'default_chain_profile_id'").get() as { value: string } | undefined;
+  if (!setting) return null;
+  const profileId = parseInt(setting.value, 10);
+  if (!Number.isInteger(profileId)) return null;
+  if (db.prepare('SELECT id FROM profiles WHERE id = ?').get(profileId)) return profileId;
+
+  const fallback = db.prepare(
+    "SELECT id FROM profiles WHERE type = 'default' OR type = 'builtin' ORDER BY id ASC LIMIT 1",
+  ).get() as { id: number } | undefined;
+  return fallback ? fallback.id : null;
+}
+
 // Only chains that still opt in to the backfill (#895). A chain created with
 // `empty: true` — or one the operator later switched the flag off on — holds
 // exactly what was put in it, and a catalog sync must not quietly refill it.

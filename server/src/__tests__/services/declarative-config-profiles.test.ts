@@ -56,11 +56,16 @@ describe('declarative config keeps profile membership in sync', () => {
     expect(profileRowCount(model!.id)).toBe(profileCount);
   });
 
-  it('makes the model reachable through the active profile chain', () => {
+  it('makes the model reachable through the chain plain auto routes over', () => {
     const db = getDb();
     const profile = db.prepare('SELECT id FROM profiles ORDER BY id LIMIT 1').get() as { id: number };
+    // Both settings name this chain: the model has to be in it either way, and
+    // `resolveRoutingChain('auto')` reads the routing default (#1409).
     db.prepare(
       "INSERT INTO settings (key, value) VALUES ('active_profile_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+    ).run(String(profile.id));
+    db.prepare(
+      "INSERT INTO settings (key, value) VALUES ('default_chain_profile_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
     ).run(String(profile.id));
 
     applyDeclarativeConfig({
@@ -72,21 +77,22 @@ describe('declarative config keeps profile membership in sync', () => {
       }],
     });
 
-    // resolveRoutingChain('auto') goes through the same active-profile lookup the
-    // proxy uses, so this asserts real reachability rather than table contents.
+    // resolveRoutingChain('auto') goes through the same chain lookup the proxy
+    // uses, so this asserts real reachability rather than table contents.
     const { chain } = resolveRoutingChain('auto');
     expect(chain.some(entry => entry.model_id === 'reachable-chat')).toBe(true);
 
-    // The model must also be in the ACTIVE profile specifically, not just some profile.
+    // The model must also be in that profile specifically, not just some profile.
     const model = db.prepare(
       "SELECT id FROM models WHERE platform = 'custom' AND model_id = 'reachable-chat'",
     ).get() as { id: number };
-    const inActiveProfile = db.prepare(
+    const inProfile = db.prepare(
       'SELECT 1 FROM profile_models WHERE profile_id = ? AND model_db_id = ?',
     ).get(profile.id, model.id);
-    expect(inActiveProfile).toBeDefined();
+    expect(inProfile).toBeDefined();
 
     db.prepare("DELETE FROM settings WHERE key = 'active_profile_id'").run();
+    db.prepare("DELETE FROM settings WHERE key = 'default_chain_profile_id'").run();
   });
 
   it('is idempotent — re-applying does not duplicate profile rows', () => {

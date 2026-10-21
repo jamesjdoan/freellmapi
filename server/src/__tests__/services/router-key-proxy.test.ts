@@ -19,6 +19,7 @@ describe('Router — per-key proxy override (#590)', () => {
     setRoutingStrategy('priority');
     db.prepare('DELETE FROM api_keys').run();
     db.prepare("DELETE FROM settings WHERE key = 'active_profile_id'").run();
+    db.prepare("DELETE FROM settings WHERE key = 'default_chain_profile_id'").run();
   });
 
   afterEach(() => {

@@ -60,6 +60,7 @@ describe('multiple keys per custom endpoint (#619)', () => {
     process.env.ENCRYPTION_KEY = '0'.repeat(64);
     initDb(':memory:');
     getDb().prepare("DELETE FROM settings WHERE key = 'active_profile_id'").run();
+    getDb().prepare("DELETE FROM settings WHERE key = 'default_chain_profile_id'").run();
     app = createApp();
     dashToken = mintDashboardToken();
   });

@@ -1629,7 +1629,7 @@
     "title": "Chaînes de repli",
     "description": "Chaînes nommées, chacune appelable via auto:<name> dans /v1/models.",
     "count": "{count} chaînes",
-    "active": "Active",
+    "active": "Editing",
     "default": "Par défaut",
     "activate": "Activer",
     "activateHint": "Faire éditer cette chaîne par le tableau ci-dessous et l'utiliser pour le routage auto",
@@ -1646,7 +1646,14 @@
     "renameHint": "Renommer cette chaîne",
     "renameConfirm": "Renommer la chaîne « {oldName} » en « {name} » ? Les clients appelant auto:{oldName} doivent passer à auto:{name}.",
     "renamePlaceholder": "Nouveau nom de la chaîne",
-    "renameFailed": "Impossible de renommer cette chaîne."
+    "renameFailed": "Impossible de renommer cette chaîne.",
+    "plainAuto": "plain auto",
+    "plainAutoHint": "A request that names no chain (model: \"auto\") routes through this chain.",
+    "makePlainAuto": "Use for plain auto",
+    "makePlainAutoHint": "Route requests that name no chain through this chain. This is the one choice here that changes live routing.",
+    "plainAutoConfirm": "Route plain auto through \"{name}\"? Every request that names no chain switches to this chain.",
+    "plainAutoFailed": "Could not change the plain-auto chain.",
+    "editingOtherChain": "The table below is the chain you are editing ({editing}). Requests that name no chain route through {auto}."
   },
   "updates": {
     "versionAvailable": "La version {version} est disponible",

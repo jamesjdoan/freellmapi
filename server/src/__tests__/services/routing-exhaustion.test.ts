@@ -53,6 +53,7 @@ describe('Routing Key Exhaustion', () => {
     
     // Clear seeded DB data to isolate this test's routing logic
     db.prepare("DELETE FROM settings WHERE key = 'active_profile_id'").run();
+    db.prepare("DELETE FROM settings WHERE key = 'default_chain_profile_id'").run();
     db.prepare("DELETE FROM fallback_config").run();
     db.prepare("DELETE FROM profile_models").run();
     db.prepare("DELETE FROM models").run();

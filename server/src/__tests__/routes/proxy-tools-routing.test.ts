@@ -95,6 +95,7 @@ describe('Tools-aware routing', () => {
     const db = getDb();
     setRoutingStrategy('priority');
     db.prepare("DELETE FROM settings WHERE key = 'active_profile_id'").run();
+    db.prepare("DELETE FROM settings WHERE key = 'default_chain_profile_id'").run();
 
     // One key for google, whose catalog holds both a non-tool model (gemma)
     // and tool-capable ones (gemini). Put gemma at the top of the chain.

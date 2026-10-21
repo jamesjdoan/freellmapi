@@ -62,6 +62,7 @@ describe('built-in provider model discovery routes (#1348)', () => {
     process.env.BUILTIN_MODEL_DISCOVERY = 'manual';
     initDb(':memory:');
     getDb().prepare("DELETE FROM settings WHERE key = 'active_profile_id'").run();
+    getDb().prepare("DELETE FROM settings WHERE key = 'default_chain_profile_id'").run();
     resetBuiltinDiscoveryThrottle();
     app = createApp();
     dashToken = mintDashboardToken();

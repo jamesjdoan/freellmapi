@@ -9,6 +9,7 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { getDb } from '../db/index.js';
 import { monthlyBudgetScore } from '../lib/budget.js';
+import { getDefaultChainProfileId } from '../services/profile-models.js';
 
 export const profilesRouter = Router();
 
@@ -103,6 +104,37 @@ profilesRouter.post('/active', (req: Request, res: Response) => {
     ON CONFLICT(key) DO UPDATE SET value = excluded.value
   `).run(String(profileId));
   res.json({ activeProfileId: Number(profileId) });
+});
+
+// GET /api/profiles/default-chain — the chain a plain `auto` request routes to
+// (#1409). Deliberately NOT /active: that one is the chain the dashboard shows
+// and edits, and the two only agree until an operator opens another chain.
+profilesRouter.get('/default-chain', (_req: Request, res: Response) => {
+  res.json({ defaultChainProfileId: getDefaultChainProfileId(getDb()) });
+});
+
+// POST /api/profiles/default-chain — point plain `auto` at a chain. This is the
+// only write that moves live routing between chains, so the dashboard puts a
+// confirm on it and nothing else does.
+profilesRouter.post('/default-chain', (req: Request, res: Response) => {
+  const db = getDb();
+  const profileId = req.body?.profileId;
+  if (profileId === null || profileId === undefined || !Number.isFinite(Number(profileId))) {
+    res.status(400).json({ error: { message: 'profileId is required' } });
+    return;
+  }
+
+  const profile = db.prepare('SELECT id FROM profiles WHERE id = ?').get(Number(profileId)) as { id: number } | undefined;
+  if (!profile) {
+    res.status(404).json({ error: { message: 'Profile not found' } });
+    return;
+  }
+
+  db.prepare(`
+    INSERT INTO settings (key, value) VALUES ('default_chain_profile_id', ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run(String(profileId));
+  res.json({ defaultChainProfileId: Number(profileId) });
 });
 
 // GET /api/profiles/:id/models — get profile model order
@@ -363,18 +395,24 @@ profilesRouter.delete('/:id', (req: Request, res: Response) => {
     return;
   }
 
-  // If the deleted profile is the currently active one, switch to Default
+  // If the deleted profile is the currently active one, switch to Default —
+  // and the same handoff for the chain plain `auto` routes through (#1409):
+  // deleting a chain must never leave live traffic pointed at nothing.
   const activeRow = db.prepare(`SELECT value FROM settings WHERE key = 'active_profile_id'`).get() as { value: string } | undefined;
   const activeId = activeRow ? parseInt(activeRow.value) : null;
+  const defaultChainId = getDefaultChainProfileId(db);
 
   db.prepare('DELETE FROM profiles WHERE id = ?').run(profileId);
 
-  if (activeId === profileId) {
-    const defaultProf = db.prepare("SELECT id FROM profiles WHERE type = 'default' OR type = 'builtin' ORDER BY id ASC LIMIT 1").get() as { id: number } | undefined;
-    const fallbackId = defaultProf?.id ?? (db.prepare('SELECT id FROM profiles ORDER BY sort_order ASC LIMIT 1').get() as { id: number })?.id;
-    if (fallbackId) {
-      db.prepare(`INSERT INTO settings (key, value) VALUES ('active_profile_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(String(fallbackId));
-    }
+  const handoffId = db.prepare("SELECT id FROM profiles WHERE type = 'default' OR type = 'builtin' ORDER BY id ASC LIMIT 1")
+    .get() as { id: number } | undefined;
+  const fallbackId = handoffId?.id ?? (db.prepare('SELECT id FROM profiles ORDER BY sort_order ASC LIMIT 1').get() as { id: number } | undefined)?.id;
+
+  if (activeId === profileId && fallbackId) {
+    db.prepare(`INSERT INTO settings (key, value) VALUES ('active_profile_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(String(fallbackId));
+  }
+  if (defaultChainId === profileId && fallbackId) {
+    db.prepare(`INSERT INTO settings (key, value) VALUES ('default_chain_profile_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(String(fallbackId));
   }
 
   res.json({ success: true });

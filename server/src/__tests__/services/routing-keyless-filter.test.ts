@@ -56,6 +56,7 @@ describe('keyless-platform prefilter', () => {
     setRoutingStrategy('priority');
     const db = getDb();
     db.prepare("DELETE FROM settings WHERE key = 'active_profile_id'").run();
+    db.prepare("DELETE FROM settings WHERE key = 'default_chain_profile_id'").run();
     db.prepare('DELETE FROM fallback_config').run();
     db.prepare('DELETE FROM profile_models').run();
     db.prepare('DELETE FROM models').run();

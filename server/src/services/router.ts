@@ -39,7 +39,7 @@ import { parseBudget } from '../lib/budget.js';
 import { platformDropsResponseFormat } from '../lib/sampling-params.js';
 import { passesContextWindowFloor } from '../lib/min-context-window.js';
 import { isUnifyEnabled, getModelGroups, resolveRequestedIdForDispatch, getProviderPreferences, routingMemberId } from './model-groups.js';
-import { getActiveProfileId } from './profile-models.js';
+import { getDefaultChainProfileId } from './profile-models.js';
 import { getClientContext } from '../lib/client-context.js';
 import { customEndpointKeyIds } from './custom-endpoint.js';
 import { isDegraded } from './degradation.js';
@@ -1704,13 +1704,14 @@ function paidCreditTierRows(): ChainRow[] {
  * Providers excluded from autoroute are dropped here, which is what makes the
  * exclusion hold for models the catalog has not synced yet.
  */
-// Chain cache: the active chain only changes on admin writes (models/profiles/
-// fallback_config), not per request — but routeRequest used to re-run the JOIN
-// on every request (synchronously, on the event loop). Cache by db+profileId
-// with a 1s TTL safety net; a profile switch changes profileId so it takes
-// effect immediately. Copy on return: callers like routeRequest splice/unshift.
-// Bypassed under NODE_ENV=test: suites write chain tables via raw SQL and route
-// immediately afterwards.
+// Chain cache: the plain-auto chain only changes on admin writes
+// (models/profiles/fallback_config) or on a `default_chain_profile_id` change,
+// not per request — but routeRequest used to re-run the JOIN on every request
+// (synchronously, on the event loop). Cache by db+profileId with a 1s TTL
+// safety net; pointing the routing default at another chain changes profileId,
+// so it takes effect immediately. Copy on return: callers like routeRequest
+// splice/unshift. Bypassed under NODE_ENV=test: suites write chain tables via
+// raw SQL and route immediately afterwards.
 let chainCache: { db: Db; profileId: number | null; rows: ChainRow[]; at: number } | null = null;
 const CHAIN_CACHE_TTL_MS = 1_000;
 
@@ -1718,12 +1719,13 @@ function cachesEnabled(): boolean {
   return process.env.NODE_ENV !== 'test';
 }
 
+/** The chain a plain `auto` request routes over — see getActiveChainRows. */
 function getActiveChain(db: Db): ChainRow[] {
   return withoutAutorouteDisabled(getActiveChainRows(db));
 }
 
 function getActiveChainRows(db: Db): ChainRow[] {
-  const profileId = getActiveProfileId(db);
+  const profileId = getDefaultChainProfileId(db);
   if (cachesEnabled() && chainCache && chainCache.db === db && chainCache.profileId === profileId
       && Date.now() - chainCache.at < CHAIN_CACHE_TTL_MS) {
     return chainCache.rows.slice();
@@ -1779,8 +1781,9 @@ function getChainByGlobalSort(db: Db, globalAxis: string): ChainRow[] {
   // A global sort ignores the chain's ORDER, not its enable flags: a model the
   // operator switched off — in the catalog or just for auto routing — stays off
   // here too (#634). Models with no chain row yet (fresh catalog rows) default
-  // to in, so the sort still spans the whole catalog.
-  const profileId = getActiveProfileId(db);
+  // to in, so the sort still spans the whole catalog. The enable flags come
+  // from the chain plain `auto` routes over, never the one being edited.
+  const profileId = getDefaultChainProfileId(db);
   const chainEnabled = profileId != null
     ? 'COALESCE(pm.enabled, fc.enabled, 1) = 1'
     : 'COALESCE(fc.enabled, 1) = 1';
@@ -1812,24 +1815,24 @@ function getChainByGlobalSort(db: Db, globalAxis: string): ChainRow[] {
 }
 
 /**
- * The active chain, or a client-facing refusal when it has nothing enabled.
+ * The plain-auto chain, or a client-facing refusal when it has nothing enabled.
  *
  * Mirrors what `auto:<name>` already does for a named chain: say the chain is
  * empty rather than routing the request over models the operator never put in
- * it. Only when a profile is active — a legacy install with none keeps the
- * ordinary "all models exhausted" exhaustion path.
+ * it. Only when a chain is resolved for routing — a legacy install with none
+ * keeps the ordinary "all models exhausted" exhaustion path.
  */
 function activeChainOrThrow(db: Db): ChainRow[] {
   const chain = getActiveChain(db);
   if (chain.some(entry => entry.enabled)) return chain;
 
-  const profileId = getActiveProfileId(db);
+  const profileId = getDefaultChainProfileId(db);
   if (profileId == null) return chain;
 
   const profile = db.prepare('SELECT name FROM profiles WHERE id = ?').get(profileId) as { name: string } | undefined;
   const err = new Error(
-    `The active fallback chain${profile ? ` '${profile.name}'` : ''} has no enabled models. `
-    + 'Enable models for it on the Models page, switch the active chain, or name another one with "auto:<chain>".',
+    `The default fallback chain${profile ? ` '${profile.name}'` : ''} has no enabled models. `
+    + 'Enable models for it on the Models page, pick the chain plain auto uses, or name one with "auto:<chain>".',
   ) as any;
   err.status = 400;
   throw err;
@@ -2392,8 +2395,9 @@ export function pinnedModelFitsRequestSize(modelDbId: number, estimatedTokens: n
 /**
  * Resolve a logical model group's member db ids to an ordered ChainRow[] for
  * strict group-pin routing (the "unify" feature). Each catalog-enabled member
- * is hydrated as a ChainRow carrying its active-profile/manual priority, then
- * ordered by the active strategy via orderChain. Auto-chain enabled/disabled is
+ * is hydrated as a ChainRow carrying the manual priority of the chain routing
+ * uses (the plain-auto default), then ordered by the active strategy via
+ * orderChain. Auto-chain enabled/disabled is
  * intentionally ignored here because an explicit model request should still be
  * able to use a direct model that the user removed from auto routing.
  *
@@ -2417,8 +2421,8 @@ export function resolveModelGroupCandidates(
   const strategy = effectiveRoutingStrategy();
   if (strategy !== 'priority') refreshStatsCache(db);
 
-  const activeProfileId = getActiveProfileId(db);
-  const selectMember = activeProfileId == null
+  const routingProfileId = getDefaultChainProfileId(db);
+  const selectMember = routingProfileId == null
     ? db.prepare(`
       SELECT m.id as model_db_id, COALESCE(fc.priority, 0) as priority,
              1 as enabled,
@@ -2445,7 +2449,7 @@ export function resolveModelGroupCandidates(
 
   const rows: ChainRow[] = [];
   for (const id of memberDbIds) {
-    const row = (activeProfileId == null ? selectMember.get(id) : selectMember.get(activeProfileId, id)) as ChainRow | undefined;
+    const row = (routingProfileId == null ? selectMember.get(id) : selectMember.get(routingProfileId, id)) as ChainRow | undefined;
     if (!row) continue;
     row.match_tier = demotedDbIds?.has(id) ? 1 : 0;
     rows.push(row);
@@ -2965,14 +2969,19 @@ export function getRoutingScores(): { strategy: RoutingStrategy; keySelectionStr
   const strategy = getRoutingStrategy();
   refreshStatsCache(db);
 
-  // Score the whole enabled catalog, not just the active chain (#1047). Since
+  // Score the whole enabled catalog, not just the routed chain (#1047). Since
   // #1023 the dashboard table lists every catalog row through the chain, and
   // merging it against chain-only scores left every not-yet-opted-in row with
   // blank reliability/speed — which read as "each new chain starts from
   // scratch" even though the underlying per-model stats are global. Rows the
-  // chain names keep its enabled flag; the rest score as disabled. Display
-  // only: routeRequest still walks getActiveChain.
-  const profileId = getActiveProfileId(db);
+  // chain names keep its enabled flag; the rest score as disabled.
+  //
+  // The chain read here is the ROUTING default, not `active_profile_id`: these
+  // numbers answer "what would an auto request pick", and the table they render
+  // beside must not change because the operator opened a different chain to
+  // edit it. Display only — routeRequest walks the same default through
+  // getActiveChain.
+  const profileId = getDefaultChainProfileId(db);
   const chain = db.prepare(`
     SELECT m.id AS model_db_id, COALESCE(c.priority, 0) AS priority, COALESCE(c.enabled, 0) AS enabled,
            m.platform, m.model_id, m.display_name, m.intelligence_rank,

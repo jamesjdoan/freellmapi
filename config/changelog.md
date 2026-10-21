@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-21 — Editing a chain no longer changes plain-auto routing (local, not deployed)
+
+- **The bug.** One setting, `settings.active_profile_id`, meant two things: the chain the dashboard's table showed and edited, and the chain a request that names no chain (`model: "auto"`) routed through. Opening Extra-Tier to edit it silently moved every plain-auto request onto the overflow chain.
+- Two settings now. `active_profile_id` is the chain being edited and viewed. The new `default_chain_profile_id` is the chain plain `auto` routes through, and it is the only one the router reads.
+- Migration `20261021_000001_default_chain_profile` copies the current active value into the new setting when it is absent, so the deploy changes no routing. Live active is Default (id 1), so plain auto keeps routing over Default. Reversible; covered by the migration round-trip test.
+- A `default_chain_profile_id` that names a deleted profile resolves to the Default chain, and the profile `DELETE` route moves the setting there too. A missing setting keeps the legacy meaning: no chain at all, so `fallback_config` is the chain — which is what every existing install with no profiles relies on.
+- API: `GET /api/profiles/default-chain` and `POST /api/profiles/default-chain { profileId }` (404 on an unknown profile). `active_profile_id`, the fallback-chain listing, the models list, the token-usage estimate and the free-tier inventory keep following the chain being edited; the routing paths (`auto`, global sorts, exclude-from-auto enable flags, unify member priorities) and the quota forecast follow the routing default.
+- Dashboard: chain rows gained a `plain auto` badge on the chain plain auto uses and a **Use for plain auto** action that confirms before it fires. **Edit** (formerly **Activate**) only points the table below at a chain. When the chain being edited is not the plain-auto chain, the table says which is which.
+- Tests: `server` — 410 files / 5,182 tests pass (5 skipped), typecheck clean. `client` — 92 files / 699 tests pass, `tsc -b`, build clean, and lint on the two changed files shows the same single pre-existing `FallbackPage.tsx` error as `HEAD`.
+
 ## 2026-10-21 — Chains 8 → 6; typed scores apply to every route of a model (deployed `main-20261021-202037`, applied live)
 
 - **Why fewer chains.** Over 14 days, `auto:frontier`, `auto:apex`, `auto:coding` and `auto:vision` ran out of routes 3,789 times. The chains shared most members: Apex × Frontier 91%, Workhorse × Default 93%, Frontier × Coding 86%. So they cooled down together.

@@ -76,8 +76,10 @@ describe('Custom Provider Endpoints', () => {
     beforeAll(() => {
       process.env.ENCRYPTION_KEY = '0'.repeat(64);
       initDb(':memory:');
-      // Isolate tests to use global fallback_config
+      // Isolate tests to use global fallback_config (no chain at all: both the
+      // edited-chain and the plain-auto setting have to go, #1409)
       getDb().prepare("DELETE FROM settings WHERE key = 'active_profile_id'").run();
+      getDb().prepare("DELETE FROM settings WHERE key = 'default_chain_profile_id'").run();
       app = createApp();
       dashToken = mintDashboardToken();
     });
@@ -253,6 +255,7 @@ describe('Custom Provider Endpoints', () => {
       db.prepare("DELETE FROM models WHERE platform = 'custom'").run();
       db.prepare('DELETE FROM api_keys').run();
       db.prepare("DELETE FROM settings WHERE key = 'active_profile_id'").run();
+      db.prepare("DELETE FROM settings WHERE key = 'default_chain_profile_id'").run();
 
       const a = await post(app, '/api/keys/custom', { baseUrl: 'http://127.0.0.1:11434/v1', model: 'llama3:8b', label: 'Ollama box' });
       const b = await post(app, '/api/keys/custom', { baseUrl: 'http://127.0.0.1:1234/v1', model: 'qwen3:4b', label: 'LM Studio' });
