@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-10-22 — "New" models marked seen on one device stay seen on all (local, not deployed)
+## 2026-10-22 — "New" models marked seen on one device stay seen on all (deployed `main-20261022-095940`)
 
 - The Keys "N new" tag and the panel's "Mark N seen" kept their list in each browser's localStorage. Marks made on the Mac did not reach the iPad or the tailnet address, and were lost when site data was cleared. So tags kept coming back.
 - They now use the server's acknowledgement (`catalogue_ack`, via `POST /api/models/changes/acknowledge-bulk`), the same record Premium → Catalog updates uses. Marking seen anywhere clears the tag everywhere, and every catalogue-changes view refreshes.
