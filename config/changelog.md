@@ -1,6 +1,8 @@
 # Changelog
 
-## 2026-10-22 — Extra-Tier is every chain's overflow (local, not deployed)
+## 2026-10-22 — Extra-Tier is every chain's overflow (deployed `main-20261022-094030`)
+
+- Live after deploy: both `overflow` columns exist, all 19 keys decrypt, and `auto`, `auto:apex`, `auto:coding` and `auto:fast-lane` each returned 200 from their own members (`overflow` 0).
 
 - When a chain runs out, Extra-Tier's enabled routes that are not already in that chain are tried last, before `routing_exhausted`. Only routes that meet the chain's tools or vision requirement are added, in Extra-Tier's order. The chain's own members always come first, and the sticky preference, exploration and bandit can never move an overflow route ahead of them. Plain `auto`, `auto:<name>` and the aliases get it. Global sorts, Extra-Tier itself and explicit model ids do not.
 - Switch: extension `extra-tier-overflow`, on by default. Answers are marked in new columns `requests.overflow` and `request_attempts.overflow` (migration `20261022_000001`, reversible), and shown in the analytics request detail.
