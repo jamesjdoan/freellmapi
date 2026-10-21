@@ -1,6 +1,8 @@
 # Changelog
 
-## 2026-10-21 — Editing a chain no longer changes plain-auto routing (local, not deployed)
+## 2026-10-21 — Editing a chain no longer changes plain-auto routing (deployed `main-20261022-010730`)
+
+- Live after deploy: `default-chain` and `active` both read Default (1), plain `auto` returned 200, and all 19 keys decrypt.
 
 - **The bug.** One setting, `settings.active_profile_id`, meant two things: the chain the dashboard's table showed and edited, and the chain a request that names no chain (`model: "auto"`) routed through. Opening Extra-Tier to edit it silently moved every plain-auto request onto the overflow chain.
 - Two settings now. `active_profile_id` is the chain being edited and viewed. The new `default_chain_profile_id` is the chain plain `auto` routes through, and it is the only one the router reads.
