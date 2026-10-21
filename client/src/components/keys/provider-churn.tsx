@@ -5,7 +5,7 @@ import { PROVIDER_CHURN_DAYS } from '@/lib/catalogue-changes'
 import { formatStamp } from '@/lib/stamp'
 import type { ProviderChurn } from '@/lib/catalogue-changes'
 import { useExtensionEnabled } from '@/lib/use-extension'
-import { markArrivalsSeen, useUnseenArrivals } from '@/lib/seen-arrivals'
+import { useMarkArrivalsSeen, useUnseenArrivals } from '@/lib/seen-arrivals'
 
 // What this provider's catalogue has done lately, on the provider row itself.
 //
@@ -85,11 +85,12 @@ export function ProviderChurnChip({ churn, expanded, onToggle }: {
  * Separate from the +N chip because they answer different questions: +N is
  * "what did this provider do lately" and stays for its whole window, while
  * this is "is there anything here you have not seen" and goes away once you
- * say so. Dismissing is per browser and permanent for those arrivals.
+ * say so. Dismissing is saved on the server, so it holds on every device.
  */
 export function NewArrivalsTag({ churn }: { churn: ProviderChurn | undefined }) {
   const enabled = useExtensionEnabled('provider-churn')
   const unseen = useUnseenArrivals(churn?.arrived)
+  const markArrivalsSeen = useMarkArrivalsSeen()
   const { t } = useI18n()
   if (!enabled || unseen.length === 0) return null
   return (

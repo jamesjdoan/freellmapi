@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-22 — "New" models marked seen on one device stay seen on all (local, not deployed)
+
+- The Keys "N new" tag and the panel's "Mark N seen" kept their list in each browser's localStorage. Marks made on the Mac did not reach the iPad or the tailnet address, and were lost when site data was cleared. So tags kept coming back.
+- They now use the server's acknowledgement (`catalogue_ack`, via `POST /api/models/changes/acknowledge-bulk`), the same record Premium → Catalog updates uses. Marking seen anywhere clears the tag everywhere, and every catalogue-changes view refreshes.
+- On first load, a browser that still holds the old list sends those marks to the server once, then deletes the list, so nothing marked before comes back.
+- On a live-data copy, with two separate sessions standing in for two devices: one marked 17 Custom arrivals seen, and the other session's unseen count for Custom went from 17 to gone. The other providers were unchanged.
+- Checks: the client typechecks and builds, the full suite passes (92 files / 699 tests), and lint shows only 2 pre-existing errors in `provider-churn.tsx` (lines 34 and 143, not this change).
+
 ## 2026-10-22 — Extra-Tier is every chain's overflow (deployed `main-20261022-094030`)
 
 - Live after deploy: both `overflow` columns exist, all 19 keys decrypt, and `auto`, `auto:apex`, `auto:coding` and `auto:fast-lane` each returned 200 from their own members (`overflow` 0).

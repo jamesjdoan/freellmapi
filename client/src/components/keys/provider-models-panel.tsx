@@ -15,7 +15,7 @@ import { ModelCombobox } from '@/components/model-combobox'
 import { ModelName } from '@/components/model-name'
 import { useExtensionEnabled } from '@/lib/use-extension'
 import { churnByPlatform, useCatalogueChanges } from '@/lib/catalogue-changes'
-import { markArrivalsSeen, useUnseenArrivals } from '@/lib/seen-arrivals'
+import { useMarkArrivalsSeen, useUnseenArrivals } from '@/lib/seen-arrivals'
 import { ChainFit } from '@/components/chain-fit'
 import { scoreRowOf, useScoreTone } from '@/lib/chain-minimums'
 import type { ScoreCell, Scores } from '@/lib/score-provenance'
@@ -545,6 +545,7 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
   const churnEnabled = useExtensionEnabled('provider-churn')
   const { data: catalogueChanges } = useCatalogueChanges()
   const unseenArrivals = useUnseenArrivals(churnEnabled ? churnByPlatform(catalogueChanges).get(platform)?.arrived : undefined)
+  const markArrivalsSeen = useMarkArrivalsSeen()
   const newModelIds = new Set(unseenArrivals.map(m => m.modelId))
   // This panel's rows: the platform, narrowed to one endpoint for an
   // OpenAI-compatible account row.

@@ -40,6 +40,7 @@ import type { HealthData } from './shared'
 import { NewArrivalsTag, ProviderChurnChip, ProviderChurnPanel } from './provider-churn'
 import { ProviderDiagnosisChip, useProviderDiagnosis } from './provider-diagnosis'
 import { churnByPlatform, useCatalogueChanges } from '@/lib/catalogue-changes'
+import { useMigrateLegacySeenArrivals } from '@/lib/seen-arrivals'
 import { ProviderModelsPanel } from '@/components/keys/provider-models-panel'
 import { ProviderRemovalsLog, RemoveProviderDialog } from './provider-removals'
 import { useRemovedPlatforms } from '@/lib/provider-removals'
@@ -728,6 +729,8 @@ export function ProviderList({ onAddKey, initialSearch }: {
   // provider even when nobody has acknowledged it yet.
   const { data: catalogueChanges } = useCatalogueChanges()
   const churn = churnByPlatform(catalogueChanges)
+  // Marks this browser made before "seen" moved to the server, carried over once.
+  useMigrateLegacySeenArrivals(catalogueChanges?.arrived)
   // One fetch for every provider; the chip reads its own row out of it.
   const { data: diagnosis } = useProviderDiagnosis()
   const diagnosisByPlatform = new Map((diagnosis?.providers ?? []).map(p => [p.platform, p]))
