@@ -467,17 +467,41 @@ export interface ScoreCell {
 
 interface BenchmarkEntry { value: number; provenance: EntryProvenance; enteredAt: string }
 
-/** Typed scores keyed `platform\0modelId` → metric. */
-function loadBenchmarkEntries(db: Db): Map<string, Partial<Record<ScoreMetric, BenchmarkEntry>>> {
-  const out = new Map<string, Partial<Record<ScoreMetric, BenchmarkEntry>>>();
-  for (const e of db.prepare('SELECT platform, model_id, metric, value, provenance, entered_at FROM model_benchmark_entry')
-    .all() as { platform: string; model_id: string; metric: ScoreMetric; value: number; provenance: EntryProvenance; entered_at: string }[]) {
+type TypedScores = Partial<Record<ScoreMetric, BenchmarkEntry>>;
+interface TypedEntries { byRoute: Map<string, TypedScores>; bySlug: Map<string, TypedScores> }
+
+/**
+ * Typed scores per route, plus the same scores per benchmark slug.
+ *
+ * A typed score describes the MODEL, so it applies to every route linked
+ * (auto, manual or proxy) to the same AA model, including routes added after
+ * the score was typed (James, 2026-10-21). A route's own entry wins for its
+ * metric; otherwise the newest entry on any route of that model. Routes with
+ * no link keep only their own entries.
+ */
+function loadBenchmarkEntries(db: Db): TypedEntries {
+  const byRoute = new Map<string, TypedScores>();
+  const bySlug = new Map<string, TypedScores>();
+  for (const e of db.prepare(`
+    SELECT e.platform, e.model_id, e.metric, e.value, e.provenance, e.entered_at, l.aa_slug
+      FROM model_benchmark_entry e
+      LEFT JOIN aa_model_link l ON l.platform = e.platform AND l.model_id = e.model_id
+     ORDER BY e.entered_at ASC
+  `).all() as { platform: string; model_id: string; metric: ScoreMetric; value: number; provenance: EntryProvenance; entered_at: string; aa_slug: string | null }[]) {
+    const entry = { value: e.value, provenance: e.provenance, enteredAt: e.entered_at };
     const key = `${e.platform}\u0000${e.model_id}`;
-    const metrics = out.get(key) ?? {};
-    metrics[e.metric] = { value: e.value, provenance: e.provenance, enteredAt: e.entered_at };
-    out.set(key, metrics);
+    byRoute.set(key, { ...byRoute.get(key), [e.metric]: entry });
+    // Ascending order, so the newest entry for a metric is the one kept.
+    if (e.aa_slug) bySlug.set(e.aa_slug, { ...bySlug.get(e.aa_slug), [e.metric]: entry });
   }
-  return out;
+  return { byRoute, bySlug };
+}
+
+/** The typed scores that apply to one route: its own, then its model's. */
+function typedFor(entries: TypedEntries, platform: string, modelId: string, slug: unknown): TypedScores {
+  const own = entries.byRoute.get(`${platform}\u0000${modelId}`) ?? {};
+  const shared = typeof slug === 'string' && slug ? entries.bySlug.get(slug) ?? {} : {};
+  return { ...shared, ...own };
 }
 
 /**
@@ -631,7 +655,7 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
   const entries = loadBenchmarkEntries(db);
   const AA_COLUMN: Record<ScoreMetric, string> = { intelligence: 'intelligence_index', coding: 'coding_index', agentic: 'agentic_index' };
   const scoresOf = (r: Record<string, unknown>): Record<ScoreMetric, ScoreCell> => {
-    const typed = entries.get(pairKey(String(r.platform), String(r.model_id))) ?? {};
+    const typed = typedFor(entries, String(r.platform), String(r.model_id), r.aa_slug);
     const proxy = r.link_source === 'proxy';
     return Object.fromEntries(SCORE_METRICS.map(metric => [metric, resolveScore(
       r.aa_present ? nudge(numberOrNull(r[AA_COLUMN[metric]]), r, metric) : null, proxy, typed[metric],
@@ -1075,7 +1099,7 @@ export interface AdjustedScores {
  */
 export function getAdjustedScores(db: Db = getDb()): Map<string, AdjustedScores> {
   const rows = db.prepare(`
-    SELECT l.platform, l.model_id, l.source,
+    SELECT l.platform, l.model_id, l.source, l.aa_slug,
            a.name, a.intelligence_index, a.coding_index, a.agentic_index,
            a.median_output_tokens_per_second,
            l.proxy_delta_intelligence, l.proxy_delta_coding, l.proxy_delta_agentic, l.proxy_delta_speed
@@ -1087,7 +1111,7 @@ export function getAdjustedScores(db: Db = getDb()): Map<string, AdjustedScores>
   const put = (platform: string, modelId: string, r: Record<string, unknown> | null) => {
     const source = r == null ? null : r.source === 'manual' || r.source === 'proxy' ? r.source : 'auto' as const;
     const linkRow: Record<string, unknown> | null = r == null ? null : { ...r, link_source: source };
-    const typed = entries.get(`${platform}\u0000${modelId}`) ?? {};
+    const typed = typedFor(entries, platform, modelId, r?.aa_slug);
     const cell = (metric: ScoreMetric, column: string) =>
       resolveScore(linkRow ? nudge(numberOrNull(linkRow[column]), linkRow, metric) : null, source === 'proxy', typed[metric]);
     const intelligence = cell('intelligence', 'intelligence_index');
@@ -1106,7 +1130,7 @@ export function getAdjustedScores(db: Db = getDb()): Map<string, AdjustedScores>
   for (const r of rows) put(String(r.platform), String(r.model_id), r);
   // Routes AA never measured but the operator scored: without these the router
   // would go on ranking them as unknown (ADR D1).
-  for (const key of entries.keys()) {
+  for (const key of entries.byRoute.keys()) {
     const [platform, modelId] = key.split('\u0000') as [string, string];
     if (!out.has(`${platform}:${modelId}`)) put(platform, modelId, null);
   }

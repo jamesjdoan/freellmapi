@@ -306,7 +306,7 @@ Independent of the routing strategy on purpose — model ranking and key selecti
 | `orderKeysByScore(entry, keys)` | Per-key Thompson ordering |
 | `orderKeysByRemainingQuota(entry, ordered)` | Re-sorts by observed remaining quota (roomiest first) |
 | `quotaWeightingApplies(entry)` | Whether remaining-quota weighting is meaningful for this chain entry |
-| `resolveRoutingChain(modelString)` | Parses `auto`, `auto:smart`, `auto:profile-name` |
+| `resolveRoutingChain(modelString)` | Parses `auto`, `auto:smart`, `auto:profile-name`; the six capability classes plus the merged-out aliases `auto:frontier`→Apex and `auto:workhorse`→Default (`CHAIN_ALIASES`, applied before the profile lookup) |
 | `getKeySelectionStrategy()` / `setKeySelectionStrategy(s)` | Read/write the `key_selection_strategy` setting |
 | `getHeadroomThresholds()` / `setHeadroomThresholds(rampStart, floor)` | Read/write tunable headroom thresholds |
 | `getPeakHoursConfig()` / `setPeakHoursConfig(patch)` | Read/write peak-hours settings |

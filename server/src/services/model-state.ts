@@ -258,7 +258,7 @@ export function retireCatalogModelUpstream(
   if (existing) return false;
   // What this retirement costs, captured BEFORE the rows below are switched
   // off. A model leaving matters because of what went with it: "gemini-2.5-pro
-  // retired" and "gemini-2.5-pro retired, it was Vision #1 and Frontier #3" are
+  // retired" and "gemini-2.5-pro retired, it was Vision #1 and Apex #3" are
   // the same event and completely different problems.
   //
   // It cannot be read back afterwards. The disable below leaves the chain rows

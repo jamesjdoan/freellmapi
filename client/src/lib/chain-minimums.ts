@@ -10,7 +10,7 @@ import { isEstimate, type Scores } from '@/lib/score-provenance'
 // (server/src/services/chain-minimums.ts); evaluation happens here so the
 // side panel can re-grade every visible row as a stepper moves, before save.
 
-export const GRADED_CHAINS = ['Apex', 'Frontier', 'Workhorse', 'Default', 'Coding', 'Vision', 'Extra-Tier', 'Fast-Lane'] as const
+export const GRADED_CHAINS = ['Apex', 'Default', 'Coding', 'Vision', 'Extra-Tier', 'Fast-Lane'] as const
 export type GradedChain = typeof GRADED_CHAINS[number]
 export type Metric = 'general' | 'coding' | 'agentic'
 export const METRICS: readonly Metric[] = ['general', 'coding', 'agentic']

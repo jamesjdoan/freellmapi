@@ -346,8 +346,8 @@ proxyRouter.get('/models', (req: Request, res: Response) => {
   // The default profile is listed alongside the custom ones. `resolveRoutingChain`
   // has always resolved `auto:default` by name — the filter here was the only
   // thing keeping it out of discovery, so a client reading this listing to find
-  // out what it may send saw seven of the eight capability classes and had to
-  // be told about the eighth out of band. Emitting it costs one row and makes
+  // out what it may send saw five of the six capability classes and had to
+  // be told about the sixth out of band. Emitting it costs one row and makes
   // the listing agree with what the router accepts.
   const profileRows = getDb().prepare(`
     SELECT p.id, p.name,

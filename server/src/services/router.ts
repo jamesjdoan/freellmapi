@@ -1611,6 +1611,19 @@ const GLOBAL_SORT_ALIASES: Record<string, string> = {
   reliable: 'reliable', reliability: 'reliable',
   balanced: 'balanced',
 };
+/**
+ * Capability classes merged out of existence keep their selectors as aliases.
+ * On 2026-10-21 Frontier folded into Apex (91% shared members) and Workhorse
+ * into Default (93%); each pair exhausted together, so the old selector buys
+ * nothing the canonical chain does not already give. Applied BEFORE the
+ * profile-name lookup so a stale Frontier/Workhorse `profiles` row left in the
+ * database can never shadow the canonical chain, and the strategy key records
+ * the canonical name so sticky buckets do not split per alias.
+ */
+const CHAIN_ALIASES: Record<string, string> = {
+  frontier: 'apex',
+  workhorse: 'default',
+};
 
 /** Drop providers the operator has excluded from automatic selection, and any
  *  route that would spend real money.
@@ -1839,7 +1852,11 @@ export function resolveRoutingChain(modelString: string | undefined): ResolvedCh
     return { chain: activeChainOrThrow(db), strategyKey: 'auto' };
   }
 
-  const globalAxis = GLOBAL_SORT_ALIASES[suffix];
+  // Canonicalise first (see CHAIN_ALIASES): a stale Frontier/Workhorse profile
+  // row must not shadow the chain that absorbed it.
+  const canonical = CHAIN_ALIASES[suffix] ?? suffix;
+
+  const globalAxis = GLOBAL_SORT_ALIASES[canonical];
   if (globalAxis) {
     const chain = getChainByGlobalSort(db, globalAxis);
     if (chain.length === 0) {
@@ -1850,7 +1867,7 @@ export function resolveRoutingChain(modelString: string | undefined): ResolvedCh
     return { chain, strategyKey: `auto:${globalAxis}` };
   }
 
-  const chain = getChainByProfileName(db, suffix);
+  const chain = getChainByProfileName(db, canonical);
   if (!chain) {
     const err = new Error(`Profile '${suffix}' not found. Use 'auto' for the default profile, or call /v1/models for available options.`) as any;
     err.status = 400;
@@ -1864,7 +1881,7 @@ export function resolveRoutingChain(modelString: string | undefined): ResolvedCh
     throw err;
   }
 
-  return { chain, strategyKey: `auto:${suffix}` };
+  return { chain, strategyKey: `auto:${canonical}` };
 }
 
 // Weights for the in-model key score (#580). Reliability dominates: the point

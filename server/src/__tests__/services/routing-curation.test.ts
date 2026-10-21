@@ -65,14 +65,16 @@ describe('chain contracts hold for every curated member', () => {
   });
 
   it('keeps the daily driver free of promo capacity and vision free of nothing but blindness', () => {
-    // frontier is the likely harness DEFAULT: an unmeasured promo route in it
-    // would put unqualified requests on capacity nobody can account for. apex
-    // is the escalation tip and may carry an experimental tail, but never at
-    // its head — 'heads every chain with a CORE route' covers that.
-    const frontier = chainMembers('Frontier').map(m => m.classification);
-    expect(frontier).not.toContain('EXPERIMENTAL');
-    expect(frontier).not.toContain('SPECIALIST');
-    expect(chainMembers('Apex').map(m => m.classification)).not.toContain('SPECIALIST');
+    // Apex is the merged top chain: the working edge a harness sits on all day
+    // AND what a request escalates to (Frontier folded into it on 2026-10-21).
+    // An unmeasured promo route in it would put unqualified requests on
+    // capacity nobody can account for, and SPECIALIST is Vision's business.
+    const apex = chainMembers('Apex').map(m => m.classification);
+    expect(apex).not.toContain('EXPERIMENTAL');
+    expect(apex).not.toContain('SPECIALIST');
+    // The contract says the same, so a future curator is refused too.
+    expect(CHAIN_CONTRACTS.find(c => c.name === 'Apex')!.admits).not.toContain('EXPERIMENTAL');
+    expect(CHAIN_CONTRACTS.find(c => c.name === 'Apex')!.admits).not.toContain('SPECIALIST');
 
     // vision is the one chain that admits SPECIALIST, precisely so a strong
     // multimodal model is not rejected for lacking tool support.
@@ -121,13 +123,6 @@ describe('chain contracts hold for every curated member', () => {
     }
   });
 
-  it('gives apex and frontier different heads — they are different questions', () => {
-    // frontier = best practical daily driver; apex = the peak it escalates to.
-    // Collapsing them would make free escalation a no-op.
-    const apexHead = chainMembers('Apex')[0]!;
-    const frontierHead = chainMembers('Frontier')[0]!;
-    expect(`${apexHead.platform}/${apexHead.modelId}`).not.toBe(`${frontierHead.platform}/${frontierHead.modelId}`);
-  });
 });
 
 describe('shared quota domains are not mistaken for depth', () => {
@@ -135,7 +130,7 @@ describe('shared quota domains are not mistaken for depth', () => {
     // Three NVIDIA models are three capabilities and ONE allowance. A chain
     // whose first two entries share a pool has no depth at all at the moment
     // that pool refuses — which is the moment depth is needed.
-    for (const name of ['Apex', 'Frontier', 'Coding', 'Workhorse', 'Fast-Lane', 'Vision'] as ChainName[]) {
+    for (const name of ['Apex', 'Coding', 'Default', 'Fast-Lane', 'Vision'] as ChainName[]) {
       const members = chainMembers(name);
       const firstTwo = members.slice(0, 2).map(m => resolveQuotaPolicy(m.platform as never, m.modelId).poolKey);
       expect(new Set(firstTwo).size, `${name} head pools: ${firstTwo.join(', ')}`).toBe(2);
@@ -175,7 +170,7 @@ describe('scarce capacity stays off the high-volume paths', () => {
     const fastLane = chainMembers('Fast-Lane').map(m => m.platform);
     expect(fastLane).not.toContain('ollama');
     // Where it does appear, it appears last.
-    for (const name of ['Frontier', 'Workhorse'] as ChainName[]) {
+    for (const name of ['Apex', 'Default'] as ChainName[]) {
       const members = chainMembers(name);
       const ollama = members.findIndex(m => m.platform === 'ollama');
       if (ollama === -1) continue;
@@ -184,9 +179,9 @@ describe('scarce capacity stays off the high-volume paths', () => {
   });
 
   it('keeps unmeasured promo capacity off the driver, coding and fast-lane', () => {
-    // apex is exempt: escalation is where an unproven frontier-tier route is
-    // worth one attempt, and it sits last there.
-    for (const name of ['Frontier', 'Coding', 'Fast-Lane', 'Workhorse', 'Default'] as ChainName[]) {
+    // The driver and the escalation tip are one chain now, so the exemption
+    // apex had under the old split is gone with it.
+    for (const name of ['Apex', 'Coding', 'Fast-Lane', 'Default'] as ChainName[]) {
       expect(chainMembers(name).map(m => m.platform), name).not.toContain('opencode');
     }
   });
@@ -287,7 +282,7 @@ describe('chain capability gates', () => {
   });
 
   it('every agentic chain declares that it requires tools', () => {
-    for (const name of ['Apex', 'Coding', 'Frontier', 'Workhorse', 'Fast-Lane', 'Default'] as ChainName[]) {
+    for (const name of ['Apex', 'Coding', 'Fast-Lane', 'Default'] as ChainName[]) {
       expect(CHAIN_CONTRACTS.find(c => c.name === name)!.requiresTools, name).toBe(true);
     }
   });
@@ -307,5 +302,46 @@ describe('tail integrity', () => {
       expect(priorities, `${contract.name} priorities are not 1..${priorities.length}`)
         .toEqual(Array.from({ length: priorities.length }, (_, i) => i + 1));
     }
+  });
+});
+
+describe('merged chains keep their old selectors', () => {
+  beforeEach(reset);
+
+  it('resolves auto:frontier to Apex and auto:workhorse to Default, even with stale profiles present', () => {
+    // Frontier folded into Apex and Workhorse into Default on 2026-10-21. The
+    // operator rewrites profile_models through the API after deploy, so an old
+    // Frontier/Workhorse profile row can still exist in the database; the
+    // alias must win before the profile-name lookup, never route to the row.
+    addKey('groq');
+    const apexHead = addModel('groq', 'apex-head');
+    const apexTail = addModel('groq', 'apex-tail');
+    const defaultHead = addModel('groq', 'default-head');
+    const defaultTail = addModel('groq', 'default-tail');
+    const staleFrontierMember = addModel('groq', 'stale-frontier-member');
+    addChain('Apex', [apexHead, apexTail]);
+    // The legacy baseline seeds an empty 'Default' profile; give IT the members
+    // rather than colliding with a second 'Default' row — the better-sqlite3
+    // row is the profiles table's own { id } shape.
+    const defaultProfileRow = getDb()
+      .prepare("SELECT id FROM profiles WHERE LOWER(name) = 'default'")
+      .get() as { id: number } | undefined;
+    if (!defaultProfileRow) throw new Error('the legacy baseline must seed a Default profile');
+    const addDefaultMember = getDb().prepare(
+      'INSERT INTO profile_models (profile_id, model_db_id, priority, enabled) VALUES (?, ?, ?, 1)',
+    );
+    addDefaultMember.run(defaultProfileRow.id, defaultHead, 1);
+    addDefaultMember.run(defaultProfileRow.id, defaultTail, 2);
+    addChain('Frontier', [apexTail, staleFrontierMember]);
+    addChain('Workhorse', [defaultTail]);
+    setRoutingStrategy('priority');
+
+    const frontier = resolveRoutingChain('auto:frontier');
+    expect(frontier.strategyKey).toBe('auto:apex');
+    expect(frontier.chain.map(e => e.model_id)).toEqual(['apex-head', 'apex-tail']);
+
+    const workhorse = resolveRoutingChain('auto:workhorse');
+    expect(workhorse.strategyKey).toBe('auto:default');
+    expect(workhorse.chain.map(e => e.model_id)).toEqual(['default-head', 'default-tail']);
   });
 });

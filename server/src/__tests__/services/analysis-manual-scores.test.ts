@@ -111,6 +111,30 @@ describe('resolving a score', () => {
     expect(group.scores.coding).toMatchObject({ value: 24, provenance: 'tested', editable: true });
     expect(group.scores.intelligence).toMatchObject({ value: null, editable: true });
   });
+
+  it('applies a typed score to every route linked to the same model, including ones added later', () => {
+    // MiniMax M3.1 Flash on 2026-10-21: scored on OpenRouter, then reached on
+    // Kilo and Vercel without a score of their own.
+    addAa('minimax-m3-1-flash', { intelligence: 42.7, coding: null, agentic: null });
+    addModel('openrouter', 'minimax/minimax-m3.1-flash:free', 'MiniMax M3.1 Flash');
+    setManualLink('openrouter', 'minimax/minimax-m3.1-flash:free', 'minimax-m3-1-flash');
+    setBenchmarkEntry([{ platform: 'openrouter', modelId: 'minimax/minimax-m3.1-flash:free' }], 'coding', 74.2, 'tested');
+
+    // A route that arrives afterwards and is linked to the same model.
+    addModel('kilo', 'minimax/minimax-m3.1-flash:free', 'MiniMax M3.1 Flash');
+    setManualLink('kilo', 'minimax/minimax-m3.1-flash:free', 'minimax-m3-1-flash');
+    expect(row('kilo', 'minimax/minimax-m3.1-flash:free').scores.coding).toMatchObject({ value: 74.2, provenance: 'tested' });
+    expect(getAdjustedScores().get('kilo:minimax/minimax-m3.1-flash:free')?.coding).toBe(74.2);
+
+    // A route's own entry still wins for its metric.
+    setBenchmarkEntry([{ platform: 'kilo', modelId: 'minimax/minimax-m3.1-flash:free' }], 'coding', 70, 'approximated');
+    expect(row('kilo', 'minimax/minimax-m3.1-flash:free').scores.coding).toMatchObject({ value: 70, provenance: 'approximated' });
+    expect(row('openrouter', 'minimax/minimax-m3.1-flash:free').scores.coding).toMatchObject({ value: 74.2 });
+
+    // An unlinked route borrows nothing.
+    addModel('custom', 'minimax-lookalike', 'MiniMax lookalike');
+    expect(row('custom', 'minimax-lookalike').scores.coding.value).toBeNull();
+  });
 });
 
 describe('PUT/DELETE /api/analysis/score', () => {

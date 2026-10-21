@@ -88,17 +88,17 @@ describe('departures name what was lost', () => {
 
   it('records the chains a retired model was serving', () => {
     // "gemini-2.5-pro retired" and "gemini-2.5-pro retired, it was Vision #1
-    // and Frontier #3" are the same event and completely different problems.
+    // and Apex #3" are the same event and completely different problems.
     const id = addModel('google', 'gemini-2.5-pro', daysAgo(40));
     addToChain(id, 'Vision', 1);
-    addToChain(id, 'Frontier', 3);
+    addToChain(id, 'Apex', 3);
 
     retireCatalogModelUpstream(getDb(), id, 'google', 'gemini-2.5-pro', '404: no longer available to new users');
 
     const [departed] = getCatalogueChanges(30).departed;
     expect(departed.modelId).toBe('gemini-2.5-pro');
     expect(departed.reason).toContain('no longer available');
-    expect(departed.lostFrom.map(c => `${c.chain}#${c.priority}`).sort()).toEqual(['Frontier#3', 'Vision#1']);
+    expect(departed.lostFrom.map(c => `${c.chain}#${c.priority}`).sort()).toEqual(['Apex#3', 'Vision#1']);
   });
 
   it('captures membership at retirement, because it cannot be read back after', () => {

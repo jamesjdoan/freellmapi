@@ -75,8 +75,10 @@ describe('chain minimums', () => {
     expect(outOfRange.status).toBe(400);
   });
 
-  it('reads a document saved before Fast-Lane was graded, keeping every saved minimum', async () => {
-    // The live document on 2026-10-21: seven chains, no `either`, no Fast-Lane.
+  it('reads the live revision-6 document: chains it predates default, chains it outlives are ignored', async () => {
+    // The live document on 2026-10-21: seven chains, no `either`, no Fast-Lane
+    // — and Frontier/Workhorse still present, merged into Apex/Default that
+    // day. A stale key must not invalidate the document it rides in.
     const off = { general: null, coding: null, agentic: null, acceptEstimated: false };
     const legacy = {
       version: 1, revision: 6, savedAt: '2026-10-01T00:00:00.000Z',
@@ -91,8 +93,14 @@ describe('chain minimums', () => {
     const { body } = await request(app, 'GET', '/api/chain-minimums');
     expect(body.doc.revision).toBe(6);
     expect(body.doc.chains.Apex.general).toBe(40);
+    expect(body.doc.chains.Default.general).toBeNull(); // saved value kept intact
     expect(body.doc.chains.Coding).toMatchObject({ coding: 30, agentic: 20, either: [] });
-    expect(body.doc.chains['Fast-Lane']).toMatchObject({ general: 15 });
+    expect(body.doc.chains['Fast-Lane']).toMatchObject({ general: 15 }); // default
+    // The merged-out chains are not part of the graded set at all.
+    expect(body.doc.chains.Frontier).toBeUndefined();
+    expect(body.doc.chains.Workhorse).toBeUndefined();
+    expect(Object.keys(body.doc.chains).sort())
+      .toEqual(['Apex', 'Coding', 'Default', 'Extra-Tier', 'Fast-Lane', 'Vision']);
 
     // And it saves forward with Fast-Lane set.
     const saved = await request(app, 'PUT', '/api/chain-minimums', {

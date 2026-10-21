@@ -33,44 +33,47 @@ class* — belongs above this layer; FreeLLMAPI handles **supply**.
 
 ---
 
-## 2. The eight capability classes
+## 2. The six capability classes
 
 Chains are `profiles` rows, addressable as `auto:<lowercased name>` and listed in
 `GET /v1/models`. Their contracts live in `CHAIN_CONTRACTS`
 (`server/src/data/routing-curation.ts`) so the documentation and the assertion
 the tests run are the same statement.
 
+On 2026-10-21 the roster shrank from eight to six: Frontier folded into Apex
+(the two shared 91% of members and exhausted together) and Workhorse into
+Default (93%). The retired selectors still resolve, as aliases applied in
+`resolveRoutingChain` before the profile-name lookup, so a stale
+Frontier/Workhorse `profiles` row can never shadow the chain that absorbed it:
+
+| Alias | Resolves to |
+|---|---|
+| `auto:frontier` | `auto:apex` |
+| `auto:workhorse` | `auto:default` |
+
 | Chain | Contract | Tools | Vision |
 |---|---|---|---|
-| `auto:apex` | The **peak** of the free catalogue, for **escalation** — strongest capability available, whether or not it suits daily volume. Deliberately not the same as frontier. | required | — |
+| `auto:apex` | The top chain: the strongest **reliable** free general driver AND what a request escalates to when that is not enough. Reasoning, coding, tool use, context and reliability together — not the longest chain, the best one. | required | — |
 | `auto:coding` | Implementation worker: coding ability, tool/edit reliability, adequate context, sustainable quota. | required | — |
-| `auto:frontier` | Strongest **reliable** free general driver — the working edge a harness sits on all day. Reasoning, coding, tool use, context and reliability together. Not the longest chain, the best one. | required | — |
-| `auto:workhorse` | Balanced middle tier: quota depth, reliability, sustained throughput. | required | — |
 | `auto:fast-lane` | Low-latency, high-volume: scouting, search, summaries, classification, bounded subagents. Lowest opportunity cost. | required | — |
 | `auto:vision` | Screenshots, UI inspection, image analysis, visual verification. | — | required |
 | `auto:extra-tier` | Overflow and experimental capacity. Never early on a critical path. | — | — |
-| `auto:default` | Generic safe compatibility endpoint. Behaves like a dependable general-purpose route — **not** a secret alias for the most powerful model available. | required | — |
+| `auto:default` | Generic safe compatibility endpoint: a dependable general-purpose chain with the quota depth for sustained throughput. **Not** a secret alias for the most powerful model available; escalation lives in Apex. | required | — |
 
-### frontier is not apex
+### escalation and the daily driver are one chain now
 
-The distinction decides where escalation goes, and the tests enforce that their
-heads differ. `frontier` is the best model to drive all day — the working edge.
-`apex` is the peak of what is available for free, whether or not it suits daily
-volume. Collapsing them makes free escalation a no-op:
+Under the old eight-chain split, `frontier` was the working edge and `apex` the
+peak a request escalated to. The merge put both questions to the same chain: it
+has to be good enough to sit on all day and strong enough to be worth
+escalating to. `auto:frontier` still works — it is an alias for `auto:apex`.
 
 ```
 ordinary free model insufficient
         ↓
-auto:apex              ← a genuinely stronger pool, not the same one again
+auto:apex              ← the same chain the harness may already be driving
         ↓
 external premium, only if still justified
 ```
-
-### workhorse has no harness role, and keeps its place
-
-It is the middle tier for ordinary API consumers, fallback within other chains,
-medium-complexity delegated work and sustained execution. Absence of a harness
-role named WORKHORSE is not a reason to delete a useful tier.
 
 ---
 
@@ -513,7 +516,7 @@ not something the server enforces:
 
 | OMP role | Chain |
 |---|---|
-| `DEFAULT` | `auto:frontier` |
+| `DEFAULT` | `auto:apex` |
 | `TASK` | `auto:coding` |
 | `SMOL` | `auto:fast-lane` |
 | `TINY` | `auto:fast-lane` |
@@ -525,5 +528,6 @@ not something the server enforces:
 offers `auto:apex` as a free escalation option for when higher-level triage
 elects to use it; it does not claim those roles.
 
-Other consumers — Codex, Claude Code, plain OpenAI clients — use the same eight
-aliases. They are cross-harness capability classes, not OMP terminology.
+Other consumers — Codex, Claude Code, plain OpenAI clients — use the same six
+aliases (plus the two merged-out ones, which resolve through the alias map).
+They are cross-harness capability classes, not OMP terminology.

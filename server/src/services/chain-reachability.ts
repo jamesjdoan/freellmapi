@@ -11,7 +11,8 @@ import { parseModelScope, scopeAllows } from '../lib/model-scope.js';
  *   - the Mistral key switched off, stranding three members, one of them at
  *     Fast-Lane #2;
  *   - Google's model scope missing a Fast-Lane member;
- *   - NVIDIA's missing a Workhorse member.
+ *   - NVIDIA's missing a Workhorse member (that chain merged into Default on
+ *     2026-10-21).
  *
  * Each was reported by the probe as "No enabled key is scoped to this model" -
  * a state no chain view could show, because membership lives in

@@ -16,7 +16,7 @@
 //
 // Why a source file and not just the dashboard: chain membership lives in
 // `profile_models`, which is runtime state. Catalogue syncs add models,
-// providers retire them, and an operator clicking through eight chains has no
+// providers retire them, and an operator clicking through six chains has no
 // record of WHY a route is in one. This is that record, it is diffable, and
 // `scripts/apply-routing-curation.ts` makes it re-appliable after any sync.
 //
@@ -48,11 +48,13 @@ export type ModelClassification =
 // chain row this file does not name, which is the same statement and cannot
 // drift out of date.
 
-/** The eight public capability classes. Names match the `profiles` rows they
- *  apply to, and resolve as `auto:<lowercased name>` for clients. */
+/** The six public capability classes. Frontier and Workhorse were merged into
+ *  Apex and Default on 2026-10-21 (91% and 93% shared membership, and each pair
+ *  exhausted together); `auto:frontier` and `auto:workhorse` still resolve, as
+ *  aliases in server/src/services/router.ts. Names match the `profiles` rows
+ *  they apply to, and resolve as `auto:<lowercased name>` for clients. */
 export type ChainName =
-  | 'Default' | 'Coding' | 'Apex' | 'Frontier'
-  | 'Workhorse' | 'Fast-Lane' | 'Vision' | 'Extra-Tier';
+  | 'Default' | 'Coding' | 'Apex' | 'Fast-Lane' | 'Vision' | 'Extra-Tier';
 
 export interface CuratedRoute {
   platform: string;
@@ -72,7 +74,7 @@ export interface CuratedRoute {
  * This is the single most important fact about the table below and the reason
  * chain order is not simply "strongest first": three NVIDIA models are three
  * capabilities but ONE allowance. Ordering kimi-k3, deepseek-v4-pro and
- * nemotron-3-ultra 1-2-3 in `auto:frontier` reads like depth and is actually a
+ * nemotron-3-ultra 1-2-3 in one chain reads like depth and is actually a
  * single point of failure with three names.
  *
  * Independence is asserted only where it has been observed in
@@ -115,6 +117,9 @@ export const QUOTA_DOMAINS: Record<string, { pool: string; independent: boolean;
 
 /**
  * The routed set, as applied to the database on 2026-09-14.
+ * Frontier and Workhorse were merged into Apex and Default on 2026-10-21 —
+ * 91% and 93% shared membership, each pair exhausting together — and the
+ * surviving chains were renumbered contiguously; see the chain contracts.
  *
  * ORDER IS GROUNDED IN MEASUREMENT, not in catalogue tier, and four axes decide
  * it — each of which changed the answer when it was added:
@@ -124,7 +129,7 @@ export const QUOTA_DOMAINS: Record<string, { pool: string; independent: boolean;
  *  2. Reliability, over the trailing 14 days. Capability describes what a model
  *     does when it answers; position has to describe how often it answers at
  *     all. kimi-k3 scores 43.8 — the highest here — and succeeds 21% of 148
- *     attempts with 8 hangs, so it heads nothing and sits at Frontier 5.
+ *     attempts with 8 hangs, so it heads nothing and sat at Frontier 5.
  *  3. Scarcity. Google's Flash routes are 20/day and Ollama Cloud is one
  *     monthly balance; both are demoted a tier rather than excluded.
  *  4. Provenance. An unproven provider and an unmeasured route both take a
@@ -149,7 +154,7 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // ── unorouter ─────────────────────────────────────────────────
   {
     platform: 'unorouter', modelId: 'glm-5.3:free', classification: 'OVERFLOW',
-    chains: { Default: 4, Coding: 3, Apex: 3, Frontier: 5, Workhorse: 4 },
+    chains: { Default: 4, Coding: 3, Apex: 3 },
     why: 'intelligence 44.9 — the highest in this pool, above kimi-k3 at 43.8 — with coding 74.8 and a 977K window. Two probes only, so it heads nothing: 1328ms on 2026-09-17, and a 35s answer on the 16th while the daily token quota was already spent. One route per chain because unorouter free is a single daily token quota.',
   },
   {
@@ -160,33 +165,33 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // ── google ────────────────────────────────────────────────────
   {
     platform: 'google', modelId: 'gemini-3.8-flash', classification: 'OVERFLOW',
-    chains: { Coding: 6, Apex: 6, Frontier: 2, Vision: 10 },
+    chains: { Coding: 6, Apex: 6, Vision: 10 },
     why: '68% over 74 attempts. 18670ms measured. intelligence 41.2. coding 76.3. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
     platform: 'google', modelId: 'gemini-3.7-flash', classification: 'CORE',
-    chains: { Coding: 1, Apex: 5, Frontier: 1, Vision: 1 },
+    chains: { Coding: 1, Apex: 5, Vision: 1 },
     why: '77% over 194 attempts. 7356ms measured. intelligence 39.4. coding 76.1. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
     platform: 'google', modelId: 'gemini-3.6-flash', classification: 'CORE',
-    chains: { Coding: 5, Apex: 1, Frontier: 6, Vision: 8 },
+    chains: { Coding: 5, Apex: 1, Vision: 8 },
     why: '87% over 159 attempts. 15225ms measured. intelligence 34.3. coding 69.2. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
     platform: 'google', modelId: 'gemini-3.5-flash', classification: 'CORE',
-    chains: { Coding: 7, Frontier: 7, Vision: 11 },
+    chains: { Coding: 7, Apex: 9, Vision: 11 },
     why: '70% over 132 attempts. 8723ms measured. intelligence 33. coding 70.1. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
     platform: 'google', modelId: 'gemini-3.5-flash-lite', classification: 'CORE',
-    chains: { Default: 5, Workhorse: 5, Vision: 2 },
+    chains: { Default: 5, Vision: 2 },
     why: '77% over 22 attempts. 16256ms measured. intelligence 22.7. coding 49.3. 15/min. 500/day.',
   },
   {
     platform: 'google', modelId: 'gemini-3.1-flash-lite', classification: 'CORE',
-    chains: { Workhorse: 9, 'Fast-Lane': 5, Vision: 3 },
-    why: '84% over 192 attempts. intelligence 16. coding 34.7. 15/min, 500/day — twenty-five times the allowance the Gemini Flash routes carry, which is the depth this chain needed: five of its first eight members are Google 20/day. Not vision-only: 500/day and tools, so its allowance serves Fast-Lane and the Workhorse tail as well. A vision model is a model that can ALSO see.',
+    chains: { Default: 9, 'Fast-Lane': 5, Vision: 3 },
+    why: '84% over 192 attempts. intelligence 16. coding 34.7. 15/min, 500/day — twenty-five times the allowance the Gemini Flash routes carry, which is the depth the Workhorse chain needed when it joined that tail at 9. Not vision-only: 500/day and tools, so its allowance serves Fast-Lane and, since the 2026-10-21 merge, the Default tail as well. A vision model is a model that can ALSO see.',
   },
   {
     platform: 'google', modelId: 'gemma-4-26b-a4b-it', classification: 'SPECIALIST',
@@ -201,8 +206,8 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // ── groq ──────────────────────────────────────────────────────
   {
     platform: 'groq', modelId: 'qwen/qwen3.8-27b', classification: 'OVERFLOW',
-    chains: { Default: 2, Coding: 2, Apex: 2, Frontier: 3, Workhorse: 2, 'Fast-Lane': 4, Vision: 5 },
-    why: '190ms measured, intelligence 33.9, coding 68.1, and 100% across every chain probe on 2026-09-18. Added to Frontier 3 the same day: that chain was four Google routes plus one unorouter, so a spent Google day and one credit cooldown emptied it completely — it refused all 7 candidates twice. Groq is its own counter, which is the depth Frontier was missing.',
+    chains: { Default: 2, Coding: 2, Apex: 2, 'Fast-Lane': 4, Vision: 5 },
+    why: '190ms measured, intelligence 33.9, coding 68.1, and 100% across every chain probe on 2026-09-18. Added to Frontier 3 that day (a chain merged into Apex on 2026-10-21): four Google routes plus one unorouter, so a spent Google day and one credit cooldown emptied it completely — it refused all 7 candidates twice. Groq is its own counter, which is the depth that chain was missing.',
   },
   {
     platform: 'groq', modelId: 'openai/gpt-oss-20b', classification: 'CORE',
@@ -211,7 +216,7 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'groq', modelId: 'openai/gpt-oss-120b', classification: 'CORE',
-    chains: { Default: 8, Workhorse: 8 },
+    chains: { Default: 8 },
     why: '94% over 88 attempts. intelligence 12.3. One of the two most-proven routes here that was in NO chain at all — found by auditing enabled models against chain membership, not by noticing it was missing.',
   },
   // ── mistral ───────────────────────────────────────────────────
@@ -222,8 +227,8 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'mistral', modelId: 'ministral-14b-2512', classification: 'CORE',
-    chains: { Workhorse: 10, Vision: 6 },
-    why: 'Added 2026-09-18. 563ms, and it answered a real base64 PNG with the right colour — probed with an image rather than with text, because that is what this chain is for. Mistral meters per model, so this is its own allowance behind Google. Workhorse tail too: own Mistral per-model pool, 256k, tools.',
+    chains: { Default: 10, Vision: 6 },
+    why: 'Added 2026-09-18. 563ms, and it answered a real base64 PNG with the right colour — probed with an image rather than with text, because that is what this chain is for. Mistral meters per model, so this is its own allowance behind Google. Default tail too (the Workhorse membership folded here on 2026-10-21): own Mistral per-model pool, 256k, tools.',
   },
     {
     platform: 'mistral', modelId: 'mistral-code-latest', classification: 'CORE',
@@ -237,8 +242,8 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'mistral', modelId: 'ministral-8b-latest', classification: 'OVERFLOW',
-    chains: { Workhorse: 12 },
-    why: 'Added 2026-09-18. ok on probe. The `-latest` alias beside the pinned 2512 build: a second name on the SAME per-model allowance, so it is depth against a bad build rather than against exhaustion. Workhorse tail only, for that reason.',
+    chains: { Default: 12 },
+    why: 'Added 2026-09-18. ok on probe. The `-latest` alias beside the pinned 2512 build: a second name on the SAME per-model allowance, so it is depth against a bad build rather than against exhaustion. Default tail only (its Workhorse membership folded here on 2026-10-21), for that reason.',
   },
   {
     platform: 'mistral', modelId: 'ministral-3b-2512', classification: 'OVERFLOW',
@@ -252,14 +257,15 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // serve. Groq's copy still heads Fast-Lane; re-probe before restoring it.
   {
     platform: 'nvidia', modelId: 'meta/muse-glimmer-30b', classification: 'CORE',
-    chains: { Apex: 8, Frontier: 8, Vision: 9 },
-    why: 'Added 2026-09-18. ok on probe, intelligence 8 - the strongest spare route on any key we hold, with tools and vision. Apex, Frontier and Vision depth on NVIDIA\'s per-model cap.',
+    chains: { Apex: 8, Vision: 9 },
+    why: 'Added 2026-09-18. ok on probe, intelligence 8 - the strongest spare route on any key we hold, with tools and vision. Apex and Vision depth on NVIDIA\'s per-model cap.',
   },
-  {
-    platform: 'openrouter', modelId: 'inclusionai/ling-3.0-flash-fin:free', classification: 'OVERFLOW',
-    chains: { Frontier: 9 },
-    why: 'Added 2026-09-18. ok on probe. Frontier was the one chain with NO OpenRouter route, so this adds a pool rather than a second claim on the one account counter.',
-  },
+  // openrouter/inclusionai/ling-3.0-flash-fin:free removed 2026-10-21 with the
+  // Frontier chain it lived in. Its folded position in Apex was refused by the
+  // single-counter rule: Apex already carries nex-n2.5-mini:free, and both
+  // routes draw the ONE OpenRouter account allowance, so they would exhaust
+  // together while reading as depth. Re-curate it once a chain has no
+  // OpenRouter route of its own.
   {
     platform: 'ollama', modelId: 'gpt-oss:120b', classification: 'OVERFLOW',
     chains: { 'Extra-Tier': 5 },
@@ -288,23 +294,23 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // kept a route that answered one call in five.
   {
     platform: 'nvidia', modelId: 'nvidia/nemotron-3-ultra-550b-a55b', classification: 'CORE',
-    chains: { Default: 1, Apex: 7, Frontier: 4, Workhorse: 1 },
-    why: '78% over 917 attempts. 21192ms measured. intelligence 23.4. coding 49.3. 40/min. Added to Frontier 4 on 2026-09-18 for a third independent pool behind Groq: slow, but the chain needed something that is not Google and not a spent credit balance.',
+    chains: { Default: 1, Apex: 7 },
+    why: '78% over 917 attempts. 21192ms measured. intelligence 23.4. coding 49.3. 40/min. Added to Frontier 4 on 2026-09-18 (a chain merged into Apex on 2026-10-21) for a third independent pool behind Groq: slow, but the chain needed something that is not Google and not a spent credit balance.',
   },
   {
     platform: 'nvidia', modelId: 'nvidia/nemotron-3-super-120b-a12b', classification: 'CORE',
-    chains: { Default: 6, Workhorse: 6 },
+    chains: { Default: 6 },
     why: '97% over 6883 attempts. 12729ms measured. intelligence 13.6. coding 37.7. 40/min.',
   },
   {
     platform: 'nvidia', modelId: 'nvidia/nemotron-3.5-lightning-30b-a3b', classification: 'CORE',
-    chains: { Default: 7, Workhorse: 7 },
+    chains: { Default: 7 },
     why: '97% over 761 attempts, the best reliability figure on this install, and it was in no chain. Kept OUT of Fast-Lane deliberately: it averages 22,032ms despite publishing 288 tok/s. The middle tier does not rank on latency, so its reliability is what counts here. 40/min.',
   },
   {
     platform: 'nvidia', modelId: 'meta/llama-3.2-11b-vision-instruct', classification: 'CORE',
-    chains: { Workhorse: 11, Vision: 7 },
-    why: 'Added 2026-09-18. 882ms, saw the image correctly, tools as well as vision. NVIDIA meters per model at 40/min, so this is a third independent pool in a chain that was seven-elevenths Google. Workhorse tail too: its NVIDIA per-model minute cap is capacity the text chains had no claim on before.',
+    chains: { Default: 11, Vision: 7 },
+    why: 'Added 2026-09-18. 882ms, saw the image correctly, tools as well as vision. NVIDIA meters per model at 40/min, so this is a third independent pool in a chain that was seven-elevenths Google. Default tail too (the Workhorse membership folded here on 2026-10-21): its NVIDIA per-model minute cap is capacity the text chains had no claim on before.',
   },
   {
     platform: 'nvidia', modelId: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', classification: 'SPECIALIST',
@@ -345,7 +351,7 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   {
     platform: 'openrouter', modelId: 'deepseek/deepseek-v4-flash-0731:free', classification: 'OVERFLOW',
     chains: { 'Extra-Tier': 8 },
-    why: 'Arrived 2026-09-19 in the overnight sync; probed ok in 2426ms. Tools, 1M context. Extra-Tier because it is the ONLY chain holding no OpenRouter route - the other seven already spend that single account counter, so a second route in any of them would be the duplicate-quota illusion rather than depth.',
+    why: 'Arrived 2026-09-19 in the overnight sync; probed ok in 2426ms. Tools, 1M context. Extra-Tier because it is the ONLY chain holding no OpenRouter route - the other five already spend that single account counter, so a second route in any of them would be the duplicate-quota illusion rather than depth.',
   },
   // nvidia/nemotron-parse-2.0 removed 2026-09-19, hours after being added, and
   // the reason is worth keeping: it PROBED ok (696ms) and then failed the only
@@ -386,7 +392,7 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // ── openrouter ────────────────────────────────────────────────
   {
     platform: 'openrouter', modelId: 'nex-agi/nex-n2.5-mini:free', classification: 'OVERFLOW',
-    chains: { Default: 3, Coding: 4, Apex: 4, Workhorse: 3 },
+    chains: { Default: 3, Coding: 4, Apex: 4 },
     why: '1 attempt(s) — too thin to rate. intelligence 28.2. coding 59.1. OpenRouter spends ONE account counter (1000/day, 20/min) whichever :free model answers, so only its strongest qualifying route is listed: a weaker sibling costs the same unit for less, and adds no depth because they exhaust together.',
   },
   {
@@ -419,25 +425,13 @@ export interface ChainContract {
 export const CHAIN_CONTRACTS: ChainContract[] = [
   {
     name: 'Apex',
-    purpose: 'The peak of the free catalogue, for ESCALATION — the strongest capability available whether or not it suits daily volume. Deliberately NOT the same as frontier: frontier is the best practical daily driver, apex is what a request escalates TO when frontier was not enough.',
+    purpose: 'The top chain: the strongest reliable free general driver AND what a request escalates TO when that is not enough. Frontier merged into it on 2026-10-21 — the two shared 91% of members and exhausted together — and `auto:frontier` now resolves here as an alias. Because it is also the daily driver, an unmeasured promo route does not belong in it.',
     requiresTools: true, requiresVision: false,
-    admits: ['CORE', 'OVERFLOW', 'EXPERIMENTAL'],
+    admits: ['CORE', 'OVERFLOW'],
   },
   {
     name: 'Coding',
     purpose: 'Implementation worker: coding ability, tool/edit reliability, adequate context, reasonable latency, sustainable quota. The likely harness TASK role.',
-    requiresTools: true, requiresVision: false,
-    admits: ['CORE', 'OVERFLOW'],
-  },
-  {
-    name: 'Frontier',
-    purpose: 'Strongest RELIABLE free general-purpose driver: the working edge a harness can sit on all day. Optimised for reasoning, coding, tool use, context and reliability together — not for maximising model count. The likely harness DEFAULT.',
-    requiresTools: true, requiresVision: false,
-    admits: ['CORE', 'OVERFLOW'],
-  },
-  {
-    name: 'Workhorse',
-    purpose: 'Reliable balanced middle tier: quota depth, reliability, tool support, decent intelligence, sustained throughput. Has no one-to-one harness role and does not need one.',
     requiresTools: true, requiresVision: false,
     admits: ['CORE', 'OVERFLOW'],
   },
@@ -461,7 +455,7 @@ export const CHAIN_CONTRACTS: ChainContract[] = [
   },
   {
     name: 'Default',
-    purpose: 'Generic safe compatibility endpoint for clients that send no capability class. Behaves like a dependable general-purpose route — deliberately NOT a secret alias for the most powerful model available.',
+    purpose: 'Generic safe compatibility endpoint for clients that send no capability class: a dependable general-purpose chain with the quota depth for sustained throughput. Workhorse merged into it on 2026-10-21 — the two shared 93% of members and exhausted together — and `auto:workhorse` now resolves here as an alias. Deliberately NOT a secret alias for the most powerful model available; escalation lives in Apex.',
     requiresTools: true, requiresVision: false,
     admits: ['CORE', 'OVERFLOW'],
   },

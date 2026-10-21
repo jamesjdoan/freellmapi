@@ -20,7 +20,7 @@ export const SETTING_KEY = 'imperium_chain_minimums';
  *  ordered on measured latency rather than capability; it takes floors now so
  *  its members can be compared on capability too (James, 2026-10-21). */
 export type GradedChain = ChainName;
-export const GRADED_CHAINS: readonly GradedChain[] = ['Apex', 'Frontier', 'Workhorse', 'Default', 'Coding', 'Vision', 'Extra-Tier', 'Fast-Lane'];
+export const GRADED_CHAINS: readonly GradedChain[] = ['Apex', 'Default', 'Coding', 'Vision', 'Extra-Tier', 'Fast-Lane'];
 
 const score = z.number().min(0).max(100).nullable();
 export const MINIMUM_METRICS = ['general', 'coding', 'agentic'] as const;
@@ -55,8 +55,6 @@ export interface ChainMinimumsDoc {
 const off = { general: null, coding: null, agentic: null, acceptEstimated: false, either: [] };
 export const DEFAULT_CHAINS: Record<GradedChain, ChainMinimums> = {
   Apex: { ...off, general: 45 },
-  Frontier: { ...off, general: 35 },
-  Workhorse: { ...off, general: 25 },
   Default: { ...off, general: 25 },
   Coding: { ...off, coding: 45, agentic: 30 },
   Vision: { ...off, general: 25 },
@@ -71,10 +69,16 @@ function defaults(): ChainMinimumsDoc {
 }
 
 /** Parse a stored chains object. A chain the document predates (Fast-Lane,
- *  before 2026-10-21) takes its default rather than invalidating the rest. */
+ *  before 2026-10-21) takes its default, and a chain the document outlives
+ *  (Frontier, Workhorse — merged into Apex and Default the same day) is
+ *  ignored: neither invalidates the rest of the document. */
 function readChains(raw: unknown): Record<GradedChain, ChainMinimums> | null {
   if (raw == null || typeof raw !== 'object') return null;
-  const parsed = chainsSchema.safeParse({ ...structuredClone(DEFAULT_CHAINS), ...raw });
+  const graded = Object.fromEntries(
+    Object.entries(raw as Record<string, unknown>).filter(([chain]) =>
+      (GRADED_CHAINS as readonly string[]).includes(chain)),
+  );
+  const parsed = chainsSchema.safeParse({ ...structuredClone(DEFAULT_CHAINS), ...graded });
   return parsed.success ? parsed.data : null;
 }
 

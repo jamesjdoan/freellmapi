@@ -1,6 +1,25 @@
 # Changelog
 
-## 2026-10-21 — Fast-Lane takes minimums; collapsed Keys rows cleaned up (local, not deployed)
+## 2026-10-21 — Chains 8 → 6; typed scores apply to every route of a model (local, not deployed)
+
+- **Why fewer chains.** Over 14 days, `auto:frontier`, `auto:apex`, `auto:coding` and `auto:vision` ran out of routes 3,789 times. The chains shared most members: Apex × Frontier 91%, Workhorse × Default 93%, Frontier × Coding 86%. So they cooled down together.
+- **Merged in code.** Frontier goes into Apex, and Workhorse into Default. `auto:frontier` and `auto:workhorse` still work as aliases (`CHAIN_ALIASES` in `router.ts`), so OMP's config keeps working. The remaining chains are Apex, Default, Coding, Vision, Fast-Lane and Extra-Tier.
+  - Chain minimums ignore stored keys for the removed chains.
+  - The curated spec folds Frontier positions into Apex and Workhorse into Default. One route is dropped, `openrouter/ling-3.0-flash-fin:free`, a second route on OpenRouter's single free counter.
+- **Live rewrite, rehearsed on a live-data copy, not yet applied.**
+  - Apex is rebuilt to 13 members across 9 quota pools, led by GLM-5.3 Flash (NVIDIA, 93% success over 14 days), Qwen3.8 Max (xKiro, 97%), MiniMax M3.1 Flash on OpenRouter (100%) and Vercel. Dropped: Step 5 Preview, which has no tools and 0% success.
+  - Default is rebuilt to 13. Dropped: Gemini 3.5 Flash, GLM-5.2 on Inferera, Qwen3.8 Omni Flash, Radeon Qwen3.8-27B and ElectronHub GPT-5.6 Luna. Each was weak, duplicate or failing.
+  - Removed members stay as switched-off rows, so nothing is lost. The Frontier and Workhorse profiles are deleted.
+  - Minimums saved as revision 7:
+    - Apex: General 38 + (Coding 65 OR Agentic 40)
+    - Default: General 30 + Agentic 25
+    - Coding: General 25 + (Coding 60 OR Agentic 35)
+    - Fast-Lane: General 15
+  - On the copy, `/v1/models` listed the 6 chains, and `auto:frontier`, `auto:workhorse` and `auto:apex` each returned 200.
+- **Typed scores follow the model.** A tested, approximated or family score typed on one route now applies to every route linked to the same AA model, including routes added later. A route's own entry still wins. 8 missing rows were also filled on the live data: MiniMax M3.1 Flash on Kilo, Ollama and Vercel, and Step 5 on Speka. On the copy, all four MiniMax routes read Coding 74.2 (tested) and Agentic 46.
+- Checks: the server suite passes (408 files / 5,171 tests), including the alias, legacy-document and shared-score tests. The client suite passes (92 files / 699 tests), and the build is clean.
+
+## 2026-10-21 — Fast-Lane takes minimums; collapsed Keys rows cleaned up (deployed `main-20261021-095253`)
 
 - **Fast-Lane in Chain minimums.** It was hard-coded as reserved because it is ordered on measured latency, not capability. It now takes General, Coding and Agentic floors like every chain, with AND/OR, so its members can be compared on capability. The default is General 15.
   - A saved document that predates this reads Fast-Lane at its default and keeps every saved minimum. A regression test covers the 7-chain document as it is live today (revision 6).

@@ -15,7 +15,7 @@
  *     express routing policy would hide 550 models an operator can legitimately
  *     ask for by name.
  *   - create profiles. A chain the operator has not created is reported, not
- *     invented — an eight-row INSERT that quietly changes what `auto:apex`
+ *     invented — a six-row INSERT that quietly changes what `auto:apex`
  *     means is not something a sync script should do on its own.
  *
  * Usage:
