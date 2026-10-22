@@ -1,6 +1,8 @@
 # Changelog
 
-## 2026-10-21 — Expiry countdown on a model row; Quota bars count down (local, not deployed)
+## 2026-10-21 — Expiry countdown on a model row; Quota bars count down (deployed `main-20261023-064053`)
+
+- Live after deploy: the `model_expiry` table exists, all 19 keys decrypt, and the Vercel MiniMax row (1707) carries the expiry 2026-10-22T23:59:00Z with its unlimited flag still on. The compare payload returns it.
 
 - **A model's free access can now carry an end date.** New table `model_expiry` (migration `20261022_000002`, reversible) and `PATCH /api/models/:id` with `expiresAt` + `expiryLabel`. The Keys provider model table shows a chip beside the name: "13h 45m left", ticking once a minute, with the date and the reason in its tooltip.
 - **It is a reminder only.** Nothing switches off and no route changes when the countdown reaches zero, at James's instruction: a promotion ending is not a model breaking. The Vercel MiniMax row keeps its unlimited flag.
