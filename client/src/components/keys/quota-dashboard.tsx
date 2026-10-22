@@ -13,7 +13,9 @@ import { CUSTOM_GROUP, PLATFORMS } from './shared'
 // enabled key, one bar per allowance. Spent rows fade and say they are waiting
 // for the reset; the footer carries the next reset and the reading's age.
 
-const ROWS_SHOWN = 5
+// Three, not five: a grid row is as tall as its tallest card, so one provider
+// with many pools (Mistral, Groq) left a band of empty space beside it.
+const ROWS_SHOWN = 3
 
 const BAR: Record<Tone, string> = {
   good: 'bg-emerald-500',
@@ -44,6 +46,7 @@ function useNow(): number {
 function Row({ row, waitingLabel, exhaustedLabel, localLabel, learnedLabel, refilledLabel, hasReset }: {
   row: PoolRow; waitingLabel: string; exhaustedLabel: string; localLabel: string; learnedLabel: string; refilledLabel: string; hasReset: boolean
 }) {
+  const { t } = useI18n()
   return (
     <li className={cn('rounded-lg px-2.5 py-2', row.spent ? 'bg-muted/40' : 'bg-muted/20 ring-1 ring-border/60')}>
       <div className={cn(row.spent && 'opacity-50')}>
@@ -54,11 +57,11 @@ function Row({ row, waitingLabel, exhaustedLabel, localLabel, learnedLabel, refi
               {hasReset ? waitingLabel : exhaustedLabel}
             </span>
           ) : row.tone && (
-            <span className={cn('shrink-0 font-semibold tabular-nums', TEXT[row.tone])}>{row.left}%</span>
+            <span className={cn('shrink-0 font-semibold tabular-nums', TEXT[row.tone])}>{t('keys.pctLeft', { pct: row.left ?? 0 })}</span>
           )}
         </div>
         <div className="mt-0.5 flex items-baseline justify-between gap-2 text-[11px] text-muted-foreground">
-          <span className="tabular-nums">{row.amount}</span>
+          <span className="tabular-nums">{row.amount && t('keys.quotaDashAmountLeft', { amount: row.amount })}</span>
           {(row.refilled || row.learned || row.local) && (
             <span>{[row.refilled ? refilledLabel : null, row.learned ? learnedLabel : null, row.local ? localLabel : null].filter(Boolean).join(' · ')}</span>
           )}
@@ -128,7 +131,7 @@ function Card({ card, nowMs, usageSupported, usageLine, onOpenUsage }: {
         )
       )}
       {(clock || card.paidOnly > 0 || card.updatedMs != null) && (
-        <div className="mt-auto space-y-0.5 border-t pt-2 text-[11px] text-muted-foreground">
+        <div className="mt-2 space-y-0.5 border-t pt-2 text-[11px] text-muted-foreground">
           {clock && resetIn != null && (
             <p className={cn('tabular-nums', card.waiting ? 'font-semibold text-amber-700 dark:text-amber-300' : 'text-foreground/80')}>
               <span className="whitespace-nowrap">{t('keys.quotaDashResets', { clock })}</span>
@@ -170,6 +173,11 @@ export function QuotaDashboard({ states }: { states: ProviderQuotaState[] }) {
   })
   const [usageDialog, setUsageDialog] = useState<{ platform: string; label: string } | null>(null)
   const cards = buildCards(data?.providers ?? [], keys, states, nowMs, locale)
+  // A provider with nothing reported has nothing to draw. A whole card each
+  // ("No allowance reported…") was a third of the grid; they share one line.
+  const reporting = cards.filter(card => card.rows.length > 0)
+  const silent = cards.filter(card => card.rows.length === 0)
+  const openUsage = (platform: string) => setUsageDialog({ platform, label: providerName(platform) })
   return (
     <section aria-label={t('keys.quotaDashTitle')}>
       <div className="mb-1 flex items-baseline justify-between gap-3">
@@ -179,14 +187,33 @@ export function QuotaDashboard({ states }: { states: ProviderQuotaState[] }) {
       {cards.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t('keys.quotaDashEmpty')}</p>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {cards.map(card => (
+        // `items-start`: each card is as tall as its own rows. Stretched to the
+        // tallest card in the row, short cards were mostly empty space.
+        <div className="grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {reporting.map(card => (
             <Card key={card.platform} card={card} nowMs={nowMs}
               usageSupported={Boolean(usageCreds?.supported?.[card.platform]?.length)}
               usageLine={summarizeUsageCredentials(usageCreds?.credentials ?? [], card.platform)}
-              onOpenUsage={() => setUsageDialog({ platform: card.platform, label: providerName(card.platform) })} />
+              onOpenUsage={() => openUsage(card.platform)} />
           ))}
         </div>
+      )}
+      {silent.length > 0 && (
+        <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          <span>{t('keys.quotaDashSilent')}</span>
+          {silent.map(card => (
+            <span key={card.platform} className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5">
+              <PlatformDot platform={card.platform} />
+              <span className="text-foreground/80">{providerName(card.platform)}</span>
+              {Boolean(usageCreds?.supported?.[card.platform]?.length) && (
+                <button type="button" onClick={() => openUsage(card.platform)}
+                  className="underline decoration-dotted underline-offset-2 hover:text-foreground">
+                  {t('keys.usageCredConnect')}
+                </button>
+              )}
+            </span>
+          ))}
+        </p>
       )}
       {usageDialog && usageCreds && (
         <UsageCredentialDialog

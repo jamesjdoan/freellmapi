@@ -22,8 +22,8 @@ describe('buildCards', () => {
     ], keys, [], NOW)
     expect(cards.map(c => c.platform)).toEqual(['xkiro', 'groq', 'zhipu'])
     expect(cards[0]).toMatchObject({ waiting: true, nextResetMs: Date.UTC(2026, 9, 18) })
-    expect(cards[0].rows[0]).toMatchObject({ label: 'free', spent: true, left: 0, amount: '0 / 1M tokens' })
-    expect(cards[1].rows[0]).toMatchObject({ label: 'qwen', left: 81, tone: 'good', amount: '812 / 1,000' })
+    expect(cards[0].rows[0]).toMatchObject({ label: 'Free', spent: true, left: 0, amount: '0 / 1M tokens' })
+    expect(cards[1].rows[0]).toMatchObject({ label: 'Qwen', left: 81, tone: 'good', amount: '812 / 1,000' })
     expect(cards[2].rows).toEqual([])
   })
 
@@ -51,8 +51,18 @@ describe('buildCards', () => {
       pool({}),
     ], [keys[0]], [], NOW)
     expect(card.paidOnly).toBe(1)
-    expect(card.rows.map(r => [r.label, r.learned])).toEqual([['daily', true], ['qwen', false]])
+    expect(card.rows.map(r => [r.label, r.learned])).toEqual([['Daily', true], ['Qwen', false]])
     expect(card).toMatchObject({ waiting: true, nextResetMs: Date.UTC(2026, 9, 17, 7) })
+  })
+
+  it('says what each pool counts when two pools share a name', () => {
+    // AMD on 2026-10-22: "daily-free" twice, once in usage points, once in dollars.
+    const [card] = buildCards([
+      pool({ platform: 'radeon', pool: 'radeon::daily-free', limit: 20, remaining: 18 }),
+      pool({ platform: 'radeon', pool: 'radeon::daily-free', unit: 'cents', limit: 100, remaining: 100 }),
+      pool({ platform: 'radeon', pool: 'radeon::model::Qwen3.8-27B', limit: 10, remaining: 5 }),
+    ], [{ id: 39, platform: 'radeon', enabled: true }], [], NOW)
+    expect(card.rows.map(r => r.label).sort()).toEqual(['Daily free · credit', 'Daily free · requests', 'Qwen3.8-27B'])
   })
 
   it('formats credit balances and fractions in their own units, and marks local counts', () => {
@@ -61,8 +71,8 @@ describe('buildCards', () => {
       pool({ platform: 'openrouter', pool: 'openrouter::calendar_day', limit: 1000, remaining: 812, usedSource: 'local' }),
     ], [{ id: 9, platform: 'openrouter', enabled: true }], [], NOW)
     const rows = cards[0].rows
-    expect(rows.find(r => r.label === 'credits')!.amount).toBe('$9.50 / $12.00')
-    expect(rows.find(r => r.label === 'daily')!.local).toBe(true)
+    expect(rows.find(r => r.label === 'Credits')!.amount).toBe('$9.50 / $12.00')
+    expect(rows.find(r => r.label === 'Daily')!.local).toBe(true)
     // An unsized allowance reported as a fraction shows only its percentage.
     const [ollama] = buildCards([pool({ platform: 'ollama', pool: 'ollama::monthly', unit: 'per_10k', limit: 10_000, remaining: 6820 })],
       [{ id: 8, platform: 'ollama', enabled: true }], [], NOW)
@@ -90,8 +100,8 @@ describe('helpers', () => {
 
   it('names a pool without its provider prefix or kind', () => {
     expect(poolName('google', 'google::project-model::gemini-3.8-flash')).toBe('gemini-3.8-flash')
-    expect(poolName('nvidia', 'nvidia::calendar_day')).toBe('daily')
-    expect(poolName('mistral', 'mistral::codestral')).toBe('codestral')
+    expect(poolName('nvidia', 'nvidia::calendar_day')).toBe('Daily')
+    expect(poolName('mistral', 'mistral::codestral')).toBe('Codestral')
   })
 
   it('formats ages at the coarsest useful unit, and resets without seconds past an hour', () => {

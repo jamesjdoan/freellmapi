@@ -36,13 +36,15 @@ function useNow(active: boolean) {
   return now
 }
 
+/** Shows the credit LEFT in the window and shrinks as it is spent, like every
+ *  other allowance bar on Keys → Quota (James, 2026-10-22). */
 function SpendMeter({ fraction, label }: { fraction: number; label: string }) {
-  const pct = Math.min(100, Math.max(0, fraction * 100))
-  const fill = pct >= 90 ? 'bg-rose-500' : pct >= 67 ? 'bg-amber-500' : 'bg-emerald-500'
+  const left = Math.min(100, Math.max(0, (1 - fraction) * 100))
+  const fill = left <= 20 ? 'bg-rose-500' : left <= 50 ? 'bg-amber-500' : 'bg-emerald-500'
   return (
-    <span role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}
+    <span role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(left)}
       className="inline-block h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-muted">
-      <span aria-hidden="true" className={cn('block h-full rounded-full', fill)} style={{ width: `${pct}%` }} />
+      <span aria-hidden="true" className={cn('block h-full rounded-full', fill)} style={{ width: `${left}%` }} />
     </span>
   )
 }
@@ -133,7 +135,7 @@ function KeyWindow({ view }: { view: PaidCreditKeyView }) {
         {w && (
           <div className="flex flex-wrap items-center gap-2">
             <SpendMeter fraction={w.quantity > 0 ? w.spent / w.quantity : 0} label={t('keys.paidCreditWindow')} />
-            <span className="tabular-nums">{formatAmount(w.spent, w.unit)} / {formatAmount(w.quantity, w.unit)}</span>
+            <span className="tabular-nums">{t('keys.spentOf', { used: formatAmount(w.spent, w.unit), limit: formatAmount(w.quantity, w.unit) })}</span>
             <span className="text-muted-foreground">{t('keys.bonusRemaining', { value: formatAmount(w.remaining, w.unit) })}</span>
             {active && w.awaitingReading && <span className="text-amber-600 dark:text-amber-400">{t('keys.paidCreditAwaiting')}</span>}
             {active && (

@@ -50,6 +50,8 @@ export interface PoolRow {
   /** The reset has rolled over since this reading: the window is full again
    *  until the next measured request, however the stale reading read. */
   refilled: boolean
+  /** What the pool counts. Shown beside the name only when two pools share one. */
+  measure: 'credit' | 'tokens' | 'requests'
 }
 
 export interface ProviderCard {
@@ -124,12 +126,28 @@ export function parseStamp(value: string | null | undefined): number | null {
   return Number.isNaN(ms) ? null : ms
 }
 
-/** The pool's own name without the provider prefix or its kind. */
+/**
+ * The pool's own name without the provider prefix or its kind.
+ *
+ * A pool named by its window ("weekly-credit", "daily-free", "monthly") reads
+ * as words: "Weekly credit". A pool named after a model ("gemini-3.5-flash",
+ * "openai/gpt-oss-20b") keeps its id, which is what the operator searches for.
+ * Model ids carry a digit or a slash; window names carry neither.
+ */
 export function poolName(platform: string, pool: string | null): string {
   if (!pool) return '—'
   const rest = pool.startsWith(`${platform}::`) ? pool.slice(platform.length + 2) : pool
-  if (rest === 'calendar_day') return 'daily'
-  return rest.replace(/^(model|project-model)::/, '')
+  if (rest === 'calendar_day') return 'Daily'
+  const name = rest.replace(/^(model|project-model)::/, '')
+  if (/[\d/]/.test(name)) return name
+  const words = name.replace(/[-_]+/g, ' ').trim()
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
+/** What a pool counts, for telling apart two pools with the same name. */
+function measureOf(p: Pick<OverviewPool, 'unit' | 'metric'>): 'credit' | 'tokens' | 'requests' {
+  if (p.unit === 'cents') return 'credit'
+  return p.metric === 'tokens' ? 'tokens' : 'requests'
 }
 
 function amountOf(p: OverviewPool, locale: string, remaining: number): string {
@@ -190,8 +208,15 @@ export function buildCards(
         refilled,
         local: p.usedSource === 'local',
         learned: !p.metered,
+        measure: measureOf(p),
       })
     }
+    // One pool can be metered two ways (AMD's "Daily free" in points and in
+    // dollars, a Groq model in requests and in tokens). Two rows with one name
+    // read as a duplicate, so a repeated name says what each one counts.
+    const seen = new Map<string, number>()
+    for (const r of rows) seen.set(r.label, (seen.get(r.label) ?? 0) + 1)
+    for (const r of rows) if ((seen.get(r.label) ?? 0) > 1) r.label = `${r.label} · ${r.measure}`
     rows.sort((a, b) => Number(b.spent) - Number(a.spent) || (a.left ?? 101) - (b.left ?? 101) || a.label.localeCompare(b.label))
 
     const stamps = observations

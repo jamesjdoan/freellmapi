@@ -411,6 +411,10 @@ export interface CompareRow {
   chainRanks: number[];
   /** The operator's note on this model (model_note), e.g. why it is parked. */
   note: { text: string; recheckAt: string | null; updatedAt: string } | null;
+  /** When this model's free access ends, if the provider published an end
+   *  date (model_expiry). A reminder for the operator, not a routing input:
+   *  the date passing does not switch anything off (2026-10-22). */
+  expiry: { expiresAt: string; label: string | null } | null;
   /** The three capability scores as every surface should print them, each with
    *  where it came from (ARCH-20261018). `analysis` stays AA's data alone. */
   scores: Record<ScoreMetric, ScoreCell>;
@@ -552,6 +556,7 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
            a.coding_index, a.agentic_index, a.price_1m_input, a.price_1m_output, a.index_cost_per_task,
            a.median_output_tokens_per_second, a.median_time_to_first_token_seconds,
            n.note, n.recheck_at AS note_recheck_at, n.updated_at AS note_updated_at,
+           e.expires_at AS expires_at, e.label AS expires_label,
            -- Name AND position in one concat. Two separate GROUP_CONCATs would
            -- not be guaranteed to agree on row order, so the ranks could line
            -- up against the wrong chains — "in Coding" and "FIRST in Coding"
@@ -563,6 +568,7 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
       LEFT JOIN aa_model_link l ON l.platform = m.platform AND l.model_id = m.model_id
       LEFT JOIN aa_model a ON a.slug = l.aa_slug
       LEFT JOIN model_note n ON n.platform = m.platform AND n.model_id = m.model_id
+      LEFT JOIN model_expiry e ON e.platform = m.platform AND e.model_id = m.model_id
      ORDER BY m.platform, m.model_id
   `).all() as Record<string, unknown>[];
 
@@ -703,6 +709,12 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
         text: String(r.note),
         recheckAt: r.note_recheck_at == null ? null : String(r.note_recheck_at),
         updatedAt: String(r.note_updated_at),
+      },
+      // When this model's free access ends, if the provider said so. The
+      // dashboard counts down to it; the router ignores it (2026-10-22).
+      expiry: r.expires_at == null ? null : {
+        expiresAt: String(r.expires_at),
+        label: r.expires_label == null ? null : String(r.expires_label),
       },
       scores: scoresOf(r),
       tokenEfficiency: tokenEfficiencyOf(r),

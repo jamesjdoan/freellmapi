@@ -105,9 +105,10 @@ describe('PaidCreditPanel', () => {
     mount()
     await flush()
     const text = container.textContent ?? ''
-    expect(text).toContain('$4.00 / $5.00')
+    expect(text).toContain('$4.00 spent of $5.00')
     expect(text).toContain('waiting for the balance to measure the last request')
-    expect(container.querySelector('[role="meter"]')?.getAttribute('aria-valuenow')).toBe('80')
+    // $4 of $5 spent: the bar shows what is left, so 20%.
+    expect(container.querySelector('[role="meter"]')?.getAttribute('aria-valuenow')).toBe('20')
     expect([...container.querySelectorAll('button')].some(b => b.textContent === 'Open credit window')).toBe(false)
   })
 

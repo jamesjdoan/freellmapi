@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-10-21 — Expiry countdown on a model row; Quota bars count down (local, not deployed)
+
+- **A model's free access can now carry an end date.** New table `model_expiry` (migration `20261022_000002`, reversible) and `PATCH /api/models/:id` with `expiresAt` + `expiryLabel`. The Keys provider model table shows a chip beside the name: "13h 45m left", ticking once a minute, with the date and the reason in its tooltip.
+- **It is a reminder only.** Nothing switches off and no route changes when the countdown reaches zero, at James's instruction: a promotion ending is not a model breaking. The Vercel MiniMax row keeps its unlimited flag.
+- **Fixed a broken cell on the way.** The provider model table printed "0 of {limit}" for any model with no declared daily limit, because the server sends `limit: null`. The limit is nullable in the client type now, and the cell says what it knows.
+- **Every allowance bar counts down** (shows what is left, shrinks as it is used): provider cards, forecast, AMD capacity, bonus grants, paid credit. Bonus and paid credit used to fill up with usage.
+- **Numbers are labelled**: "500,000 used of 1,200,000", "$4.00 spent of $5.00", "81% left", "12 left of 20".
+- **Quota page cleaned up**: about 7,000px of open panels became about 2,000px. Cards size to their content and show 3 pools before "+N more"; window names read as words ("Weekly credit"); two pools with one name say what each counts ("Daily free · requests", "Daily free · credit"); providers with nothing reported share one line of chips; one Details holds AMD capacity, the forecast, headroom and raw readings.
+- **Redundant UI strings removed:** 24 strings referenced nowhere, 1,440 entries across 60 locales. The stray `client/src/i18n/en.json` stub deleted.
+- Checks: the client typechecks and builds, the full suite passes (93 files / 704 tests); the server typechecks and the full suite passes (411 files / 5,194 tests). The expiry flow was verified on a live-data copy: the API stored the date, the compare payload carried it, and the row showed the countdown.
+
+## 2026-10-22 — Quota numbers say what is left; redundant UI strings removed (local, not deployed)
+
+- **Every allowance bar counts down.** The provider cards, the forecast, AMD capacity, bonus grants and paid credit all show what is LEFT and shrink as it is used, red at 20% or less and amber at half or less. Bonus and paid-credit bars used to fill UP with usage.
+- **Numbers are labelled.** Provider cards read "{amount} left" and "{pct}% left". Bonus grants and paid credit say "500,000 used of 1,200,000", and AMD says "x left of y". Nothing is a bare fraction any more.
+- **Redundant UI strings removed:** 24 strings were in `en.json` and all 59 other locales but referenced nowhere (old scopes, verdicts the diagnosis renders dynamically but through prefixes, Compare filters from an older UI). 1,440 locale entries deleted; `check-i18n` passes at 60 locales / 2,169 keys.
+- The stray `client/src/i18n/en.json` stub (2 keys, Oct 14) duplicated keys the real locale already holds; deleted.
+- Checks: the client typechecks and builds, the full suite passes (92 files / 700 tests), and lint shows no new errors versus `HEAD`.
+
+## 2026-10-22 — Keys → Quota cleaned up (local, not deployed)
+
+- The page was about 7,000px of mostly open panels. It is now about 2,000px, measured on live data at desktop width: allowance cards, then bonus grants and paid credit, then one closed **Details**.
+- **Cards size to their own content.** They were stretched to the tallest card in their row. Each card shows 3 pools before "+N more" (was 5), so Mistral and Groq no longer leave empty bands.
+- **Readable pool names.** Window names read as words ("weekly-credit" → "Weekly credit", "daily-free" → "Daily free"). Model ids are kept as they are. When two pools share a name, each says what it counts, for example AMD's "Daily free · requests" and "Daily free · credit", which looked like a duplicate.
+- **Providers with nothing reported** (Agnes, UnoRouter, Zhipu) are one line of chips under the cards instead of three empty cards. UnoRouter's chip keeps its Connect account usage link.
+- **One Details disclosure** now holds the AMD fleet capacity, the forecast, provider headroom with declared limits, and raw readings. Headroom and declared limits used to open by themselves whenever a policy existed.
+- Checks: the client typechecks and builds, and the full suite passes (92 files / 700 tests, including a new test for repeated pool names). Lint shows the same 1 error as `HEAD`. The page stays 390px wide on a phone.
+
 ## 2026-10-22 — "New" models marked seen on one device stay seen on all (deployed `main-20261022-095940`)
 
 - The Keys "N new" tag and the panel's "Mark N seen" kept their list in each browser's localStorage. Marks made on the Mac did not reach the iPad or the tailnet address, and were lost when site data was cleared. So tags kept coming back.

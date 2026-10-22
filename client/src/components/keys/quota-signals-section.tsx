@@ -11,6 +11,7 @@ import { QuotaDashboard } from './quota-dashboard'
 import { ProviderCapacityPanel } from '../provider-capacity'
 import { BonusGrantsPanel } from './bonus-grants-panel'
 import { PaidCreditPanel } from './paid-credit-panel'
+import { QuotaLimitsSection } from './quota-limits-section'
 
 function formatQuotaNumber(value: number | null): string {
   return value == null ? '—' : new Intl.NumberFormat().format(value)
@@ -23,8 +24,11 @@ function formatResetAt(value: string | null): string {
 }
 
 // Keys → Quota. Provider allowance cards first, because "how much is left and
-// when does it come back" is the question the tab is opened for. The forecast
-// and the raw observations it is built from sit in Details below.
+// when does it come back" is the question the tab is opened for. Then the two
+// things an operator acts on (bonus grants, paid credit). Everything that is
+// the evidence behind the cards (AMD fleet load, the forecast, raw readings,
+// per-provider headroom and declared limits) sits in one Details disclosure:
+// it used to be four more open panels and a 7,000px page (2026-10-22).
 export function QuotaSignalsSection({ states }: { states: ProviderQuotaState[] }) {
   const { t } = useI18n()
   const { data: keys = [] } = useQuery<ApiKey[]>({
@@ -39,13 +43,19 @@ export function QuotaSignalsSection({ states }: { states: ProviderQuotaState[] }
   return (
     <div className="space-y-6">
       <QuotaDashboard states={states} />
-      <ProviderCapacityPanel />
       <BonusGrantsPanel />
       <PaidCreditPanel />
       <details className="overflow-hidden rounded-3xl border bg-card">
         <summary className="cursor-pointer px-4 py-3 text-sm font-medium">{t('keys.quotaDetails')}</summary>
         <div className="space-y-5 border-t p-4">
+          <ProviderCapacityPanel />
           <QuotaOutlookSection />
+          <details>
+            <summary className="cursor-pointer text-sm font-medium">{t('keys.limitsDisclosure')}</summary>
+            <div className="mt-3">
+              <QuotaLimitsSection />
+            </div>
+          </details>
           <details>
             <summary className="cursor-pointer text-sm font-medium">{t('keys.outlookRaw')}</summary>
             <div className="mt-3 space-y-2">

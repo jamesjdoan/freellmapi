@@ -39,7 +39,7 @@ function OutlookPool({ pool, generatedAt, windowMinutes, minimumRequests }: {
         <>
           <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <div><strong className="text-xl font-medium tabular-nums text-foreground">{number(pool.remaining)}</strong>{' / '}{number(pool.limit)}{' '}{t(reportedOnly ? 'keys.outlookLastReported' : 'keys.outlookRequestsLeft')}</div>
-            <span className="tabular-nums text-foreground">{number(pool.remainingPct)}%</span>
+            <span className="tabular-nums text-foreground">{t('keys.pctLeft', { pct: number(pool.remainingPct) })}</span>
           </div>
           <div className="my-3 h-1 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label={t('keys.quotaRemaining')} aria-valuenow={pool.remainingPct} aria-valuemin={0} aria-valuemax={100}>
             <div className={cn('h-full rounded-full bg-foreground/40', pool.warning && 'bg-amber-500/80')} style={{ width: `${pool.remainingPct}%` }} />

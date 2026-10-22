@@ -47,7 +47,10 @@ beforeEach(() => {
     key({ id: 7, platform: 'unorouter', label: 'Uno main', maskedKey: 'ur-…a1' }),
     key({ id: 9, platform: 'groq', maskedKey: 'gsk-…z9' }),
   ]
-  providers = []
+  // One reading each: a provider with nothing reported is no longer a card of
+  // its own, it is a chip on the "No allowance reported" line.
+  const pool = (platform: string) => ({ platform, pool: `${platform}::daily`, limit: 100, remaining: 60, reset_at: null, metered: true, usedSource: 'provider', metric: 'requests', unit: null })
+  providers = [pool('unorouter'), pool('groq')]
   usage = usageOf()
   vi.mocked(apiFetch).mockReset().mockImplementation(async path => {
     if (path === '/api/keys') return keys

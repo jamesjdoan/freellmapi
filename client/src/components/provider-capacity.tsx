@@ -49,6 +49,16 @@ function usageTone(spent: number | null): { fill: string; text: string } {
   return { fill: 'bg-emerald-500', text: 'text-foreground' }
 }
 
+/** The allocation bar shows what is LEFT, so it takes the provider cards'
+ *  thresholds: red at 20% or less left, amber at half or less. */
+function leftTone(spent: number | null): { fill: string; text: string } {
+  if (spent == null) return usageTone(null)
+  const left = 1 - spent
+  if (left <= 0.2) return { fill: 'bg-rose-500', text: 'text-rose-700 dark:text-rose-400' }
+  if (left <= 0.5) return { fill: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-400' }
+  return { fill: 'bg-emerald-500', text: 'text-foreground' }
+}
+
 /** One meter used by both reading kinds, so widths and heights align across
  *  every row and kind of bar. */
 function UsageMeter({ modelId, label, value, fill, dataAttribute }: {
@@ -94,11 +104,11 @@ function Reading({ reading, kind, compact = false }: { reading: ProviderCapacity
   ].join('\n')
   const label = kind === 'allocation' ? t('capacity.sharedAllocation') : t('capacity.rpm')
   const spent = reading.limit != null && reading.limit > 0 && reading.used != null ? reading.used / reading.limit : null
-  const tone = usageTone(freshness === 'fresh' ? spent : null)
+  const tone = leftTone(freshness === 'fresh' ? spent : null)
   const value = freshness === 'unknown' ? t('capacity.unknown')
     : compact && kind === 'allocation' && reading.remainingPct != null
       ? formatCapacityPercent(reading.remainingPct, view.percentages)
-      : `${amount(reading.remaining)} / ${amount(reading.limit)}`
+      : t('capacity.leftOf', { remaining: amount(reading.remaining), limit: amount(reading.limit) })
   return (
     <Tooltip text={title} wide>
       <span className={`inline-flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] tabular-nums ${tone.text}`} data-capacity-reading={kind} data-freshness={freshness}>
@@ -108,7 +118,9 @@ function Reading({ reading, kind, compact = false }: { reading: ProviderCapacity
         {freshness === 'fresh' && spent != null && <UsageMeter
           modelId={`${kind}:${reading.observedAt ?? ''}`}
           label={label}
-          value={spent * 100}
+          // What is LEFT, shrinking as it is used, like every allowance bar on
+          // Keys → Quota (2026-10-22). It used to fill up with usage.
+          value={Math.max(0, Math.min(100, (1 - spent) * 100))}
           fill={tone.fill}
           dataAttribute="capacity-allocation-usage"
         />}

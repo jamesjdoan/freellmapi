@@ -66,6 +66,12 @@ const modelUpdateSchema = z.object({
   note: z.string().max(500).nullable().optional(),
   /** When to look at this model again, YYYY-MM-DD. Only stored with a note. */
   recheckAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'recheckAt must be YYYY-MM-DD').nullable().optional(),
+  /** When this model's free access ends (model_expiry), ISO 8601 UTC. A
+   *  reminder for the operator: the dashboard counts down to it and nothing
+   *  switches off when it passes (2026-10-22). */
+  expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
+  /** What the expiry means, shown beside the countdown. */
+  expiryLabel: z.string().max(120).nullable().optional(),
 }).strict();
 
 const MODEL_FIELD_COLUMNS: Record<keyof ModelOverridePatch | 'enabled', string> = {
@@ -346,6 +352,8 @@ modelsRouter.patch('/:id', async (req: Request, res: Response) => {
   delete modelPatch.unlimited;
   delete modelPatch.note;
   delete modelPatch.recheckAt;
+  delete modelPatch.expiresAt;
+  delete modelPatch.expiryLabel;
   const modelKeys = Object.keys(modelPatch) as Array<keyof typeof modelPatch>;
   const noteOnly = modelKeys.length === 0 && parsed.data.fallbackEnabled === undefined && parsed.data.unlimited === undefined;
   if (parsed.data.note !== undefined || parsed.data.recheckAt !== undefined) {
@@ -364,6 +372,37 @@ modelsRouter.patch('/:id', async (req: Request, res: Response) => {
       `).run(row.platform, row.model_id, text, parsed.data.recheckAt ?? null, parsed.data.recheckAt !== undefined ? 1 : 0);
     }
     if (noteOnly) {
+      res.json({ success: true, id });
+      return;
+    }
+  }
+  if (parsed.data.expiresAt !== undefined || parsed.data.expiryLabel !== undefined) {
+    // The expiry is a REMINDER. It is stored beside the model and counted down
+    // in the dashboard; it never switches the model off and never changes a
+    // route, because a promotion that ends is not the same as a model that
+    // stopped working (2026-10-22).
+    const current = db.prepare('SELECT expires_at, label FROM model_expiry WHERE platform = ? AND model_id = ?')
+      .get(row.platform, row.model_id) as { expires_at: string | null; label: string | null } | undefined;
+    const expiresAt = parsed.data.expiresAt === undefined
+      ? current?.expires_at ?? null
+      : parsed.data.expiresAt;
+    const label = parsed.data.expiryLabel === undefined
+      ? current?.label ?? null
+      : parsed.data.expiryLabel?.trim() || null;
+    if (expiresAt == null) {
+      db.prepare('DELETE FROM model_expiry WHERE platform = ? AND model_id = ?').run(row.platform, row.model_id);
+    } else {
+      db.prepare(`
+        INSERT INTO model_expiry (platform, model_id, expires_at, label, updated_at)
+        VALUES (?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(platform, model_id) DO UPDATE SET
+          expires_at = excluded.expires_at,
+          label = excluded.label,
+          updated_at = excluded.updated_at
+      `).run(row.platform, row.model_id, expiresAt, label);
+    }
+    if (modelKeys.length === 0 && parsed.data.fallbackEnabled === undefined && parsed.data.unlimited === undefined
+      && parsed.data.note === undefined && parsed.data.recheckAt === undefined) {
       res.json({ success: true, id });
       return;
     }

@@ -16,6 +16,7 @@ import { ModelName } from '@/components/model-name'
 import { useExtensionEnabled } from '@/lib/use-extension'
 import { churnByPlatform, useCatalogueChanges } from '@/lib/catalogue-changes'
 import { useMarkArrivalsSeen, useUnseenArrivals } from '@/lib/seen-arrivals'
+import { ExpiryChip } from './expiry-chip'
 import { ChainFit } from '@/components/chain-fit'
 import { scoreRowOf, useScoreTone } from '@/lib/chain-minimums'
 import type { ScoreCell, Scores } from '@/lib/score-provenance'
@@ -132,6 +133,8 @@ interface Row {
   chains: string[]
   /** The operator's note (model_note): why it is parked, when to look again. */
   note?: { text: string; recheckAt: string | null; updatedAt: string } | null
+  /** When this model's free access ends, if the provider published a date. */
+  expiry?: { expiresAt: string; label: string | null } | null
   /** Position within each chain above, same order — the server pairs them in
    *  one concat so they cannot drift apart. */
   chainRanks: number[]
@@ -157,7 +160,9 @@ interface Row {
   tokenEfficiency: TokenEfficiency | null
 }
 
-interface RateUsageWindow { used: number; limit: number }
+/** The server sends `limit: null` for a window it has no ceiling for, so the
+ *  limit is nullable here too. */
+interface RateUsageWindow { used: number; limit: number | null }
 interface RateUsageRow {
   modelDbId: number
   rpm: RateUsageWindow | null
@@ -222,7 +227,7 @@ function AllowanceCell({ probe, usage }: { probe?: QuotaProbe; usage?: RateUsage
   // Spent fraction decides the colour: amber past two thirds, red past nine
   // tenths. A chain reaching for a route at 19 of 20 will be refused on the
   // next call but one.
-  const spent = day && day.limit > 0 ? day.used / day.limit : 0
+  const spent = day && day.limit != null && day.limit > 0 ? day.used / day.limit : 0
   const tone = spent >= 0.9 ? 'text-rose-600 dark:text-rose-400'
     : spent >= 0.67 ? 'text-amber-700 dark:text-amber-400'
     : 'text-foreground'
@@ -230,13 +235,13 @@ function AllowanceCell({ probe, usage }: { probe?: QuotaProbe; usage?: RateUsage
   const detail = [
     probe?.finding,
     parts.length > 0 ? t('keys.allowanceMeasuredAs', { measured: parts.join(' · ') }) : null,
-    minute ? t('keys.allowancePerMinute', { used: minute.used, limit: minute.limit }) : null,
+    minute && minute.limit != null ? t('keys.allowancePerMinute', { used: minute.used, limit: minute.limit }) : null,
   ].filter(Boolean).join('\n')
 
   return (
     <td className="py-1 pr-2 text-right text-[10px] tabular-nums">
       <Tooltip text={detail || t('keys.panelMeasuredNoCeiling')} wide>
-        {day ? (
+        {day && day.limit != null && day.limit > 0 ? (
           <span className={tone}>
             {t('keys.allowanceLeft', { left: Math.max(0, day.limit - day.used), limit: day.limit })}
           </span>
@@ -754,6 +759,10 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
                     {newModelIds.has(r.modelId) && (
                       <span className="shrink-0 rounded-full bg-amber-500 px-1.5 text-[9px] font-semibold uppercase tracking-wide text-white">{t('keys.newArrivalBadge')}</span>
                     )}
+                    {/* When this model's free access ends. A reminder only:
+                        nothing switches off when the countdown reaches zero
+                        (2026-10-22). */}
+                    {r.expiry && <ExpiryChip expiresAt={r.expiry.expiresAt} label={r.expiry.label} />}
                   </span>
                   <code className="block max-w-[260px] truncate text-[10px] text-muted-foreground" title={r.modelId}>{r.modelId}</code>
                   <ProviderModelCapacityIndicator platform={r.platform} modelId={r.modelId} />

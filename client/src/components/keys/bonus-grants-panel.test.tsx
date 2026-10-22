@@ -105,11 +105,12 @@ describe('BonusGrantsPanel', () => {
     mount()
     await flush()
     const text = container.textContent ?? ''
-    expect(text).toContain('1,500,000 / 1,200,000')
+    expect(text).toContain('1,500,000 used of 1,200,000')
     expect(text).toContain('limit reported by provider')
-    expect(text).toContain('125%')
+    // 125% used is past the limit: the bar shows what is left, so 0% and empty.
+    expect(text).toContain('0% left')
     const normalMeter = container.querySelector('[role="meter"][aria-label="Normal allowance"]')
-    expect(normalMeter?.getAttribute('aria-valuenow')).toBe('100')
+    expect(normalMeter?.getAttribute('aria-valuenow')).toBe('0')
   })
 
   it('renders progress meter bars for normal, pool, and allowance', async () => {

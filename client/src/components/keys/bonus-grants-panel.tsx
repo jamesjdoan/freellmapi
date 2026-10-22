@@ -25,28 +25,33 @@ function useLiveCountdown(expiresAt: string | null, active: boolean) {
   return ms > 0 ? Math.ceil(ms / 1000) : 0
 }
 
-function usageTone(spent: number | null): { fill: string; text: string } {
-  if (spent == null) return { fill: 'bg-muted-foreground/40', text: 'text-muted-foreground' }
-  if (spent >= 0.9) return { fill: 'bg-rose-500', text: 'text-rose-700 dark:text-rose-400' }
-  if (spent >= 0.67) return { fill: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-400' }
-  return { fill: 'bg-emerald-500', text: 'text-foreground' }
-}
-
 function formatMetricLabel(metric: string, t: (k: string) => string): string {
   if (metric === 'requests') return t('keys.bonusMetricRequests')
   if (metric === 'total_tokens') return t('keys.bonusMetricTokens')
   return metric
 }
 
-function UsageMeter({ value, label }: { value: number | null; label: string }) {
-  const tone = usageTone(value == null ? null : value / 100)
-  // Usage can run past a limit (the normal allowance, once a window funds the
-  // excess); the fill stops at the track while the label keeps the real figure.
-  const fill = value == null ? 0 : Math.min(100, Math.max(0, value))
+/** Every allowance bar on Keys → Quota shows what is LEFT and shrinks as it is
+ *  used, coloured like the provider cards: red at 20% or less, amber at half
+ *  or less (James, 2026-10-22). These used to fill UP with usage. */
+function leftTone(left: number | null): { fill: string; text: string } {
+  if (left == null) return { fill: 'bg-muted-foreground/40', text: 'text-muted-foreground' }
+  if (left <= 20) return { fill: 'bg-rose-500', text: 'text-rose-700 dark:text-rose-400' }
+  if (left <= 50) return { fill: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-400' }
+  return { fill: 'bg-emerald-500', text: 'text-foreground' }
+}
+
+/** Percent left from a spent fraction; usage past the limit reads 0% left. */
+function leftPct(spent: number | null): number | null {
+  return spent == null ? null : Math.max(0, Math.min(100, Math.round((1 - spent) * 100)))
+}
+
+function LeftMeter({ left, label }: { left: number | null; label: string }) {
+  const tone = leftTone(left)
   return (
-    <span role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={value == null ? undefined : fill}
+    <span role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={left ?? undefined}
       className="inline-block h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-muted">
-      <span aria-hidden="true" className={cn('block h-full rounded-full', tone.fill)} style={{ width: `${fill}%` }} />
+      <span aria-hidden="true" className={cn('block h-full rounded-full', tone.fill)} style={{ width: `${left ?? 0}%` }} />
     </span>
   )
 }
@@ -278,11 +283,11 @@ function GrantRow({ grant, keysById, onEdit }: { grant: BonusGrantView; keysById
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['quota', 'bonuses'] }),
   })
 
-  const poolSpent = grant.quantity > 0 ? (grant.used + grant.reserved) / grant.quantity : null
-  const allowanceSpent = grant.allowance && grant.allowance.quantity > 0
+  const poolLeft = leftPct(grant.quantity > 0 ? (grant.used + grant.reserved) / grant.quantity : null)
+  const allowanceLeft = leftPct(grant.allowance && grant.allowance.quantity > 0
     ? (grant.allowance.used + grant.allowance.reserved) / grant.allowance.quantity
-    : null
-  const normalSpent = grant.normal.limit > 0 ? grant.normal.used / grant.normal.limit : null
+    : null)
+  const normalLeft = leftPct(grant.normal.limit > 0 ? grant.normal.used / grant.normal.limit : null)
 
   const keyLabels = grant.keyIds.map(id => keysById.get(id) ?? `#${id}`).join(', ')
   const numberFmt = useMemo(() => new Intl.NumberFormat(locale), [locale])
@@ -312,13 +317,13 @@ function GrantRow({ grant, keysById, onEdit }: { grant: BonusGrantView; keysById
         <div className="flex items-center justify-between mb-1">
           <span className="font-medium text-foreground">{t('keys.bonusNormalAllowance')}</span>
           <span className="text-muted-foreground">
-            {numberFmt.format(grant.normal.used)} / {numberFmt.format(grant.normal.limit)} · {t('keys.bonusPeriodDay')} {grant.normal.timezone} · {t(grant.normal.limitSource === 'provider' ? 'keys.bonusLimitProvider' : 'keys.bonusLimitOperator')}
+            {t('keys.usedOf', { used: numberFmt.format(grant.normal.used), limit: numberFmt.format(grant.normal.limit) })} · {t('keys.bonusPeriodDay')} {grant.normal.timezone} · {t(grant.normal.limitSource === 'provider' ? 'keys.bonusLimitProvider' : 'keys.bonusLimitOperator')}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <UsageMeter value={normalSpent != null ? normalSpent * 100 : null} label={t('keys.bonusNormalAllowance')} />
-          <span className={cn('tabular-nums', usageTone(normalSpent).text)}>
-            {normalSpent != null ? `${Math.round(normalSpent * 100)}%` : '—'}
+          <LeftMeter left={normalLeft} label={t('keys.bonusNormalAllowance')} />
+          <span className={cn('tabular-nums', leftTone(normalLeft).text)}>
+            {normalLeft != null ? t('keys.pctLeft', { pct: normalLeft }) : '—'}
           </span>
           <span className="text-muted-foreground">{t('keys.bonusRemaining', { value: numberFmt.format(grant.normal.remaining) })}</span>
           {resetSeconds != null && <span className="text-muted-foreground ml-auto">{t('keys.bonusResetsIn', { countdown: formatCountdown(resetSeconds) })}</span>}
@@ -329,12 +334,12 @@ function GrantRow({ grant, keysById, onEdit }: { grant: BonusGrantView; keysById
       <div className="mt-2 rounded-lg border p-2.5 text-xs">
         <div className="flex items-center justify-between mb-1">
           <span className="font-medium text-foreground">{t('keys.bonusGrantPool')}</span>
-          <span className="text-muted-foreground">{numberFmt.format(grant.used)} / {numberFmt.format(grant.quantity)} · {t('keys.bonusReserved', { value: numberFmt.format(grant.reserved) })}</span>
+          <span className="text-muted-foreground">{t('keys.usedOf', { used: numberFmt.format(grant.used), limit: numberFmt.format(grant.quantity) })} · {t('keys.bonusReserved', { value: numberFmt.format(grant.reserved) })}</span>
         </div>
         <div className="flex items-center gap-2">
-          <UsageMeter value={poolSpent != null ? poolSpent * 100 : null} label={t('keys.bonusGrantPool')} />
-          <span className={cn('tabular-nums', usageTone(poolSpent).text)}>
-            {poolSpent != null ? `${Math.round(poolSpent * 100)}%` : '—'}
+          <LeftMeter left={poolLeft} label={t('keys.bonusGrantPool')} />
+          <span className={cn('tabular-nums', leftTone(poolLeft).text)}>
+            {poolLeft != null ? t('keys.pctLeft', { pct: poolLeft }) : '—'}
           </span>
           <span className="text-muted-foreground">{t('keys.bonusRemaining', { value: numberFmt.format(grant.remaining) })}</span>
           {grant.status === 'active' && poolSeconds != null && (
@@ -350,7 +355,7 @@ function GrantRow({ grant, keysById, onEdit }: { grant: BonusGrantView; keysById
           {grant.allowance ? (
             <div className="flex items-center gap-2">
               <Badge variant={allowanceStatusVariant}>{t(`keys.bonusAllowanceStatus_${grant.allowance.status}`)}</Badge>
-              <span className="text-muted-foreground">{numberFmt.format(grant.allowance.used)} / {numberFmt.format(grant.allowance.quantity)} · {t('keys.bonusReserved', { value: numberFmt.format(grant.allowance.reserved) })}</span>
+              <span className="text-muted-foreground">{t('keys.usedOf', { used: numberFmt.format(grant.allowance.used), limit: numberFmt.format(grant.allowance.quantity) })} · {t('keys.bonusReserved', { value: numberFmt.format(grant.allowance.reserved) })}</span>
             </div>
           ) : (
             <span className="text-muted-foreground">{t('keys.bonusNoActiveAllowance')}</span>
@@ -358,9 +363,9 @@ function GrantRow({ grant, keysById, onEdit }: { grant: BonusGrantView; keysById
         </div>
         {grant.allowance && (
           <div className="flex items-center gap-2">
-            <UsageMeter value={allowanceSpent != null ? allowanceSpent * 100 : null} label={t('keys.bonusSpendingWindow')} />
-            <span className={cn('tabular-nums', usageTone(allowanceSpent).text)}>
-              {allowanceSpent != null ? `${Math.round(allowanceSpent * 100)}%` : '—'}
+            <LeftMeter left={allowanceLeft} label={t('keys.bonusSpendingWindow')} />
+            <span className={cn('tabular-nums', leftTone(allowanceLeft).text)}>
+              {allowanceLeft != null ? t('keys.pctLeft', { pct: allowanceLeft }) : '—'}
             </span>
             <span className="text-muted-foreground">{t('keys.bonusRemaining', { value: numberFmt.format(grant.allowance.remaining) })}</span>
             {grant.allowance.status === 'active' && allowanceSeconds != null && (
