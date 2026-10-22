@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-23 — Model screen across the routed set; OpenRouter retired its :free MiniMax (live data)
+
+- **Screened 20 routes** with our own benchmark (3 scenarios: tool use, bug fixing, code review) on a copy of the live database, then imported the 14 that produced a verdict. The rest could not be measured, each for a provider reason, not a model one: UnoRouter 503 (all upstreams busy), ElectronHub 429 (its monthly 100,000 free tokens are spent, resets in 10 days), Google 503 (high demand), xKiro on cooldown, Inferera MiMo V2.6 Pro 404 (retired upstream), NVIDIA GLM-5.3 Flash 429, Poolside Laguna XS 2.1 503 then a 90s timeout.
+- **OpenRouter retired `minimax/minimax-m3.1-flash:free`.** Its API answers 404: "The free launch period for MiniMax M3.1 Flash ended on Oct 22, 2026." That route carried 985 requests a day, the busiest in the install. Model 1701 is switched off with a note; the paid replacement is `minimax/minimax-m3.1-flash` at $0.15/M in and $0.60/M out. It stays on the key's model list, so a return would serve again.
+- **Tokens per task, measured** (screen, tokens ÷ scenarios passed): Groq Qwen3.8 27B 403, Radeon DeepSeek-V4-Flash 394, Inferera MiMo V2.6 Flash 394, NVIDIA DeepSeek V4.1 Flash 661, NVIDIA GLM-5.3 662, Vercel MiniMax 797, ElectronHub DeepSeek V4 Flash 938, Radeon Qwen3.8 Flash Next 1,050.
+- The pattern: the models that pass all three scenarios are the cheap ones, at about 400 tokens per task. The higher-scoring ones spend 660-800 and lose points on code review.
+- Poolside Laguna XS 2.1 has neither an AA score nor a screen result: it is the one Poolside model with no numbers, because its only reachable route is overloaded.
+
 ## 2026-10-21 — Expiry countdown on a model row; Quota bars count down (deployed `main-20261023-064053`)
 
 - Live after deploy: the `model_expiry` table exists, all 19 keys decrypt, and the Vercel MiniMax row (1707) carries the expiry 2026-10-22T23:59:00Z with its unlimited flag still on. The compare payload returns it.
