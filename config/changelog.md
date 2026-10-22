@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-23 — Retired OpenRouter ids cleaned up; Poolside given a proxy score (live data)
+
+- **The OpenRouter key scope was 17 model ids, 12 of them dead.** Probed every one on 2026-10-23: 12 answered 404 (retired upstream, or "no longer available for free" — the Space Bunny Alpha, the Ling 3.0 free variants, the DeepSeek V4 Flash free, Apodex, NEX, GLM-5.2 free, MiniMax M2.7/M3 free, Qwen3.8-27B free), 3 answered 200, one 429 and one 403. The scope now holds the 5 that still exist: the three Nemotron free models, Xing 4.0 and Ling 3.1 Flash. The 429 and the 403 are transient limits, not retirements, so those two were kept.
+- The 12 retired catalogue rows were already switched off, and the retired MiniMax row carries a note naming the paid replacement.
+- **Poolside Laguna has no AA entry.** Checked against AA's live catalogue on 2026-10-23: no Laguna at all. Its 5 enabled routes are now PROXY-linked to Nemotron 3.5 Super VL (I 26.5, C 57.4, A 25.7), the closest published relative: an open-weights agentic coding model. A proxy is a "read this as roughly that" claim, not a measurement, and it never merges two routes.
+- Poolside still could not be screened: the NVIDIA route answers 503 "Worker local total request limit reached" and the Vercel route 503 as well. Both rows carry a note saying so, and that the scores shown are the proxy's.
+- **17 screen results are imported.** 15 of them sit behind an AA estimate, so the dashboard shows the AA range and keeps the screen figure in the passport. The 2 visible screen figures are Google Gemini 3 Flash Preview (201 tokens per task, 3 scenarios) and Gemini 3.7 Flash (263, 1 scenario).
+
 ## 2026-10-23 — Model screen across the routed set; OpenRouter retired its :free MiniMax (live data)
 
 - **Screened 20 routes** with our own benchmark (3 scenarios: tool use, bug fixing, code review) on a copy of the live database, then imported the 14 that produced a verdict. The rest could not be measured, each for a provider reason, not a model one: UnoRouter 503 (all upstreams busy), ElectronHub 429 (its monthly 100,000 free tokens are spent, resets in 10 days), Google 503 (high demand), xKiro on cooldown, Inferera MiMo V2.6 Pro 404 (retired upstream), NVIDIA GLM-5.3 Flash 429, Poolside Laguna XS 2.1 503 then a 90s timeout.
