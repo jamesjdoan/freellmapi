@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-23 — The free MiniMax is over; all four routes retired (live data)
+
+- **Vercel's $0 promotion ended 22 Oct.** The model is $0.15/M in and $0.60/M out, billed to the credit balance. $1.31 of the $5 was spent before it was caught — the unlimited flag had been cleared, but the route kept carrying the heaviest traffic in the install.
+- **All four MiniMax routes are switched off**, each with a note naming its own reason:
+  - Vercel (custom): switched off, removed from every chain, expiry row cleared.
+  - Ollama: 402 "this model is not included in your free usage" — it bills pay-as-you-go.
+  - OpenRouter `:free`: 404, retired on 22 Oct (see the previous entry).
+  - Kilo: left on, but it has no working key, so it cannot serve.
+- Every chain was checked for MiniMax rows still enabled: none. Routing after: `auto` served DeepSeek V4.1 Flash, `auto:apex` and `auto:coding` served GLM-5.3 Flash, `auto:fast-lane` served Qwen3.8 27B.
+- The MiniMax model Passport and its 797-tokens-per-task screen result stay in the benchmark record, so if a free route appears again the comparison is there.
+
 ## 2026-10-23 — Retired OpenRouter ids cleaned up; Poolside given a proxy score (live data)
 
 - **The OpenRouter key scope was 17 model ids, 12 of them dead.** Probed every one on 2026-10-23: 12 answered 404 (retired upstream, or "no longer available for free" — the Space Bunny Alpha, the Ling 3.0 free variants, the DeepSeek V4 Flash free, Apodex, NEX, GLM-5.2 free, MiniMax M2.7/M3 free, Qwen3.8-27B free), 3 answered 200, one 429 and one 403. The scope now holds the 5 that still exist: the three Nemotron free models, Xing 4.0 and Ling 3.1 Flash. The 429 and the 403 are transient limits, not retirements, so those two were kept.
