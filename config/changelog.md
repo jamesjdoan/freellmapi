@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-23 — Agnes and Aion screened; Vercel free-tier rules confirmed (live data)
+
+- **All 9 Agnes and Aion models screened** (3 scenarios: tool use, bug fixing, code review) on a live-data copy. 5 produced verdicts and were imported; 3 failed every call and 1 failed on tool selection:
+  - Agnes 2.5 Flash 3/3 PASS, 764 tokens per task. Agnes 3.0 Flash 3/3 PASS, 448.
+  - Aion 3.0 3/3 (85.7 on implementation, 83.3 on review), 593. Aion 3.0 Mini 2/3, 1,034. Aion 2.0 0/3.
+  - No verdicts: Agnes 2.0 Flash (3 failed calls), Agnes 2.5 Pro and Pro Alpha (3 failed calls each; the 2.5 Pro route carried a measured AA score already).
+- Agnes 2.5 Pro keeps its measured AA scores (I 35.2, C 62.3); Agnes 3.0 Flash borrows them as a family figure.
+- **Vercel free-tier rules, from its own pricing page:** the free tier covers a SUBSET of models, not the full catalogue; its requests are rate limited per model; the free credit starts on the first request; and buying any credits moves the team to the paid tier, after which the monthly free credit no longer applies. So the choice is a bounded $5/month on a narrow model list, or spending money for everything.
+
 ## 2026-10-23 — The free MiniMax is over; all four routes retired (live data)
 
 - **Vercel's $0 promotion ended 22 Oct.** The model is $0.15/M in and $0.60/M out, billed to the credit balance. $1.31 of the $5 was spent before it was caught — the unlimited flag had been cleared, but the route kept carrying the heaviest traffic in the install.
