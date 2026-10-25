@@ -581,6 +581,8 @@
     "providerActions": "Działania dostawcy",
     "routeViaProxy": "Trasa przez proxy",
     "checkNow": "Sprawdź teraz",
+    "lastWorkedHint": "Ostatnie działanie: {when}",
+    "lastWorkedNever": "Nie obsłużył jeszcze żadnego żądania ani nie przeszedł sprawdzenia",
     "noAutoCheckHint": "Ten dostawca nie pozwala na automatyczne sprawdzanie kluczy. Klucz staje się sprawny po obsłużeniu pierwszego żądania.",
     "noModelsYetHint": "Twój katalog nie ma jeszcze modeli tego dostawcy, więc nie ma czego obsługiwać.",
     "proxyEnvHintBefore": "Możliwość konfiguracji również poprzez",
@@ -748,6 +750,10 @@
     "monthlyTokenCapLabel": "Miesięczny limit tokenów",
     "capUnlimitedPlaceholder": "Bez limitu",
     "capEditHint": "Limity resetują się 1. dnia miesiąca o 00:00 UTC. Pozostaw puste, aby bez limitu.",
+    "keyProxyLabel": "Proxy for this key",
+    "keyProxyHint": "Leave blank to keep the current setting. Requests made with this key use this proxy instead of the global one; local and LAN addresses still connect directly.",
+    "keyProxyRemoved": "The proxy is removed when you save, and this key goes back to the global proxy.",
+    "keyProxyUndo": "Undo",
     "monthlyUsageLine": "{requests} żądań, {tokens} tokenów w tym miesiącu",
     "quotaBalanceHint": "Pozostało {remaining} z {limit} {metric}",
     "quotaBalanceLeft": "Pozostało {remaining}",
@@ -758,6 +764,9 @@
     "copyGroupHandle": "Copy group handle",
     "groupHandleCopied": "Copied {handle}",
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
+    "capUsagePercent": "{used} of {cap} ({pct}%)",
+    "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
     "checklistRemoveTip": "Remove {provider} from this list",
     "modelLimitsTitle": "Models & account limits",
     "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
@@ -1219,7 +1228,9 @@
     "emptyDescription": "Wpisy pojawią się tutaj, gdy serwer zacznie je zapisywać. Poszerz filtry poziomu, dostawcy lub wyszukiwania, jeśli spodziewasz się wyników.",
     "noLevelsTitle": "Nie wybrano poziomów",
     "noLevelsDescription": "Włącz co najmniej jeden poziom, aby zobaczyć zawartość logu.",
-    "loadFailed": "Nie udało się wczytać logu serwera."
+    "loadFailed": "Nie udało się wczytać logu serwera.",
+    "eventFilter": "Zdarzenie",
+    "allEvents": "Wszystkie zdarzenia"
   },
   "playground": {
     "title": "Plac zabaw",
@@ -1578,7 +1589,8 @@
       "openclaw": "Zawsze dostępny osobisty asystent, który z Twojego własnego komputera odpowiada w aplikacjach WhatsApp, Telegram, Discord i innych.",
       "hermes": "Samodoskonalący się agent Nous Research z trwałą pamięcią i umiejętnościami, w terminalu lub w aplikacjach czatowych.",
       "pi": "Minimalistyczny agent terminalowy, który kształtujesz własnymi rozszerzeniami, umiejętnościami i szablonami promptów.",
-      "reasonix": "Terminalowy agent do programowania stworzony dla DeepSeek, oparty na cache'owaniu prefiksów, by długie sesje pozostawały tanie."
+      "reasonix": "Terminalowy agent do programowania stworzony dla DeepSeek, oparty na cache'owaniu prefiksów, by długie sesje pozostawały tanie.",
+      "zcode": "Agent kodujący Z.ai dla jego modeli GLM, łączący się z dowolnym końcowym punktem zgodnym z OpenAI przez rejestr dostawców."
     }
   },
   "update": {

@@ -581,6 +581,8 @@
     "providerActions": "การกระทำของผู้ให้บริการ",
     "routeViaProxy": "เส้นทางผ่านพร็อกซี",
     "checkNow": "ตรวจสอบตอนนี้",
+    "lastWorkedHint": "ทำงานล่าสุด: {when}",
+    "lastWorkedNever": "ยังไม่เคยรับคำขอหรือผ่านการตรวจสอบ",
     "noAutoCheckHint": "ผู้ให้บริการนี้ไม่อนุญาตให้ตรวจสอบคีย์อัตโนมัติ คีย์จะใช้งานได้ปกติหลังจากให้บริการคำขอแรก",
     "noModelsYetHint": "แคตตาล็อกของคุณยังไม่มีโมเดลจากผู้ให้บริการนี้ จึงยังไม่มีอะไรให้บริการ",
     "proxyEnvHintBefore": "นอกจากนี้ยังสามารถกำหนดค่าผ่านทาง",
@@ -748,6 +750,10 @@
     "monthlyTokenCapLabel": "ขีดจำกัดโทเคนรายเดือน",
     "capUnlimitedPlaceholder": "ไม่จำกัด",
     "capEditHint": "ขีดจำกัดจะรีเซ็ตวันที่ 1 เวลา 00:00 UTC เว้นว่างไว้หากไม่จำกัด",
+    "keyProxyLabel": "Proxy for this key",
+    "keyProxyHint": "Leave blank to keep the current setting. Requests made with this key use this proxy instead of the global one; local and LAN addresses still connect directly.",
+    "keyProxyRemoved": "The proxy is removed when you save, and this key goes back to the global proxy.",
+    "keyProxyUndo": "Undo",
     "monthlyUsageLine": "เดือนนี้ {requests} คำขอ {tokens} โทเคน",
     "quotaBalanceHint": "เหลือ {remaining} จาก {limit} {metric}",
     "quotaBalanceLeft": "เหลือ {remaining}",
@@ -758,6 +764,9 @@
     "copyGroupHandle": "Copy group handle",
     "groupHandleCopied": "Copied {handle}",
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
+    "capUsagePercent": "{used} of {cap} ({pct}%)",
+    "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
     "checklistRemoveTip": "Remove {provider} from this list",
     "modelLimitsTitle": "Models & account limits",
     "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
@@ -1219,7 +1228,9 @@
     "emptyDescription": "รายการจะปรากฏที่นี่เมื่อเซิร์ฟเวอร์เขียนบันทึก หากคาดว่าควรมีผลลัพธ์ ให้ขยายตัวกรองระดับ ผู้ให้บริการ หรือคำค้นหา",
     "noLevelsTitle": "ยังไม่ได้เลือกระดับ",
     "noLevelsDescription": "เปิดอย่างน้อยหนึ่งระดับเพื่อดูผลลัพธ์ในบันทึก",
-    "loadFailed": "ไม่สามารถโหลดบันทึกเซิร์ฟเวอร์ได้"
+    "loadFailed": "ไม่สามารถโหลดบันทึกเซิร์ฟเวอร์ได้",
+    "eventFilter": "เหตุการณ์",
+    "allEvents": "เหตุการณ์ทั้งหมด"
   },
   "playground": {
     "title": "สนามเด็กเล่น",
@@ -1578,7 +1589,8 @@
       "openclaw": "ผู้ช่วยส่วนตัวที่พร้อมตลอดเวลา ตอบกลับบน WhatsApp, Telegram, Discord และอื่น ๆ จากเครื่องของคุณเอง",
       "hermes": "เอเจนต์ที่พัฒนาตัวเองได้ของ Nous Research พร้อมหน่วยความจำถาวรและทักษะ ใช้ได้ทั้งในเทอร์มินัลและบนแอปแชต",
       "pi": "เอเจนต์เทอร์มินัลแบบมินิมอลที่คุณปรับแต่งได้ด้วยส่วนขยาย ทักษะ และเทมเพลตพรอมต์ของคุณเอง",
-      "reasonix": "เอเจนต์เขียนโค้ดบนเทอร์มินัลที่สร้างมาเพื่อ DeepSeek โดยออกแบบรอบ prefix caching ให้เซสชันยาว ๆ ยังคงประหยัด"
+      "reasonix": "เอเจนต์เขียนโค้ดบนเทอร์มินัลที่สร้างมาเพื่อ DeepSeek โดยออกแบบรอบ prefix caching ให้เซสชันยาว ๆ ยังคงประหยัด",
+      "zcode": "เอเจนต์เขียนโค้ดของ Z.ai สำหรับโมเดล GLM เชื่อมต่อกับ endpoint ที่เข้ากันได้กับ OpenAI ผ่านทะเบียนผู้ให้บริการ"
     }
   },
   "update": {

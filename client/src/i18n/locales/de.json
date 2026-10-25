@@ -581,6 +581,8 @@
     "providerActions": "Anbieteraktionen",
     "routeViaProxy": "Route über Proxy",
     "checkNow": "Jetzt prüfen",
+    "lastWorkedHint": "Zuletzt funktionsfähig: {when}",
+    "lastWorkedNever": "Hat noch keine Anfrage bedient und keine Prüfung bestanden",
     "noAutoCheckHint": "Dieser Anbieter erlaubt keine automatischen Schlüsselprüfungen. Der Schlüssel wird gesund, sobald er seine erste Anfrage bedient hat.",
     "noModelsYetHint": "Dein Katalog enthält noch keine Modelle dieses Anbieters, daher gibt es nichts zu bedienen.",
     "proxyEnvHintBefore": "Auch konfigurierbar über die",
@@ -748,6 +750,10 @@
     "monthlyTokenCapLabel": "Monatliches Token-Limit",
     "capUnlimitedPlaceholder": "Unbegrenzt",
     "capEditHint": "Limits werden am 1. um 00:00 UTC zurückgesetzt. Leer lassen für unbegrenzt.",
+    "keyProxyLabel": "Proxy for this key",
+    "keyProxyHint": "Leave blank to keep the current setting. Requests made with this key use this proxy instead of the global one; local and LAN addresses still connect directly.",
+    "keyProxyRemoved": "The proxy is removed when you save, and this key goes back to the global proxy.",
+    "keyProxyUndo": "Undo",
     "monthlyUsageLine": "{requests} Anfragen, {tokens} Tokens diesen Monat",
     "quotaBalanceHint": "{remaining} von {limit} {metric} übrig",
     "quotaBalanceLeft": "{remaining} übrig",
@@ -758,6 +764,9 @@
     "copyGroupHandle": "Copy group handle",
     "groupHandleCopied": "Copied {handle}",
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
+    "capUsagePercent": "{used} of {cap} ({pct}%)",
+    "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
     "checklistRemoveTip": "Remove {provider} from this list",
     "modelLimitsTitle": "Models & account limits",
     "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
@@ -1219,7 +1228,9 @@
     "emptyDescription": "Einträge erscheinen hier, sobald der Server sie schreibt. Erweitern Sie die Filter für Ebene, Anbieter oder Suche, wenn Sie eine Ausgabe erwartet haben.",
     "noLevelsTitle": "Keine Ebene ausgewählt",
     "noLevelsDescription": "Schalten Sie mindestens eine Ebene ein, um die Protokollausgabe zu sehen.",
-    "loadFailed": "Das Serverprotokoll konnte nicht geladen werden."
+    "loadFailed": "Das Serverprotokoll konnte nicht geladen werden.",
+    "eventFilter": "Ereignis",
+    "allEvents": "Alle Ereignisse"
   },
   "playground": {
     "title": "Spielplatz",
@@ -1578,7 +1589,8 @@
       "openclaw": "Ein ständig verfügbarer persönlicher Assistent, der von deinem eigenen Rechner aus auf WhatsApp, Telegram, Discord und mehr antwortet.",
       "hermes": "Der selbstverbessernde Agent von Nous Research mit dauerhaftem Gedächtnis und Skills, im Terminal oder in Chat-Apps.",
       "pi": "Ein minimaler Terminal-Agent, den du mit eigenen Erweiterungen, Skills und Prompt-Vorlagen formst.",
-      "reasonix": "Ein für DeepSeek gebauter Coding-Agent fürs Terminal, ausgelegt auf Prefix-Caching, damit lange Sitzungen günstig bleiben."
+      "reasonix": "Ein für DeepSeek gebauter Coding-Agent fürs Terminal, ausgelegt auf Prefix-Caching, damit lange Sitzungen günstig bleiben.",
+      "zcode": "Der Coding-Agent von Z.ai für seine GLM-Modelle, der über ein Provider-Verzeichnis jede OpenAI-kompatible Endstelle anspricht."
     }
   },
   "update": {

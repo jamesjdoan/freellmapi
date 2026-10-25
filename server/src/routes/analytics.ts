@@ -40,6 +40,15 @@ const ENDPOINT_ID_SQL = "COALESCE(rtrim(trim(k.base_url), '/'), '')";
 const toSqliteDateTime = (timestamp: number) =>
     new Date(timestamp).toISOString().slice(0, 19).replace('T', ' ');
 
+// First value only — Express hands back an array for a repeated query param,
+// and a repeated filter is a client bug, not two filters. Same contract as
+// routes/logs.ts (upstream v0.16.6, #1597).
+function firstParam(value: unknown): string | undefined {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
+  return undefined;
+}
+
 // ── The analytics window ─────────────────────────────────────────────────────
 //
 // Every endpoint reads the SAME half-open interval `[since, until)` in SQLite's
@@ -513,18 +522,19 @@ function modelFilter(raw: unknown): QueryFilter | string {
 }
 
 /** Compose the three page-wide filters. Returns the fragments on success, or
- *  the error message the endpoint should answer 400 with. */
+ *  the error message the endpoint should answer 400 with. A repeated param is
+ *  read as its first value (`firstParam`), so it is one filter, not a 400. */
 export function pageFilters(query: {
   status?: unknown;
   provider?: unknown;
   platform?: unknown;
   model?: unknown;
 }): QueryFilter | string {
-  const status = statusFilter(query.status);
+  const status = statusFilter(firstParam(query.status));
   if (typeof status === 'string') return status;
-  const provider = providerFilter(query.provider, query.platform);
+  const provider = providerFilter(firstParam(query.provider), firstParam(query.platform));
   if (typeof provider === 'string') return provider;
-  const model = modelFilter(query.model);
+  const model = modelFilter(firstParam(query.model));
   if (typeof model === 'string') return model;
   return {
     sql: status.sql + provider.sql + model.sql,

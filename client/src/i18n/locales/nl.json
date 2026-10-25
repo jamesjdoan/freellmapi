@@ -581,6 +581,8 @@
     "providerActions": "Acties van aanbieders",
     "routeViaProxy": "Route via proxy",
     "checkNow": "Controleer nu",
+    "lastWorkedHint": "Laatst gewerkt: {when}",
+    "lastWorkedNever": "Heeft nog geen verzoek dienden lopen noch een controle doorstaan",
     "noAutoCheckHint": "Deze provider staat geen automatische sleutelcontroles toe. De sleutel wordt gezond nadat hij zijn eerste verzoek heeft afgehandeld.",
     "noModelsYetHint": "Je catalogus heeft nog geen modellen van deze provider, dus er valt niets af te handelen.",
     "proxyEnvHintBefore": "Ook configureerbaar via de",
@@ -748,6 +750,10 @@
     "monthlyTokenCapLabel": "Maandelijke limiet tokens",
     "capUnlimitedPlaceholder": "Onbeperkt",
     "capEditHint": "Limieten worden op de 1e om 00:00 UTC gereset. Laat leeg voor onbeperkt.",
+    "keyProxyLabel": "Proxy for this key",
+    "keyProxyHint": "Leave blank to keep the current setting. Requests made with this key use this proxy instead of the global one; local and LAN addresses still connect directly.",
+    "keyProxyRemoved": "The proxy is removed when you save, and this key goes back to the global proxy.",
+    "keyProxyUndo": "Undo",
     "monthlyUsageLine": "{requests} verzoeken, {tokens} tokens deze maand",
     "quotaBalanceHint": "{remaining} van {limit} {metric} over",
     "quotaBalanceLeft": "{remaining} over",
@@ -758,6 +764,9 @@
     "copyGroupHandle": "Copy group handle",
     "groupHandleCopied": "Copied {handle}",
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
+    "capUsagePercent": "{used} of {cap} ({pct}%)",
+    "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
     "checklistRemoveTip": "Remove {provider} from this list",
     "modelLimitsTitle": "Models & account limits",
     "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
@@ -1219,7 +1228,9 @@
     "emptyDescription": "Regels verschijnen hier zodra de server ze schrijft. Verruim de filters voor niveau, aanbieder of zoekopdracht als je uitvoer verwachtte.",
     "noLevelsTitle": "Geen niveaus geselecteerd",
     "noLevelsDescription": "Zet minstens één niveau aan om loguitvoer te zien.",
-    "loadFailed": "Kan het serverlog niet laden."
+    "loadFailed": "Kan het serverlog niet laden.",
+    "eventFilter": "Gebeurtenis",
+    "allEvents": "Alle gebeurtenissen"
   },
   "playground": {
     "title": "Speeltuin",
@@ -1578,7 +1589,8 @@
       "openclaw": "Een altijd actieve persoonlijke assistent die vanaf je eigen machine antwoordt op WhatsApp, Telegram, Discord en meer.",
       "hermes": "De zelfverbeterende agent van Nous Research met blijvend geheugen en skills, in de terminal of in chat-apps.",
       "pi": "Een minimalistische terminal-agent die je vormgeeft met je eigen extensies, skills en promptsjablonen.",
-      "reasonix": "Een terminal-codeeragent gebouwd voor DeepSeek, rond prefix-caching, zodat lange sessies goedkoop blijven."
+      "reasonix": "Een terminal-codeeragent gebouwd voor DeepSeek, rond prefix-caching, zodat lange sessies goedkoop blijven.",
+      "zcode": "De codeeragent van Z.ai voor zijn GLM-modellen, verbindt met elke OpenAI-compatibele endpoint via een providerregister."
     }
   },
   "update": {

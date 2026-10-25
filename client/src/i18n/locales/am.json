@@ -581,6 +581,8 @@
     "providerActions": "የአቅራቢዎች እርምጃዎች",
     "routeViaProxy": "በፕሮክሲ በኩል የሚደረግ መንገድ",
     "checkNow": "አሁን ይመልከቱ",
+    "lastWorkedHint": "Last worked: {when}",
+    "lastWorkedNever": "Has not served a request or passed a check yet",
     "noAutoCheckHint": "ይህ አቅራቢ ራስ-ሰር የቁልፍ ፍተሻዎችን አይፈቅድም። ቁልፉ የመጀመሪያ ጥያቄውን ካገለገለ በኋላ ጤናማ ይሆናል።",
     "noModelsYetHint": "ካታሎግዎ ከዚህ አቅራቢ እስካሁን ሞዴሎች የሉትም፣ ስለዚህ የሚያገለግለው ነገር የለም።",
     "proxyEnvHintBefore": "እንዲሁም በ በኩል ሊዋቀር ይችላል",
@@ -748,6 +750,10 @@
     "monthlyTokenCapLabel": "ወርሃዊ የቶከን ገደብ",
     "capUnlimitedPlaceholder": "ወሰን የለሽ",
     "capEditHint": "ገደቦች በእያንዳንዱ ወር 1 ቀን 00:00 UTC ዳግም ይጀምራሉ። ለወሰን አልባ ባዶ ይተዉ።",
+    "keyProxyLabel": "Proxy for this key",
+    "keyProxyHint": "Leave blank to keep the current setting. Requests made with this key use this proxy instead of the global one; local and LAN addresses still connect directly.",
+    "keyProxyRemoved": "The proxy is removed when you save, and this key goes back to the global proxy.",
+    "keyProxyUndo": "Undo",
     "monthlyUsageLine": "በዚህ ወር {requests} ጥያቄዎች፣ {tokens} ቶከኖች",
     "quotaBalanceHint": "ከ{limit} {metric} {remaining} ቀርቷል",
     "quotaBalanceLeft": "{remaining} ቀርቷል",
@@ -758,6 +764,9 @@
     "copyGroupHandle": "Copy group handle",
     "groupHandleCopied": "Copied {handle}",
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
+    "capUsagePercent": "{used} of {cap} ({pct}%)",
+    "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
     "checklistRemoveTip": "Remove {provider} from this list",
     "modelLimitsTitle": "Models & account limits",
     "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
@@ -1219,7 +1228,9 @@
     "emptyDescription": "አገልጋዩ ሲጽፋቸው ግቤቶች እዚህ ይታያሉ። ውጤት የጠበቁ ከሆነ የደረጃ፣ የአቅራቢ ወይም የፍለጋ ማጣሪያዎችን ያስፉ።",
     "noLevelsTitle": "ምንም ደረጃ አልተመረጠም",
     "noLevelsDescription": "የመዝገብ ውጤትን ለማየት ቢያንስ አንድ ደረጃ ያብሩ።",
-    "loadFailed": "የአገልጋዩን መዝገብ መጫን አልተቻለም።"
+    "loadFailed": "የአገልጋዩን መዝገብ መጫን አልተቻለም።",
+    "eventFilter": "ክስተት",
+    "allEvents": "ሁሉም ክስተቶች"
   },
   "playground": {
     "title": "የመጫወቻ ሜዳ",
@@ -1578,7 +1589,8 @@
       "openclaw": "ከራስዎ ማሽን ሆኖ በ WhatsApp፣ Telegram፣ Discord እና በሌሎችም ላይ የሚመልስ፣ ሁልጊዜ የሚሠራ የግል ረዳት።",
       "hermes": "የ Nous Research ራሱን የሚያሻሽል ኤጀንት፣ ቋሚ ማህደረ ትውስታ እና ክህሎቶች ያሉት፣ በተርሚናል ወይም በቻት መተግበሪያዎች ላይ።",
       "pi": "በራስዎ ቅጥያዎች፣ ክህሎቶች እና የጥያቄ አብነቶች የሚቀርጹት አነስተኛ የተርሚናል ኤጀንት።",
-      "reasonix": "ለDeepSeek የተሰራ የተርሚናል ኮዲንግ ወኪል፤ ረጅም ክፍለ ጊዜዎች ርካሽ እንዲሆኑ በprefix caching ዙሪያ የተገነባ።"
+      "reasonix": "ለDeepSeek የተሰራ የተርሚናል ኮዲንግ ወኪል፤ ረጅም ክፍለ ጊዜዎች ርካሽ እንዲሆኑ በprefix caching ዙሪያ የተገነባ።",
+      "zcode": "Z.ai's coding agent for its GLM models, speaking any OpenAI-compatible endpoint through a provider registry."
     }
   },
   "update": {

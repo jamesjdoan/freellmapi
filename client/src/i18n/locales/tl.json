@@ -581,6 +581,8 @@
     "providerActions": "Mga aksyon ng provider",
     "routeViaProxy": "Ruta sa pamamagitan ng proxy",
     "checkNow": "Suriin ngayon",
+    "lastWorkedHint": "Last worked: {when}",
+    "lastWorkedNever": "Has not served a request or passed a check yet",
     "noAutoCheckHint": "Hindi pinapayagan ng provider na ito ang awtomatikong pagsusuri ng key. Magiging healthy ang key pagkatapos nitong pagsilbihan ang una nitong request.",
     "noModelsYetHint": "Wala pang model mula sa provider na ito ang iyong catalog, kaya wala pa itong mapagsisilbihan.",
     "proxyEnvHintBefore": "Maaari ring i-configure gamit ang",
@@ -748,6 +750,10 @@
     "monthlyTokenCapLabel": "Buwanang limit ng token",
     "capUnlimitedPlaceholder": "Walang limit",
     "capEditHint": "Nireset ang limit sa ika-1 ng buwan, 00:00 UTC. Iwanang blangko kung walang limit.",
+    "keyProxyLabel": "Proxy for this key",
+    "keyProxyHint": "Leave blank to keep the current setting. Requests made with this key use this proxy instead of the global one; local and LAN addresses still connect directly.",
+    "keyProxyRemoved": "The proxy is removed when you save, and this key goes back to the global proxy.",
+    "keyProxyUndo": "Undo",
     "monthlyUsageLine": "{requests} kahilingan, {tokens} token ngayong buwan",
     "quotaBalanceHint": "{remaining} sa {limit} {metric} ang natitira",
     "quotaBalanceLeft": "{remaining} ang natitira",
@@ -758,6 +764,9 @@
     "copyGroupHandle": "Copy group handle",
     "groupHandleCopied": "Copied {handle}",
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
+    "capUsagePercent": "{used} of {cap} ({pct}%)",
+    "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
     "checklistRemoveTip": "Remove {provider} from this list",
     "modelLimitsTitle": "Models & account limits",
     "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
@@ -1219,7 +1228,9 @@
     "emptyDescription": "Lumilitaw dito ang mga entry habang isinusulat ang mga ito ng server. Palawakin ang mga filter ng antas, provider o paghahanap kung umaasa ka ng output.",
     "noLevelsTitle": "Walang napiling antas",
     "noLevelsDescription": "Mag-on ng kahit isang antas para makita ang output ng log.",
-    "loadFailed": "Hindi ma-load ang server log."
+    "loadFailed": "Hindi ma-load ang server log.",
+    "eventFilter": "Kaganapan",
+    "allEvents": "Lahat ng kaganapan"
   },
   "playground": {
     "title": "Palaruan",
@@ -1578,7 +1589,8 @@
       "openclaw": "Isang personal assistant na laging naka-on at sumasagot sa WhatsApp, Telegram, Discord at iba pa mula sa sarili mong makina.",
       "hermes": "Ang self-improving na agent ng Nous Research na may persistent na memorya at mga skill, sa terminal o sa mga chat app.",
       "pi": "Isang minimal na terminal agent na hinuhubog mo gamit ang sarili mong mga extension, skill at prompt template.",
-      "reasonix": "Isang terminal coding agent na ginawa para sa DeepSeek, nakabatay sa prefix caching para manatiling mura ang mahahabang session."
+      "reasonix": "Isang terminal coding agent na ginawa para sa DeepSeek, nakabatay sa prefix caching para manatiling mura ang mahahabang session.",
+      "zcode": "Z.ai's coding agent for its GLM models, speaking any OpenAI-compatible endpoint through a provider registry."
     }
   },
   "update": {

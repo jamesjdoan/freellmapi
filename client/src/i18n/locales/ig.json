@@ -581,6 +581,8 @@
     "providerActions": "Omume ndị na-eweta",
     "routeViaProxy": "Ụzọ site na proxy",
     "checkNow": "Lelee ugbu a",
+    "lastWorkedHint": "Last worked: {when}",
+    "lastWorkedNever": "Has not served a request or passed a check yet",
     "noAutoCheckHint": "Onye na-enye ọrụ a anaghị ekwe ka a lelee igodo na-akpaghị aka. Igodo ahụ ga-adị mma mgbe o jesịrị arịrịọ mbụ ya ozi.",
     "noModelsYetHint": "Katalọgụ gị enweghị ụdị ọ bụla sitere n'aka onye na-enye ọrụ a ugbu a, ya mere ọ nweghị ihe ọ ga-eje ozi.",
     "proxyEnvHintBefore": "Ọzọkwa configurable site na",
@@ -748,6 +750,10 @@
     "monthlyTokenCapLabel": "Oke token ọnwa",
     "capUnlimitedPlaceholder": "Enweghị oke",
     "capEditHint": "A na-ebugharị oke ụbọchị nke 1, 00:00 UTC. Hapụ oghere maka enweghị oke.",
+    "keyProxyLabel": "Proxy for this key",
+    "keyProxyHint": "Leave blank to keep the current setting. Requests made with this key use this proxy instead of the global one; local and LAN addresses still connect directly.",
+    "keyProxyRemoved": "The proxy is removed when you save, and this key goes back to the global proxy.",
+    "keyProxyUndo": "Undo",
     "monthlyUsageLine": "Arịrịọ {requests}, token {tokens} ọnwa a",
     "quotaBalanceHint": "{remaining} n'ime {limit} {metric} fọdụrụ",
     "quotaBalanceLeft": "{remaining} fọdụrụ",
@@ -758,6 +764,9 @@
     "copyGroupHandle": "Copy group handle",
     "groupHandleCopied": "Copied {handle}",
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
+    "capUsagePercent": "{used} of {cap} ({pct}%)",
+    "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
     "checklistRemoveTip": "Remove {provider} from this list",
     "modelLimitsTitle": "Models & account limits",
     "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
@@ -1219,7 +1228,9 @@
     "emptyDescription": "Ihe ndekọ na-apụta ebe a ka sava na-ede ha. Gbasaa nzacha ọkwa, onye na-eweta ma ọ bụ ọchụchọ ma ọ bụrụ na ị tụrụ anya nsonaazụ.",
     "noLevelsTitle": "Ahọrọghị ọkwa ọ bụla",
     "noLevelsDescription": "Gbanye ma ọ dịkarịa ala otu ọkwa ka ị hụ ihe ndekọ.",
-    "loadFailed": "Enweghị ike ibugo ndekọ sava."
+    "loadFailed": "Enweghị ike ibugo ndekọ sava.",
+    "eventFilter": "Ihe omume",
+    "allEvents": "Ihe omume niile"
   },
   "playground": {
     "title": "Ebe egwuregwu",
@@ -1578,7 +1589,8 @@
       "openclaw": "Onye enyemaka nkeonwe na-arụ ọrụ mgbe niile, nke na-aza na WhatsApp, Telegram, Discord na ndị ọzọ site na igwe nke gị.",
       "hermes": "Onye ọrụ Nous Research na-emeziwanye onwe ya, nwere ebe nchekwa na-adịgide na nkà, na terminal ma ọ bụ na ngwa mkparịta ụka.",
       "pi": "Obere onye ọrụ terminal ị na-akpụ site na ndọtị, nkà na ndebiri ajụjụ nke gị.",
-      "reasonix": "Onye nnọchite ide koodu na terminal emere maka DeepSeek, wuru gburugburu prefix caching ka ogologo nnọkọ wee dị ọnụ ala."
+      "reasonix": "Onye nnọchite ide koodu na terminal emere maka DeepSeek, wuru gburugburu prefix caching ka ogologo nnọkọ wee dị ọnụ ala.",
+      "zcode": "Z.ai's coding agent for its GLM models, speaking any OpenAI-compatible endpoint through a provider registry."
     }
   },
   "update": {

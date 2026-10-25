@@ -581,6 +581,8 @@
     "providerActions": "සපයන්නාගේ ක්රියාවන්",
     "routeViaProxy": "ප්‍රොක්සි හරහා ගමන් කරන්න",
     "checkNow": "දැන් පරීක්ෂා කරන්න",
+    "lastWorkedHint": "Last worked: {when}",
+    "lastWorkedNever": "Has not served a request or passed a check yet",
     "noAutoCheckHint": "මෙම සපයන්නා ස්වයංක්‍රීය යතුරු පරීක්ෂා කිරීමට ඉඩ නොදේ. පළමු ඉල්ලීම සපුරාලීමෙන් පසු යතුර නිරෝගී වේ.",
     "noModelsYetHint": "ඔබේ නාමාවලියේ තවමත් මෙම සපයන්නාගේ ආකෘති නොමැති බැවින් සපුරාලීමට කිසිවක් නැත.",
     "proxyEnvHintBefore": "හරහා ද වින්‍යාසගත කළ හැක",
@@ -748,6 +750,10 @@
     "monthlyTokenCapLabel": "මාසික ටෝකන් සීමාව",
     "capUnlimitedPlaceholder": "සීමා රහිත",
     "capEditHint": "සීමාවන් සෑම මාසයකම 1 වන දා 00:00 UTC ට යළි සකසයි. සීමා රහිතට හිස්ව තබන්න.",
+    "keyProxyLabel": "Proxy for this key",
+    "keyProxyHint": "Leave blank to keep the current setting. Requests made with this key use this proxy instead of the global one; local and LAN addresses still connect directly.",
+    "keyProxyRemoved": "The proxy is removed when you save, and this key goes back to the global proxy.",
+    "keyProxyUndo": "Undo",
     "monthlyUsageLine": "මෙම මාසය ඉල්ලීම් {requests}, ටෝකන් {tokens}",
     "quotaBalanceHint": "{limit} {metric} න් {remaining} ඉතිරියි",
     "quotaBalanceLeft": "{remaining} ඉතිරියි",
@@ -758,6 +764,9 @@
     "copyGroupHandle": "Copy group handle",
     "groupHandleCopied": "Copied {handle}",
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
+    "capUsagePercent": "{used} of {cap} ({pct}%)",
+    "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
     "checklistRemoveTip": "Remove {provider} from this list",
     "modelLimitsTitle": "Models & account limits",
     "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
@@ -1219,7 +1228,9 @@
     "emptyDescription": "සේවාදායකය ලියන පරිදි ඇතුළත් කිරීම් මෙහි දිස්වේ. ප්‍රතිදානයක් අපේක්ෂා කළේ නම් මට්ටම, සපයන්නා හෝ සෙවුම් පෙරහන් පුළුල් කරන්න.",
     "noLevelsTitle": "මට්ටම් තෝරා නැත",
     "noLevelsDescription": "ලොග ප්‍රතිදානය බැලීමට අවම වශයෙන් එක් මට්ටමක් සක්‍රීය කරන්න.",
-    "loadFailed": "සේවාදායක ලොගය පූරණය කළ නොහැකි විය."
+    "loadFailed": "සේවාදායක ලොගය පූරණය කළ නොහැකි විය.",
+    "eventFilter": "සිදුවීම",
+    "allEvents": "සිදුවීම් සියල්ල"
   },
   "playground": {
     "title": "ක්රීඩා පිටිය",
@@ -1578,7 +1589,8 @@
       "openclaw": "ඔබේම යන්ත්‍රයෙන් WhatsApp, Telegram, Discord සහ තවත් ඒවායේ පිළිතුරු දෙන, සැමවිටම ක්‍රියාත්මක පුද්ගලික සහායකයෙක්.",
       "hermes": "Nous Research හි ස්වයං-වැඩිදියුණු වන ඒජන්තය, ස්ථිර මතකය සහ කුසලතා සමඟ, ටර්මිනලයේ හෝ චැට් යෙදුම්වල.",
       "pi": "ඔබේම දිගු, කුසලතා සහ prompt සැකිලි සමඟ හැඩගස්වන අවම ටර්මිනල් ඒජන්තයක්.",
-      "reasonix": "DeepSeek සඳහා සාදන ලද ටර්මිනල් කේතන නියෝජිතයෙක්; දිගු සැසි ලාභදායීව තබා ගැනීමට prefix caching මත ගොඩනගා ඇත."
+      "reasonix": "DeepSeek සඳහා සාදන ලද ටර්මිනල් කේතන නියෝජිතයෙක්; දිගු සැසි ලාභදායීව තබා ගැනීමට prefix caching මත ගොඩනගා ඇත.",
+      "zcode": "Z.ai's coding agent for its GLM models, speaking any OpenAI-compatible endpoint through a provider registry."
     }
   },
   "update": {

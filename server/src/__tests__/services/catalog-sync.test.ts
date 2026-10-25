@@ -253,6 +253,14 @@ describe('applyCatalog', () => {
     expect(getDb().prepare("SELECT id FROM models WHERE platform = 'some-future-provider'").get()).toBeUndefined();
   });
 
+  it('skips Auray rows a catalog still carries after the provider was removed (#1583)', () => {
+    const models = existingAsCatalogModels();
+    models.push(baseModel({ platform: 'auray', modelId: 'kimi-k3' }));
+    const counts = applyCatalog(getDb(), catalogOf(models));
+    expect(counts.skippedUnknownPlatform).toBeGreaterThanOrEqual(1);
+    expect(getDb().prepare("SELECT id FROM models WHERE platform = 'auray'").get()).toBeUndefined();
+  });
+
   it('imports the new chat providers and keeps Speechify exclusively in audio', () => {
     const models = existingAsCatalogModels();
     models.push(baseModel({ platform: 'clod', modelId: 'test-clod' }));
@@ -825,10 +833,10 @@ describe('applyCatalog: searchEngines', () => {
 
   it('skips an engine whose platform has no search adapter in this binary', () => {
     const roster = searchRoster();
-    roster.push({ platform: 'brave', engineId: 'brave-search', displayName: 'Brave', priority: 5, enabled: true });
+    roster.push({ platform: 'kagi', engineId: 'kagi-search', displayName: 'Kagi', priority: 5, enabled: true });
     const counts = applyCatalog(getDb(), searchCatalog(roster));
     expect(counts.skippedUnknownPlatform).toBeGreaterThanOrEqual(1);
-    expect(searchRows().map(r => r.model_id)).not.toContain('brave-search');
+    expect(searchRows().map(r => r.model_id)).not.toContain('kagi-search');
   });
 
   it('rejects a malformed searchEngines entry before applying the cached catalog', () => {

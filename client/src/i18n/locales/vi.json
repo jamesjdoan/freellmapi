@@ -581,6 +581,8 @@
     "providerActions": "Hành động của nhà cung cấp",
     "routeViaProxy": "Định tuyến qua proxy",
     "checkNow": "Kiểm tra ngay",
+    "lastWorkedHint": "Lần hoạt động gần nhất: {when}",
+    "lastWorkedNever": "Chưa phục vụ yêu cầu nào và chưa qua lần kiểm tra nào",
     "noAutoCheckHint": "Nhà cung cấp này không cho phép kiểm tra khóa tự động. Khóa sẽ chuyển sang trạng thái tốt sau khi phục vụ yêu cầu đầu tiên.",
     "noModelsYetHint": "Danh mục của bạn chưa có mô hình nào từ nhà cung cấp này, nên chưa có gì để phục vụ.",
     "proxyEnvHintBefore": "Cũng có thể cấu hình thông qua",
@@ -748,6 +750,10 @@
     "monthlyTokenCapLabel": "Giới hạn token hàng tháng",
     "capUnlimitedPlaceholder": "Không giới hạn",
     "capEditHint": "Giới hạn đặt lại vào ngày 1 lúc 00:00 UTC. Để trống để không giới hạn.",
+    "keyProxyLabel": "Proxy for this key",
+    "keyProxyHint": "Leave blank to keep the current setting. Requests made with this key use this proxy instead of the global one; local and LAN addresses still connect directly.",
+    "keyProxyRemoved": "The proxy is removed when you save, and this key goes back to the global proxy.",
+    "keyProxyUndo": "Undo",
     "monthlyUsageLine": "{requests} yêu cầu, {tokens} token tháng này",
     "quotaBalanceHint": "Còn {remaining}/{limit} {metric}",
     "quotaBalanceLeft": "Còn {remaining}",
@@ -758,6 +764,9 @@
     "copyGroupHandle": "Copy group handle",
     "groupHandleCopied": "Copied {handle}",
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
+    "capUsagePercent": "{used} of {cap} ({pct}%)",
+    "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
     "checklistRemoveTip": "Remove {provider} from this list",
     "modelLimitsTitle": "Models & account limits",
     "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
@@ -1219,7 +1228,9 @@
     "emptyDescription": "Các mục sẽ xuất hiện ở đây khi máy chủ ghi nhật ký. Hãy nới rộng bộ lọc mức, nhà cung cấp hoặc tìm kiếm nếu bạn mong có kết quả.",
     "noLevelsTitle": "Chưa chọn mức nào",
     "noLevelsDescription": "Bật ít nhất một mức để xem nội dung nhật ký.",
-    "loadFailed": "Không thể tải nhật ký máy chủ."
+    "loadFailed": "Không thể tải nhật ký máy chủ.",
+    "eventFilter": "Sự kiện",
+    "allEvents": "Tất cả sự kiện"
   },
   "playground": {
     "title": "Sân chơi",
@@ -1578,7 +1589,8 @@
       "openclaw": "Trợ lý cá nhân luôn sẵn sàng, trả lời trên WhatsApp, Telegram, Discord và nhiều nền tảng khác ngay từ máy của bạn.",
       "hermes": "Tác nhân tự cải thiện của Nous Research với bộ nhớ lâu dài và kỹ năng, trong dòng lệnh hoặc trên các ứng dụng chat.",
       "pi": "Một tác nhân dòng lệnh tối giản mà bạn định hình bằng tiện ích mở rộng, kỹ năng và mẫu prompt của riêng mình.",
-      "reasonix": "Tác tử lập trình trên terminal dành riêng cho DeepSeek, xây dựng quanh bộ nhớ đệm tiền tố để các phiên dài vẫn rẻ."
+      "reasonix": "Tác tử lập trình trên terminal dành riêng cho DeepSeek, xây dựng quanh bộ nhớ đệm tiền tố để các phiên dài vẫn rẻ.",
+      "zcode": "Tác nhân lập trình của Z.ai cho các mô hình GLM, kết nối mọi endpoint tương thích OpenAI qua sổ đăng ký nhà cung cấp."
     }
   },
   "update": {

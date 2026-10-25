@@ -581,6 +581,8 @@
     "providerActions": "សកម្មភាពអ្នកផ្តល់សេវា",
     "routeViaProxy": "បញ្ជូនតាមរយៈប្រូកស៊ី",
     "checkNow": "ពិនិត្យឥឡូវនេះ",
+    "lastWorkedHint": "Last worked: {when}",
+    "lastWorkedNever": "Has not served a request or passed a check yet",
     "noAutoCheckHint": "អ្នកផ្ដល់សេវានេះមិនអនុញ្ញាតការពិនិត្យសោដោយស្វ័យប្រវត្តិទេ។ សោនឹងល្អ បន្ទាប់ពីវាបម្រើសំណើដំបូងរបស់វា។",
     "noModelsYetHint": "កាតាឡុករបស់អ្នកមិនទាន់មានម៉ូដែលពីអ្នកផ្ដល់សេវានេះនៅឡើយ ដូច្នេះមិនមានអ្វីត្រូវបម្រើទេ។",
     "proxyEnvHintBefore": "អាចកំណត់រចនាសម្ព័ន្ធបានតាមរយៈ",
@@ -748,6 +750,10 @@
     "monthlyTokenCapLabel": "ដែនកំណត់តូខិនប្រចាំខែ",
     "capUnlimitedPlaceholder": "គ្មានដែនកំណត់",
     "capEditHint": "ដែនកំណត់កំណត់ឡើងវិញនៅថ្ងៃទី 1 ម៉ោង 00:00 UTC ទុកទទេប្រសិនបើគ្មានដែនកំណត់។",
+    "keyProxyLabel": "Proxy for this key",
+    "keyProxyHint": "Leave blank to keep the current setting. Requests made with this key use this proxy instead of the global one; local and LAN addresses still connect directly.",
+    "keyProxyRemoved": "The proxy is removed when you save, and this key goes back to the global proxy.",
+    "keyProxyUndo": "Undo",
     "monthlyUsageLine": "ខែនេះ {requests} ស្នើសុំ {tokens} តូខិន",
     "quotaBalanceHint": "នៅសល់ {remaining} ក្នុងចំណោម {limit} {metric}",
     "quotaBalanceLeft": "នៅសល់ {remaining}",
@@ -758,6 +764,9 @@
     "copyGroupHandle": "Copy group handle",
     "groupHandleCopied": "Copied {handle}",
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
+    "capUsagePercent": "{used} of {cap} ({pct}%)",
+    "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
     "checklistRemoveTip": "Remove {provider} from this list",
     "modelLimitsTitle": "Models & account limits",
     "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
@@ -1219,7 +1228,9 @@
     "emptyDescription": "ធាតុនឹងបង្ហាញនៅទីនេះនៅពេលម៉ាស៊ីនមេសរសេរវា។ សូមពង្រីកតម្រងកម្រិត អ្នកផ្តល់សេវា ឬការស្វែងរក ប្រសិនបើអ្នករំពឹងថាមានលទ្ធផល។",
     "noLevelsTitle": "មិនបានជ្រើសរើសកម្រិតណាមួយ",
     "noLevelsDescription": "សូមបើកកម្រិតយ៉ាងហោចណាស់មួយ ដើម្បីមើលលទ្ធផលកំណត់ហេតុ។",
-    "loadFailed": "មិនអាចផ្ទុកកំណត់ហេតុម៉ាស៊ីនមេបានទេ។"
+    "loadFailed": "មិនអាចផ្ទុកកំណត់ហេតុម៉ាស៊ីនមេបានទេ។",
+    "eventFilter": "ព្រឹត្តិការណ៍",
+    "allEvents": "ព្រឹត្តិការណ៍ទាំងអស់"
   },
   "playground": {
     "title": "កន្លែងលេងក្មេង",
@@ -1578,7 +1589,8 @@
       "openclaw": "ជំនួយការផ្ទាល់ខ្លួនដែលដំណើរការជានិច្ច ហើយឆ្លើយតបនៅលើ WhatsApp, Telegram, Discord និងផ្សេងទៀត ពីម៉ាស៊ីនរបស់អ្នកផ្ទាល់។",
       "hermes": "ភ្នាក់ងាររបស់ Nous Research ដែលកែលម្អខ្លួនឯង មានអង្គចងចាំអចិន្ត្រៃយ៍ និងជំនាញ នៅក្នុង terminal ឬលើកម្មវិធីជជែក។",
       "pi": "ភ្នាក់ងារ terminal តូចចង្អៀត ដែលអ្នករៀបចំដោយផ្នែកបន្ថែម ជំនាញ និងគំរូ prompt ផ្ទាល់ខ្លួន។",
-      "reasonix": "ភ្នាក់ងារសរសេរកូដលើ terminal ដែលបង្កើតឡើងសម្រាប់ DeepSeek ផ្អែកលើ prefix caching ដើម្បីឱ្យវគ្គវែងៗនៅតែថោក។"
+      "reasonix": "ភ្នាក់ងារសរសេរកូដលើ terminal ដែលបង្កើតឡើងសម្រាប់ DeepSeek ផ្អែកលើ prefix caching ដើម្បីឱ្យវគ្គវែងៗនៅតែថោក។",
+      "zcode": "Z.ai's coding agent for its GLM models, speaking any OpenAI-compatible endpoint through a provider registry."
     }
   },
   "update": {

@@ -581,6 +581,8 @@
     "providerActions": "プロバイダーのアクション",
     "routeViaProxy": "プロキシ経由のルート",
     "checkNow": "今すぐチェック",
+    "lastWorkedHint": "最終稼働: {when}",
+    "lastWorkedNever": "リクエストの処理もチェックの合格もまだありません",
     "noAutoCheckHint": "このプロバイダーはキーの自動チェックを許可していません。最初のリクエストを処理するとキーは正常になります。",
     "noModelsYetHint": "カタログにはまだこのプロバイダーのモデルがないため、処理するものがありません。",
     "proxyEnvHintBefore": "また、",
@@ -748,6 +750,10 @@
     "monthlyTokenCapLabel": "月間トークン上限",
     "capUnlimitedPlaceholder": "無制限",
     "capEditHint": "上限は毎月1日 00:00 UTC にリセットされます。無制限は空欄のままにしてください。",
+    "keyProxyLabel": "Proxy for this key",
+    "keyProxyHint": "Leave blank to keep the current setting. Requests made with this key use this proxy instead of the global one; local and LAN addresses still connect directly.",
+    "keyProxyRemoved": "The proxy is removed when you save, and this key goes back to the global proxy.",
+    "keyProxyUndo": "Undo",
     "monthlyUsageLine": "今月 {requests} リクエスト、{tokens} トークン",
     "quotaBalanceHint": "{limit} {metric}中 残り {remaining}",
     "quotaBalanceLeft": "残り {remaining}",
@@ -758,6 +764,9 @@
     "copyGroupHandle": "Copy group handle",
     "groupHandleCopied": "Copied {handle}",
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
+    "capUsagePercent": "{used} of {cap} ({pct}%)",
+    "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
     "checklistRemoveTip": "Remove {provider} from this list",
     "modelLimitsTitle": "Models & account limits",
     "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
@@ -1219,7 +1228,9 @@
     "emptyDescription": "サーバーが書き込むと、ここにエントリが表示されます。出力があるはずの場合は、レベル・プロバイダー・検索のフィルターを広げてください。",
     "noLevelsTitle": "レベルが選択されていません",
     "noLevelsDescription": "ログ出力を表示するには、レベルを 1 つ以上オンにしてください。",
-    "loadFailed": "サーバーログを読み込めませんでした。"
+    "loadFailed": "サーバーログを読み込めませんでした。",
+    "eventFilter": "イベント",
+    "allEvents": "すべてのイベント"
   },
   "playground": {
     "title": "遊び場",
@@ -1578,7 +1589,8 @@
       "openclaw": "自分のマシンから WhatsApp、Telegram、Discord などで応答する、常時稼働のパーソナルアシスタントです。",
       "hermes": "Nous Research の自己改善型エージェント。永続的なメモリとスキルを備え、ターミナルでもチャットアプリでも使えます。",
       "pi": "自分の拡張機能、スキル、プロンプトテンプレートで形づくる、ミニマルなターミナルエージェント。",
-      "reasonix": "DeepSeek ネイティブのターミナル向けコーディングエージェント。プレフィックスキャッシュを軸に設計され、長いセッションでも安く済みます。"
+      "reasonix": "DeepSeek ネイティブのターミナル向けコーディングエージェント。プレフィックスキャッシュを軸に設計され、長いセッションでも安く済みます。",
+      "zcode": "Z.ai が GLM モデル向けに作ったコーディングエージェント。プロバイダ登録経由で OpenAI 互換エンドポイントに接続できます。"
     }
   },
   "update": {

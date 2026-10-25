@@ -1,6 +1,7 @@
 import { isUnlimitedModel } from '../services/unlimited-models.js';
 import { getDb } from '../db/index.js';
 import { pruneRequestAnalytics } from '../services/request-retention.js';
+import { noteBudgetAlerts } from '../services/budget-alerts.js';
 import { getClientContext } from './client-context.js';
 import { getRequestTrace, noteRequestRowId, type RequestTrace } from './attempt-trace.js';
 import { isExtensionEnabled } from '../services/extension-state.js';
@@ -167,6 +168,11 @@ export function logRequest(
     tx();
 
     pruneRequestAnalytics({ db });
+
+    // Soft budget alerts (#1158 follow-on): after the ledger trigger committed,
+    // compare this key's month usage to its caps and log a threshold event
+    // (80%/100%, once each per month). Never throws.
+    if (status === 'success' && keyId != null) noteBudgetAlerts(keyId);
   } catch (e) {
     console.error('Failed to log request:', e);
   }

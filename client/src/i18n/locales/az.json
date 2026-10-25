@@ -581,6 +581,8 @@
     "providerActions": "Təchizatçı tədbirləri",
     "routeViaProxy": "Proxy vasitəsilə marşrut",
     "checkNow": "İndi yoxla",
+    "lastWorkedHint": "Last worked: {when}",
+    "lastWorkedNever": "Has not served a request or passed a check yet",
     "noAutoCheckHint": "Bu provayder açarların avtomatik yoxlanmasına icazə vermir. Açar ilk sorğusuna xidmət etdikdən sonra sağlam olur.",
     "noModelsYetHint": "Kataloqunuzda hələ bu provayderin modeli yoxdur, ona görə də xidmət edəcəyi bir şey yoxdur.",
     "proxyEnvHintBefore": "Həmçinin konfiqurasiya etmək üçün",
@@ -748,6 +750,10 @@
     "monthlyTokenCapLabel": "Aylıq token limiti",
     "capUnlimitedPlaceholder": "Limitsiz",
     "capEditHint": "Limitlər hər ayın 1-i 00:00 UTC-də sıfırlanır. Limitsiz üçün boş buraxın.",
+    "keyProxyLabel": "Proxy for this key",
+    "keyProxyHint": "Leave blank to keep the current setting. Requests made with this key use this proxy instead of the global one; local and LAN addresses still connect directly.",
+    "keyProxyRemoved": "The proxy is removed when you save, and this key goes back to the global proxy.",
+    "keyProxyUndo": "Undo",
     "monthlyUsageLine": "Bu ay {requests} sorğu, {tokens} token",
     "quotaBalanceHint": "{limit} {metric} içindən {remaining} qalıb",
     "quotaBalanceLeft": "{remaining} qalıb",
@@ -758,6 +764,9 @@
     "copyGroupHandle": "Copy group handle",
     "groupHandleCopied": "Copied {handle}",
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
+    "capUsagePercent": "{used} of {cap} ({pct}%)",
+    "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
     "checklistRemoveTip": "Remove {provider} from this list",
     "modelLimitsTitle": "Models & account limits",
     "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
@@ -1219,7 +1228,9 @@
     "emptyDescription": "Server qeydləri yazdıqca onlar burada görünəcək. Nəticə gözləyirdinizsə, səviyyə, təchizatçı və ya axtarış filtrlərini genişləndirin.",
     "noLevelsTitle": "Səviyyə seçilməyib",
     "noLevelsDescription": "Log çıxışını görmək üçün ən azı bir səviyyəni aktivləşdirin.",
-    "loadFailed": "Server logu yüklənə bilmədi."
+    "loadFailed": "Server logu yüklənə bilmədi.",
+    "eventFilter": "Hadisə",
+    "allEvents": "Bütün hadisələr"
   },
   "playground": {
     "title": "Uşaq meydançası",
@@ -1578,7 +1589,8 @@
       "openclaw": "Öz maşınınızdan WhatsApp, Telegram, Discord və digərlərində cavab verən, həmişə aktiv şəxsi köməkçi.",
       "hermes": "Nous Research-in özünü təkmilləşdirən agenti; daimi yaddaş və bacarıqlarla, terminalda və ya söhbət tətbiqlərində.",
       "pi": "Öz genişləndirmələriniz, bacarıqlarınız və sorğu şablonlarınızla formalaşdırdığınız minimal terminal agenti.",
-      "reasonix": "DeepSeek üçün yaradılmış terminal kodlaşdırma agenti; uzun sessiyalar ucuz qalsın deyə prefiks keşi üzərində qurulub."
+      "reasonix": "DeepSeek üçün yaradılmış terminal kodlaşdırma agenti; uzun sessiyalar ucuz qalsın deyə prefiks keşi üzərində qurulub.",
+      "zcode": "Z.ai's coding agent for its GLM models, speaking any OpenAI-compatible endpoint through a provider registry."
     }
   },
   "update": {

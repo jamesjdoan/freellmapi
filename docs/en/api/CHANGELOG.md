@@ -4,10 +4,13 @@
 
 Doc revision history for `docs/api/`, seeded from API-relevant commits.
 
+## 2026-10-20
+
+- **docs(api): document `GET /v1/usage`** — the endpoint shipped with #1600 and gained a per-key breakdown in #1614 but was never in `01-rest-api.md`. Added a Usage API section: response shape (`month`, `resetsAt`, `requests`, `tokens`, `byPlatform[]`, `byKey[]` with `requestCap`/`tokenCap`, `null` = unlimited), unified-key-only auth (`403` for client profiles), deleted keys surfacing under platform `removed`, and the ledger-not-clamped-at-cap semantics that match `429 quota_exceeded`. Source: `server/src/routes/proxy.ts` (`GET /v1/usage` handler).
+
 ## 2026-09-05 — Quota API
 
 - **docs(api): document the `/api/quota` endpoints** — added reference for quota policy CRUD (`GET /policies`, `PUT /policies`, `DELETE /policies/:id`), quota state (`GET /state`), forecast (`GET /forecast`), shadow (`GET /shadow`), decisions (`GET /decisions`), mode (`GET /mode`, `PUT /mode`), and reservation (`GET /reservation`, `PUT /reservation`) in `docs/api/OVERVIEW.md`.
-
 
 ## 2026-09-03
 

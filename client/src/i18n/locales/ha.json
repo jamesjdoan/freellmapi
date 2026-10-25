@@ -581,6 +581,8 @@
     "providerActions": "Ayyukan mai bayarwa",
     "routeViaProxy": "Hanya ta hanyar wakili",
     "checkNow": "Duba yanzu",
+    "lastWorkedHint": "Last worked: {when}",
+    "lastWorkedNever": "Has not served a request or passed a check yet",
     "noAutoCheckHint": "Wannan mai bayarwa ba ya ba da izinin duba maɓalli ta atomatik. Maɓallin zai zama lafiya bayan ya yi hidimar buƙatarsa ta farko.",
     "noModelsYetHint": "Kasidarka ba ta da samfura daga wannan mai bayarwa tukuna, don haka babu abin da zai yi wa hidima.",
     "proxyEnvHintBefore": "Hakanan ana iya daidaitawa ta hanyar",
@@ -748,6 +750,10 @@
     "monthlyTokenCapLabel": "Iyakar token ta wata",
     "capUnlimitedPlaceholder": "Ba iyaka ba",
     "capEditHint": "Ana saita iyakoki a ranar 1 00:00 UTC. Bara komai don mara iyaka.",
+    "keyProxyLabel": "Proxy for this key",
+    "keyProxyHint": "Leave blank to keep the current setting. Requests made with this key use this proxy instead of the global one; local and LAN addresses still connect directly.",
+    "keyProxyRemoved": "The proxy is removed when you save, and this key goes back to the global proxy.",
+    "keyProxyUndo": "Undo",
     "monthlyUsageLine": "Buƙatotu {requests}, token {tokens} wannan wata",
     "quotaBalanceHint": "Saura {remaining} daga {limit} {metric}",
     "quotaBalanceLeft": "Saura {remaining}",
@@ -758,6 +764,9 @@
     "copyGroupHandle": "Copy group handle",
     "groupHandleCopied": "Copied {handle}",
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
+    "capUsagePercent": "{used} of {cap} ({pct}%)",
+    "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
     "checklistRemoveTip": "Remove {provider} from this list",
     "modelLimitsTitle": "Models & account limits",
     "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
@@ -1219,7 +1228,9 @@
     "emptyDescription": "Shigarwa na bayyana nan yayin da uwar garken ke rubuta su. Faɗaɗa matatun mataki, mai samarwa ko bincike idan kana tsammanin fitarwa.",
     "noLevelsTitle": "Ba a zaɓi kowane mataki ba",
     "noLevelsDescription": "Kunna aƙalla mataki ɗaya don ganin fitarwar log.",
-    "loadFailed": "An kasa loda log ɗin uwar garke."
+    "loadFailed": "An kasa loda log ɗin uwar garke.",
+    "eventFilter": "Lambar",
+    "allEvents": "Duk lambobi"
   },
   "playground": {
     "title": "filin wasa",
@@ -1578,7 +1589,8 @@
       "openclaw": "Mataimaki na kai da ke aiki koyaushe, yana amsawa a WhatsApp, Telegram, Discord da sauransu daga na'urarka.",
       "hermes": "Wakilin Nous Research mai inganta kansa, da ƙwaƙwalwa mai dorewa da ƙwarewa, a cikin terminal ko a manhajojin hira.",
       "pi": "Ƙaramin wakilin terminal da kuke tsara shi da naku ƙarin abubuwa, ƙwarewa da samfuran umarni.",
-      "reasonix": "Wakilin rubuta lamba a tasha da aka gina don DeepSeek, bisa ajiyar prefix domin dogayen zama su kasance masu arha."
+      "reasonix": "Wakilin rubuta lamba a tasha da aka gina don DeepSeek, bisa ajiyar prefix domin dogayen zama su kasance masu arha.",
+      "zcode": "Z.ai's coding agent for its GLM models, speaking any OpenAI-compatible endpoint through a provider registry."
     }
   },
   "update": {

@@ -581,6 +581,8 @@
     "providerActions": "Tindakan penyedia",
     "routeViaProxy": "Laluan melalui proksi",
     "checkNow": "Semak sekarang",
+    "lastWorkedHint": "Last worked: {when}",
+    "lastWorkedNever": "Has not served a request or passed a check yet",
     "noAutoCheckHint": "Penyedia ini tidak membenarkan semakan kunci automatik. Kunci menjadi sihat selepas ia melayan permintaan pertamanya.",
     "noModelsYetHint": "Katalog anda belum mempunyai model daripada penyedia ini, jadi tiada apa untuk dilayan.",
     "proxyEnvHintBefore": "Juga boleh dikonfigurasikan melalui",
@@ -748,6 +750,10 @@
     "monthlyTokenCapLabel": "Had token bulanan",
     "capUnlimitedPlaceholder": "Tanpa had",
     "capEditHint": "Had diset semula pada 1 haribulan 00:00 UTC. Biarkan kosong untuk tanpa had.",
+    "keyProxyLabel": "Proxy for this key",
+    "keyProxyHint": "Leave blank to keep the current setting. Requests made with this key use this proxy instead of the global one; local and LAN addresses still connect directly.",
+    "keyProxyRemoved": "The proxy is removed when you save, and this key goes back to the global proxy.",
+    "keyProxyUndo": "Undo",
     "monthlyUsageLine": "{requests} permintaan, {tokens} token bulan ini",
     "quotaBalanceHint": "Baki {remaining} daripada {limit} {metric}",
     "quotaBalanceLeft": "Baki {remaining}",
@@ -758,6 +764,9 @@
     "copyGroupHandle": "Copy group handle",
     "groupHandleCopied": "Copied {handle}",
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
+    "capUsagePercent": "{used} of {cap} ({pct}%)",
+    "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
     "checklistRemoveTip": "Remove {provider} from this list",
     "modelLimitsTitle": "Models & account limits",
     "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
@@ -1219,7 +1228,9 @@
     "emptyDescription": "Entri akan muncul di sini apabila pelayan menulisnya. Luaskan penapis aras, penyedia atau carian jika anda menjangkakan ada output.",
     "noLevelsTitle": "Tiada aras dipilih",
     "noLevelsDescription": "Hidupkan sekurang-kurangnya satu aras untuk melihat output log.",
-    "loadFailed": "Tidak dapat memuatkan log pelayan."
+    "loadFailed": "Tidak dapat memuatkan log pelayan.",
+    "eventFilter": "Acara",
+    "allEvents": "Semua acara"
   },
   "playground": {
     "title": "Taman Permainan",
@@ -1578,7 +1589,8 @@
       "openclaw": "Pembantu peribadi yang sentiasa aktif dan menjawab di WhatsApp, Telegram, Discord dan banyak lagi dari mesin anda sendiri.",
       "hermes": "Ejen Nous Research yang menambah baik dirinya sendiri, dengan memori kekal dan kemahiran, di terminal atau di aplikasi sembang.",
       "pi": "Ejen terminal minimalis yang anda bentuk dengan sambungan, kemahiran dan templat prompt anda sendiri.",
-      "reasonix": "Ejen pengekodan terminal yang dibina untuk DeepSeek, berasaskan cache awalan supaya sesi panjang kekal murah."
+      "reasonix": "Ejen pengekodan terminal yang dibina untuk DeepSeek, berasaskan cache awalan supaya sesi panjang kekal murah.",
+      "zcode": "Z.ai's coding agent for its GLM models, speaking any OpenAI-compatible endpoint through a provider registry."
     }
   },
   "update": {

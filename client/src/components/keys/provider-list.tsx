@@ -673,7 +673,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
   }
 
 
-  const healthKeyMap = new Map<number, { status: string; lastCheckedAt: string | null; lastHealthError: string | null }>()
+  const healthKeyMap = new Map<number, { status: string; lastCheckedAt: string | null; lastHealthyAt?: string | null; lastHealthError: string | null }>()
   for (const k of healthData?.keys ?? []) healthKeyMap.set(k.id, k)
   const statusOf = (k: ApiKey) => healthKeyMap.get(k.id)?.status ?? k.status
   // "unchecked" is not a problem (#1459): a new key sits there until its
@@ -1157,6 +1157,14 @@ export function ProviderList({ onAddKey, initialSearch }: {
                       const status = statusOf(k)
                       const health = healthKeyMap.get(k.id)
                       const lastChecked = health?.lastCheckedAt ?? k.lastCheckedAt
+                      // #1493: "last worked" is separate from "last checked" —
+                      // a transport error refreshes the check time without
+                      // proving the key works, so a stale worked-time under a
+                      // fresh check-time is the signal an operator needs.
+                      const lastWorked = health?.lastHealthyAt ?? k.lastHealthyAt ?? null
+                      // The health payload is authoritative when present: a
+                      // cleared error there must not fall back to the stale
+                      // value on the key row.
                       const lastHealthError = health ? health.lastHealthError : k.lastHealthError
                       const balance = balanceOf.get(k.id)
                       const customModels = k.models ?? []
@@ -1272,9 +1280,15 @@ export function ProviderList({ onAddKey, initialSearch }: {
                             <ProviderKeyCapacityIndicator platform={k.platform} keyId={k.id} />
                             <div className="flex-1" />
                             {lastChecked && (
-                              <span className="text-[11px] text-muted-foreground tabular-nums">
-                                {formatSqliteUtcToLocalTime(lastChecked, { hour: '2-digit', minute: '2-digit' })}
-                              </span>
+                              <Tooltip
+                                text={lastWorked
+                                  ? t('keys.lastWorkedHint', { when: formatSqliteUtcToLocalTime(lastWorked, { hour: '2-digit', minute: '2-digit' }) })
+                                  : t('keys.lastWorkedNever')}
+                              >
+                                <span className="text-[11px] text-muted-foreground tabular-nums">
+                                  {formatSqliteUtcToLocalTime(lastChecked, { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </Tooltip>
                             )}
                             <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/krow:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
                               <Button

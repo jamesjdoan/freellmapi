@@ -581,6 +581,8 @@
     "providerActions": "Palveluntarjoajan toimet",
     "routeViaProxy": "Reitti välityspalvelimen kautta",
     "checkNow": "Tarkista nyt",
+    "lastWorkedHint": "Viimeksi toiminnassa: {when}",
+    "lastWorkedNever": "Ei ole vielä palvellut pyyntöjä eikä läpäissyt tarkistusta",
     "noAutoCheckHint": "Tämä palveluntarjoaja ei salli avainten automaattisia tarkistuksia. Avain muuttuu terveeksi, kun se on palvellut ensimmäisen pyyntönsä.",
     "noModelsYetHint": "Katalogissasi ei ole vielä tämän palveluntarjoajan malleja, joten sillä ei ole mitään palveltavaa.",
     "proxyEnvHintBefore": "Myös konfiguroitavissa",
@@ -748,6 +750,10 @@
     "monthlyTokenCapLabel": "Kuukausittainen tokenraja",
     "capUnlimitedPlaceholder": "Rajoittamaton",
     "capEditHint": "Rajat nollautuvat kuun 1. päivänä 00:00 UTC. Jätä tyhjäksi rajoittamattomaan.",
+    "keyProxyLabel": "Proxy for this key",
+    "keyProxyHint": "Leave blank to keep the current setting. Requests made with this key use this proxy instead of the global one; local and LAN addresses still connect directly.",
+    "keyProxyRemoved": "The proxy is removed when you save, and this key goes back to the global proxy.",
+    "keyProxyUndo": "Undo",
     "monthlyUsageLine": "{requests} pyyntöä, {tokens} tokenia tässä kuussa",
     "quotaBalanceHint": "{remaining}/{limit} {metric} jäljellä",
     "quotaBalanceLeft": "{remaining} jäljellä",
@@ -758,6 +764,9 @@
     "copyGroupHandle": "Copy group handle",
     "groupHandleCopied": "Copied {handle}",
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
+    "capUsagePercent": "{used} of {cap} ({pct}%)",
+    "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
     "checklistRemoveTip": "Remove {provider} from this list",
     "modelLimitsTitle": "Models & account limits",
     "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
@@ -1219,7 +1228,9 @@
     "emptyDescription": "Merkinnät ilmestyvät tähän sitä mukaa kun palvelin kirjoittaa niitä. Laajenna taso-, palveluntarjoaja- tai hakusuodattimia, jos odotit tulostetta.",
     "noLevelsTitle": "Ei valittuja tasoja",
     "noLevelsDescription": "Valitse vähintään yksi taso nähdäksesi lokitulosteen.",
-    "loadFailed": "Palvelimen lokia ei voitu ladata."
+    "loadFailed": "Palvelimen lokia ei voitu ladata.",
+    "eventFilter": "Tapahtuma",
+    "allEvents": "Kaikki tapahtumat"
   },
   "playground": {
     "title": "Leikkipaikka",
@@ -1578,7 +1589,8 @@
       "openclaw": "Aina päällä oleva henkilökohtainen avustaja, joka vastaa omalta koneeltasi WhatsApp-, Telegram-, Discord- ja muissa sovelluksissa.",
       "hermes": "Nous Research -yhtiön itseään kehittävä agentti, jolla on pysyvä muisti ja taitoja, terminaalissa tai chat-sovelluksissa.",
       "pi": "Minimalistinen terminaaliagentti, jota muokkaat omilla laajennuksilla, taidoilla ja kehotepohjilla.",
-      "reasonix": "DeepSeekille rakennettu päätteen koodausagentti, joka nojaa etuliitevälimuistiin, jotta pitkät istunnot pysyvät edullisina."
+      "reasonix": "DeepSeekille rakennettu päätteen koodausagentti, joka nojaa etuliitevälimuistiin, jotta pitkät istunnot pysyvät edullisina.",
+      "zcode": "Z.ai's coding agent for its GLM models, speaking any OpenAI-compatible endpoint through a provider registry."
     }
   },
   "update": {

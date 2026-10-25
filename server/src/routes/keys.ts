@@ -19,7 +19,7 @@ import { resolveCustomEndpointKey, customEndpointKeyIds, siblingEndpointKeyId, e
 import { registerCustomModels, registerCustomChatModels } from '../services/custom-model-register.js';
 import { registerCustomMediaModel } from '../services/custom-media-register.js';
 import { isSearchPlatform } from '../lib/search-platforms.js';
-import { discoverEndpointModels, probeEndpointModel, classifyModelId, ModelDiscoveryError } from '../services/model-discovery.js';
+import { discoverEndpointModels, probeEndpointModel, classifyModelId, ModelDiscoveryError, type DiscoveredModelKind } from '../services/model-discovery.js';
 import { probeEmbeddingDimensions, registerCustomEmbeddingModel } from '../services/embeddings.js';
 import { listModelHealth, probeModel } from '../services/model-health.js';
 import { endpointScopeForBaseUrl, normalizeBaseUrl } from '../lib/endpoint-scope.js';
@@ -49,18 +49,18 @@ export const keysRouter = Router();
 // existing keys still work if the catalog re-enables them. The setup
 // checklist stops suggesting them to anyone who has no key yet; the dashboard
 // pickers hide them through `hidden` in client/src/components/keys/shared.tsx.
-// Auray: free accounts locked and API access charged (#1563).
-const UNLISTED_PLATFORMS = new Set<string>(['auray']);
+// Empty since Auray was removed outright (#1583).
+const UNLISTED_PLATFORMS = new Set<string>();
 
 // Active providers — must match providers/index.ts registrations + shared/types.ts Platform.
 // Moonshot and MiniMax direct integrations were dropped in V4. HuggingFace
 // was dropped in V4 and re-added in V13 via the router.huggingface.co route.
 // SambaNova was dropped in V23 (free tier permanently retired). GitHub Models
-// was dropped after its retirement on 30 July 2026 (#1557).
+// was dropped after its retirement on 30 July 2026 (#1557). Auray was removed
+// at the provider's request after it started charging for API access (#1583).
 const PLATFORMS = [
   'aclide',
   'speka',
-  'auray',
   'typhoon',
   'plugsky',
   'inferbase',
@@ -71,10 +71,13 @@ const PLATFORMS = [
   'moondream',
   'beatapi',
   'apinex',
+  'onomeo',
+  'iteracompute',
   'serpsearch',
+  'brave',
   'freeai',
   'google', 'groq', 'cerebras', 'sail', 'electronhub', 'experiential', 'router9', 'septor', 'clod', 'speechify', 'blaze', 'lucidity', 'airforce', 'dreamprompting', 'waterfall', 'logfare', 'bai', 'radeon', 'nvidia', 'mistral',
-  'openrouter', 'cohere', 'tavily', 'exa', 'firecrawl', 'linkup', 'parallel', 'cloudflare', 'zhipu', 'ollama',
+  'openrouter', 'cohere', 'tavily', 'exa', 'firecrawl', 'linkup', 'parallel', 'keenable', 'cloudflare', 'zhipu', 'ollama',
   'kilo', 'pollinations', 'llm7', 'huggingface', 'opencode', 'ovh', 'agnes', 'reka', 'siliconflow',
   'routeway', 'bazaarlink', 'ainative', 'aion', 'anyapi', 'requesty', 'navy', 'nara', 'sealion', 'orcarouter', 'unorouter', 'xkiro', 'modelscope',
   'qianfan', 'volcengine', 'longcat', 'xfyun', 'aihorde', 'custom',
@@ -534,13 +537,18 @@ keysRouter.get('/', (_req: Request, res: Response) => {
       // unexplained "unchecked". modelsAvailable says whether this install has
       // any of the provider's models to serve that first request with.
       autoHealthCheck: resolveProvider(row.platform)?.supportsKeyValidation !== false,
-      ...(resolveProvider(row.platform)?.supportsKeyValidation === false
+      // Search keys serve engines, not models, so they never count as missing models.
+      ...(resolveProvider(row.platform)?.supportsKeyValidation === false && !isSearchPlatform(row.platform)
         ? { modelsAvailable: modelCountFor(row.platform) }
         : {}),
       // Lets the export dialog count exactly what the export will write.
       exportable: isExportableKey({ platform: row.platform, baseUrl: row.base_url ?? null, key: realKey }),
       createdAt: row.created_at,
       lastCheckedAt: row.last_checked_at,
+      // #1493: last time this key was proven to work (valid probe or served
+      // request) — distinct from lastCheckedAt, which a transport error also
+      // refreshes.
+      lastHealthyAt: row.last_healthy_at ?? null,
       lastHealthError: row.last_health_error ?? null,
       // The model_id list this key is limited to; null = serves everything (#657).
       modelScope: scope ? [...scope] : null,
@@ -738,9 +746,11 @@ keysRouter.get('/export', (req: Request, res: Response) => {
     // CSV formula-injection guard: a spreadsheet treats a cell that starts with
     // =, +, -, @, tab or CR as a live formula, so a label like `=HYPERLINK(...)`
     // would execute on open. Prefix such cells with a single quote to force them
-    // to be read as text. Applied only to free-text fields the user controls
-    // (labels); the key value must round-trip verbatim for re-import, and the
-    // platform is one of our own fixed enum values.
+    // to be read as text. Applied to the free-text fields the user controls
+    // (labels AND base_url — the custom endpoint column is free text too, and
+    // the importer strips the guard quote back off both); the key value must
+    // round-trip verbatim for re-import, and the platform is one of our own
+    // fixed enum values.
     const neutralize = (v: string) => (/^[=+\-@\t\r]/.test(v) ? `'${v}` : v);
     // base_url is the fourth column: a custom row is an ENDPOINT, and without
     // its URL the key cannot be re-imported (#687). Blank for every other
@@ -748,7 +758,7 @@ keysRouter.get('/export', (req: Request, res: Response) => {
     // written by older builds still load.
     const header = 'platform,key,label,base_url';
     const lines = decryptedKeys.map(k =>
-      [escCsv(k.platform), escCsv(k.key), escCsv(neutralize(k.label)), escCsv(k.baseUrl ?? '')].join(',')
+      [escCsv(k.platform), escCsv(k.key), escCsv(neutralize(k.label)), escCsv(neutralize(k.baseUrl ?? ''))].join(',')
     );
     const content = [header, ...lines].join('\n') + '\n';
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -928,6 +938,11 @@ const modelEntrySchema = z.union([
     displayName: z.string().optional(),
     supportsTools: z.boolean().optional(),
     supportsVision: z.boolean().optional(),
+    // #1506: a kind forwarded from discovery metadata (the endpoint's own
+    // `type`/metadata) so an id with no media keyword still routes to the
+    // table that can serve it. Absent, the handler falls back to the
+    // id-based classifier (#1051).
+    kind: z.enum(['embedding', 'image', 'audio', 'transcription', 'video']).optional(),
   }),
 ]);
 // `baseUrl` and `keyId` are both optional but at least one is required: the
@@ -1412,9 +1427,9 @@ keysRouter.post('/custom', async (req: Request, res: Response) => {
   // whatever name it already has on re-registration (see the upsert below).
   const topTools = parsed.data.supportsTools;
   const topVision = parsed.data.supportsVision;
-  const entries: { modelId: string; displayName: string | null; supportsTools?: boolean; supportsVision?: boolean }[] = [];
+  const entries: { modelId: string; displayName: string | null; supportsTools?: boolean; supportsVision?: boolean; kind?: DiscoveredModelKind }[] = [];
   const seen = new Set<string>();
-  const addEntry = (rawId: string, rawDisplay?: string, tools?: boolean, vision?: boolean) => {
+  const addEntry = (rawId: string, rawDisplay?: string, tools?: boolean, vision?: boolean, kind?: DiscoveredModelKind) => {
     const modelId = rawId.trim();
     if (!modelId || seen.has(modelId)) return;
     seen.add(modelId);
@@ -1423,12 +1438,13 @@ keysRouter.post('/custom', async (req: Request, res: Response) => {
       displayName: rawDisplay?.trim() || null,
       supportsTools: tools ?? topTools,
       supportsVision: vision ?? topVision,
+      kind,
     });
   };
   if (parsed.data.model?.trim()) addEntry(parsed.data.model, parsed.data.displayName);
   for (const m of parsed.data.models ?? []) {
     if (typeof m === 'string') addEntry(m);
-    else addEntry(m.model, m.displayName, m.supportsTools, m.supportsVision);
+    else addEntry(m.model, m.displayName, m.supportsTools, m.supportsVision, m.kind);
   }
   // A lone model submitted through the plural `models` also carries its name in
   // the top-level `displayName` — that is exactly what the dashboard's custom
@@ -1483,7 +1499,14 @@ keysRouter.post('/custom', async (req: Request, res: Response) => {
   // on the entry is an operator override: someone who says "this is a chat
   // model with vision/tools" wins over the keyword guess.
   const overridden = (e: typeof entries[number]) => e.supportsTools !== undefined || e.supportsVision !== undefined;
-  const kindOf = (e: typeof entries[number]) => overridden(e) ? undefined : classifyModelId(e.modelId);
+  const kindOf = (e: typeof entries[number]) => {
+    // #1506: a forwarded discovery kind is authoritative for a generic-id
+    // model; an explicit capability flag forces chat over both the kind and
+    // the id guess (#1051).
+    if (overridden(e)) return undefined;
+    if (e.kind !== undefined) return e.kind;
+    return classifyModelId(e.modelId);
+  };
   const chatEntries = entries.filter(e => kindOf(e) === undefined || kindOf(e) === 'embedding');
   const embedEntries = chatEntries.filter(e => kindOf(e) === 'embedding');
   const pureChatEntries = chatEntries.filter(e => kindOf(e) !== 'embedding');

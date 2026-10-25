@@ -75,6 +75,7 @@ import * as customEndpointGroupLabel from '../migrations/20260930_000001_custom_
 import * as catalogueAck from '../migrations/20261001_000001_catalogue_ack.js';
 import * as clifreeLinksToModelLinks from '../migrations/20261012_000001_clifree_links_to_model_links.js';
 import * as catalogueSyncLog from '../migrations/20261013_000001_catalogue_sync_log.js';
+import * as modelProbeStatus from '../migrations/20261007_000001_model_probe_status.js';
 import * as searchEngines from '../migrations/20261013_000001_search_engines.js';
 import * as externalModelDiscovery from '../migrations/20261014_000001_external_model_discovery.js';
 import * as catalogueSyncMembers from '../migrations/20261014_000002_catalogue_sync_members.js';
@@ -94,6 +95,8 @@ import * as modelBenchResults from '../migrations/20261020_000001_model_bench_re
 import * as defaultChainProfile from '../migrations/20261021_000001_default_chain_profile.js';
 import * as extraTierOverflow from '../migrations/20261022_000001_extra_tier_overflow.js';
 import * as modelExpiry from '../migrations/20261022_000002_model_expiry.js';
+import * as removeAurayProvider from '../migrations/20261019_000001_remove_auray_provider.js';
+import * as keyLastHealthyAt from '../migrations/20261020_000001_key_last_healthy_at.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -171,6 +174,7 @@ export const QUOTA_POLICY_BUCKET_FILENAME = '20260912_000001_quota_policy_bucket
 export const AA_COST_PER_TASK_FILENAME = '20260913_000001_aa_cost_per_task.ts';
 export const REQUEST_MODEL_ATTRIBUTION_FILENAME = '20260913_000001_request_model_attribution.ts';
 export const CUSTOM_ENDPOINT_GROUP_LABEL_FILENAME = '20260930_000001_custom_endpoint_group_label.ts';
+export const MODEL_PROBE_STATUS_FILENAME = '20261007_000001_model_probe_status.ts';
 export const KEY_MONTHLY_USAGE_FILENAME = '20260914_000001_key_monthly_usage.ts';
 export const QUOTA_SNAPSHOT_FRESHNESS_FILENAME = '20260915_000001_quota_snapshot_freshness.ts';
 export const CATALOGUE_ACK_FILENAME = '20261001_000001_catalogue_ack.ts';
@@ -182,6 +186,8 @@ export const REQUEST_FAILURE_ATTRIBUTION_FILENAME = '20261017_233153_request_fai
 export const DEFAULT_CHAIN_PROFILE_FILENAME = '20261021_000001_default_chain_profile.ts';
 export const EXTRA_TIER_OVERFLOW_FILENAME = '20261022_000001_extra_tier_overflow.ts';
 export const MODEL_EXPIRY_FILENAME = '20261022_000002_model_expiry.ts';
+export const REMOVE_AURAY_PROVIDER_FILENAME = '20261019_000001_remove_auray_provider.ts';
+export const KEY_LAST_HEALTHY_AT_FILENAME = '20261020_000001_key_last_healthy_at.ts';
 
 export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: LEGACY_BASELINE_FILENAME, module: legacyBaseline },
@@ -260,6 +266,7 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   // pending migrations by filename membership, not "newer than the latest".
   { filename: CUSTOM_ENDPOINT_GROUP_LABEL_FILENAME, module: customEndpointGroupLabel },
   { filename: CATALOGUE_ACK_FILENAME, module: catalogueAck },
+  { filename: MODEL_PROBE_STATUS_FILENAME, module: modelProbeStatus },
   { filename: '20261012_000001_clifree_links_to_model_links.ts', module: clifreeLinksToModelLinks },
   { filename: '20261013_000001_catalogue_sync_log.ts', module: catalogueSyncLog },
   // Upstream v0.15.0. Back-dated relative to our head like the entry above;
@@ -279,6 +286,8 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: '20261017_000002_usage_credentials.ts', module: usageCredentials },
   { filename: REQUEST_FAILURE_ATTRIBUTION_FILENAME, module: requestFailureAttribution },
   { filename: '20261018_000001_model_benchmark_entries.ts', module: modelBenchmarkEntries },
+  { filename: REMOVE_AURAY_PROVIDER_FILENAME, module: removeAurayProvider },
+  { filename: KEY_LAST_HEALTHY_AT_FILENAME, module: keyLastHealthyAt },
   { filename: '20261020_000001_model_bench_results.ts', module: modelBenchResults },
   { filename: DEFAULT_CHAIN_PROFILE_FILENAME, module: defaultChainProfile },
   { filename: EXTRA_TIER_OVERFLOW_FILENAME, module: extraTierOverflow },

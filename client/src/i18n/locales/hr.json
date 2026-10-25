@@ -581,6 +581,8 @@
     "providerActions": "Akcije pružatelja",
     "routeViaProxy": "Ruta putem posrednika",
     "checkNow": "Provjeri sada",
+    "lastWorkedHint": "Last worked: {when}",
+    "lastWorkedNever": "Has not served a request or passed a check yet",
     "noAutoCheckHint": "Ovaj pružatelj ne dopušta automatske provjere ključeva. Ključ postaje ispravan nakon što posluži svoj prvi zahtjev.",
     "noModelsYetHint": "Vaš katalog još nema modele ovog pružatelja, pa nema što posluživati.",
     "proxyEnvHintBefore": "Također se može konfigurirati putem",
@@ -748,6 +750,10 @@
     "monthlyTokenCapLabel": "Mjesečno ograničenje tokena",
     "capUnlimitedPlaceholder": "Neograničeno",
     "capEditHint": "Ograničenja se resetiraju 1. u 00:00 UTC. Ostavite prazno za neograničeno.",
+    "keyProxyLabel": "Proxy for this key",
+    "keyProxyHint": "Leave blank to keep the current setting. Requests made with this key use this proxy instead of the global one; local and LAN addresses still connect directly.",
+    "keyProxyRemoved": "The proxy is removed when you save, and this key goes back to the global proxy.",
+    "keyProxyUndo": "Undo",
     "monthlyUsageLine": "{requests} zahtjeva, {tokens} tokena ovaj mjesec",
     "quotaBalanceHint": "Preostalo {remaining} od {limit} {metric}",
     "quotaBalanceLeft": "Preostalo {remaining}",
@@ -758,6 +764,9 @@
     "copyGroupHandle": "Copy group handle",
     "groupHandleCopied": "Copied {handle}",
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
+    "capUsagePercent": "{used} of {cap} ({pct}%)",
+    "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
     "checklistRemoveTip": "Remove {provider} from this list",
     "modelLimitsTitle": "Models & account limits",
     "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
@@ -1219,7 +1228,9 @@
     "emptyDescription": "Unosi se pojavljuju ovdje čim ih server zapiše. Proširite filtre razine, pružatelja ili pretrage ako ste očekivali izlaz.",
     "noLevelsTitle": "Nije odabrana nijedna razina",
     "noLevelsDescription": "Uključite barem jednu razinu da biste vidjeli sadržaj loga.",
-    "loadFailed": "Nije moguće učitati log servera."
+    "loadFailed": "Nije moguće učitati log servera.",
+    "eventFilter": "Događaj",
+    "allEvents": "Svi događaji"
   },
   "playground": {
     "title": "Igralište",
@@ -1578,7 +1589,8 @@
       "openclaw": "Uvijek dostupan osobni asistent koji s vašeg računala odgovara u aplikacijama WhatsApp, Telegram, Discord i drugima.",
       "hermes": "Samopoboljšavajući agent tvrtke Nous Research s trajnom memorijom i vještinama, u terminalu ili u chat aplikacijama.",
       "pi": "Minimalistički terminalski agent koji oblikujete vlastitim proširenjima, vještinama i predlošcima upita.",
-      "reasonix": "Terminalski agent za programiranje izrađen za DeepSeek, oko predmemoriranja prefiksa, kako bi duge sesije ostale jeftine."
+      "reasonix": "Terminalski agent za programiranje izrađen za DeepSeek, oko predmemoriranja prefiksa, kako bi duge sesije ostale jeftine.",
+      "zcode": "Z.ai's coding agent for its GLM models, speaking any OpenAI-compatible endpoint through a provider registry."
     }
   },
   "update": {

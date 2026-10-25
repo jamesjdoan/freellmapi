@@ -581,6 +581,8 @@
     "providerActions": "Sağlayıcı eylemleri",
     "routeViaProxy": "Proxy aracılığıyla yönlendirme",
     "checkNow": "Şimdi kontrol et",
+    "lastWorkedHint": "Son çalışma: {when}",
+    "lastWorkedNever": "Henüz bir istek karşılamadı ve kontrolden geçmedi",
     "noAutoCheckHint": "Bu sağlayıcı otomatik anahtar kontrollerine izin vermiyor. Anahtar ilk isteğini karşıladıktan sonra sağlıklı olur.",
     "noModelsYetHint": "Kataloğunuzda henüz bu sağlayıcıdan model yok, bu yüzden karşılayacağı bir istek yok.",
     "proxyEnvHintBefore": "Ayrıca ",
@@ -748,6 +750,10 @@
     "monthlyTokenCapLabel": "Aylık token sınırı",
     "capUnlimitedPlaceholder": "Sınırsız",
     "capEditHint": "Sınırlar her ayın 1'inde 00:00 UTC'de sıfırlanır. Sınırsız için boş bırakın.",
+    "keyProxyLabel": "Proxy for this key",
+    "keyProxyHint": "Leave blank to keep the current setting. Requests made with this key use this proxy instead of the global one; local and LAN addresses still connect directly.",
+    "keyProxyRemoved": "The proxy is removed when you save, and this key goes back to the global proxy.",
+    "keyProxyUndo": "Undo",
     "monthlyUsageLine": "Bu ay {requests} istek, {tokens} token",
     "quotaBalanceHint": "{limit} {metric} içinden {remaining} kaldı",
     "quotaBalanceLeft": "{remaining} kaldı",
@@ -758,6 +764,9 @@
     "copyGroupHandle": "Copy group handle",
     "groupHandleCopied": "Copied {handle}",
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
+    "capUsagePercent": "{used} of {cap} ({pct}%)",
+    "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
     "checklistRemoveTip": "Remove {provider} from this list",
     "modelLimitsTitle": "Models & account limits",
     "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
@@ -1219,7 +1228,9 @@
     "emptyDescription": "Sunucu kayıtları yazdıkça burada görünür. Çıktı bekliyorsanız düzey, sağlayıcı veya arama filtrelerini genişletin.",
     "noLevelsTitle": "Düzey seçilmedi",
     "noLevelsDescription": "Günlük çıktısını görmek için en az bir düzeyi açın.",
-    "loadFailed": "Sunucu günlüğü yüklenemedi."
+    "loadFailed": "Sunucu günlüğü yüklenemedi.",
+    "eventFilter": "Olay",
+    "allEvents": "Tüm olaylar"
   },
   "playground": {
     "title": "Oyun Alanı",
@@ -1578,7 +1589,8 @@
       "openclaw": "Kendi makinenizden WhatsApp, Telegram, Discord ve daha fazlasında yanıt veren, her zaman açık bir kişisel asistan.",
       "hermes": "Nous Research'ün kendini geliştiren ajanı; kalıcı bellek ve becerilerle, terminalde ya da sohbet uygulamalarında.",
       "pi": "Kendi uzantılarınız, becerileriniz ve istem şablonlarınızla şekillendirdiğiniz minimal bir terminal ajanı.",
-      "reasonix": "DeepSeek için geliştirilmiş bir terminal kodlama ajanı; uzun oturumlar ucuz kalsın diye önek önbelleği etrafında kurulmuştur."
+      "reasonix": "DeepSeek için geliştirilmiş bir terminal kodlama ajanı; uzun oturumlar ucuz kalsın diye önek önbelleği etrafında kurulmuştur.",
+      "zcode": "Z.ai'nin GLM modelleri için kodlama ajanı; sağlayıcı kaydıyla herhangi bir OpenAI uyumlu uç noktaya bağlanır."
     }
   },
   "update": {

@@ -261,11 +261,6 @@ export function resolveQuotaPolicy(
   // per-platform default until measured.
   if (platform === 'aclide') return policy('aclide::monthly-credit', 'shared_pool', 'unknown', [], 'unknown');
   if (platform === 'speka') return policy('speka::monthly-credit', 'shared_pool', 'unknown', [], 'unknown');
-  // Upstream v0.15.0 (#1524): Auray's free credits renew monthly and are one
-  // wallet shared across chat and embeddings, so one pool for the account.
-  // Nothing readable reports the balance yet, so accounting stays unknown.
-  if (platform === 'auray') return policy('auray::monthly-credit', 'shared_pool', 'unknown', [], 'unknown');
-
   // Providers added by upstream v0.13.7 (#1441 Plugsky, #1455 Inferbase and
   // SimpleLLM). Pool NAMES and shared scope are upstream's; nothing readable
   // reports their allowance yet, so accounting stays unknown rather than asserted.
@@ -275,6 +270,13 @@ export function resolveQuotaPolicy(
   // Upstream v0.16.3 (#1578): APINex. Pool NAME is upstream's; nothing
   // readable reports the allowance yet, so accounting stays unknown.
   if (platform === 'apinex') return policy('apinex::daily-free', 'shared_pool', 'unknown', [], 'unknown');
+  // Upstream v0.16.9 (#1460 onomeo, #1649 IteraCompute): each is one account
+  // allowance across every free model — onomeo 30 calls per 5 hours,
+  // IteraCompute 30M tokens a month — so one shared pool each. Pool NAMES are
+  // upstream's; nothing readable reports either balance, so accounting stays
+  // unknown. (Upstream v0.16.4 removed Auray, #1583, so its pool is gone.)
+  if (platform === 'onomeo') return policy('onomeo::five-hour-free', 'shared_pool', 'unknown', [], 'unknown');
+  if (platform === 'iteracompute') return policy('iteracompute::monthly-free', 'shared_pool', 'unknown', [], 'unknown');
   // AI Horde: anonymous requests share one queue priority (the 0000000000 key),
   // so they pool together; a registered key has its own kudos priority but we
   // still bucket per-platform here.

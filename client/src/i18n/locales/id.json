@@ -581,6 +581,8 @@
     "providerActions": "Tindakan penyedia",
     "routeViaProxy": "Rute melalui proxy",
     "checkNow": "Periksa sekarang",
+    "lastWorkedHint": "Terakhir berfungsi: {when}",
+    "lastWorkedNever": "Belum pernah melayani permintaan atau lolos pemeriksaan",
     "noAutoCheckHint": "Penyedia ini tidak mengizinkan pemeriksaan kunci otomatis. Kunci menjadi sehat setelah melayani permintaan pertamanya.",
     "noModelsYetHint": "Katalog Anda belum memiliki model dari penyedia ini, jadi belum ada yang bisa dilayani.",
     "proxyEnvHintBefore": "Juga dapat dikonfigurasi melalui",
@@ -748,6 +750,10 @@
     "monthlyTokenCapLabel": "Batas token bulanan",
     "capUnlimitedPlaceholder": "Tanpa batas",
     "capEditHint": "Batas disetel ulang pada tanggal 1 pukul 00:00 UTC. Kosongkan untuk tanpa batas.",
+    "keyProxyLabel": "Proxy for this key",
+    "keyProxyHint": "Leave blank to keep the current setting. Requests made with this key use this proxy instead of the global one; local and LAN addresses still connect directly.",
+    "keyProxyRemoved": "The proxy is removed when you save, and this key goes back to the global proxy.",
+    "keyProxyUndo": "Undo",
     "monthlyUsageLine": "{requests} permintaan, {tokens} token bulan ini",
     "quotaBalanceHint": "Tersisa {remaining} dari {limit} {metric}",
     "quotaBalanceLeft": "Tersisa {remaining}",
@@ -758,6 +764,9 @@
     "copyGroupHandle": "Copy group handle",
     "groupHandleCopied": "Copied {handle}",
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
+    "capUsagePercent": "{used} of {cap} ({pct}%)",
+    "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
     "checklistRemoveTip": "Remove {provider} from this list",
     "modelLimitsTitle": "Models & account limits",
     "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
@@ -1219,7 +1228,9 @@
     "emptyDescription": "Entri muncul di sini saat server menuliskannya. Perlebar filter level, penyedia, atau pencarian jika Anda mengharapkan ada keluaran.",
     "noLevelsTitle": "Tidak ada level yang dipilih",
     "noLevelsDescription": "Aktifkan setidaknya satu level untuk melihat keluaran log.",
-    "loadFailed": "Tidak dapat memuat log server."
+    "loadFailed": "Tidak dapat memuat log server.",
+    "eventFilter": "Event",
+    "allEvents": "Semua event"
   },
   "playground": {
     "title": "Taman bermain",
@@ -1578,7 +1589,8 @@
       "openclaw": "Asisten pribadi yang selalu aktif dan menjawab di WhatsApp, Telegram, Discord, dan lainnya dari mesin Anda sendiri.",
       "hermes": "Agen dari Nous Research yang terus memperbaiki diri, dengan memori persisten dan keterampilan, di terminal atau di aplikasi chat.",
       "pi": "Agen terminal minimalis yang Anda bentuk dengan ekstensi, keterampilan, dan templat prompt Anda sendiri.",
-      "reasonix": "Agen coding terminal yang dibuat khusus untuk DeepSeek, dibangun di sekitar prefix caching agar sesi panjang tetap murah."
+      "reasonix": "Agen coding terminal yang dibuat khusus untuk DeepSeek, dibangun di sekitar prefix caching agar sesi panjang tetap murah.",
+      "zcode": "Agen kode Z.ai untuk model GLM-nya, terhubung ke endpoint apa pun yang kompatibel dengan OpenAI melalui registri penyedia."
     }
   },
   "update": {

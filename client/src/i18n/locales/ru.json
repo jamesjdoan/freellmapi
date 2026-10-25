@@ -581,6 +581,8 @@
     "providerActions": "Действия провайдера",
     "routeViaProxy": "Маршрут через прокси",
     "checkNow": "Проверьте сейчас",
+    "lastWorkedHint": "Последняя работа: {when}",
+    "lastWorkedNever": "Ещё не обработал ни одного запроса и не прошёл проверку",
     "noAutoCheckHint": "Этот провайдер не разрешает автоматическую проверку ключей. Ключ станет рабочим после того, как обслужит первый запрос.",
     "noModelsYetHint": "В вашем каталоге пока нет моделей этого провайдера, поэтому обслуживать нечего.",
     "proxyEnvHintBefore": "Также настраивается через",
@@ -748,6 +750,10 @@
     "monthlyTokenCapLabel": "Месячный лимит токенов",
     "capUnlimitedPlaceholder": "Без ограничений",
     "capEditHint": "Лимиты сбрасываются 1-го числа в 00:00 UTC. Оставьте пустым для безлимита.",
+    "keyProxyLabel": "Proxy for this key",
+    "keyProxyHint": "Leave blank to keep the current setting. Requests made with this key use this proxy instead of the global one; local and LAN addresses still connect directly.",
+    "keyProxyRemoved": "The proxy is removed when you save, and this key goes back to the global proxy.",
+    "keyProxyUndo": "Undo",
     "monthlyUsageLine": "{requests} запросов, {tokens} токенов в этом месяце",
     "quotaBalanceHint": "Осталось {remaining} из {limit} {metric}",
     "quotaBalanceLeft": "Осталось {remaining}",
@@ -758,6 +764,9 @@
     "copyGroupHandle": "Copy group handle",
     "groupHandleCopied": "Copied {handle}",
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
+    "capUsagePercent": "{used} of {cap} ({pct}%)",
+    "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
     "checklistRemoveTip": "Remove {provider} from this list",
     "modelLimitsTitle": "Models & account limits",
     "scopeEditedOnPanel": "Which models this key serves is set on Keys: expand the provider and use each model’s switch. Limits here apply to all keys for this provider; account limits apply to this key only.",
@@ -1219,7 +1228,9 @@
     "emptyDescription": "Записи появятся здесь, как только сервер их запишет. Если вы ожидали вывод, расширьте фильтры по уровню, поставщику или поиску.",
     "noLevelsTitle": "Уровни не выбраны",
     "noLevelsDescription": "Включите хотя бы один уровень, чтобы видеть вывод журнала.",
-    "loadFailed": "Не удалось загрузить журнал сервера."
+    "loadFailed": "Не удалось загрузить журнал сервера.",
+    "eventFilter": "Событие",
+    "allEvents": "Все события"
   },
   "playground": {
     "title": "Детская площадка",
@@ -1578,7 +1589,8 @@
       "openclaw": "Всегда доступный персональный ассистент, который отвечает в WhatsApp, Telegram, Discord и других мессенджерах прямо с вашего компьютера.",
       "hermes": "Самосовершенствующийся агент от Nous Research с постоянной памятью и навыками — в терминале или в чат-приложениях.",
       "pi": "Минималистичный терминальный агент, который вы настраиваете своими расширениями, навыками и шаблонами промптов.",
-      "reasonix": "Терминальный агент для программирования, созданный под DeepSeek и построенный вокруг кэширования префиксов, чтобы длинные сессии оставались дешёвыми."
+      "reasonix": "Терминальный агент для программирования, созданный под DeepSeek и построенный вокруг кэширования префиксов, чтобы длинные сессии оставались дешёвыми.",
+      "zcode": "Кодовый агент Z.ai для его моделей GLM, подключаемый к любому OpenAI-совместимому эндпоинту через реестр провайдеров."
     }
   },
   "update": {
