@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-10-27 — Upstream v0.16.10 merged
+## 2026-10-27 — Upstream v0.16.10 merged (deployed `main-20261027-021403`)
 
 - `--no-ff` merge of tag `v0.16.10` onto `f99e0d54`. It covers 14 upstream commits, 52 files. Recovery tag: `imperium/pre-v0.16.10-recovery`.
 - **One conflict**, `server/src/lib/fallback-loop.ts`: upstream's Cloudflare account-wide bench (#1622) placed inside our zero-duration guard, so a decision that benches nothing still benches nothing on any account.
@@ -11,6 +11,11 @@
   - `legacy-baseline-rerun.test.ts` expects every migration in our manifest, not upstream's 47.
 - **Data check:** v0.16.10 changes only the legacy baseline (#1603). Its new DELETE path runs only on a baseline re-run, and the live baseline is recorded as applied. Rehearsed twice on a copy of the live DB: 100 migrations, 750 chain rows, 977 models and 19 keys, identical on both passes.
 - **Verified:** server 441 files, 5509 passed, 5 skipped; client 96 files, 731 passed; both type-checks clean; i18n 60 locales.
+- **Live after deploy** (rollback `jamesjdoan/freellmapi:provider-routing-before-20261027-021403`, volume backup `backups/freellmapi-data-20261027-021403.tar.gz`):
+  - `Up (healthy)` on `127.0.0.1:3001`; 19/19 keys decrypt; 100 migrations.
+  - `routing_strategy` still `priority`; the Apex pin for MiniMax M3.1 Flash survived; the Apex head unchanged.
+  - `auto:apex` answered a tool call and `auto:fast-lane` a chat. `/v1/models` lists 559 ids, up from 556.
+  - The Extensions panel lists 53 entries, every new id present; only `amd-capacity-routing` is off, as before.
 
 ## 2026-10-27 — Chain auto-arrange and route bench probes (deployed `main-20261027-011810`)
 
