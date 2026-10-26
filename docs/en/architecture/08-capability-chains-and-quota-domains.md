@@ -507,6 +507,51 @@ agentic chains and from nothing else: image analysis does not need tool calls,
 and rejecting vision models for lacking them would throw away most of the free
 multimodal capacity.
 
+### Membership is curated; order is arranged
+
+Since 2026-10-26 the two halves have different owners (ADR
+`ARCH-20261026-chain-auto-arrange`). The curation file and its applier own
+**which** routes are in a chain. The chain arranger (`services/chain-arrange.ts`,
+Extensions → **Chain auto-arrange**, controls under **Routing → Auto-arrange**)
+owns **their order**, and rewrites it hourly from evidence. In a chain the
+arranger manages, the applier inserts new members at their spec position but
+never overwrites an existing member's priority, so the two never fight. The
+positions written in `routing-curation.ts` are therefore a snapshot, not the
+live order.
+
+The arranger orders **routes**, not models. A route is
+`(platform, model_id, endpoint_scope)`, one `models` row. Capability scores are
+shared by every route of a model; reliability, latency, bench score and quota
+pool are per route. nvidia glm-5.3-flash at 91% and radeon GLM-5.3-Flash at 41%
+are one model and two positions.
+
+Per member it computes:
+
+- **Reliability tier** from 14 days of real requests plus route probes
+  (`services/route-evidence.ts`): `proven` (50+ samples, ≥ 80%), `partial`,
+  `unmeasured`, or `failing` (20+ samples, < 55%). A failing tier is also
+  forced by a per-route veto: no usable key, tools refused where the chain needs
+  them, or a failing agentic or coding screen.
+- **Eligibility** against the chain minimums (`chain-minimums.ts`) with a
+  tolerance band: `fit`, `near` (within the band, default 10%, or a score nobody
+  has published — unknown is not zero), `out`, or `filler` (an `out` route
+  promoted so the chain keeps its minimum depth).
+- **Position:** failing routes last; then fit before near/filler before out;
+  then proven before partial before unmeasured; then the chain's own metric
+  (Apex intelligence, Coding coding index, Fast-Lane measured latency, the rest
+  reliability). The first `minMembers` positions are spread across at least
+  `minPools` independent quota pools. Operator pins are placed last, at their
+  positions, and always win.
+
+Every applied arrangement is a `chain_arrange_run` row with the order before and
+after and the reasons for every position, so a bad run can be read and undone.
+Per-request quota terms (§4) still adjust the arranged order on every request; the
+arranger only supplies the base order they adjust.
+
+Routes that real traffic never reaches are measured by scheduled probes, each one
+a graded screening scenario sent streamed through the route's own key
+(`services/route-probe.ts`, `docs/en/operations/model-bench.md`).
+
 ---
 
 ## 9. Harness mapping

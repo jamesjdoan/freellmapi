@@ -137,15 +137,22 @@ export function plannedTokens(ids: ScenarioId[]): number {
   }, 0);
 }
 
-export async function runBenchmark(call: Caller, cfg: RunConfig): Promise<RunResult> {
-  const usage = emptyUsage();
-  const results: Partial<Record<ScenarioId, ScenarioResult>> = {};
-  let stoppedBy: string | null = null;
-  mkdirSync(cfg.cacheDir, { recursive: true });
+type Invoke = (s: Scenario, messages: ChatMessage[], tools: boolean) => Promise<ChatCompletionResponse>;
 
-  const invoke = async (s: Scenario, messages: ChatMessage[], tools: boolean): Promise<ChatCompletionResponse> => {
-    const projected = spent(usage) + Math.ceil(JSON.stringify(messages).length / 4) + s.maxTokens;
-    if (projected > cfg.budgetTokens) throw new BudgetExceeded(`token budget ${cfg.budgetTokens} would be exceeded (spent ${spent(usage)}, next call up to ${projected - spent(usage)})`);
+/** The one place a scenario reaches the caller: usage accounting and, for a
+ *  full run, the token ceiling. `budgetTokens` null is a single probe call,
+ *  which has a per-scenario output cap and needs no run-wide ceiling. */
+function makeInvoke(
+  call: Caller,
+  cfg: Pick<RunConfig, 'temperature' | 'seed' | 'reasoningEffort'>,
+  usage: Usage,
+  budgetTokens: number | null,
+): Invoke {
+  return async (s, messages, tools) => {
+    if (budgetTokens != null) {
+      const projected = spent(usage) + Math.ceil(JSON.stringify(messages).length / 4) + s.maxTokens;
+      if (projected > budgetTokens) throw new BudgetExceeded(`token budget ${budgetTokens} would be exceeded (spent ${spent(usage)}, next call up to ${projected - spent(usage)})`);
+    }
     usage.calls++;
     const started = Date.now();
     try {
@@ -167,48 +174,61 @@ export async function runBenchmark(call: Caller, cfg: RunConfig): Promise<RunRes
       throw err;
     }
   };
+}
 
-  const turnOf = (res: ChatCompletionResponse, mode: Transcript['mode']): Turn => {
-    const msg = res.choices?.[0]?.message;
-    const content = textOf(msg);
-    const toolCalls = mode === 'simulated'
-      ? simulatedCalls(content)
-      : (msg?.tool_calls ?? []).map(tc => ({ name: tc.function.name, rawArguments: tc.function.arguments, args: parseArgs(tc.function.arguments) }));
-    return { content, toolCalls, finishReason: res.choices?.[0]?.finish_reason ?? null };
-  };
+function turnOf(res: ChatCompletionResponse, mode: Transcript['mode']): Turn {
+  const msg = res.choices?.[0]?.message;
+  const content = textOf(msg);
+  const toolCalls = mode === 'simulated'
+    ? simulatedCalls(content)
+    : (msg?.tool_calls ?? []).map(tc => ({ name: tc.function.name, rawArguments: tc.function.arguments, args: parseArgs(tc.function.arguments) }));
+  return { content, toolCalls, finishReason: res.choices?.[0]?.finish_reason ?? null };
+}
 
-  const once = async (s: Scenario): Promise<Transcript> => {
-    const wantsTools = s.tools.length > 0;
-    let mode: Transcript['mode'] = wantsTools ? 'native' : 'none';
-    let messages: ChatMessage[] = [...s.messages];
-    const turns: Turn[] = [];
-    for (let i = 0; i < s.maxTurns; i++) {
-      let res: ChatCompletionResponse;
-      try {
-        res = await invoke(s, messages, mode === 'native');
-      } catch (err) {
-        if (err instanceof BudgetExceeded) throw err;
-        if (mode === 'native' && i === 0 && toolsRefused(err)) {
-          if (!s.simulable) return { mode, turns, toolsUnsupported: true, error: err instanceof Error ? err.message : String(err) };
-          mode = 'simulated';
-          messages = simulate(s);
-          i--;
-          continue;
-        }
-        return { mode, turns, error: err instanceof Error ? err.message.slice(0, 300) : String(err) };
+/** One pass through a scenario: a single turn, or A3's scripted tool loop.
+ *  Native tools first; a refusal falls back to the text simulation where the
+ *  scenario allows one. A BudgetExceeded propagates; any other call error
+ *  ends the transcript with that error recorded. */
+async function transcribe(s: Scenario, invoke: Invoke): Promise<Transcript> {
+  const wantsTools = s.tools.length > 0;
+  let mode: Transcript['mode'] = wantsTools ? 'native' : 'none';
+  let messages: ChatMessage[] = [...s.messages];
+  const turns: Turn[] = [];
+  for (let i = 0; i < s.maxTurns; i++) {
+    let res: ChatCompletionResponse;
+    try {
+      res = await invoke(s, messages, mode === 'native');
+    } catch (err) {
+      if (err instanceof BudgetExceeded) throw err;
+      if (mode === 'native' && i === 0 && toolsRefused(err)) {
+        if (!s.simulable) return { mode, turns, toolsUnsupported: true, error: err instanceof Error ? err.message : String(err) };
+        mode = 'simulated';
+        messages = simulate(s);
+        i--;
+        continue;
       }
-      const turn = turnOf(res, mode);
-      turns.push(turn);
-      if (s.id !== 'A3' || turn.toolCalls.length === 0) break;
-      // A3: answer each call from the scripted world and continue.
-      const assistant = res.choices[0].message;
-      messages = [...messages, { role: 'assistant', content: assistant.content ?? '', tool_calls: assistant.tool_calls, ...(assistant.reasoning_content ? { reasoning_content: assistant.reasoning_content } : {}) }];
-      for (const [k, tc] of (assistant.tool_calls ?? []).entries()) {
-        messages.push({ role: 'tool', tool_call_id: tc.id, content: a3ToolReply(turn.toolCalls[k]?.name ?? '', turn.toolCalls[k]?.args ?? {}) });
-      }
+      return { mode, turns, error: err instanceof Error ? err.message.slice(0, 300) : String(err) };
     }
-    return { mode, turns };
-  };
+    const turn = turnOf(res, mode);
+    turns.push(turn);
+    if (s.id !== 'A3' || turn.toolCalls.length === 0) break;
+    // A3: answer each call from the scripted world and continue.
+    const assistant = res.choices[0].message;
+    messages = [...messages, { role: 'assistant', content: assistant.content ?? '', tool_calls: assistant.tool_calls, ...(assistant.reasoning_content ? { reasoning_content: assistant.reasoning_content } : {}) }];
+    for (const [k, tc] of (assistant.tool_calls ?? []).entries()) {
+      messages.push({ role: 'tool', tool_call_id: tc.id, content: a3ToolReply(turn.toolCalls[k]?.name ?? '', turn.toolCalls[k]?.args ?? {}) });
+    }
+  }
+  return { mode, turns };
+}
+
+export async function runBenchmark(call: Caller, cfg: RunConfig): Promise<RunResult> {
+  const usage = emptyUsage();
+  const results: Partial<Record<ScenarioId, ScenarioResult>> = {};
+  let stoppedBy: string | null = null;
+  mkdirSync(cfg.cacheDir, { recursive: true });
+
+  const invoke = makeInvoke(call, cfg, usage, cfg.budgetTokens);
 
   const runScenario = async (id: ScenarioId): Promise<void> => {
     const s = SCENARIOS[id];
@@ -222,7 +242,7 @@ export async function runBenchmark(call: Caller, cfg: RunConfig): Promise<RunRes
     const transcripts: Transcript[] = [];
     for (let run = 0; run < cfg.maxRuns; run++) {
       if (run > 0) usage.repeatRuns++;
-      const t = await once(s);
+      const t = await transcribe(s, invoke);
       transcripts.push(t);
       runs.push(grade(id, t));
       const last = runs.at(-1)!;
@@ -282,6 +302,30 @@ export async function runBenchmark(call: Caller, cfg: RunConfig): Promise<RunRes
     benchVersion: BENCH_VERSION, config, results, usage, stoppedBy,
     plannedTokens: plannedTokens(cfg.only ?? [...STAGE_1, ...STAGE_2]), startedAt: new Date().toISOString(),
   };
+}
+
+export interface ScenarioOnce {
+  transcript: Transcript;
+  grade: Grade;
+  usage: Usage;
+}
+
+/**
+ * One graded pass through one scenario, with no cache and no repeat.
+ *
+ * The scheduled route probe's entry point: it spends one scenario per call
+ * and keeps every result as history, so neither the file cache (which would
+ * answer a re-probe from last week) nor the borderline re-run (which would
+ * double the quota a probe spends) belongs here. The full CLI run keeps both.
+ */
+export async function runScenarioOnce(
+  call: Caller,
+  id: ScenarioId,
+  cfg: Pick<RunConfig, 'temperature' | 'seed' | 'reasoningEffort'>,
+): Promise<ScenarioOnce> {
+  const usage = emptyUsage();
+  const transcript = await transcribe(SCENARIOS[id], makeInvoke(call, cfg, usage, null));
+  return { transcript, grade: grade(id, transcript), usage };
 }
 
 function notTested(id: ScenarioId, why: string): ScenarioResult {

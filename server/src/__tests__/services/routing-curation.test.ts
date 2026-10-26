@@ -9,6 +9,7 @@ import {
   chainMembers,
   type ChainName,
 } from '../../data/routing-curation.js';
+import { planCuration } from '../../scripts/apply-routing-curation.js';
 import { resolveRoutingChain, setRoutingStrategy } from '../../services/router.js';
 import { consumesPaidBalance, resolveQuotaPolicy } from '../../services/provider-quota.js';
 import { invalidateQuotaPressure } from '../../services/quota-pressure.js';
@@ -35,12 +36,12 @@ function addKey(platform: string): void {
   `).run(platform, secret.encrypted, secret.iv, secret.authTag);
 }
 
-function addModel(platform: string, modelId: string, opts: { tools?: boolean; vision?: boolean } = {}): number {
+function addModel(platform: string, modelId: string, opts: { tools?: boolean; vision?: boolean; endpointScope?: string } = {}): number {
   const info = getDb().prepare(`
     INSERT INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, size_label,
-      monthly_token_budget, context_window, enabled, supports_vision, supports_tools)
-    VALUES (?, ?, ?, 5, 5, 'Large', '', 128000, 1, ?, ?)
-  `).run(platform, modelId, `${modelId} (${platform})`, opts.vision ? 1 : 0, opts.tools === false ? 0 : 1);
+      monthly_token_budget, context_window, enabled, supports_vision, supports_tools, endpoint_scope)
+    VALUES (?, ?, ?, 5, 5, 'Large', '', 128000, 1, ?, ?, ?)
+  `).run(platform, modelId, `${modelId} (${platform})`, opts.vision ? 1 : 0, opts.tools === false ? 0 : 1, opts.endpointScope ?? '');
   return Number(info.lastInsertRowid);
 }
 
@@ -345,3 +346,29 @@ describe('merged chains keep their old selectors', () => {
     expect(workhorse.chain.map(e => e.model_id)).toEqual(['default-head', 'default-tail']);
   });
 });
+
+describe('the applier names custom-endpoint routes by scope', () => {
+  beforeEach(reset);
+
+  it('keeps the scoped route the spec names and disables only the twin it does not', () => {
+    // Two custom keys can serve the same model id, and they are different
+    // routes with different quotas. The pre-2026-10-26 applier looked models up
+    // with endpoint_scope = '', saw NEITHER row, and its "switch off every
+    // chain row the spec does not name" rule then disabled both — stripping a
+    // live route the spec carried. Scope is now part of the lookup key, so a
+    // spec row with endpointScope matches its one row and leaves the twin
+    // (same id, other endpoint) to the disable sweep.
+    addKey('custom');
+    const scopedMatch = addModel('custom', 'coding-glm-5.3-free', { endpointScope: 'https://api.inferera.com/v1' });
+    const scopedTwin = addModel('custom', 'coding-glm-5.3-free', { endpointScope: 'https://other-key.example/v1' });
+    addChain('Apex', [scopedMatch, scopedTwin]);
+
+    const plan = planCuration();
+    const apexEnables = plan.enable.filter(r => r.chain === 'Apex');
+    expect(apexEnables.map(r => r.modelDbId)).toEqual([scopedMatch]);
+    expect(plan.disable).toEqual([
+      { chain: 'Apex', modelDbId: scopedTwin, platform: 'custom', modelId: 'coding-glm-5.3-free' },
+    ]);
+  });
+});
+

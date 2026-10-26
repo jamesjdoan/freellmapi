@@ -31,13 +31,14 @@ import {
   chainMembers,
   type ChainName,
 } from '../data/routing-curation.js';
+import { isChainOrderManaged } from '../services/chain-arrange.js';
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
   return i !== -1 ? process.argv[i + 1] : undefined;
 }
 
-interface ModelRow { id: number; platform: string; model_id: string; supports_tools: number; supports_vision: number }
+interface ModelRow { id: number; platform: string; model_id: string; endpoint_scope: string; supports_tools: number; supports_vision: number }
 
 export interface CurationPlan {
   /** Chain rows to switch on, with the priority the spec gives them. */
@@ -63,21 +64,22 @@ export function planCuration(): CurationPlan {
   const db = getDb();
   const plan: CurationPlan = { enable: [], disable: [], missingModels: [], missingChains: [], violations: [] };
 
-  // Catalogue rows keyed the way the spec names them. `endpoint_scope = ''`
-  // restricts this to catalogue platforms: a relay serving the same model id is
-  // a different route with different economics and is not what the spec means.
+  // Catalogue rows keyed the way the spec names them. A route on a custom
+  // endpoint is named by (platform, model id, endpoint scope) because two keys
+  // can serve the same model id and they are different routes with different
+  // economics; an omitted scope in the spec matches the '' catalogue rows.
   const models = db.prepare(
-    "SELECT id, platform, model_id, supports_tools, supports_vision FROM models WHERE endpoint_scope = ''",
+    "SELECT id, platform, model_id, COALESCE(endpoint_scope, '') AS endpoint_scope, supports_tools, supports_vision FROM models",
   ).all() as ModelRow[];
   const byKey = new Map<string, ModelRow>();
-  for (const m of models) byKey.set(`${m.platform}\u0000${m.model_id}`, m);
+  for (const m of models) byKey.set(`${m.platform}\u0000${m.model_id}\u0000${m.endpoint_scope}`, m);
 
   const profiles = db.prepare('SELECT id, name FROM profiles').all() as { id: number; name: string }[];
   const profileByName = new Map<string, number>();
   for (const p of profiles) profileByName.set(p.name.toLowerCase(), p.id);
 
   for (const route of CURATED_ROUTES) {
-    if (!byKey.has(`${route.platform}\u0000${route.modelId}`)) {
+    if (!byKey.has(`${route.platform}\u0000${route.modelId}\u0000${route.endpointScope ?? ''}`)) {
       plan.missingModels.push({ platform: route.platform, modelId: route.modelId });
     }
   }
@@ -91,7 +93,7 @@ export function planCuration(): CurationPlan {
 
     const wanted = new Map<number, { priority: number; platform: string; modelId: string }>();
     for (const member of chainMembers(contract.name)) {
-      const row = byKey.get(`${member.platform}\u0000${member.modelId}`);
+      const row = byKey.get(`${member.platform}\u0000${member.modelId}\u0000${member.endpointScope ?? ''}`);
       if (!row) continue; // already reported as missing
       // The contract is checked against the CATALOGUE's capability flags, not
       // against the spec's opinion of the model. A vision chain that admits a
@@ -151,13 +153,23 @@ export function applyCuration(plan: CurationPlan): void {
     VALUES (?, ?, ?, 1)
     ON CONFLICT(profile_id, model_db_id) DO UPDATE SET priority = excluded.priority, enabled = 1
   `);
+  // In a chain the arranger owns, order is not the applier's to write: an
+  // existing member keeps the priority the arranger gave it, and only a new
+  // member takes its spec position (ADR ARCH-20261026-chain-auto-arrange).
+  const upsertKeepingOrder = db.prepare(`
+    INSERT INTO profile_models (profile_id, model_db_id, priority, enabled)
+    VALUES (?, ?, ?, 1)
+    ON CONFLICT(profile_id, model_db_id) DO UPDATE SET enabled = 1
+  `);
   const disable = db.prepare('UPDATE profile_models SET enabled = 0 WHERE profile_id = ? AND model_db_id = ?');
+  const managed = new Map<string, boolean>();
 
   db.transaction(() => {
     for (const row of plan.enable) {
       const profileId = profileByName.get(row.chain.toLowerCase());
       if (profileId === undefined) continue;
-      upsert.run(profileId, row.modelDbId, row.priority);
+      if (!managed.has(row.chain)) managed.set(row.chain, isChainOrderManaged(row.chain, db));
+      (managed.get(row.chain) ? upsertKeepingOrder : upsert).run(profileId, row.modelDbId, row.priority);
     }
     for (const row of plan.disable) {
       const profileId = profileByName.get(row.chain.toLowerCase());

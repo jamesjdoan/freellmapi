@@ -1,5 +1,6 @@
 import { blockedReason, hideControlPressable, verdictEdge } from '@/lib/route-blockers'
 import { Fragment, useMemo, useState } from 'react'
+import { History } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { readHideDisabled, writeHideDisabled } from '@/lib/hide-disabled-pref'
@@ -22,6 +23,7 @@ import { scoreRowOf, useScoreTone } from '@/lib/chain-minimums'
 import type { ScoreCell, Scores } from '@/lib/score-provenance'
 import type { TokenEfficiency } from '@freellmapi/shared/types'
 import { TokenEfficiencyCell } from '@/components/token-efficiency'
+import { RouteHistoryDialog } from '@/components/keys/route-history-dialog'
 import { compareTokenEfficiency } from '@/lib/token-efficiency'
 import { NoToolsMark, ScoreValue } from '@/components/score-value'
 import { ProviderModelCapacityIndicator } from '@/components/provider-capacity'
@@ -263,6 +265,14 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
    *  platform 'custom'. Undefined = the whole platform. */
   endpointScope?: string
 }) {
+  // Hooks this feature added sit above the early return below, so the hook
+  // order never depends on the panel's own switch.
+  // `screening-benchmark` off: the tokens-per-task column is removed from the
+  // table below — header, cells and the parked-row spans.
+  const screeningOn = useExtensionEnabled('screening-benchmark')
+  // The route-history drill-in (ARCH-20261026): one dialog at a time, opened
+  // from the row whose probes and drift are in question.
+  const [historyFor, setHistoryFor] = useState<Row | null>(null)
   // `provider-models-panel` off: the panel is hidden and upstream's provider view is used; saved scope is untouched.
   if (!useExtensionEnabled('provider-models-panel')) return null
   const { t } = useI18n()
@@ -702,7 +712,7 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
             <SortTh active={sort === 'coding'} onClick={() => setSort('coding')} right>{t('compare.coding')}</SortTh>
             <SortTh active={sort === 'agentic'} onClick={() => setSort('agentic')} right>{t('compare.agentic')}</SortTh>
             <SortTh active={sort === 'speed'} onClick={() => setSort('speed')} right>{t('compare.colSpeed')}</SortTh>
-            <SortTh active={sort === 'tokens'} onClick={() => setSort('tokens')} right>{t('compare.colTokensPerTask')}</SortTh>
+            {screeningOn && <SortTh active={sort === 'tokens'} onClick={() => setSort('tokens')} right>{t('compare.colTokensPerTask')}</SortTh>}
             <th className="py-1 pr-2 text-right font-normal">{t('compare.colContext')}</th>
             <th className="py-1 pr-2 text-right font-normal">{t('keys.panelColAllowance')}</th>
             <th className="py-1 pr-2 text-left font-normal">{t('keys.panelColChains')}</th>
@@ -717,7 +727,7 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
               <Fragment key={r.modelDbId}>
               {parkedStart && (
                 <tr className="border-t-2">
-                  <td colSpan={11} className="bg-muted/40 px-2 py-1.5 text-[11px]">
+                  <td colSpan={screeningOn ? 11 : 10} className="bg-muted/40 px-2 py-1.5 text-[11px]">
                     <span className="font-semibold">{t('keys.parkedTitle', { count: rows.length - i })}</span>
                     <span className="ml-2 text-muted-foreground">{t('keys.parkedHint')}</span>
                   </td>
@@ -765,6 +775,16 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
                     {r.expiry && <ExpiryChip expiresAt={r.expiry.expiresAt} label={r.expiry.label} />}
                   </span>
                   <code className="block max-w-[260px] truncate text-[10px] text-muted-foreground" title={r.modelId}>{r.modelId}</code>
+                  {/* Probes and per-day drift for THIS route (platform, model,
+                      endpoint) — the evidence the arranger ranks it on. */}
+                  <button
+                    type="button"
+                    onClick={() => setHistoryFor(r)}
+                    className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <History className="size-3" />
+                    {t('routeHistory.open')}
+                  </button>
                   <ProviderModelCapacityIndicator platform={r.platform} modelId={r.modelId} />
                   {rename.isError && rename.variables?.id === r.modelDbId && (
                     <span className="block text-[10px] text-destructive">{(rename.error as Error).message}</span>
@@ -872,9 +892,11 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
                 {/* Tokens per task (ADR ARCH-20261020). The AA range and the
                     screen measurement are different measures, so each carries
                     its own mark and they are never compared as one column. */}
-                <td className="py-1 pr-2 text-right tabular-nums" title={t('compare.tokensPerTaskHint')}>
-                  <TokenEfficiencyCell value={r.tokenEfficiency} />
-                </td>
+                {screeningOn && (
+                  <td className="py-1 pr-2 text-right tabular-nums" title={t('compare.tokensPerTaskHint')}>
+                    <TokenEfficiencyCell value={r.tokenEfficiency} />
+                  </td>
+                )}
                 <td className="py-1 pr-2 text-right tabular-nums text-muted-foreground">
                   {r.contextWindow ? `${Math.round(r.contextWindow / 1000)}K` : '–'}
                 </td>
@@ -994,6 +1016,14 @@ export function ProviderModelsPanel({ platform, endpointScope }: {
             </span>
           ))}
         </div>
+      )}
+      {historyFor && (
+        <RouteHistoryDialog
+          route={{ platform: historyFor.platform, modelId: historyFor.modelId, endpointScope: historyFor.endpointScope ?? '' }}
+          displayName={historyFor.displayName}
+          open
+          onClose={() => setHistoryFor(null)}
+        />
       )}
     </div>
   )

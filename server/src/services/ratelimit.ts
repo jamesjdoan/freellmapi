@@ -1021,6 +1021,23 @@ export function recordTokens(
   }
 }
 
+/**
+ * A route probe's spend (services/route-probe.ts). It counts toward the same
+ * windows as routed traffic, because the provider counts it too, but unlike
+ * recordRequest it clears nothing: a probe that happened to answer is not
+ * evidence that a route's 429 history is over, and probe traffic never feeds
+ * cooldowns, penalties or their recovery (ADR ARCH-20261026-chain-auto-arrange).
+ */
+export function recordProbeUsage(platform: string, modelId: string, keyId: number, tokens: number) {
+  const now = Date.now();
+  if (isUnlimitedModel(platform, modelId)) return;
+  if (!recordUsage(platform, modelId, keyId, 'request', 0, now)) {
+    pushMemoryRequest(`${platform}:${modelId}:${keyId}:rpm`, MINUTE, now);
+    pushMemoryRequest(`${platform}:${modelId}:${keyId}:rpd`, DAY, now);
+  }
+  if (tokens > 0) recordTokens(platform, modelId, keyId, tokens);
+}
+
 // Cooldown: when a provider returns 429, block that model+key for a period
 const cooldowns = new Map<string, number>(); // key -> expiry timestamp
 

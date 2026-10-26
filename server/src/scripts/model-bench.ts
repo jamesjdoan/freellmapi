@@ -38,6 +38,7 @@ import { REASONING_EFFORTS, type ReasoningEffort } from '../lib/sampling-params.
 import { plannedTokens, runBenchmark, type Caller } from '../services/model-bench/runner.js';
 import { buildPassport, renderMarkdown, type Passport } from '../services/model-bench/passport.js';
 import { sandboxAvailable } from '../services/model-bench/sandbox.js';
+import { pickRouteKey } from '../services/model-bench/route-key.js';
 
 interface Args {
   models: string[]; db?: string; keyId?: number; budget: number; runs: number; effort?: ReasoningEffort;
@@ -75,28 +76,6 @@ function parse(argv: string[]): Args {
 }
 
 interface ModelRow { platform: string; model_id: string; display_name: string; context_window: number | null; supports_tools: number; supports_vision: number; key_id: number | null }
-interface KeyRow { id: number; encrypted_key: string; iv: string; auth_tag: string; base_url: string | null; model_scope_json: string | null }
-
-function pickKey(model: ModelRow, keyId?: number): KeyRow {
-  // Every custom relay shares platform 'custom', so "first usable custom key"
-  // can be a different relay that does not serve this id. A custom route is
-  // tested only through the key its catalogue row belongs to.
-  if (model.platform === 'custom') {
-    if (model.key_id == null) throw new Error(`custom/${model.model_id}: catalogue row names no key; cannot tell which relay serves it`);
-    if (keyId != null && keyId !== model.key_id) throw new Error(`custom/${model.model_id} belongs to key ${model.key_id}, not ${keyId}`);
-    keyId = model.key_id;
-  }
-  const keys = getDb().prepare(`
-    SELECT id, encrypted_key, iv, auth_tag, base_url, model_scope_json FROM api_keys
-     WHERE platform = ? AND enabled = 1 AND status IN ('healthy', 'unknown') ${keyId != null ? 'AND id = ?' : ''} ORDER BY id
-  `).all(...(keyId != null ? [model.platform, keyId] : [model.platform])) as KeyRow[];
-  const usable = keys.filter(k => {
-    if (!k.model_scope_json) return true;
-    try { return (JSON.parse(k.model_scope_json) as string[]).includes(model.model_id); } catch { return false; }
-  });
-  if (usable.length === 0) throw new Error(`no enabled, healthy key on ${model.platform} whose scope covers ${model.model_id}`);
-  return usable[0];
-}
 
 async function benchOne(spec: string, args: Args): Promise<Passport | null> {
   const slash = spec.indexOf('/');
@@ -111,7 +90,7 @@ async function benchOne(spec: string, args: Args): Promise<Passport | null> {
   console.log(`\n${spec}: plan ${ids.join(' ')} · token ceiling ${plannedTokens(ids)} · budget ${args.budget}`);
   if (args.dryRun) return null;
 
-  const key = pickKey(model, args.keyId);
+  const key = pickRouteKey(db, model, args.keyId);
   const cooling = db.prepare('SELECT MAX(expires_at_ms) AS until FROM rate_limit_cooldowns WHERE platform = ? AND model_id = ? AND expires_at_ms > ?')
     .get(platform, modelId, Date.now()) as { until: number | null };
   if (cooling.until) throw new Error(`${spec}: on cooldown until ${new Date(cooling.until).toISOString()}; not spending calls into a known refusal`);

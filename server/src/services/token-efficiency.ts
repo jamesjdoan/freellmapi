@@ -260,6 +260,8 @@ const benchRunSchema = z.object({
   config: z.object({
     platform: z.string().min(1),
     modelId: z.string().min(1),
+    /** The key's base_url: which relay served a custom route. */
+    endpoint: z.string().nullable().optional(),
     reasoningEffort: z.string().nullable().optional(),
   }),
   usage: z.object({
@@ -268,7 +270,16 @@ const benchRunSchema = z.object({
     completionTokens: z.number().int().nonnegative(),
     reasoningTokens: z.number().int().nonnegative(),
   }),
-  results: z.record(z.string(), z.object({ status: z.string().min(1) })),
+  // Per-scenario fields beyond `status` are optional so a passport written
+  // before the route-history import still imports; they feed
+  // route_probe_result (services/route-probe.ts recordBenchImport).
+  results: z.record(z.string(), z.object({
+    status: z.string().min(1),
+    score: z.number().nullable().optional(),
+    mode: z.string().optional(),
+    cached: z.boolean().optional(),
+    note: z.string().optional(),
+  })),
   startedAt: z.string().min(1),
 });
 

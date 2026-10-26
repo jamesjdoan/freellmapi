@@ -22,6 +22,7 @@ import { ExtensionsDialog } from '@/components/extensions-dialog'
 import { SettingsDialog } from '@/components/settings-dialog'
 import { UpdatesDialog } from '@/components/updates-dialog'
 import { OPEN_UPDATES_EVENT } from '@/lib/updates'
+import { OPEN_EXTENSIONS_EVENT } from '@/lib/extensions'
 import { Toaster } from '@/components/toaster'
 import { ChainMinimumsPanel } from '@/components/chain-minimums-panel'
 import { UpdateReminder } from '@/components/update-reminder'
@@ -260,6 +261,13 @@ const [extensionsOpen, setExtensionsOpen] = useState(false)
     const open = () => setUpdatesOpen(true)
     window.addEventListener(OPEN_UPDATES_EVENT, open)
     return () => window.removeEventListener(OPEN_UPDATES_EVENT, open)
+  }, [])
+  // So do gated panels (the auto-arrange panel points an operator here when
+  // its extension is switched off).
+  useEffect(() => {
+    const open = () => setExtensionsOpen(true)
+    window.addEventListener(OPEN_EXTENSIONS_EVENT, open)
+    return () => window.removeEventListener(OPEN_EXTENSIONS_EVENT, open)
   }, [])
   const [credentialsMode, setCredentialsMode] = useState<'password' | 'email' | null>(null)
   const { data: premium, licensed, isLoading: premiumLoading, isError: premiumError } = usePremium()

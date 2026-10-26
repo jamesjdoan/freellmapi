@@ -131,6 +131,44 @@ function toolReliability(run: RunResult): Passport['internal']['toolReliability'
 
 const METRIC_OF = { general: 'intelligence', coding: 'coding', agentic: 'agentic' } as const;
 
+export interface MetricVerdict {
+  result: 'pass' | 'near' | 'below' | 'unknown';
+  reason: string;
+  /** The number behind the verdict is an AA measurement, not a typed score
+   *  or a proxy's estimate. */
+  measured: boolean;
+}
+
+export interface MinimumJudgeOptions {
+  /** How far below a minimum still counts as near-fit. The passport's chain
+   *  recommendations stay hard-edged (0); the chain arranger passes its
+   *  tolerancePct so one rule grades both surfaces. */
+  tolerancePct: number;
+  acceptEstimated: boolean;
+}
+
+/** One published metric judged against one minimum — THE one rule, shared by
+ *  recommendChains and the chain arranger. A missing score and an unaccepted
+ *  estimate are both unknown, a value at or above the minimum passes, one
+ *  inside the tolerance band is near, one under it is below. */
+export function judgeMetric(key: string, cell: ScoreCell, min: number, opts: MinimumJudgeOptions): MetricVerdict {
+  const measured = cell.provenance === 'measured';
+  if (cell.value == null) {
+    return { result: 'unknown', reason: `${key}: no published or typed score (minimum ${min})`, measured };
+  }
+  if ((cell.provenance === 'family' || cell.provenance === 'approximated') && !opts.acceptEstimated) {
+    return { result: 'unknown', reason: `${key}: ${cell.value} is ${cell.provenance}; chain does not accept estimates`, measured };
+  }
+  if (cell.value >= min) {
+    return { result: 'pass', reason: `${key}: ${cell.value} (${cell.provenance}) meets ${min}`, measured };
+  }
+  const floor = min * (1 - opts.tolerancePct / 100);
+  if (cell.value >= floor) {
+    return { result: 'near', reason: `${key}: ${cell.value} (${cell.provenance}) within ${opts.tolerancePct}% of ${min}`, measured };
+  }
+  return { result: 'below', reason: `${key}: ${cell.value} (${cell.provenance}) below minimum ${min}`, measured };
+}
+
 /** Provisional working thresholds on PUBLISHED AA indices (task brief, 2026-10-18).
  *  Not AA categories. Never applied to internal 0–100 scores. */
 export const OMP_ROLE_THRESHOLDS: Record<string, { intelligence?: number; coding?: number; agentic?: number; critical?: boolean }> = {
@@ -175,24 +213,19 @@ export function recommendChains(p: Pick<Passport, 'internal' | 'route' | 'publis
     // Alternatives: one passing member clears the group; otherwise the group
     // fails if every set member is measured below, and is unknown if any
     // could still pass once scored.
-    const group: { key: string; result: 'pass' | 'below' | 'unknown'; reason: string; measured: boolean }[] = [];
+    const group: { key: string; result: MetricVerdict['result']; reason: string; measured: boolean }[] = [];
     for (const key of ['general', 'coding', 'agentic'] as const) {
       const min = m?.[key];
       if (min == null) continue;
       const cell = p.published[METRIC_OF[key]];
-      let result: 'pass' | 'below' | 'unknown';
-      let reason: string;
-      if (cell.value == null) { result = 'unknown'; reason = `${key}: no published or typed score (minimum ${min})`; }
-      else if ((cell.provenance === 'family' || cell.provenance === 'approximated') && !m.acceptEstimated) {
-        result = 'unknown'; reason = `${key}: ${cell.value} is ${cell.provenance}; chain does not accept estimates`;
-      } else if (cell.value < min) { result = 'below'; reason = `${key}: ${cell.value} (${cell.provenance}) below minimum ${min}`; }
-      else { result = 'pass'; reason = `${key}: ${cell.value} (${cell.provenance}) meets ${min}`; }
-      const measured = cell.provenance === 'measured';
-      if (either.has(key)) { group.push({ key, result, reason, measured }); continue; }
-      if (result === 'pass' && !measured) provisional = true;
-      if (result === 'below') return { target: rule.name, status: 'not qualified' as const, reasons: [...reasons, reason] };
-      if (result === 'unknown') unknown = true;
-      reasons.push(reason);
+      // Tolerance 0 keeps these recommendations hard-edged; the band is the
+      // arranger's widening of the same rule.
+      const v = judgeMetric(key, cell, min, { tolerancePct: 0, acceptEstimated: m?.acceptEstimated ?? false });
+      if (either.has(key)) { group.push({ key, result: v.result, reason: v.reason, measured: v.measured }); continue; }
+      if (v.result === 'pass' && !v.measured) provisional = true;
+      if (v.result === 'below') return { target: rule.name, status: 'not qualified' as const, reasons: [...reasons, v.reason] };
+      if (v.result === 'unknown') unknown = true;
+      reasons.push(v.reason);
     }
     if (group.length > 0) {
       // A measured pass beats an estimated one: only the alternative that

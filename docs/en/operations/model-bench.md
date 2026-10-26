@@ -6,7 +6,7 @@ Code: `server/src/services/model-bench/` (fixtures, sandbox, grade, runner, pass
 
 ## What it never does
 
-- **Touch production.** `--db` names a source database. It is copied to a temp directory and only the copy is opened. Keys are decrypted from the copy, and the provider adapters' quota bookkeeping lands in the copy, which is deleted on exit. No table or migration is added. Results go to `server/data/model-bench/` (gitignored).
+- **Touch production — from the CLI.** `--db` names a source database. It is copied to a temp directory and only the copy is opened. Keys are decrypted from the copy, and the provider adapters' quota bookkeeping lands in the copy, which is deleted on exit. No table or migration is added. Results go to `server/data/model-bench/` (gitignored). The scheduled route probe (below) is the one deliberate exception: it runs the same scenarios inside the server against production keys, and only on that path (ADR `ARCH-20261026-chain-auto-arrange`).
 - **Fall back.** Calls go straight to the provider adapter for the one route named. There is no router and no chain behind it, so a failure is that model's failure.
 - **Spend paid balance.** A route for which `consumesPaidBalance` is true is refused before any call.
 - **Pick another relay's key.** Custom routes run only through the key their catalogue row belongs to.
@@ -169,6 +169,22 @@ curl -X DELETE http://127.0.0.1:3001/api/analysis/bench-results \
 ```
 
 Re-importing a route replaces its row. The import refuses a route with no catalogue row (404), and a run where no scenario reached a verdict (400).
+Importing also appends each scenario to the route's history (`route_probe_result`, below); the response reports how many rows were written as `historyRows`.
+
+## Scheduled route probes and history
+
+Since 2026-10-26 the server runs the agentic scenarios on its own, one per call, to keep a record of chain routes that real traffic does not reach (`server/src/services/route-probe.ts`, Extensions → **Route bench probes**). The chain arranger ranks routes on this record (ADR `ARCH-20261026-chain-auto-arrange`).
+
+- **Streamed, with native tools.** Routed agent traffic streams, and a route can pass a non-streamed call and fail every streamed one; `nvidia/stepfun-ai/step-5-preview` did. `services/model-bench/stream.ts` turns the stream back into a completion the grader reads, treating an empty stream as an empty completion and rescuing inline tool-call dialects exactly as the proxy does. Tool arguments are graded raw, never repaired.
+- **One scenario per call, no cache, no repeat.** `runScenarioOnce` in `runner.ts`. Scenarios rotate A1 → A2 → A3 per route, so each route has a full agentic screen within about a week.
+- **Coding stays on the host.** C1–C3 execute Python in an OS sandbox the container lacks (no `python3`, and `unshare -rn` is refused there), so they run from the Mac through the CLI above.
+- **Budget.**
+  - Only routes in a chain are probed, and only those that served no real traffic in the last 24 hours.
+  - At most 2 probes per route per day (1 where the daily limit is unknown or under 200), 8 hours apart.
+  - At most 1% of a provider's account-wide daily cap, where one is set.
+  - Nothing is sent into a cooldown, a closed quota domain, or a pool with less than half left — unless that pool is under-spent near its reset, in which case it is probed first. Paid routes are never probed.
+- **Ledger.** A probe call counts toward the route's usage windows (`recordProbeUsage`), because the provider counts it, but it never sets, clears or extends a cooldown or penalty.
+- **History.** Every probe appends a row to `route_probe_result`, keyed by route — `(platform, model_id, endpoint_scope)` — with the key used, outcome (`ok`, `empty`, `timeout`, `rate_limited`, `refused`, `error`), bench status and score, latency and tokens. An imported CLI run appends one row per scenario as well (source `import`, not streamed), so coding scores have a history too; cached scenarios and a second import of the same file add nothing. Unlike `model_bench_result`, which keeps one row per route, the history keeps every result, so drift can be read: **Keys → provider → History** on a route row shows the daily table and every probe, with **Probe now**.
 
 ## Limitations
 

@@ -12,6 +12,8 @@ import { startZenGateWatch } from './services/clifree-gate-watch.js';
 import { startBurnRecoveryPoller } from './services/quota-burn.js';
 import { startProviderUsagePolling } from './services/provider-usage-api.js';
 import { startModelProbe } from './services/model-probe.js';
+import { startRouteProbe } from './services/route-probe.js';
+import { startChainArrange } from './services/chain-arrange.js';
 import { startCustomModelSync } from './services/custom-model-sync.js';
 import { startBuiltinModelDiscovery } from './services/builtin-model-discovery.js';
 import { installProcessSafetyNet } from './lib/process-safety-net.js';
@@ -102,6 +104,10 @@ async function main() {
     startProviderUsagePolling(scheduler);
     stopRadeonPressureCollection ??= startRadeonPressurePolling(scheduler);
     startModelProbe(scheduler);
+    // Imperium: evidence for routes nobody calls, and the hourly arranger that
+    // ranks chains on it. Both read their Extensions gate on every tick.
+    startRouteProbe(scheduler);
+    startChainArrange(scheduler);
     startDbBackupPump(getDb(), scheduler, config.dbPath ?? undefined);
     startBackupScheduler(scheduler);
     startCustomModelSync(getDb(), scheduler);

@@ -1,5 +1,85 @@
 # Changelog
 
+## 2026-10-27 — Chain auto-arrange and route bench probes (built, not deployed)
+
+- **Why.** On 2026-10-26, 47 of the 85 routes in the six chains had no real requests in 14 days, so their positions were never measured. Under `routing_strategy = priority` the stored order decides which model serves, and that order was hand-set and stale. Extra-Tier, the overflow for every chain, was headed by ten never-called custom routes. ADR `ARCH-20261026-chain-auto-arrange`, approved 2026-10-26.
+- **Chain auto-arrange** (`services/chain-arrange.ts`, extension `chain-auto-arrange`, on by default, hourly).
+  - Orders routes, not models. Per route: reliability tier (Wilson lower bound over real traffic plus probes), eligibility against the chain minimums with a 10% tolerance band (an unpublished score is never a failure), then the chain's own metric.
+  - The head spreads across independent quota pools. Per-chain minimum depth defaults: Apex, Coding and Default 8 models across 4 pools; Fast-Lane 6 across 3; Vision 4 across 2.
+  - Operator pins always win, and a hand move in a managed chain becomes a pin. Any chain can be switched to manual.
+  - Every applied order is a `chain_arrange_run` row with the reasons for every position.
+  - The curation applier keeps arranged priorities in managed chains. `judgeMetric` (`model-bench/passport.ts`) is now the one minimum rule for both passport recommendations and the arranger.
+- **Route bench probes** (`services/route-probe.ts`, extension `route-bench-probe`, on by default, every 15 minutes).
+  - Each probe is one graded agentic scenario (A1–A3 rotating), sent streamed with native tools through the route's own key.
+  - Budget: 1–2 per route per day, only for chain routes without real traffic in 24h, never into a cooldown, closed quota or paid route. Quota about to expire unused is spent first.
+  - Results append to `route_probe_result`, keyed by route. Bench CLI imports append there too, so the host-only coding scenarios have a history.
+  - Dashboard: **Routing → Auto-arrange** (preview, pins, depth, run history) and **Keys → provider → History** (daily drift, every probe, Probe now).
+- **Migration** `20261026_000001_route_probes_and_chain_arrange`: creates two tables and changes nothing existing. `down()` drops only those two tables.
+- **Verified:**
+  - Server: 435 files, 5425 passed, 5 skipped. Client: 96 files, 731 passed. Both type-checks clean; i18n 60 locales.
+  - On a copy of the production DB: the migration applied, and every chain previewed in under 100 ms.
+  - One real streamed probe: `groq/openai/gpt-oss-120b` A1 PASS at 100, 328 ms, 243+69 tokens from the stream's own usage frame.
+  - `nvidia/stepfun-ai/step-5-preview` A1 FAIL at 0 after 37 s, recorded as evidence.
+  - A second apply on the copy wrote nothing.
+- **Not yet done:** image rebuild and redeploy (needs approval); re-pinning MiniMax M3.1 Flash at Apex 3, chosen by hand on 2026-10-26 but not yet a pin, so the first pass would move it to 6.
+
+## 2026-10-26 — Upstream v0.16.9 merged (deployed `main-20261026-064426`)
+
+- `--no-ff` merge of tag `v0.16.9` onto `f5419594`, committed as `c44a4c2b` and fast-forwarded onto `docs/freellm-assert-start-on-redeploy`. It covers v0.16.4–v0.16.9, 63 commits. Recovery tag: `imperium/pre-v0.16.9-recovery`. Rollback image: `jamesjdoan/freellmapi:provider-routing-before-20261026-064426`. Volume backup: `backups/freellmapi-data-20261026-064426.tar.gz`.
+- **Live after deploy:**
+  - `Up (healthy)` on `127.0.0.1:3001`, running the same image ID as the validated candidate (`eff4aca0`).
+  - 99 migrations, with the three new ones applied.
+  - 19/19 keys decrypt.
+  - `auto:fast-lane` answered "OK" through `groq/qwen/qwen3.8-27b`.
+  - `/v1/models` lists 556 ids.
+- **72 conflicts.** The 60 locale files were merged key by key; no value had changed on both sides. The 12 code and doc conflicts:
+  - `resolveQuotaPolicy` kept (the documented exception). Upstream's onomeo and IteraCompute pools were ported into it, and Auray's pool was dropped.
+  - No account-wide NVIDIA minute cap (measured per model); upstream's APINex 5/min cap taken.
+  - Analytics keeps our window scope and takes upstream's first-value rule for repeated params (#1597) across every page filter.
+  - `last_healthy_at` (#1493) taken. Our rule that the health payload's error wins over the key row's stale one is kept.
+  - Moderation keeps the paid-balance guard and takes upstream's monthly-cap gate.
+  - The migration manifest is filename-ordered with upstream's three new migrations.
+  - Upstream's deleted Auray test and its Auray checklist case were dropped.
+- **Deference review: nothing to delete.** No upstream change in the window does what an extension does. Upstream's model probe (#1492) is opt-in and observation-only, monthly-cap alerts (#1665) cover only monthly caps, `/v1/usage` reads our own ledger, and the Groq OTPM fix (#1546) complements the pool resolver.
+- **Validation:**
+  - Typecheck clean on both packages; `check:i18n` passes.
+  - Client tests: 717/717.
+  - Server tests: 5395 passed and 2 failed in the full run. Both failures are timing budgets (`compression` performance, `router-key-bandit` 5 s) that pass alone and pass on the pre-merge tree.
+  - Two upstream tests ported to the fork's API: `inferQuotaPoolKey`, and the auth-aware fetch mock.
+  - Image `jamesjdoan/freellmapi:candidate-v0.16.9` built on Node 24.
+  - **Migration rehearsal** on a copy of the live DB: the first run applied the three new migrations, and the second applied nothing. `api_keys` was identical apart from the new empty column; the Auray removal touched no rows.
+  - **Candidate container on a data copy:** came up healthy; 19/19 keys decrypt; all 41 extensions on the same states as live. `auto:fast-lane` and `auto` both answered through `groq/qwen/qwen3.8-27b`; `/v1/usage` and `/v1/models/auto` answered 200; the Keys page and Extensions panel rendered.
+- **Found on the way:** `groq/qwen/qwen3.8-27b` (model 687) had `tpm_limit 1000`, learned from 32 OTPM rejections — the bug #1546 fixes. No write was needed: the boot catalogue re-apply restored the catalogue's 70,000, and no override pins it. Under #1546 an OTPM rejection now writes nothing, so this kind of rejection can no longer pull it back down.
+
+## 2026-10-25 — UnoRouter's free chat models added; Step 5 Preview joins five chains (live data)
+
+- **82 UnoRouter `:free` chat models added** through `POST /api/models`, each with `rpm_limit 1`, matching the two rows already there. The live `/v1/models` listing had 147 `:free` ids. The rest were left out:
+  - 48 are embedding, image or AI Horde endpoints.
+  - 16 are typed `openai` but are not chat models: speech (Whisper, Nova 3, Aura), embedding, music (Lyria), translation, robotics, a safety classifier and a calibration model.
+  - `glm-5.3-flash:free` was already present.
+  - `glm-5.3:free` is no longer listed upstream. Its row is kept.
+- An AA relink afterwards matched 38 of the 84 UnoRouter rows. No chain auto-includes new models, so adding them changed no routing.
+- **Screened tool use (A1) on every route. Only 8 reached a verdict** before the account started refusing everything:
+  - PASS with native tool calls: Step 5 Preview, DeepSeek V4.1 Flash 1017, Agents A1, Beam, DiffusionGemma 26B.
+  - FAIL: Cohere Command A, DeepSeek R1 Distill 32B, ALLaM 2 7B (simulated tools).
+  - A 1-per-model sequential pass got 8 answers, then `429 … 1 request(s) every 1 min per account` on every model. That includes models never called before, and calls spaced 20 s to 2 min apart for 30 minutes. A single call after 3 quiet minutes was refused the same way: `x-ratelimit-remaining: 0`, `Retry-After: 60`. UnoRouter documents the cap as per model, per user. This behaves account-wide, and nothing in FreeLLM was calling UnoRouter at the time. The other 74 routes and the C1/C3 coding scenarios are untested.
+- **The bench's own chain grading decided membership.** Both routes were appended at the tail of each chain through `POST /api/fallback/membership`:
+  - `unorouter/step-5-preview:free` has I 43.7 measured, and coding 75.2 / agentic 43.4 typed (`tested`) from its NVIDIA and Speka routes. It joins Apex, Coding and Default as `provisional`, and Fast-Lane and Extra-Tier as `qualified`.
+  - `unorouter/deepseek-v4.1-flash-1017:free` has I 45.1 and no coding or agentic score. It joins Fast-Lane and Extra-Tier. Apex, Coding and Default stay `insufficient evidence`.
+  - Agents A1 and Beam have no score at all. DiffusionGemma is below every general minimum (I 9.5).
+- The seven A1 verdicts with real usage were imported as screen results, at 1 scenario each.
+- **Routed traffic since the chain adds: 0 of 75.** Between 10:04 and 13:24 UTC, Step 5 Preview got 39 × `429 … per account`. DeepSeek V4.1 Flash 1017 got 20 × `503 get_channel_failed`, 15 × 429 and one 520.
+- **Apex candidates tested 2026-10-26 00:38–01:03 (AEDT): 0 of 18 answered.** MiniMax M3.1 Flash (I 42.7, typed coding 74.2 / agentic 46, the only UnoRouter route that would meet Apex) and MiMo V2.6 Flash (I 37.9, 0.1 under Apex's general floor) got only 429s and 503s across A1, C1 and C3. Calls were 75 s apart per model, and neither model is in a chain.
+
+## 2026-10-25 — Remaining screen results imported; Agnes free tier caps at a handful of calls (live data)
+
+- **Every local passport with a verdict is now imported** through `POST /api/analysis/bench-results`. Four had never been: Qwen3 32B (Inferbase) 601.5 tokens per task over 6 verdicts, Qwen3 30B-A3B (Inferbase) 866.75 over 4, the retired OpenRouter `minimax/minimax-m3.1-flash:free` 1,150.5 over 6, and Mistral Large 4 (xKiro). Compare returns each one with `source: "screen"`.
+  - **Mistral Large 4 was removed again.** Its passport was a cached re-render, which reports 0 tokens, so it imported as 0 tokens per task. The row is deleted until a fresh run gives a real figure.
+  - The seven 2026-10-20 passports with no verdict (six `custom` Llama/GLM routes and both Zhipu routes) were not imported. The import refuses a run with no verdict.
+- **Agnes re-screened with all six scenarios.** Agnes 3.0 Flash passed A1, C1 and C3 again (443 tokens per task, replacing 448). Its A1 pass was a NATIVE tool call, 1 of 1 structurally valid, although the catalogue lists the route with `supports_tools = 0`.
+- **The Agnes free account is not routing capacity.** Both models hit `429: You've reached the API rate limit for free users` after a few calls: Agnes 3.0 Flash after 3, Agnes 2.5 Flash after 7. A second run on Agnes 2.5 Flash failed all 3 calls. It is one account limit shared across the Agnes models, so neither joins a chain. Agnes 2.5 Flash keeps its 2026-10-23 import, and the passport on disk now holds the rate-limited run.
+- Internal screen scores stay off the chain-minimum cells, as `docs/en/operations/model-bench.md` requires. They are on the screen's own 0–100 scale.
+
 ## 2026-10-23 — Agnes and Aion screened; Vercel free-tier rules confirmed (live data)
 
 - **All 9 Agnes and Aion models screened** (3 scenarios: tool use, bug fixing, code review) on a live-data copy. 5 produced verdicts and were imported; 3 failed every call and 1 failed on tool selection:

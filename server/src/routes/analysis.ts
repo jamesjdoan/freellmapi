@@ -28,6 +28,7 @@ import {
   deleteBenchResult,
   saveBenchResult,
 } from '../services/token-efficiency.js';
+import { recordBenchImport } from '../services/route-probe.js';
 
 // Artificial Analysis benchmark data. Read-only against routing: nothing here
 // changes what the router does. It exists so a human can compare models on
@@ -305,6 +306,9 @@ analysisRouter.post('/bench-results', (req: Request, res: Response) => {
     res.status(400).json({ error: { message: 'No scenario reached a verdict, so there are no tokens per task to show.' } });
     return;
   }
+  // The run also joins the route's scenario history, which is where the
+  // host-only coding scenarios get a timeline (services/route-probe.ts).
+  const historyRows = recordBenchImport(run);
   saveBenchResult({
     platform,
     modelId,
@@ -322,6 +326,7 @@ analysisRouter.post('/bench-results', (req: Request, res: Response) => {
     platform,
     modelId,
     scenariosCompleted,
+    historyRows,
     tokensPerTask: (run.usage.promptTokens + run.usage.completionTokens) / scenariosCompleted,
   });
 });

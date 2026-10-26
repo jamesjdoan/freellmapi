@@ -27,6 +27,8 @@ import { isExtensionEnabled } from '../services/extension-state.js';
 import { inferQuotaPoolKey } from '../services/provider-quota.js';
 import type { Platform } from '@freellmapi/shared/types.js';
 import { getDecisionRoutingStatus, setDecisionRoutingSettings } from '../services/routing-decision.js';
+import { renumberChain } from '../services/chain-order.js';
+import { isChainOrderManaged, pinRoute } from '../services/chain-arrange.js';
 
 export const fallbackRouter = Router();
 
@@ -691,15 +693,19 @@ fallbackRouter.post('/position', (req: Request, res: Response) => {
   const [moved] = ordered.splice(from, 1);
   ordered.splice(target - 1, 0, moved);
 
-  const write = db.prepare('UPDATE profile_models SET priority = ? WHERE profile_id = ? AND model_db_id = ?');
-  db.transaction(() => {
-    ordered.forEach((m, i) => write.run(i + 1, profile.id, m.model_db_id));
-  })();
+  renumberChain(db, profile.id, ordered.map(m => m.model_db_id));
+  // In a chain the arranger owns, a hand move would be undone by the next
+  // hourly pass. The operator's move IS the override, so it is kept as a pin
+  // (ARCH-20261026-chain-auto-arrange).
+  const pinned = isChainOrderManaged(parsed.data.chain, db)
+    ? pinRoute(db, parsed.data.chain, parsed.data.modelDbId, target)
+    : false;
 
   res.json({
     success: true,
     chain: parsed.data.chain,
     position: target,
+    pinned,
     order: ordered.map((m, i) => ({ modelDbId: m.model_db_id, priority: i + 1 })),
   });
 });

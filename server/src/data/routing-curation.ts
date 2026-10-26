@@ -59,6 +59,11 @@ export type ChainName =
 export interface CuratedRoute {
   platform: string;
   modelId: string;
+  /** The custom endpoint a `custom` route lives on — its `models.endpoint_scope`,
+   *  i.e. the base URL. Omitted for catalogue platforms, whose scope is ''. Two
+   *  custom keys can serve the same model id, and they are different routes with
+   *  different quotas, so the id alone does not name one. */
+  endpointScope?: string;
   classification: ModelClassification;
   /** Chain → position. Lower is earlier. Positions are the operator's manual
    *  order and the scorer's tiebreak; the quota-aware guardrails do the rest. */
@@ -154,60 +159,61 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // ── unorouter ─────────────────────────────────────────────────
   {
     platform: 'unorouter', modelId: 'glm-5.3:free', classification: 'OVERFLOW',
-    chains: { Default: 4, Coding: 3, Apex: 3 },
+    chains: { Default: 10, Coding: 11, Apex: 8, 'Fast-Lane': 17, 'Extra-Tier': 13 },
     why: 'intelligence 44.9 — the highest in this pool, above kimi-k3 at 43.8 — with coding 74.8 and a 977K window. Two probes only, so it heads nothing: 1328ms on 2026-09-17, and a 35s answer on the 16th while the daily token quota was already spent. One route per chain because unorouter free is a single daily token quota.',
   },
+  // Reconciled to the live Apex chain on 2026-10-26. The reconciliation put
+  // MiniMax M3.1 Flash (NV) at Apex 3 and demoted this route to 11: same
+  // intelligence (41.8 vs 42.7) but it draws the ONE unorouter daily token
+  // quota, and 57% over 197 attempts in the trailing fortnight against the
+  // MiniMax route's first measured success.
   {
     platform: 'unorouter', modelId: 'glm-5.3-flash:free', classification: 'OVERFLOW',
-    chains: { Vision: 16 },
+    chains: { Vision: 12 },
     why: 'intelligence 41.9 with tools AND vision on a 977K window, 2198ms measured. Vision only: it is the unorouter route that chain\'s metric names, and a second route from the same counter would buy nothing. Timed out at 40s on 2026-09-16 against a spent quota; answered in 2.2s once it reset.',
   },
   // ── google ────────────────────────────────────────────────────
   {
     platform: 'google', modelId: 'gemini-3.8-flash', classification: 'OVERFLOW',
-    chains: { Coding: 6, Apex: 6, Vision: 10 },
+    chains: { Default: 19, Coding: 22, Apex: 14, 'Fast-Lane': 46, Vision: 11, 'Extra-Tier': 65 },
     why: '68% over 74 attempts. 18670ms measured. intelligence 41.2. coding 76.3. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
     platform: 'google', modelId: 'gemini-3.7-flash', classification: 'CORE',
-    chains: { Coding: 1, Apex: 5, Vision: 1 },
+    chains: { Default: 18, Coding: 21, Apex: 13, 'Fast-Lane': 45, Vision: 10, 'Extra-Tier': 64 },
     why: '77% over 194 attempts. 7356ms measured. intelligence 39.4. coding 76.1. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
     platform: 'google', modelId: 'gemini-3.6-flash', classification: 'CORE',
-    chains: { Coding: 5, Apex: 1, Vision: 8 },
+    chains: { Default: 9, Coding: 10, Apex: 7, 'Fast-Lane': 14, Vision: 3, 'Extra-Tier': 12 },
     why: '87% over 159 attempts. 15225ms measured. intelligence 34.3. coding 69.2. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
     platform: 'google', modelId: 'gemini-3.5-flash', classification: 'CORE',
-    chains: { Coding: 7, Apex: 9, Vision: 11 },
+    chains: { Default: 11, Coding: 12, Apex: 9, 'Fast-Lane': 18, Vision: 4, 'Extra-Tier': 14 },
     why: '70% over 132 attempts. 8723ms measured. intelligence 33. coding 70.1. 5/min. 20/day. SCARCE — demoted a tier.',
   },
   {
     platform: 'google', modelId: 'gemini-3.5-flash-lite', classification: 'CORE',
-    chains: { Default: 5, Vision: 2 },
+    chains: { 'Fast-Lane': 13, 'Extra-Tier': 10 },
     why: '77% over 22 attempts. 16256ms measured. intelligence 22.7. coding 49.3. 15/min. 500/day.',
   },
   {
     platform: 'google', modelId: 'gemini-3.1-flash-lite', classification: 'CORE',
-    chains: { Default: 9, 'Fast-Lane': 5, Vision: 3 },
+    chains: { 'Fast-Lane': 2 },
     why: '84% over 192 attempts. intelligence 16. coding 34.7. 15/min, 500/day — twenty-five times the allowance the Gemini Flash routes carry, which is the depth the Workhorse chain needed when it joined that tail at 9. Not vision-only: 500/day and tools, so its allowance serves Fast-Lane and, since the 2026-10-21 merge, the Default tail as well. A vision model is a model that can ALSO see.',
   },
-  {
-    platform: 'google', modelId: 'gemma-4-26b-a4b-it', classification: 'SPECIALIST',
-    chains: { Vision: 15 },
-    why: 'Vision WITHOUT tools, which is why no agentic chain will take it and why Vision admits SPECIALIST at all. intelligence 16.7, 30/min, 4 attempts — a tail, not a fallback.',
-  },
+  // google/gemma-4-26b-a4b-it removed from routing in the 2026-10-26 reconciliation: in no live chain.
   {
     platform: 'google', modelId: 'gemini-3.1-flash-lite-preview', classification: 'OVERFLOW',
-    chains: { 'Fast-Lane': 6 },
+    chains: { 'Fast-Lane': 15 },
     why: 'Added 2026-09-18. 803ms measured direct. Google meters per project+model, so this is its own 20/day allowance rather than a second claim on one already counted. Fast-Lane tail: the chain had shrunk to three members, and this is depth that costs nothing until the faster heads refuse.',
   },
   // ── groq ──────────────────────────────────────────────────────
   {
-    platform: 'groq', modelId: 'qwen/qwen3.8-27b', classification: 'OVERFLOW',
-    chains: { Default: 2, Coding: 2, Apex: 2, 'Fast-Lane': 4, Vision: 5 },
-    why: '190ms measured, intelligence 33.9, coding 68.1, and 100% across every chain probe on 2026-09-18. Added to Frontier 3 that day (a chain merged into Apex on 2026-10-21): four Google routes plus one unorouter, so a spent Google day and one credit cooldown emptied it completely — it refused all 7 candidates twice. Groq is its own counter, which is the depth that chain was missing.',
+    platform: 'groq', modelId: 'qwen/qwen3.8-27b', classification: 'CORE',
+    chains: { Default: 8, Coding: 9, Apex: 6, 'Fast-Lane': 12, Vision: 2, 'Extra-Tier': 9 },
+    why: '190ms measured, intelligence 33.9, coding 68.1, and 100% across every chain probe on 2026-09-18. Added to Frontier 3 that day (a chain merged into Apex on 2026-10-21): four Google routes plus one unorouter, so a spent Google day and one credit cooldown emptied it completely — it refused all 7 candidates twice. Groq is its own counter, which is the depth that chain was missing. CORE since the 2026-10-26 reconciliation, which found it heading the live Fast-Lane: 72% over 347 attempts at 1665ms average, the fastest route on this install, on its own per-model Groq pool. Most of its failures are the 1000 output-tokens-per-minute cap, which refuses in about a second, so the request fails over quickly.',
   },
   {
     platform: 'groq', modelId: 'openai/gpt-oss-20b', classification: 'CORE',
@@ -216,38 +222,26 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   },
   {
     platform: 'groq', modelId: 'openai/gpt-oss-120b', classification: 'CORE',
-    chains: { Default: 8 },
+    chains: { 'Fast-Lane': 41 },
     why: '94% over 88 attempts. intelligence 12.3. One of the two most-proven routes here that was in NO chain at all — found by auditing enabled models against chain membership, not by noticing it was missing.',
   },
   // ── mistral ───────────────────────────────────────────────────
-  {
-    platform: 'mistral', modelId: 'ministral-3b-latest', classification: 'CORE',
-    chains: { 'Fast-Lane': 2, Vision: 12 },
-    why: 'Added 2026-09-18. 584ms measured against the provider directly, tools and vision, 256K window. Mistral held ELEVEN enabled models and not one chain row before this — an entire keyed provider contributing no capacity, found by auditing keys against membership. Mistral meters PER MODEL, so this is an allowance nothing else here draws on.',
-  },
+  // mistral/ministral-3b-latest removed from routing in the 2026-10-26 reconciliation: in no live chain.
   {
     platform: 'mistral', modelId: 'ministral-14b-2512', classification: 'CORE',
-    chains: { Default: 10, Vision: 6 },
+    chains: { 'Fast-Lane': 44 },
     why: 'Added 2026-09-18. 563ms, and it answered a real base64 PNG with the right colour — probed with an image rather than with text, because that is what this chain is for. Mistral meters per model, so this is its own allowance behind Google. Default tail too (the Workhorse membership folded here on 2026-10-21): own Mistral per-model pool, 256k, tools.',
   },
-    {
-    platform: 'mistral', modelId: 'mistral-code-latest', classification: 'CORE',
-    chains: { Coding: 8 },
-    why: 'Added 2026-09-18 after probing every keyed route: 1 call, ok. intelligence 13, the strongest Mistral coding route we can reach, tools. Own per-model Mistral allowance, which is genuine depth - Coding previously leaned on Google 20/day routes for three of its first four positions.',
-  },
+  // mistral/mistral-code-latest removed from routing in the 2026-10-26 reconciliation: in no live chain.
   {
     platform: 'mistral', modelId: 'codestral-latest', classification: 'CORE',
-    chains: { Coding: 9 },
+    chains: { Coding: 8 },
     why: 'Added 2026-09-18. ok on probe. A dedicated code model on its own Mistral allowance, behind mistral-code-latest.',
   },
-  {
-    platform: 'mistral', modelId: 'ministral-8b-latest', classification: 'OVERFLOW',
-    chains: { Default: 12 },
-    why: 'Added 2026-09-18. ok on probe. The `-latest` alias beside the pinned 2512 build: a second name on the SAME per-model allowance, so it is depth against a bad build rather than against exhaustion. Default tail only (its Workhorse membership folded here on 2026-10-21), for that reason.',
-  },
+  // mistral/ministral-8b-latest removed from routing in the 2026-10-26 reconciliation: in no live chain.
   {
     platform: 'mistral', modelId: 'ministral-3b-2512', classification: 'OVERFLOW',
-    chains: { 'Fast-Lane': 8 },
+    chains: { 'Fast-Lane': 40 },
     why: 'Added 2026-09-18. ok on probe. Fast-Lane tail: cheapest Mistral route, own allowance.',
   },
   // nvidia/openai/gpt-oss-20b removed 2026-09-23: two consecutive probes aborted
@@ -257,8 +251,8 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // serve. Groq's copy still heads Fast-Lane; re-probe before restoring it.
   {
     platform: 'nvidia', modelId: 'meta/muse-glimmer-30b', classification: 'CORE',
-    chains: { Apex: 8, Vision: 9 },
-    why: 'Added 2026-09-18. ok on probe, intelligence 8 - the strongest spare route on any key we hold, with tools and vision. Apex and Vision depth on NVIDIA\'s per-model cap.',
+    chains: { 'Fast-Lane': 16 },
+    why: 'Added 2026-09-18. ok on probe, intelligence 8 - the strongest spare route on any key we hold, with tools and vision. Vision depth on NVIDIA\'s per-model cap. Dropped from Apex in the 2026-10-26 reconciliation: it was already disabled from the live chain before this file was reconciled, and intelligence 8 does not belong on an escalation chain.',
   },
   // openrouter/inclusionai/ling-3.0-flash-fin:free removed 2026-10-21 with the
   // Frontier chain it lived in. Its folded position in Apex was refused by the
@@ -266,24 +260,16 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // routes draw the ONE OpenRouter account allowance, so they would exhaust
   // together while reading as depth. Re-curate it once a chain has no
   // OpenRouter route of its own.
-  {
-    platform: 'ollama', modelId: 'gpt-oss:120b', classification: 'OVERFLOW',
-    chains: { 'Extra-Tier': 5 },
-    why: 'Added 2026-09-18. ok on probe, intelligence 6. Extra-Tier only: Ollama Cloud\'s weekly allowance is scarce and the scarcity scorer must be what rations it, not a position on a critical chain.',
-  },
-  {
-    platform: 'ollama', modelId: 'gpt-oss:20b', classification: 'OVERFLOW',
-    chains: { 'Extra-Tier': 6 },
-    why: 'Added 2026-09-18. ok on probe. Extra-Tier, same scarcity reasoning as the 120b.',
-  },
+  // ollama/gpt-oss:120b removed from routing in the 2026-10-26 reconciliation: in no live chain.
+  // ollama/gpt-oss:20b removed from routing in the 2026-10-26 reconciliation: in no live chain.
   {
     platform: 'google', modelId: 'gemini-3-flash-preview', classification: 'OVERFLOW',
-    chains: { 'Extra-Tier': 7 },
+    chains: { 'Fast-Lane': 11 },
     why: 'Added 2026-09-18. ok on probe. Extra-Tier tail: another Google 20/day counter, which is why it is nowhere near a critical path.',
   },
-{
+  {
     platform: 'mistral', modelId: 'ministral-8b-2512', classification: 'OVERFLOW',
-    chains: { 'Fast-Lane': 7, Vision: 13 },
+    chains: { 'Fast-Lane': 43 },
     why: 'Added 2026-09-18. 636ms, saw the image correctly. Its own per-model Mistral allowance; a tail because the 14b sibling is stronger for the same cost. Fast-Lane tail too: vision capability is not a reason to withhold an uncapped Mistral pool from text work.',
   },
   // ── nvidia ────────────────────────────────────────────────────
@@ -292,52 +278,67 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // model row is switched off. Intelligence 43.8 was the highest in the NVIDIA
   // pool, which is exactly why it held Frontier 5 for a week: capability alone
   // kept a route that answered one call in five.
+  // nvidia/nvidia/nemotron-3-ultra-550b-a55b removed from routing in the 2026-10-26 reconciliation: in no live chain.
+  // nvidia/nvidia/nemotron-3-super-120b-a12b removed from routing in the 2026-10-26 reconciliation: in no live chain.
+  // nvidia/nvidia/nemotron-3.5-lightning-30b-a3b removed from routing in the 2026-10-26 reconciliation: in no live chain.
+  // nvidia/meta/llama-3.2-11b-vision-instruct removed from routing in the 2026-10-26 reconciliation: in no live chain.
+  // nvidia/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning removed from routing in the 2026-10-26 reconciliation: in no live chain.
+  // nvidia/google/diffusiongemma-26b-a4b-it removed from routing in the 2026-10-26 reconciliation: in no live chain.
   {
-    platform: 'nvidia', modelId: 'nvidia/nemotron-3-ultra-550b-a55b', classification: 'CORE',
-    chains: { Default: 1, Apex: 7 },
-    why: '78% over 917 attempts. 21192ms measured. intelligence 23.4. coding 49.3. 40/min. Added to Frontier 4 on 2026-09-18 (a chain merged into Apex on 2026-10-21) for a third independent pool behind Groq: slow, but the chain needed something that is not Google and not a spent credit balance.',
+    platform: 'nvidia', modelId: 'z-ai/glm-5.3-flash', classification: 'CORE',
+    chains: { Default: 4, Coding: 1, Apex: 1, 'Fast-Lane': 5, 'Extra-Tier': 3 },
+    why: 'Heads Apex on the 2026-10-26 reconciliation. 91% over 8514 attempts in the trailing fortnight, 19219ms average, intelligence 41.8, coding 71.5, tools. NVIDIA meters per model at 40/min, so it is its own pool. When its 429s land, Apex 2-3 carry the request: this head is the chain\'s default answer, not its last one.',
   },
   {
-    platform: 'nvidia', modelId: 'nvidia/nemotron-3-super-120b-a12b', classification: 'CORE',
-    chains: { Default: 6 },
-    why: '97% over 6883 attempts. 12729ms measured. intelligence 13.6. coding 37.7. 40/min.',
+    platform: 'nvidia', modelId: 'minimaxai/minimax-m3.1-flash', classification: 'OVERFLOW',
+    chains: { Default: 15, Coding: 16, Apex: 3, 'Extra-Tier': 18 },
+    why: 'Added 2026-10-26 as the replacement for the retired Minimax M3.1 routes (the Vercel "$0 to 22 Oct" key and openrouter minimax-m3.1-flash:free, both dead by 2026-10-23). The catalogue shipped supports_tools = 0 unverified; a hand probe returned finish_reason tool_calls in 1.4-1.7s, and the true flag is carried as a model_overrides row that survives catalogue sync. intelligence 42.7. Its own NVIDIA per-model pool. 2 attempts, both ok — too thin to rate, hence OVERFLOW.',
+  },
+  // nvidia/stepfun-ai/step-5-preview is deliberately NOT in any chain
+  // (2026-10-26). Non-streamed tool calls work (finish_reason tool_calls,
+  // 6.6-16s), but every routed streaming attempt fails: 6 empty_completions at
+  // 10-52s and one 45s timeout in the recorded history. The supportsTools
+  // override is left in place because the flag is accurate; chain membership
+  // waits on a streaming fix. Re-probe streamed, not hand-rolled.
+  {
+    platform: 'nvidia', modelId: 'deepseek-ai/deepseek-v4.1-flash', classification: 'CORE',
+    chains: { Default: 1, Coding: 7, Apex: 5, 'Fast-Lane': 6, 'Extra-Tier': 6 },
+    why: '85% over 5843 attempts, 29344ms average, intelligence 39.5, tools. Its own NVIDIA per-model pool. The chain\'s highest-volume reliable worker after the head.',
   },
   {
-    platform: 'nvidia', modelId: 'nvidia/nemotron-3.5-lightning-30b-a3b', classification: 'CORE',
-    chains: { Default: 7 },
-    why: '97% over 761 attempts, the best reliability figure on this install, and it was in no chain. Kept OUT of Fast-Lane deliberately: it averages 22,032ms despite publishing 288 tok/s. The middle tier does not rank on latency, so its reliability is what counts here. 40/min.',
+    platform: 'nvidia', modelId: 'z-ai/glm-5.3', classification: 'OVERFLOW',
+    chains: { Default: 24, Coding: 27, Apex: 17, 'Fast-Lane': 51, 'Extra-Tier': 70 },
+    why: '12% over 509 attempts with 57777ms average and 45s timeouts — the least reliable member of the chain, kept only because intelligence 44.8 and coding 74.8 are the second-best figures in it and its NVIDIA per-model pool is independent. A tail, not a fallback; do not promote without a reliability change.',
+  },
+  // ── radeon ────────────────────────────────────────────────────
+  // Radeon meters ONE account allowance across its models, so the three radeon
+  // routes below are one pool wearing three names. They are recorded because
+  // that pool is the highest-volume on this install, and because the
+  // shared-pool rule (at most two members per chain on one pool) is already
+  // broken by live state — the record should say so rather than hide it.
+  {
+    platform: 'radeon', modelId: 'Qwen3.8-Flash-Next', classification: 'CORE',
+    chains: { Default: 3, Coding: 3, Apex: 4, 'Fast-Lane': 9, 'Extra-Tier': 2 },
+    why: '93% over 1741 attempts, 56799ms average — long agent turns, not outliers. intelligence 39.8, coding 73.1, tools. The best model on the highest-volume pool here, which is why it holds Apex 4 despite sharing that pool with two chain-mates.',
   },
   {
-    platform: 'nvidia', modelId: 'meta/llama-3.2-11b-vision-instruct', classification: 'CORE',
-    chains: { Default: 11, Vision: 7 },
-    why: 'Added 2026-09-18. 882ms, saw the image correctly, tools as well as vision. NVIDIA meters per model at 40/min, so this is a third independent pool in a chain that was seven-elevenths Google. Default tail too (the Workhorse membership folded here on 2026-10-21): its NVIDIA per-model minute cap is capacity the text chains had no claim on before.',
+    platform: 'radeon', modelId: 'GLM-5.3-Flash', classification: 'OVERFLOW',
+    chains: { Default: 20, Coding: 23, Apex: 15, 'Fast-Lane': 47, 'Extra-Tier': 66 },
+    why: '41% over 146 attempts, 98525ms average — the slowest working member. intelligence 41.8, coding 71.5. Draws the same radeon allowance as Qwen3.8-Flash-Next, so it adds reach, not depth. Apex 9.',
   },
   {
-    platform: 'nvidia', modelId: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', classification: 'SPECIALIST',
-    chains: { Vision: 14 },
-    why: 'Added 2026-09-18. 2721ms, saw the image correctly, but tools=false — which is why no agentic chain will take it and why Vision admits SPECIALIST at all. A tail, not a fallback.',
-  },
-  {
-    platform: 'nvidia', modelId: 'google/diffusiongemma-26b-a4b-it', classification: 'SPECIALIST',
-    chains: { Vision: 17 },
-    why: 'Added 2026-09-23. Text probe ok in 4967ms, then shown the 8x8 red PNG and answered "The image is red." in 1029ms — probed with an image because nemotron-parse-2.0 passed the text probe and could not see. tools=false, so Vision only, as a SPECIALIST tail. NVIDIA meters per model, so this is its own pool: the one working unchained route on 2026-09-23 that adds depth rather than a second name for an allowance already routed.',
+    platform: 'radeon', modelId: 'DeepSeek-V4.1-Flash', classification: 'OVERFLOW',
+    chains: { Default: 12, Coding: 13, Apex: 10, 'Fast-Lane': 19, Vision: 5, 'Extra-Tier': 15 },
+    why: '68% over 28 attempts, 88492ms average. intelligence 39.5, tools AND vision. Same shared radeon allowance. Apex 13.',
   },
   // ── ollama ────────────────────────────────────────────────────
   {
     platform: 'ollama', modelId: 'nemotron-3-ultra', classification: 'EXPERIMENTAL',
-    chains: { 'Extra-Tier': 1 },
+    chains: { 'Extra-Tier': 11 },
     why: '89% over 504 attempts. 30339ms measured. intelligence 23.4. coding 49.3. SCARCE — demoted a tier.',
   },
-  {
-    platform: 'ollama', modelId: 'gemma4:31b', classification: 'SPECIALIST',
-    chains: { 'Extra-Tier': 2 },
-    why: '5 attempt(s) — too thin to rate. 6378ms measured. intelligence 15.4. coding 43.4. SCARCE — demoted a tier.',
-  },
-  {
-    platform: 'ollama', modelId: 'nemotron-3-super', classification: 'EXPERIMENTAL',
-    chains: { 'Extra-Tier': 3 },
-    why: '62% over 395 attempts. 11896ms measured. intelligence 13.6. coding 37.7. SCARCE — demoted a tier.',
-  },
+  // ollama/gemma4:31b removed from routing in the 2026-10-26 reconciliation: in no live chain.
+  // ollama/nemotron-3-super removed from routing in the 2026-10-26 reconciliation: in no live chain.
   // ── opencode ──────────────────────────────────────────────────
   // opencode/ling-3.0-flash-fin-free removed 2026-09-18: 403 'OpenCode\'s free
   // tier' on probe. So is every other model on this key - all 11 scoped ids
@@ -348,11 +349,7 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   // opencode/mimo-v2.5-free removed 2026-09-18: model row switched off, so its
   // Extra-Tier row pointed at a route the router would never walk.
   // opencode/big-pickle removed 2026-09-18: model row switched off, same reason.
-  {
-    platform: 'openrouter', modelId: 'deepseek/deepseek-v4-flash-0731:free', classification: 'OVERFLOW',
-    chains: { 'Extra-Tier': 8 },
-    why: 'Arrived 2026-09-19 in the overnight sync; probed ok in 2426ms. Tools, 1M context. Extra-Tier because it is the ONLY chain holding no OpenRouter route - the other five already spend that single account counter, so a second route in any of them would be the duplicate-quota illusion rather than depth.',
-  },
+  // openrouter/deepseek/deepseek-v4-flash-0731:free removed from routing in the 2026-10-26 reconciliation: in no live chain.
   // nvidia/nemotron-parse-2.0 removed 2026-09-19, hours after being added, and
   // the reason is worth keeping: it PROBED ok (696ms) and then failed the only
   // job Vision exists for. A real 8x8 PNG returned `empty_completion` on 1/1
@@ -384,26 +381,347 @@ export const CURATED_ROUTES: CuratedRoute[] = [
   //   anyapi/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free — AnyAPI is one
   //     shared team budget, and the same model is already in Vision via NVIDIA.
   // ── anyapi ────────────────────────────────────────────────────
+  // anyapi/dots-studio/dots-3-note-preview:free removed from routing in the 2026-10-26 reconciliation: in no live chain.
+  // ── xkiro ─────────────────────────────────────────────────────
+  // xKiro free models draw ONE daily token quota across the pool — its 429
+  // names "today's free-model token quota" — so the three xkiro routes are one
+  // pool wearing three names. Unlike unorouter and openrouter they are NOT in
+  // SINGLE_COUNTER_PLATFORMS, because the quota is tokens-per-day rather than
+  // a request counter; the distinction is academic for chain depth and the
+  // routes are recorded as the shared pool they are.
   {
-    platform: 'anyapi', modelId: 'dots-studio/dots-3-note-preview:free', classification: 'EXPERIMENTAL',
-    chains: { 'Extra-Tier': 4 },
-    why: 'Added 2026-09-18. Tools and vision on a 488K window, and it answered Extra-Tier on its first routed call. Intelligence reads 500 from the catalogue, which is a placeholder and not a measurement — hence EXPERIMENTAL and a tail position. Deliberately NOT in Vision despite being vision-capable: that chain admits CORE, OVERFLOW and SPECIALIST only, and its own contract refused this route when I tried. It earns Vision once it has a record rather than a placeholder. AnyAPI is one shared 100K-token/day team budget across every model.',
+    platform: 'xkiro', modelId: 'qwen/qwen3.8-max:free', classification: 'OVERFLOW',
+    chains: { Default: 2, Coding: 2, Apex: 2, 'Fast-Lane': 4, 'Extra-Tier': 1 },
+    why: '97% over 296 attempts, 18127ms average — the best reliability figure in the chain. intelligence 45.4, coding 76.2. The strongest of the three xkiro routes on the shared daily quota, which is why it holds Apex 2.',
+  },
+  {
+    platform: 'xkiro', modelId: 'qwen/qwen3.8-omni-flash:free', classification: 'OVERFLOW',
+    chains: { Default: 13, Coding: 14, Apex: 11, 'Fast-Lane': 20, Vision: 6, 'Extra-Tier': 16 },
+    why: '68% over 22 attempts, 21512ms average. intelligence 39.8, tools AND vision. Same shared xKiro daily quota; kept as a tail route.',
+  },
+  {
+    platform: 'xkiro', modelId: 'mistralai/mistral-large-4-0', classification: 'OVERFLOW',
+    chains: { Coding: 18, Apex: 12 },
+    why: '25% over 4 attempts — one success, three 429s against the shared xKiro daily quota — and 923ms when it answers. intelligence 38.4. Kept at the tail; its 429s are the shared counter being spent, not the model failing.',
+  },
+  // ── custom ────────────────────────────────────────────────────
+  // Custom routes live on a named endpoint (models.endpoint_scope). The scope
+  // is part of the route\'s identity here because two custom keys can serve the
+  // same model id with different quotas; the applier keys on it since 2026-10-26.
+  {
+    platform: 'custom', modelId: 'coding-glm-5.3-free', classification: 'OVERFLOW',
+    endpointScope: 'https://api.inferera.com/v1',
+    chains: { Default: 21, Coding: 24, Apex: 16, 'Fast-Lane': 48, 'Extra-Tier': 67 },
+    why: '37% over 326 attempts, 14645ms average when it answers. intelligence 44.8, coding 74.8 on a 977K window. The Inferera key answers quota-domain-exhausted(provider_header) with no reset instant — provider_quota_state has held remaining 0 since 2026-10-16 — so it spends whole days unavailable. Kept mid-chain for its context ceiling, which outruns every other member.',
   },
   // ── openrouter ────────────────────────────────────────────────
+  // openrouter/nex-agi/nex-n2.5-mini:free removed from routing in the 2026-10-26 reconciliation: in no live chain.
+  // openrouter/nex-agi/nex-n2.5-pro:free removed from routing in the 2026-10-26 reconciliation: in no live chain.
+  // openrouter/inclusionai/ling-3.0-flash-sante:free removed from routing in the 2026-10-26 reconciliation: in no live chain.
+  // ── recorded from live chains, 2026-10-26 ─────────────────────
+  // Routes the operator added through the dashboard that this file never
+  // named. Each carries its measured record; none has a curated rationale.
+  // agnes
   {
-    platform: 'openrouter', modelId: 'nex-agi/nex-n2.5-mini:free', classification: 'OVERFLOW',
-    chains: { Default: 3, Coding: 4, Apex: 4 },
-    why: '1 attempt(s) — too thin to rate. intelligence 28.2. coding 59.1. OpenRouter spends ONE account counter (1000/day, 20/min) whichever :free model answers, so only its strongest qualifying route is listed: a weaker sibling costs the same unit for less, and adds no depth because they exhaust together.',
+    platform: 'agnes', modelId: 'agnes-2.5-pro', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 40 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 35.2, coding 62.3. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
   },
   {
-    platform: 'openrouter', modelId: 'nex-agi/nex-n2.5-pro:free', classification: 'OVERFLOW',
-    chains: { Vision: 4 },
-    why: '2 attempt(s) — too thin to rate. intelligence 28.2. coding 59.1. OpenRouter spends ONE account counter (1000/day, 20/min) whichever :free model answers, so only its strongest qualifying route is listed: a weaker sibling costs the same unit for less, and adds no depth because they exhaust together. Vision only, and NOT for lack of capability: every text chain already lists an OpenRouter route, and OpenRouter free spends ONE account counter, so a second would be the duplicate-quota illusion rather than depth.',
+    platform: 'agnes', modelId: 'agnes-3.0-flash', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 63 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 35.2, coding 62.3. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  // custom
+  // custom/deepseek-v4.1-flash-free removed from routing in the 2026-10-26 reconciliation: in no live chain.
+  {
+    platform: 'custom', modelId: 'coding-glm-5.2-free', classification: 'OVERFLOW',
+    endpointScope: 'https://api.inferera.com/v1',
+    chains: { Default: 22, Coding: 25, 'Fast-Lane': 49, 'Extra-Tier': 68 },
+    why: '31% over 213 attempts, 16462ms average in the 14 days to 2026-10-26. intelligence 33.7, coding 68.8. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
   },
   {
-    platform: 'openrouter', modelId: 'inclusionai/ling-3.0-flash-sante:free', classification: 'OVERFLOW',
+    platform: 'custom', modelId: 'xiaomi-mimo-v2.6-flash-free', classification: 'OVERFLOW',
+    endpointScope: 'https://api.inferera.com/v1',
+    chains: { Default: 17, Coding: 19, 'Fast-Lane': 23, 'Extra-Tier': 22 },
+    why: '0% over 1 attempts in the 14 days to 2026-10-26. intelligence 37.9. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'custom', modelId: 'xiaomi-mimo-v2.5-pro-free', classification: 'OVERFLOW',
+    endpointScope: 'https://api.inferera.com/v1',
+    chains: { Coding: 20, 'Fast-Lane': 29, 'Extra-Tier': 29 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 26.0, coding 60.2. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'custom', modelId: 'xiaomi-mimo-v2-pro-free', classification: 'OVERFLOW',
+    endpointScope: 'https://api.inferera.com/v1',
+    chains: { 'Fast-Lane': 24, 'Extra-Tier': 24 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 28.6. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'custom', modelId: 'coding-glm-5-free', classification: 'OVERFLOW',
+    endpointScope: 'https://api.inferera.com/v1',
+    chains: { 'Fast-Lane': 25, 'Extra-Tier': 25 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 27.9. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'custom', modelId: 'qwen3.6-plus-preview-free', classification: 'OVERFLOW',
+    endpointScope: 'https://api.inferera.com/v1',
+    chains: { 'Fast-Lane': 26, 'Extra-Tier': 26 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 27.0, coding 54.5. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'custom', modelId: 'coding-glm-5-turbo-free', classification: 'OVERFLOW',
+    endpointScope: 'https://api.inferera.com/v1',
+    chains: { 'Fast-Lane': 27, 'Extra-Tier': 27 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 26.6. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'custom', modelId: 'coding-glm-5.1-free', classification: 'OVERFLOW',
+    endpointScope: 'https://api.inferera.com/v1',
+    chains: { 'Fast-Lane': 28, 'Extra-Tier': 28 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 26.1, coding 55.8. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'custom', modelId: 'hy3-free', classification: 'OVERFLOW',
+    endpointScope: 'https://api.inferera.com/v1',
+    chains: { 'Fast-Lane': 30, 'Extra-Tier': 30 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 25.3, coding 58.8. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'custom', modelId: 'xiaomi-mimo-v2.5-free', classification: 'OVERFLOW',
+    endpointScope: 'https://api.inferera.com/v1',
+    chains: { 'Fast-Lane': 36, 'Extra-Tier': 31 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 21.8, coding 56.8. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'custom', modelId: 'coding-minimax-m2.7-free', classification: 'OVERFLOW',
+    endpointScope: 'https://api.inferera.com/v1',
+    chains: { 'Fast-Lane': 33, 'Extra-Tier': 32 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 22.8, coding 52.6. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'custom', modelId: 'ling-3.0-flash-free', classification: 'OVERFLOW',
+    endpointScope: 'https://api.inferera.com/v1',
+    chains: { 'Fast-Lane': 39, 'Extra-Tier': 33 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 20.1, coding 50.6. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'custom', modelId: 'xiaomi-mimo-v2-omni-free', classification: 'OVERFLOW',
+    endpointScope: 'https://api.inferera.com/v1',
+    chains: { 'Fast-Lane': 31, 'Extra-Tier': 34 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 23.9. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'custom', modelId: 'coding-minimax-m2.5-free', classification: 'OVERFLOW',
+    endpointScope: 'https://api.inferera.com/v1',
+    chains: { 'Fast-Lane': 32, 'Extra-Tier': 35 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 22.8. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'custom', modelId: 'minimax-m2.7-free', classification: 'OVERFLOW',
+    endpointScope: 'https://api.inferera.com/v1',
+    chains: { 'Fast-Lane': 34, 'Extra-Tier': 36 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 22.8, coding 52.6. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'custom', modelId: 'coding-minimax-m2.1-free', classification: 'OVERFLOW',
+    endpointScope: 'https://api.inferera.com/v1',
+    chains: { 'Fast-Lane': 37, 'Extra-Tier': 37 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 20.9. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'custom', modelId: 'mimo-v2-flash-free', classification: 'OVERFLOW',
+    endpointScope: 'https://api.inferera.com/v1',
+    chains: { 'Fast-Lane': 38, 'Extra-Tier': 38 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 20.8. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'custom', modelId: 'xiaomi-mimo-v2.6-pro-free', classification: 'OVERFLOW',
+    endpointScope: 'https://api.inferera.com/v1',
+    chains: { Vision: 9 },
+    why: '0% over 3 attempts in the 14 days to 2026-10-26. intelligence 46.3. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  // electronhub
+  {
+    platform: 'electronhub', modelId: 'gpt-5.6-luna', classification: 'OVERFLOW',
+    chains: { Default: 23, Coding: 26, 'Fast-Lane': 50, Vision: 13, 'Extra-Tier': 69 },
+    why: '29% over 21 attempts, 29529ms average in the 14 days to 2026-10-26. intelligence 37.3, coding 71.4. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'electronhub', modelId: 'deepseek-v4-flash', classification: 'CORE',
+    chains: { Default: 6, Coding: 5, 'Fast-Lane': 8, 'Extra-Tier': 5 },
+    why: '93% over 169 attempts, 50501ms average in the 14 days to 2026-10-26. intelligence 34.3, coding 69.1. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'electronhub', modelId: 'qwen3.8-flash-next', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 23 },
+    why: '100% over 1 attempts, 7900ms average in the 14 days to 2026-10-26. intelligence 39.8, coding 73.1. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'electronhub', modelId: 'ling-3.1-flash', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 39 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 41.1. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'electronhub', modelId: 'gpt-6-luna', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 44 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 38.1. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'electronhub', modelId: 'mimo-v2.6-flash', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 45 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 37.9. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'electronhub', modelId: 'deepseek-v4-flash-0731', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 47 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 34.3, coding 69.1. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'electronhub', modelId: 'gemini-3.5-flash-lite', classification: 'OVERFLOW',
+    chains: { 'Fast-Lane': 35, 'Extra-Tier': 59 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 22.2, coding 49.3. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'electronhub', modelId: 'minimax-m2.1', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 62 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 20.9. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  // inferbase
+  {
+    platform: 'inferbase', modelId: 'qwen3-8-max', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 41 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 45.4, coding 76.2. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'inferbase', modelId: 'moonshot-kimi-k3', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 42 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 43.6, coding 76.2. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'inferbase', modelId: 'qwen3-8-flash', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 43 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 39.8, coding 73.1. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'inferbase', modelId: 'deepseek-v4-pro', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 46 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 36.0, coding 68.8. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'inferbase', modelId: 'deepseek-v4-flash-0731', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 48 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 34.3, coding 69.1. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'inferbase', modelId: 'zai-glm-5-2', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 49 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 33.7, coding 68.8. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'inferbase', modelId: 'qwen3-7-max', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 50 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 29.5, coding 66.0. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'inferbase', modelId: 'minimax-m3', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 51 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 29.2, coding 58.6. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'inferbase', modelId: 'zai-glm-5', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 52 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 27.9. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'inferbase', modelId: 'moonshot-kimi-k2-6', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 53 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 27.0, coding 61.8. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'inferbase', modelId: 'zai-glm-5-1', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 54 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 26.1, coding 55.8. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'inferbase', modelId: 'moonshot-kimi-k2-7-code', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 55 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 25.8, coding 60.8. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'inferbase', modelId: 'moonshot-kimi-k2-5', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 56 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 23.5, coding 46.8. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'inferbase', modelId: 'minimax-m2-5', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 57 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 22.8. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'inferbase', modelId: 'minimax-m2-7', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 58 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 22.8, coding 52.6. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'inferbase', modelId: 'zai-glm-4-7', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 60 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 22.2, coding 45.3. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'inferbase', modelId: 'qwen3-6-27b', classification: 'SPECIALIST',
+    chains: { 'Extra-Tier': 61 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 21.4, coding 53.7. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  // nvidia
+  {
+    platform: 'nvidia', modelId: 'stepfun-ai/step-5-preview', classification: 'EXPERIMENTAL',
+    chains: { 'Extra-Tier': 21 },
+    why: '0% over 7 attempts in the 14 days to 2026-10-26. intelligence 43.7. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  // openrouter
+  {
+    platform: 'openrouter', modelId: 'nvidia/nemotron-3-ultra-550b-a55b:free', classification: 'EXPERIMENTAL',
+    chains: { 'Extra-Tier': 20 },
+    why: '100% over 1 attempts, 1531ms average in the 14 days to 2026-10-26. intelligence 22.9, coding 49.3. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'openrouter', modelId: 'nvidia/nemotron-3.5-lightning:free', classification: 'CORE',
     chains: { 'Fast-Lane': 3 },
-    why: '3 attempt(s) — too thin to rate. 1394ms measured. intelligence 24.9. coding 50.6. OpenRouter spends ONE account counter (1000/day, 20/min) whichever :free model answers, so only its strongest qualifying route is listed: a weaker sibling costs the same unit for less, and adds no depth because they exhaust together.',
+    why: '99% over 3055 attempts, 17058ms average in the 14 days to 2026-10-26. intelligence 12.9, coding 26.8. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  // radeon
+  {
+    platform: 'radeon', modelId: 'DeepSeek-V4-Flash', classification: 'CORE',
+    chains: { Default: 5, Coding: 4, 'Fast-Lane': 7, 'Extra-Tier': 4 },
+    why: '94% over 214 attempts, 43937ms average in the 14 days to 2026-10-26. intelligence 34.3, coding 69.1. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'radeon', modelId: 'Qwen3.8-27B', classification: 'CORE',
+    chains: { Default: 7, Coding: 6, 'Fast-Lane': 10, Vision: 1, 'Extra-Tier': 7 },
+    why: '91% over 95 attempts, 63476ms average in the 14 days to 2026-10-26. intelligence 33.7, coding 68.1. CORE since the 2026-10-26 measured reorder put it at the head of Vision: the only vision-capable route above 80% success with more than 50 attempts. Slow, and on the shared radeon allowance, so Vision 2 is groq qwen3.8-27b on its own pool.',
+  },
+  {
+    platform: 'radeon', modelId: 'MiMo-V2.6-Flash', classification: 'OVERFLOW',
+    chains: { Default: 16, Coding: 17, 'Fast-Lane': 22, Vision: 8, 'Extra-Tier': 19 },
+    why: '67% over 3 attempts, 7505ms average in the 14 days to 2026-10-26. intelligence 37.9. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'radeon', modelId: 'DeepSeek-V4-Flash-Vision-Exp', classification: 'OVERFLOW',
+    chains: { Default: 14, Coding: 15, 'Fast-Lane': 21, Vision: 7, 'Extra-Tier': 17 },
+    why: '62% over 13 attempts, 21692ms average in the 14 days to 2026-10-26. intelligence 34.8, coding 65.0. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  // zhipu
+  {
+    platform: 'zhipu', modelId: 'glm-4.5-flash', classification: 'OVERFLOW',
+    chains: { 'Extra-Tier': 8 },
+    why: '84% over 63 attempts, 36369ms average in the 14 days to 2026-10-26. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
+  },
+  {
+    platform: 'zhipu', modelId: 'glm-4.7-flash', classification: 'OVERFLOW',
+    chains: { 'Fast-Lane': 42 },
+    why: 'no routed attempts in the 14 days to 2026-10-26. intelligence 14.9. Recorded from the live chain in the 2026-10-26 reconciliation, not individually curated: re-measure before moving it.',
   },
 ];
 
@@ -469,12 +787,13 @@ export const CHAIN_CONTRACTS: ChainContract[] = [
 export const CHAIN_EXTRA_TIER: ChainName = 'Extra-Tier';
 
 /** Ordered members of one chain, as the applier will write them. */
-export function chainMembers(chain: ChainName): { platform: string; modelId: string; priority: number; classification: ModelClassification }[] {
+export function chainMembers(chain: ChainName): { platform: string; modelId: string; endpointScope?: string; priority: number; classification: ModelClassification }[] {
   return CURATED_ROUTES
     .filter(route => route.chains[chain] !== undefined)
     .map(route => ({
       platform: route.platform,
       modelId: route.modelId,
+      ...(route.endpointScope !== undefined ? { endpointScope: route.endpointScope } : {}),
       priority: route.chains[chain]!,
       classification: route.classification,
     }))

@@ -55,6 +55,7 @@ import { ReliabilityFloorControl } from '@/components/reliability-floor-control'
 import { ProviderMomentControl } from '@/components/provider-moment-control'
 import { DecisionRoutingPopover, DecisionSetupGuide } from '@/components/decision-routing-popover'
 import { ChainManager } from '@/components/chain-manager'
+import { ChainArrangePanel } from '@/components/chain-arrange-panel'
 import { addAlias, unmergeGroupKeys, type AliasMerge } from '@/lib/alias-merge'
 import { CatalogueChangesPanel } from '@/components/catalogue-changes'
 
@@ -720,6 +721,11 @@ export default function FallbackPage() {
             Choosing a chain here points the table below at it — it does not
             change where plain `auto` requests go (#1409). */}
         <ChainManager />
+
+        {/* Auto-arrange (ARCH-20261026): the arranger that rewrites these
+            chains from measured evidence, beside the chains it rewrites —
+            preview, pins, depth floors and run history. */}
+        <ChainArrangePanel />
 
         <PenaltyInspector />
 
