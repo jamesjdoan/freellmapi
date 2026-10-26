@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip } from '@/components/tooltip'
+import { useExtensionEnabled } from '@/lib/use-extension'
 
 // Named fallback chains (#960/#895). The backend /api/profiles CRUD is
 // complete and every chain is listed as an `auto:<name>` model in /v1/models;
@@ -52,6 +53,10 @@ export interface Chain {
 
 export function ChainManager() {
   const { t } = useI18n()
+  // `plain-auto-chain` off: the "Use for plain auto" action goes — the plain
+  // auto badge still says which chain owns that traffic, and the underlying
+  // default-chain setting is untouched.
+  const plainAutoOn = useExtensionEnabled('plain-auto-chain')
   const queryClient = useQueryClient()
   const [newName, setNewName] = useState('')
   const [startEmpty, setStartEmpty] = useState(true)
@@ -274,7 +279,8 @@ export function ChainManager() {
                   {/* Two buttons, two settings, and the difference is the whole
                       point (#1409): "Edit" moves the table below, "Use for
                       plain auto" moves live traffic — and asks first. */}
-                  {!isPlainAuto && (
+                  {/* `plain-auto-chain` off: no traffic-moving action; the badge above stays. */}
+                  {!isPlainAuto && plainAutoOn && (
                     <Tooltip text={t('chains.makePlainAutoHint')}>
                       <Button
                         variant="ghost"

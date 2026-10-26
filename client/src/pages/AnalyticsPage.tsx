@@ -44,6 +44,7 @@ import { OffloadedInference } from '@/components/offloaded-inference'
 import { formatSqliteUtcToLocalTime } from '@/lib/utils'
 import { sortRows, useTableSort, type SortValueFn } from '@/lib/table-sort'
 import { categoryAxisProps, verticalCategoryAxisProps } from '@/lib/chart-axis'
+import { useExtensionEnabled } from '@/lib/use-extension'
 import { useI18n } from '@/i18n'
 import type { SearchAnalytics } from '@/lib/search'
 import { platformColors } from '@/lib/routing'
@@ -861,6 +862,9 @@ const EMPTY_BUCKET = (timestamp: string): TimelineBucket => ({
 
 export default function AnalyticsPage() {
   const { t } = useI18n()
+  // `offloaded-inference` off: the companion card is hidden; the proxy summary
+  // above keeps its numbers and nothing about the data behind either changes.
+  const offloadedOn = useExtensionEnabled('offloaded-inference')
   // The window: either a preset or an explicit date pair, remembered together
   // so switching to a preset and back does not lose the custom span.
   const [range, setRange] = useState<TimeRange | typeof CUSTOM>(storedRange)
@@ -1501,17 +1505,19 @@ export default function AnalyticsPage() {
             preset when one is selected, and the WIDEST preset while a custom
             span is active — the card's own numbers (the proxy half) still come
             from `summary`, which does honour the custom window. */}
-        <OffloadedInference
-          range={range === CUSTOM ? '365d' : range}
-          device={scope}
-          now={now}
-          proxy={summary && {
-            requests: summary.totalRequests,
-            inputTokens: summary.totalInputTokens,
-            outputTokens: summary.totalOutputTokens,
-            valueUsd: summary.estimatedCostSavings ?? 0,
-          }}
-        />
+        {offloadedOn && (
+          <OffloadedInference
+            range={range === CUSTOM ? '365d' : range}
+            device={scope}
+            now={now}
+            proxy={summary && {
+              requests: summary.totalRequests,
+              inputTokens: summary.totalInputTokens,
+              outputTokens: summary.totalOutputTokens,
+              valueUsd: summary.estimatedCostSavings ?? 0,
+            }}
+          />
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="lg:col-span-2">

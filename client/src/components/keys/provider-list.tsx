@@ -26,6 +26,7 @@ import { useI18n } from '@/i18n'
 import { toast } from '@/lib/toast'
 import { keyMatchesQuery } from '@/lib/key-search'
 import { copyText } from '@/lib/clipboard'
+import { useExtensionEnabled } from '@/lib/use-extension'
 import {
   PLATFORMS,
   CUSTOM_GROUP,
@@ -369,13 +370,19 @@ export function ProviderList({ onAddKey, initialSearch }: {
   const [hideDisabledProviders, setHideDisabledProviders] = useState(() => {
     try { return localStorage.getItem(HIDE_DISABLED_PROVIDERS_KEY) === '1' } catch { return false }
   })
+  // `provider-list-visibility` off: the Hide/Show control goes and every
+  // provider is listed — but the stored choice is left alone, so switching the
+  // extension back on restores exactly what this browser had chosen.
+  const visibilityOn = useExtensionEnabled('provider-list-visibility')
   function rememberHideDisabledProviders(hidden: boolean) {
     setHideDisabledProviders(hidden)
     try { localStorage.setItem(HIDE_DISABLED_PROVIDERS_KEY, hidden ? '1' : '0') } catch { /* view state only */ }
   }
   function selectStatusFilter(value: StatusFilter) {
     setStatusFilter(value)
-    if (value === 'disabled') rememberHideDisabledProviders(false)
+    // The Disabled filter only makes sense while hiding is in force, and while
+    // the control is hidden this must not overwrite the remembered choice.
+    if (visibilityOn && value === 'disabled') rememberHideDisabledProviders(false)
   }
   function toggleHideDisabledProviders() {
     const hidden = !hideDisabledProviders
@@ -392,6 +399,9 @@ export function ProviderList({ onAddKey, initialSearch }: {
   // would blur (and so save and close) an inline input the instant it opened.
   const [renameKeyId, setRenameKeyId] = useState<number | null>(null)
   const [removeTarget, setRemoveTarget] = useState<{ platform: string; label: string } | null>(null)
+  // `provider-removals` off: the Remove action and the log below it go, while
+  // past removals stay in force — tombstones and records are untouched.
+  const removalsOn = useExtensionEnabled('provider-removals')
   // Inline base-URL correction for an OpenAI-compatible account, like the
   // label: click the URL, fix it, Enter. Its models and limits move with it.
   const [editingBaseUrl, setEditingBaseUrl] = useState<{ id: number; value: string } | null>(null)
@@ -732,7 +742,10 @@ export function ProviderList({ onAddKey, initialSearch }: {
   // Marks this browser made before "seen" moved to the server, carried over once.
   useMigrateLegacySeenArrivals(catalogueChanges?.arrived)
   // One fetch for every provider; the chip reads its own row out of it.
-  const { data: diagnosis } = useProviderDiagnosis()
+  // `provider-diagnosis` off: the chip is hidden below, so the shared fetch is
+  // skipped rather than spent on a surface nobody sees.
+  const diagnosisOn = useExtensionEnabled('provider-diagnosis')
+  const { data: diagnosis } = useProviderDiagnosis({ enabled: diagnosisOn })
   const diagnosisByPlatform = new Map((diagnosis?.providers ?? []).map(p => [p.platform, p]))
 
   // The full catalogue id list per platform, which is what decides whether a
@@ -769,7 +782,9 @@ export function ProviderList({ onAddKey, initialSearch }: {
   // find the row the same way the fallback table's search does.
   const visibleGroups = grouped
     // Decide from the full provider, before search can narrow it to an off key.
-    .filter(group => !hideDisabledProviders || group.keys.some(key => key.enabled))
+    // Hiding is the visibility extension's surface: while it is off every
+    // provider is listed, whatever this browser remembered.
+    .filter(group => !(visibilityOn && hideDisabledProviders) || group.keys.some(key => key.enabled))
     .map(group => {
       if (!q) return group
       if (group.label.toLowerCase().includes(q)) return group
@@ -840,9 +855,12 @@ export function ProviderList({ onAddKey, initialSearch }: {
         <Button size="sm" variant="outline" className="h-8" aria-pressed={expandAll} onClick={() => { setExpandAllRemembered(!expandAll); setOpenGroup('') }}>
           {expandAll ? t('keys.collapseAll') : t('keys.expandAll')}
         </Button>
-        <Button size="sm" variant="outline" className="h-8" aria-pressed={hideDisabledProviders} onClick={toggleHideDisabledProviders}>
-          {hideDisabledProviders ? t('keys.showDisabledProviders') : t('keys.hideDisabledProviders')}
-        </Button>
+        {/* `provider-list-visibility` off: no control, and the list shows every provider. */}
+        {visibilityOn && (
+          <Button size="sm" variant="outline" className="h-8" aria-pressed={hideDisabledProviders} onClick={toggleHideDisabledProviders}>
+            {hideDisabledProviders ? t('keys.showDisabledProviders') : t('keys.hideDisabledProviders')}
+          </Button>
+        )}
         <span className="flex-1" />
         <span className="text-xs text-muted-foreground tabular-nums">
           {t('keys.providerCountSummary', { providers: totalProviders, keys: totalKeys })}
@@ -957,7 +975,9 @@ export function ProviderList({ onAddKey, initialSearch }: {
                       the first. `sm:contents` removes the wrapper on wider
                       screens, where everything sits on one row as before. */}
                   <div className="flex basis-full flex-wrap items-center gap-x-2 gap-y-1 pl-11 empty:hidden max-sm:order-last sm:contents">
-                  <ProviderDiagnosisChip diagnosis={group.endpointScope === undefined ? diagnosisByPlatform.get(group.platform) : undefined} />
+                  {diagnosisOn && (
+                    <ProviderDiagnosisChip diagnosis={group.endpointScope === undefined ? diagnosisByPlatform.get(group.platform) : undefined} />
+                  )}
                   {/* Collapsed: only what needs a decision (diagnosis, new
                       models) and the one number worth scanning (balance).
                       The churn history, the key itself and its last check
@@ -1036,8 +1056,10 @@ export function ProviderList({ onAddKey, initialSearch }: {
                           </DropdownMenuItem>
                         )}
                         {/* Giving up on a provider: its models leave the
-                            catalogue for good and the reason is recorded. */}
-                        {group.platform !== 'custom' && (
+                            catalogue for good and the reason is recorded.
+                            `provider-removals` off: the action goes, so the
+                            dialog below can never open. */}
+                        {removalsOn && group.platform !== 'custom' && (
                           <DropdownMenuItem onClick={() => setRemoveTarget({ platform: group.platform, label: group.label })}>
                             {t('keys.removeProvider')}
                             <Trash2 className="ml-auto size-3.5" />
@@ -1678,7 +1700,7 @@ export function ProviderList({ onAddKey, initialSearch }: {
       {/* Last child on purpose: the removal log is a record of what was given up
           on, not part of the working list. It is collapsed by default, and it
           used to render twice — once expanded above the list and once here. */}
-      <ProviderRemovalsLog />
+      {removalsOn && <ProviderRemovalsLog />}
     </div>
   )
 }

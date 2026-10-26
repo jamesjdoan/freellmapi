@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
+import { useExtensionEnabled } from '@/lib/use-extension'
 import { formatExpiryCountdown, formatExpiryDate } from '@/lib/expiry'
 
 // The chip on a model row: how long this model's free access has left.
@@ -18,6 +19,10 @@ export function ExpiryChip({ expiresAt, label }: { expiresAt: string; label: str
     return () => clearInterval(id)
   }, [])
   const end = new Date(expiresAt).getTime()
+  // `model-expiry` off: the reminder chip is hidden; the expiry data behind it
+  // is untouched. Kept after the hooks above so a flip mid-session cannot
+  // change how many hooks this component runs.
+  if (!useExtensionEnabled('model-expiry')) return null
   if (Number.isNaN(end)) return null
   const left = end - now
   const passed = left <= 0

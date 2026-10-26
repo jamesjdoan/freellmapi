@@ -35,12 +35,15 @@ export interface ProviderDiagnosis {
 }
 
 /** One fetch for every provider: the endpoint returns them all, so a query per
- *  row would be eleven requests for one answer. */
-export function useProviderDiagnosis() {
+ *  row would be eleven requests for one answer. `enabled: false` while the
+ *  `provider-diagnosis` chip is hidden, so the fetch is not spent on a
+ *  surface nobody sees. */
+export function useProviderDiagnosis(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: ['keys', 'diagnosis'],
     queryFn: () => apiFetch<{ providers: ProviderDiagnosis[] }>('/api/keys/diagnosis'),
     staleTime: 60_000,
+    ...options,
   })
 }
 

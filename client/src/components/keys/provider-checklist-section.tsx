@@ -6,6 +6,7 @@ import { Tooltip } from '@/components/tooltip'
 import { useI18n } from '@/i18n'
 import { PLATFORMS } from './shared'
 import { RemoveProviderDialog } from './provider-removals'
+import { useExtensionEnabled } from '@/lib/use-extension'
 
 // Shape of GET /api/keys/providers (#543). Declared inline: the backend owns
 // the contract (server/src/routes/keys.ts) and this is the only consumer.
@@ -34,6 +35,8 @@ export function ProviderChecklistSection({ onAddKey }: { onAddKey: (platform: st
   // records why (same log as removing a configured provider) and the server
   // stops listing it here.
   const [removeTarget, setRemoveTarget] = useState<{ platform: string; label: string } | null>(null)
+  // The same Remove action as on configured providers, so the same switch hides it.
+  const removalsOn = useExtensionEnabled('provider-removals')
   const { data } = useQuery<ProvidersChecklist>({
     queryKey: ['keys-providers'],
     queryFn: () => apiFetch('/api/keys/providers'),
@@ -124,15 +127,17 @@ export function ProviderChecklistSection({ onAddKey }: { onAddKey: (platform: st
                     </a>
                   )}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setRemoveTarget({ platform: p.platform, label: p.name })}
-                  title={t('keys.checklistRemoveTip', { provider: p.name })}
-                  aria-label={t('keys.checklistRemoveTip', { provider: p.name })}
-                  className="inline-flex text-muted-foreground transition-colors hover:text-destructive focus-visible:text-destructive"
-                >
-                  <X className="size-3" aria-hidden="true" />
-                </button>
+                {removalsOn && (
+                  <button
+                    type="button"
+                    onClick={() => setRemoveTarget({ platform: p.platform, label: p.name })}
+                    title={t('keys.checklistRemoveTip', { provider: p.name })}
+                    aria-label={t('keys.checklistRemoveTip', { provider: p.name })}
+                    className="inline-flex text-muted-foreground transition-colors hover:text-destructive focus-visible:text-destructive"
+                  >
+                    <X className="size-3" aria-hidden="true" />
+                  </button>
+                )}
               </span>
             )
           })}

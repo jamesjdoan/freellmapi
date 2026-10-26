@@ -315,6 +315,10 @@ export default function CompareModelsPage() {
   // modelId because that is what a CompareRow carries; the fleet's `spec` is
   // `provider:id` and only its opencode half can correspond to a catalogue row
   // at all — Cline has no rows here, by design, since FreeLLM cannot call it.
+  // `screening-benchmark` off: the tokens-per-task column is removed from the
+  // table below — header and cells. The AA measurements behind it stay, and
+  // sorting is unchanged.
+  const screeningOn = useExtensionEnabled('screening-benchmark')
   const fleetEnabled = useExtensionEnabled('clifree-fleet-telemetry')
   const { data: fleetData } = useFleet(fleetEnabled)
   // modelId -> the agents that report reaching it. Only OpenCode ids can ever
@@ -1069,7 +1073,7 @@ export default function CompareModelsPage() {
                   <SortHead sort={sort} onSort={sortBy} col="codingIndex" right>{t('compare.coding')}</SortHead>
                   <SortHead sort={sort} onSort={sortBy} col="agenticIndex" right>{t('compare.agentic')}</SortHead>
                   <SortHead sort={sort} onSort={sortBy} col="speed" right>{t('compare.colSpeed')}</SortHead>
-                  <SortHead sort={sort} onSort={sortBy} col="tokensPerTask" right>{t('compare.colTokensPerTask')}</SortHead>
+                  {screeningOn && <SortHead sort={sort} onSort={sortBy} col="tokensPerTask" right>{t('compare.colTokensPerTask')}</SortHead>}
                   <SortHead sort={sort} onSort={sortBy} col="latency" right>{t('compare.colLatency')}</SortHead>
                   <SortHead sort={sort} onSort={sortBy} col="price" right>{t('compare.colPrice')}</SortHead>
                   <SortHead sort={sort} onSort={sortBy} col="context" right>{t('compare.colContext')}</SortHead>
@@ -1278,9 +1282,11 @@ export default function CompareModelsPage() {
                           screen measurement are different measures, so each
                           carries its own mark and they are never compared as
                           one column of numbers. */}
-                      <TableCell className="text-right tabular-nums" title={t('compare.tokensPerTaskHint')}>
-                        <TokenEfficiencyCell value={g.tokenEfficiency} />
-                      </TableCell>
+                      {screeningOn && (
+                        <TableCell className="text-right tabular-nums" title={t('compare.tokensPerTaskHint')}>
+                          <TokenEfficiencyCell value={g.tokenEfficiency} />
+                        </TableCell>
+                      )}
                       <TableCell className="text-right tabular-nums" title={t('compare.latencyHint')}>
                         {stat(g.analysis?.medianTimeToFirstTokenSeconds, 2)}
                       </TableCell>

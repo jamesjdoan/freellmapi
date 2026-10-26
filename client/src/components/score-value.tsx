@@ -2,6 +2,7 @@ import { useState, type FormEvent, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
+import { useExtensionEnabled } from '@/lib/use-extension'
 import { useI18n } from '@/i18n'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -71,7 +72,10 @@ export function EditableScore({ cell, metric, routes, toneClass, suffix }: {
 }) {
   const { t } = useI18n()
   const typed = cell.entry != null && !cell.entry.superseded && cell.value != null && cell.provenance === cell.entry.provenance
-  const canEnter = cell.editable && routes.length > 0 && (cell.value == null || typed)
+  // `typed-benchmark-scores` off: the entry affordance goes — the cell prints
+  // plain, and a saved typed score keeps displaying like any other number.
+  const typedOn = useExtensionEnabled('typed-benchmark-scores')
+  const canEnter = typedOn && cell.editable && routes.length > 0 && (cell.value == null || typed)
   if (!canEnter) return <ScoreValue cell={cell} toneClass={toneClass} suffix={suffix} />
   const label = t('scoreProvenance.enter', { metric: t(METRIC_LABEL_KEY[metric]) })
   return (
