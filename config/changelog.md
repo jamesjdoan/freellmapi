@@ -1,6 +1,18 @@
 # Changelog
 
-## 2026-10-27 — Chain auto-arrange and route bench probes (built, not deployed)
+## 2026-10-27 — Upstream v0.16.10 merged
+
+- `--no-ff` merge of tag `v0.16.10` onto `f99e0d54`. It covers 14 upstream commits, 52 files. Recovery tag: `imperium/pre-v0.16.10-recovery`.
+- **One conflict**, `server/src/lib/fallback-loop.ts`: upstream's Cloudflare account-wide bench (#1622) placed inside our zero-duration guard, so a decision that benches nothing still benches nothing on any account.
+- **Invariant:** the merge's file set against the old tip equals upstream's `v0.16.9..v0.16.10` set exactly (0 differences).
+- **Ported to the fork:**
+  - Kenari (#1703) gets a shared pool, `kenari::daily-free`, in `resolveQuotaPolicy`. Upstream documents its `:free` routes as one renewable daily account quota, but our resolver would otherwise have put each model in its own pool.
+  - `kenari.test.ts` key validation: the mock now refuses the unauthenticated control call. This fork certifies a key only when the same URL refuses a request without it.
+  - `legacy-baseline-rerun.test.ts` expects every migration in our manifest, not upstream's 47.
+- **Data check:** v0.16.10 changes only the legacy baseline (#1603). Its new DELETE path runs only on a baseline re-run, and the live baseline is recorded as applied. Rehearsed twice on a copy of the live DB: 100 migrations, 750 chain rows, 977 models and 19 keys, identical on both passes.
+- **Verified:** server 441 files, 5509 passed, 5 skipped; client 96 files, 731 passed; both type-checks clean; i18n 60 locales.
+
+## 2026-10-27 — Chain auto-arrange and route bench probes (deployed `main-20261027-011810`)
 
 - **Why.** On 2026-10-26, 47 of the 85 routes in the six chains had no real requests in 14 days, so their positions were never measured. Under `routing_strategy = priority` the stored order decides which model serves, and that order was hand-set and stale. Extra-Tier, the overflow for every chain, was headed by ten never-called custom routes. ADR `ARCH-20261026-chain-auto-arrange`, approved 2026-10-26.
 - **Chain auto-arrange** (`services/chain-arrange.ts`, extension `chain-auto-arrange`, on by default, hourly).
@@ -21,7 +33,8 @@
   - One real streamed probe: `groq/openai/gpt-oss-120b` A1 PASS at 100, 328 ms, 243+69 tokens from the stream's own usage frame.
   - `nvidia/stepfun-ai/step-5-preview` A1 FAIL at 0 after 37 s, recorded as evidence.
   - A second apply on the copy wrote nothing.
-- **Not yet done:** image rebuild and redeploy (needs approval); re-pinning MiniMax M3.1 Flash at Apex 3, chosen by hand on 2026-10-26 but not yet a pin, so the first pass would move it to 6.
+- **Deployed** 2026-10-27 01:18 local as `main-20261027-011810` (rollback `provider-routing-before-20261027-011810`, volume backup `backups/freellmapi-data-20261027-011810.tar.gz`): `Up (healthy)`, 19/19 keys decrypt, 100 migrations, `/v1/models` 556. MiniMax M3.1 Flash pinned at Apex 3 through `POST /api/fallback/position` before the first pass. First live passes: four probes (gpt-oss-120b and gemini-3.6-flash A1 PASS at 100; zhipu glm-4.7-flash rate-limited; gemini-3.5-flash-lite timed out at 60 s, no cooldown written for either), and new orders for Apex (13 moved), Coding (23), Fast-Lane (46), Extra-Tier (56) and Default (7). A live `auto:apex` tool call served through `nvidia/z-ai/glm-5.3-flash`, ahead of the arranged head because the per-request quota terms promoted it — the intended split between base order and per-request adjustment.
+- **Extensions inventory completed** (`f99e0d54`): ten fork features that had no registry entry now have one — plain-auto chain, hide disabled providers, provider diagnosis, provider removal, expiry countdown, typed benchmark scores, screening benchmark and tokens per task, offloaded inference, analytics windows (not switchable, listed for completeness), quota measurement scripts (documentation only). Each switchable one hides its own surface only; existing removals, typed scores and the plain-auto chain stay in force when off.
 
 ## 2026-10-26 — Upstream v0.16.9 merged (deployed `main-20261026-064426`)
 

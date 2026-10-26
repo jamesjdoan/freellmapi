@@ -232,7 +232,19 @@ export function decodeEntities(v: string): string {
   return v.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e: string) => {
     if (e[0] === '#') {
       const code = e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
-      return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : m;
+      // Lone surrogates (0xD800–0xDFFF) are in the 0..0x10FFFF range but are
+      // not valid Unicode scalar values: fromCodePoint hands back a broken
+      // string whose half gets replaced with U+FFFD by every JSON encoder
+      // and rejected outright by strict ones. Web pages carry them as bait
+      // (obfuscated-email addresses render as &#xD800;-style entities), and
+      // this decoder runs on every hit title and snippet from every engine.
+      // Same guard as safeCodePoint in routes/update.ts, which caught this
+      // exact class in the update-check feed. Leave the entity verbatim —
+      // it is display text, not a hard parse dependency.
+      const isLoneSurrogate = code >= 0xd800 && code <= 0xdfff;
+      return Number.isFinite(code) && code > 0 && code <= 0x10ffff && !isLoneSurrogate
+        ? String.fromCodePoint(code)
+        : m;
     }
     return NAMED_ENTITIES[e.toLowerCase()] ?? m;
   });
@@ -325,6 +337,10 @@ const ADAPTERS: Record<string, Adapter> = {
     const url = new URL(`${BRAVE_BASE_URL}/${news ? 'news' : 'web'}/search`);
     url.searchParams.set('q', query);
     url.searchParams.set('count', String(n));
+    // Brave decorates matched terms with <strong> tags by default
+    // (text_decorations=true), so titles and snippets would reach the caller
+    // wrapped in markup every other engine never emits. Ask for plain text.
+    url.searchParams.set('text_decorations', 'false');
     let parsed: { web?: { results?: unknown }; results?: unknown } | null;
     try {
       parsed = await upstream(url.toString(), 'brave', {

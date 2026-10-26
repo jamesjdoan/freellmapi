@@ -277,6 +277,10 @@ export function resolveQuotaPolicy(
   // unknown. (Upstream v0.16.4 removed Auray, #1583, so its pool is gone.)
   if (platform === 'onomeo') return policy('onomeo::five-hour-free', 'shared_pool', 'unknown', [], 'unknown');
   if (platform === 'iteracompute') return policy('iteracompute::monthly-free', 'shared_pool', 'unknown', [], 'unknown');
+  // Upstream v0.16.10 (#1703): Kenari's named :free routes share the account's
+  // renewable daily quota (providers/kenari.ts). Without this each model read
+  // as its own pool and the account looked N times larger than it is.
+  if (platform === 'kenari') return policy('kenari::daily-free', 'shared_pool', 'unknown', [], 'unknown');
   // AI Horde: anonymous requests share one queue priority (the 0000000000 key),
   // so they pool together; a registered key has its own kudos priority but we
   // still bucket per-platform here.
