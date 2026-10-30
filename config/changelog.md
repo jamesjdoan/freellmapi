@@ -1,8 +1,14 @@
 # Changelog
 
-## 2026-10-30 — Upstream v0.16.12 merged (not deployed)
+## 2026-10-30 — Session wrap
 
-- Integrated release tag `v0.16.12` (`36826e7c`) over `514076fe`, covering seven upstream commits and 43 files. The `--no-ff --no-commit` merge had no textual conflicts; the running v0.16.10 + AA image is unchanged.
+- Prepended this session's verified deployment/handoff block to `config/handoff.md` without changing older blocks: `acc1d825` pushed/deployed, live image, rollback assets, checks, limitations and the remaining documentation-only commit/push approval.
+- Appended clean-merge duplicate-session and desktop-startup-parity gotchas to `docs/GOTCHAS.md`. Retained the approved derived-score policy in memory.
+- Deployment evidence is recorded below and the current live image is reflected in `docs/en/deployment/03-imperium-extension-branch.md`. No new commit, push, deployment, provider activation or routing-policy change was made during wrap-up.
+
+## 2026-10-30 — Upstream v0.16.12 deployed (`acc1d825`, `main-20261030-151938`)
+
+- Integrated release tag `v0.16.12` (`36826e7c`) over `514076fe` in merge commit `acc1d825`, covering seven upstream commits and 43 files. The `--no-ff --no-commit` merge had no textual conflicts; compatibility fixes were verified before committing and deploying.
 - **Upstream replaces duplicate OpenCode session handling.** Retained its endpoint-host detection (including custom OpenCode Go URLs) and UUID formatting. Removed the fork's platform-only implementation; its measured conversation-specific identity is now a small addition to the single upstream helper. Both streaming and ordinary calls share it.
 - **Context sizing:** use upstream's conservative median for auto/fusion/unified/named-chain discovery and its 90%-of-refused-size ceiling when the provider names no window. All five request surfaces supply size estimates; extended the same learning to the fork's fusion panel and streaming judge. Explicit saved operator context overrides still take precedence. Context failures remain separate from quota/cooldown failures.
 - **New adapters:** KiosAPI chat, Plugsky images, BlockRun decisions, HAL-X / AI SENSE keyless decisions, and Clairic typed extraction. Catalog/release gates remain authoritative: this update does not invent catalog entries or silently activate providers. Added the two missing keyless providers to the fork's Keys picker. KiosAPI resolves to one shared daily pool; Plugsky image observations use a separate monthly pool from chat. No new local numeric limits are asserted for endpoints that do not report them.
@@ -10,6 +16,8 @@
 - **Desktop:** accepted upstream's bounded update-check implementation. Connected the embedded server to saved extension-state loading and the existing quota/provider/chain background jobs. Removed the old source-text/mock-call-order boot tests; actual embedded startup and HTTP behavior are exercised in the upgrade smoke.
 - **Data:** no upstream migrations. Two production initialization passes on a read-only backup copy left all 68 tables identical, including 101 migration rows, 19 key ciphertexts, 749 chain memberships, 76 model overrides, 718 AA models, 1,498 archived AA values and 104 manual benchmark entries.
 - **Verification:** root `npm test` passed: 448 server files (5,614 tests, 5 skipped), 177 CLI tests (1 skipped), 734 client tests, and 60-locale i18n validation. A subsequent focused run including the added fusion regression passed 194 tests. Desktop: 69 passed, 1 skipped. Root production build and desktop server/main/preload bundles passed. An isolated, network-disabled Docker build booted and served ping plus authenticated model discovery; no production tags or volumes were changed. A separate HTTP/browser smoke on copied data exercised keyless decisions, extraction, the AA display and provider picker; provider replies were local fixtures, not live-account calls.
+- **Live deployment:** `./scripts/deploy.sh` built `main-20261030-151938` (`7bbfc55b`), stopped the service, archived the full volume to `backups/freellmapi-data-20261030-151938.tar.gz`, and recreated the existing service on that same volume. `docker compose ps`: Up (healthy), published at `127.0.0.1:3001`. All 19 provider keys decrypt. Authenticated `/v1/models`: 200, 590 entries. Real `auto:fast-lane` completion: 200 via `gemini-3.1-flash-lite`, answer `OK.`. MCP healthcheck: ready; its new search status correctly reports `needs_configuration` because no search keys are configured.
+- **Live preservation/UI:** chain membership/order, model overrides, AA mirror/archive and typed-entry hashes match the pre-deploy snapshot. AA remains published v5.0 / rankings v4.3, not stale; no refresh or scoring-version switch was performed. Compare shows archived/derived labels, the Extensions panel opens, and Keys lists KiosAPI plus the new optional-key decision providers without activating them. No browser page errors. Rollback image: `jamesjdoan/freellmapi:provider-routing-before-20261030-151938` (`cc564fdb`).
 
 ## 2026-10-30 — Artificial Analysis v2 deployed (`514076fe`, `main-20261030-113637`)
 
