@@ -14,11 +14,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 const score = z.number().finite().nullable()
 const Cell = z.object({
   value: score,
-  provenance: z.enum(['measured', 'family', 'approximated', 'tested']).nullable(),
+  provenance: z.enum(['measured', 'archived', 'derived', 'family', 'approximated', 'tested']).nullable(),
   entry: z.object({
     value: z.number().finite(), provenance: z.enum(['family', 'approximated', 'tested']), enteredAt: z.string(), superseded: z.boolean(),
   }).nullable(),
   editable: z.boolean(),
+  version: z.string().nullable().optional(),
+  asOf: z.string().nullable().optional(),
 })
 const Route = z.object({
   modelDbId: z.number().int().positive(), platform: z.string(), modelId: z.string(),

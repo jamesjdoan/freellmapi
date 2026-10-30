@@ -72,6 +72,11 @@ interface CompareRow {
     indexCostPerTask: number | null
     medianOutputTokensPerSecond: number | null
     medianTimeToFirstTokenSeconds: number | null
+    medianTimeToFirstAnswerTokenSeconds?: number | null
+    currentIntelligenceIndex?: number | null
+    currentIndexVersion?: string | null
+    capabilities?: { finance: number | null; strategyOps: number | null; legal: number | null; healthcare: number | null; engineering: number | null; economics: number | null }
+    scoreSources?: Record<ScoreMetric, { version: string | null; asOf: string | null; archived: boolean }>
   } | null
   link: { slug: string | null; source: 'auto' | 'manual' | 'proxy'; matchReason: string | null; unresolved: boolean; proxyDelta: { intelligence: number; coding: number; agentic: number; speed: number } } | null
   /** Intelligence, coding and agentic as printed, with where each came from. */
@@ -122,6 +127,12 @@ interface ComparePayload {
     cachedModels: number
     linkedModels: number
     indexVersion: string | null
+    scoringVersion?: string | null
+    responseShape?: string | null
+    promptType?: string | null
+    lastAttemptMs?: number | null
+    stale?: boolean
+    nextAllowedAt?: string | null
   }
 }
 
@@ -129,6 +140,14 @@ type Metric = 'intelligenceIndex' | 'codingIndex' | 'agenticIndex'
 /** The resolved score behind each index column: AA's measurement, or a typed
  *  or borrowed score when AA has none (ADR ARCH-20261018). */
 const SCORE_OF: Record<Metric, ScoreMetric> = { intelligenceIndex: 'intelligence', codingIndex: 'coding', agenticIndex: 'agentic' }
+const CAPABILITIES: { key: SortKey; field: keyof NonNullable<NonNullable<CompareRow['analysis']>['capabilities']>; label: string }[] = [
+  { key: 'capabilityFinance', field: 'finance', label: 'compare.capFinance' },
+  { key: 'capabilityStrategyOps', field: 'strategyOps', label: 'compare.capStrategyOps' },
+  { key: 'capabilityLegal', field: 'legal', label: 'compare.capLegal' },
+  { key: 'capabilityHealthcare', field: 'healthcare', label: 'compare.capHealthcare' },
+  { key: 'capabilityEngineering', field: 'engineering', label: 'compare.capEngineering' },
+  { key: 'capabilityEconomics', field: 'economics', label: 'compare.capEconomics' },
+]
 const indexOf = (g: { scores: Scores }, key: Metric): number | null => g.scores[SCORE_OF[key]].value
 /** What the chart plots. The three indices are one scale and can share an axis;
  *  cost is a different quantity in different units, so it gets its own view
@@ -497,13 +516,14 @@ export default function CompareModelsPage() {
     return slugs
   }, [grouped, fleetModelIds])
 
+  const [showCapabilities, setShowCapabilities] = useState(false)
   const RESET = { metric: 'intelligenceIndex' as ChartView, priceBasis: 'task' as PriceBasis, scope: 'routed' as Scope,
-                  sort: { key: 'intelligenceIndex' as SortKey, dir: 'desc' as const }, query: '' }
-  const dirty = metric !== RESET.metric || priceBasis !== RESET.priceBasis || scope !== RESET.scope || query !== RESET.query
+                  sort: { key: 'intelligenceIndex' as SortKey, dir: 'desc' as const }, query: '', showCapabilities: false }
+  const dirty = metric !== RESET.metric || priceBasis !== RESET.priceBasis || scope !== RESET.scope || query !== RESET.query || showCapabilities !== RESET.showCapabilities
     || sort.key !== RESET.sort.key || sort.dir !== RESET.sort.dir || selected.size > 0
   const resetAll = () => {
     setMetric(RESET.metric); setPriceBasis(RESET.priceBasis); setScope(RESET.scope); setSort(RESET.sort)
-    setQuery(RESET.query); setSelected(new Set())
+    setQuery(RESET.query); setSelected(new Set()); setShowCapabilities(RESET.showCapabilities)
   }
   // Second click reverses; moving to a new column starts descending, except for
   // the four where "low is good" (name A-Z, latency, price, tokens per task).
@@ -571,8 +591,10 @@ export default function CompareModelsPage() {
     // your task, and null means AA has not run it, which is not free.
     if (metric === 'price') return priceBasis === 'task' ? g.analysis?.indexCostPerTask ?? null : priceOf(g.analysis)?.input ?? null
     if (metric === 'all') {
-      const parts = OVERLAY.map(o => indexOf(g, o.key)).filter((v): v is number => v != null)
-      return parts.length > 0 ? parts.reduce((a, b) => a + b, 0) / parts.length : null
+      // All three or none: a mean over whichever happen to exist would rank a
+      // model with only intelligence on intelligence alone, unannounced.
+      const parts = OVERLAY.map(o => indexOf(g, o.key))
+      return parts.every((v): v is number => v != null) ? parts.reduce((a, b) => a + b, 0) / parts.length : null
     }
     return indexOf(g, metric)
   }, [metric, priceBasis])
@@ -649,24 +671,33 @@ export default function CompareModelsPage() {
           <section className="flex flex-wrap items-center gap-2 rounded-xl border px-4 py-2.5 text-[11px]">
             <span className="text-xs font-medium">{t('compare.keyTitle')}</span>
             <Badge variant="secondary" className="text-[10px]">{t('compare.keySaved')}</Badge>
-            {status?.tier && <Badge variant="secondary">{status.tier}</Badge>}
-            {status?.indexVersion && <Badge variant="outline">{status.indexVersion}</Badge>}
-            <span className="tabular-nums text-muted-foreground">
-              {t('compare.cacheState', { cached: status?.cachedModels ?? 0, linked: status?.linkedModels ?? 0 })}
-            </span>
-            {status?.rateLimit?.remaining != null && (
-              <span className="tabular-nums text-muted-foreground">
-                {t('compare.quota', { remaining: status.rateLimit.remaining, limit: status.rateLimit.limit ?? 0 })}
-              </span>
-            )}
-            {status?.lastSyncMs != null && (
-              <span className="text-muted-foreground">
-                {t('compare.lastSync', { when: new Date(status.lastSyncMs).toLocaleString() })}
-              </span>
-            )}
+            {status?.tier && <Badge variant="secondary">{t('compare.accountTier', { tier: status.tier })}</Badge>}
+            {status?.responseShape && <Badge variant="secondary">{t('compare.responseShape', { shape: status.responseShape })}</Badge>}
+            {status?.indexVersion && <Badge variant="outline">{t('compare.publishedVersion', { version: status.indexVersion })}</Badge>}
+            {status?.scoringVersion && <Badge variant="outline">{t('compare.scoringVersion', { version: status.scoringVersion })}</Badge>}
+            <span className="tabular-nums text-muted-foreground">{t('compare.cacheState', { cached: status?.cachedModels ?? 0, linked: status?.linkedModels ?? 0 })}</span>
+            {status?.rateLimit?.remaining != null && <span className="tabular-nums text-muted-foreground">{t('compare.quota', { remaining: status.rateLimit.remaining, limit: status.rateLimit.limit ?? 0 })}</span>}
+            {status?.lastSyncMs != null && <span className="text-muted-foreground">{t('compare.lastSync', { when: new Date(status.lastSyncMs).toLocaleString() })}</span>}
+            {status?.nextAllowedAt && <span className="text-muted-foreground">{t('compare.nextAllowed', { when: new Date(status.nextAllowedAt).toLocaleString() })}</span>}
             <span className="flex-1" />
             <Button size="xs" variant="ghost" onClick={() => setEditingKey(true)}>{t('compare.keyChange')}</Button>
-            {status?.lastError && <p className="w-full text-xs text-destructive">{status.lastError}</p>}
+            {status?.lastError && !status.stale && <p className="w-full text-xs text-destructive">{status.lastError}</p>}
+            {status?.stale && <p className="w-full rounded bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-300">
+              {t('compare.staleSnapshot', { lastSync: status.lastSyncMs == null ? '—' : new Date(status.lastSyncMs).toLocaleString(), lastAttempt: status.lastAttemptMs == null ? '—' : new Date(status.lastAttemptMs).toLocaleString(), lastError: status.lastError ?? '' })}
+            </p>}
+            {status?.scoringVersion && status.indexVersion && status.scoringVersion !== status.indexVersion && (
+              <div className="w-full rounded border border-amber-500/40 bg-amber-500/5 p-2 text-xs">
+                <p>{t('compare.versionMismatch', { scoringVersion: status.scoringVersion, indexVersion: status.indexVersion })}</p>
+                <p className="mt-1 text-muted-foreground">{t('compare.retiredMetrics')}</p>
+                <p className="mt-1 text-muted-foreground">{t('compare.switchScoringConfirm', { version: status.scoringVersion })}</p>
+                <ConfirmButton
+                  className="mt-1"
+                  variant="outline"
+                  aria-label={t('compare.switchScoringVersion', { version: status.indexVersion })}
+                  onConfirm={() => { void apiFetch('/api/analysis/scoring-version', { method: 'PUT', body: JSON.stringify({ version: status.indexVersion }) }).then(invalidate) }}
+                >{t('compare.switchScoringVersion', { version: status.indexVersion })}</ConfirmButton>
+              </div>
+            )}
           </section>
         )
         : (
@@ -781,6 +812,10 @@ export default function CompareModelsPage() {
                     ))}
                   </span>
                 )}
+                <button type="button" aria-pressed={showCapabilities} onClick={() => setShowCapabilities(v => !v)}
+                  className={`rounded-full border px-2 py-0.5 text-[11px] ${showCapabilities ? 'bg-muted' : 'hover:bg-muted/50'}`}>
+                  {t('compare.capabilitiesToggle')}
+                </button>
                 <span className="ml-2">
                   <ModelCombobox
                     value=""
@@ -1072,6 +1107,7 @@ export default function CompareModelsPage() {
                   <SortHead sort={sort} onSort={sortBy} col="intelligenceIndex" right>{t('compare.intelligence')}</SortHead>
                   <SortHead sort={sort} onSort={sortBy} col="codingIndex" right>{t('compare.coding')}</SortHead>
                   <SortHead sort={sort} onSort={sortBy} col="agenticIndex" right>{t('compare.agentic')}</SortHead>
+                  {showCapabilities && CAPABILITIES.map(c => <SortHead key={c.key} sort={sort} onSort={sortBy} col={c.key} right>{t(c.label)}</SortHead>)}
                   <SortHead sort={sort} onSort={sortBy} col="speed" right>{t('compare.colSpeed')}</SortHead>
                   {screeningOn && <SortHead sort={sort} onSort={sortBy} col="tokensPerTask" right>{t('compare.colTokensPerTask')}</SortHead>}
                   <SortHead sort={sort} onSort={sortBy} col="latency" right>{t('compare.colLatency')}</SortHead>
@@ -1253,6 +1289,9 @@ export default function CompareModelsPage() {
                         <TableCell key={metric} className="text-right tabular-nums">
                           <EditableScore
                             cell={g.scores[metric]}
+                            title={metric === 'intelligence' && g.analysis?.scoreSources?.intelligence?.archived && g.analysis.currentIntelligenceIndex != null
+                              ? t('compare.currentIntelligenceTooltip', { version: g.analysis.currentIndexVersion ?? '', value: g.analysis.currentIntelligenceIndex.toFixed(1) })
+                              : undefined}
                             metric={metric}
                             // A typed score goes to every route of the model that has
                             // no measurement of its own; a baseline takes none.
@@ -1271,6 +1310,9 @@ export default function CompareModelsPage() {
                           />
                         </TableCell>
                       ))}
+                      {showCapabilities && CAPABILITIES.map(c => (
+                        <TableCell key={c.key} className="text-right tabular-nums">{stat(g.analysis?.capabilities?.[c.field] ?? null, 1)}</TableCell>
+                      ))}
                       {/* Measured by Artificial Analysis, so they are blank
                           exactly where the scores are: an unmapped row shows
                           dashes rather than inventing a number from our own
@@ -1287,7 +1329,7 @@ export default function CompareModelsPage() {
                           <TokenEfficiencyCell value={g.tokenEfficiency} />
                         </TableCell>
                       )}
-                      <TableCell className="text-right tabular-nums" title={t('compare.latencyHint')}>
+                      <TableCell className="text-right tabular-nums" title={[t('compare.latencyHint'), g.analysis?.medianTimeToFirstAnswerTokenSeconds != null ? t('compare.firstAnswer', { seconds: g.analysis.medianTimeToFirstAnswerTokenSeconds }) : ''].filter(Boolean).join(' · ')}>
                         {stat(g.analysis?.medianTimeToFirstTokenSeconds, 2)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-[11px]" title={t('compare.priceHint')}>

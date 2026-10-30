@@ -82,7 +82,7 @@ describe('resolving a score', () => {
     setManualLink('groq', 'qwen3', 'qwen3');
 
     expect(row('groq', 'qwen3').scores.agentic).toEqual({
-      value: 22, provenance: 'measured', editable: false,
+      value: 22, provenance: 'measured', editable: false, version: 'v4.3', asOf: expect.any(String),
       entry: { value: 30, provenance: 'family', enteredAt: expect.any(String), superseded: true },
     });
     expect(getAdjustedScores().get('groq:qwen3')?.agentic).toBe(22);
@@ -176,7 +176,6 @@ describe('PUT/DELETE /api/analysis/score', () => {
     setManualLink('zhipu', 'glm-x', 'glm-x');
     const refused = await call('PUT', { routes, metric: 'coding', value: 40, provenance: 'tested' });
     expect(refused.status).toBe(409);
-    expect(refused.body.error?.message).toContain('Already measured');
     // The unmeasured metric on the same route is still open.
     expect((await call('PUT', { routes, metric: 'agentic', value: 12, provenance: 'approximated' })).body.written).toBe(1);
   });

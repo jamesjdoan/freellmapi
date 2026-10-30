@@ -334,9 +334,13 @@ function score(input: ArrangeInput, m: ArrangeMember): Scored {
   const { eligibility, reasons: why } = eligibilityOf(m, input.minimums, input.tolerancePct);
   reasons.push(...why);
 
+  // A derived estimate orders nothing in a chain that does not accept
+  // estimates: it would be routing on a fitted guess the minimums refuse.
+  const usable = (cell: ScoreCell | undefined) =>
+    cell == null || (cell.provenance === 'derived' && !input.minimums?.acceptEstimated) ? null : cell.value;
   const metric: ArrangeEntry['metric'] =
-    input.chain === 'Apex' ? { name: 'intelligence', value: m.scores?.intelligence.value ?? null }
-    : input.chain === 'Coding' ? { name: 'coding', value: m.scores?.coding.value ?? null }
+    input.chain === 'Apex' ? { name: 'intelligence', value: usable(m.scores?.intelligence) }
+    : input.chain === 'Coding' ? { name: 'coding', value: usable(m.scores?.coding) }
     : input.chain === 'Fast-Lane' ? { name: 'latency', value: e?.real.avgOkLatencyMs ?? e?.probe.avgOkLatencyMs ?? null }
     : { name: 'reliability', value: n === 0 ? null : Math.round(lb * 1000) / 10 };
   return { member: m, n, ok, lb, tier, eligibility, metric, reasons };

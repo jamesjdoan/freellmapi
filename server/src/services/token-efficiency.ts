@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { TokenEfficiency } from '@freellmapi/shared/types.js';
 import type { Db } from '../db/types.js';
 import { getDb } from '../db/index.js';
+import { loadAaScoring } from './aa-scoring.js';
 
 // Token efficiency: how many tokens a model spends to finish a task
 // (ADR ARCH-20261020).
@@ -88,16 +89,20 @@ export interface AaTokenEstimate {
   high: number;
 }
 
-/** The AA estimate for every cached model that has one. */
+/** The AA estimate for every cached model that has one. Cost per task is
+ *  read under the pinned scoring version (services/aa-scoring.ts): it is the
+ *  cost of THAT version's workload, so it belongs with that version's scores. */
 export function aaTokenEstimates(db: Db): Map<string, AaTokenEstimate> {
   const rows = db.prepare(`
-    SELECT slug, price_1m_input, price_1m_output, index_cost_per_task FROM aa_model
-  `).all() as { slug: string; price_1m_input: number | null; price_1m_output: number | null; index_cost_per_task: number | null }[];
+    SELECT slug, price_1m_input, price_1m_output FROM aa_model
+  `).all() as { slug: string; price_1m_input: number | null; price_1m_output: number | null }[];
+  const scoring = loadAaScoring(db);
 
   const out = new Map<string, AaTokenEstimate>();
   for (const r of rows) {
-    const tokens = estimateTokensPerTask(r.index_cost_per_task, r.price_1m_input, r.price_1m_output);
-    const range = tokenRangePerTask(r.index_cost_per_task, r.price_1m_input, r.price_1m_output);
+    const cost = scoring.get(r.slug)?.costPerTask.value ?? null;
+    const tokens = estimateTokensPerTask(cost, r.price_1m_input, r.price_1m_output);
+    const range = tokenRangePerTask(cost, r.price_1m_input, r.price_1m_output);
     if (tokens != null && range != null) out.set(String(r.slug), { tokensPerTask: tokens, low: range.low, high: range.high });
   }
   return out;

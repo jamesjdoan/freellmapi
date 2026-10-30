@@ -4,7 +4,22 @@
 
 export type ScoreMetric = 'intelligence' | 'coding' | 'agentic'
 export type EntryProvenance = 'family' | 'approximated' | 'tested'
-export type ScoreProvenance = 'measured' | EntryProvenance
+export type ScoreProvenance = 'measured' | 'archived' | 'derived' | EntryProvenance
+
+/** How a derived score was estimated (server services/aa-derive.ts). */
+export interface ScoreEstimate {
+  value: number
+  basis: { kind: 'intelligence'; version: string } | { kind: 'capability'; capability: string }
+  basisValue: number
+  /** Models the line was fitted on. */
+  n: number
+  /** Typical miss on an unseen model, in index points. */
+  error: number
+  r: number
+  /** The input is outside the range the line was fitted on. */
+  extrapolated: boolean
+  targetVersion: string | null
+}
 
 export interface ScoreCell {
   /** The number every table prints, sorts and grades on. */
@@ -15,6 +30,11 @@ export interface ScoreCell {
   entry: { value: number; provenance: EntryProvenance; enteredAt: string; superseded: boolean } | null
   /** False when the value is a measurement: a typed score never replaces one. */
   editable: boolean
+  /** AA index version and publication time, present only on AA-sourced cells. */
+  version?: string | null
+  asOf?: string | null
+  /** Present when provenance is 'derived'. */
+  estimate?: ScoreEstimate | null
 }
 
 export type Scores = Record<ScoreMetric, ScoreCell>
@@ -24,16 +44,20 @@ export const ENTRY_PROVENANCES: readonly EntryProvenance[] = ['family', 'approxi
 
 /** Hues no other score marking on these surfaces uses: chain minimums take
  *  emerald and amber, fit and proxy deltas rose, baselines sky (D5). */
-export const PROVENANCE_CLASS: Record<EntryProvenance, string> = {
+export const PROVENANCE_CLASS: Record<Exclude<ScoreProvenance, 'measured'>, string> = {
   tested: 'text-cyan-700 dark:text-cyan-400',
   family: 'text-indigo-600 dark:text-indigo-400',
   approximated: 'text-fuchsia-700 dark:text-fuchsia-400',
+  archived: 'text-slate-600 dark:text-slate-400',
+  derived: 'text-blue-700 dark:text-blue-400',
 }
 
-export const PROVENANCE_LABEL_KEY: Record<EntryProvenance, string> = {
+export const PROVENANCE_LABEL_KEY: Record<Exclude<ScoreProvenance, 'measured'>, string> = {
   tested: 'scoreProvenance.tested',
   family: 'scoreProvenance.family',
   approximated: 'scoreProvenance.approximated',
+  archived: 'scoreProvenance.archived',
+  derived: 'scoreProvenance.derived',
 }
 
 export const PROVENANCE_HELP_KEY: Record<EntryProvenance, string> = {
@@ -42,10 +66,11 @@ export const PROVENANCE_HELP_KEY: Record<EntryProvenance, string> = {
   approximated: 'scoreProvenance.approximatedHelp',
 }
 
-/** Related family and approximated are estimates; a test is the operator's own
- *  measurement and grades like one. */
+/** Related family, approximated and derived are estimates; archived values
+ *  retain the status of published measurements, and tested is an operator
+ *  measurement. */
 export function isEstimate(provenance: ScoreProvenance | null): boolean {
-  return provenance === 'family' || provenance === 'approximated'
+  return provenance === 'family' || provenance === 'approximated' || provenance === 'derived'
 }
 
 /** The colour class for a score, or null for a measurement (and for nothing). */

@@ -305,15 +305,15 @@ export function ClifreeFleet() {
 
   const sorted = useMemo(() => {
     const mul = dir === 'asc' ? 1 : -1
-    const key = (e: Entry): string | number => {
+    const key = (e: Entry): string | number | null => {
       switch (sort) {
         case 'name': return e.name
         case 'class': return e.cls ?? ''
         // Unrated sorts last either way rather than posing as a zero, which
         // would rank an unmeasured model below a bad one.
-        case 'intelligence': return e.analysis?.intelligenceIndex ?? -Infinity
-        case 'coding': return e.analysis?.codingIndex ?? -Infinity
-        case 'agentic': return e.analysis?.agenticIndex ?? -Infinity
+        case 'intelligence': return e.analysis?.intelligenceIndex ?? null
+        case 'coding': return e.analysis?.codingIndex ?? null
+        case 'agentic': return e.analysis?.agenticIndex ?? null
         // Token efficiency sorts by source, not by one merged number: an AA
         // rank and a screen token count are different measures (see
         // lib/token-efficiency). The comparison below handles it.
@@ -332,6 +332,7 @@ export function ClifreeFleet() {
         return cmp === 0 ? a.name.localeCompare(b.name) : cmp
       }
       const ka = key(a), kb = key(b)
+      if (ka == null || kb == null) return ka == null ? (kb == null ? a.name.localeCompare(b.name) : 1) : -1
       if (typeof ka === 'string' || typeof kb === 'string') return String(ka).localeCompare(String(kb)) * mul
       return (ka - kb) * mul
     })

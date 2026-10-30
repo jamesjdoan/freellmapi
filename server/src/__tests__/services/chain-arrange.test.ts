@@ -167,6 +167,18 @@ describe('ranking', () => {
     expect(order(plan)).toEqual(['f/fast', 'f/slow']);
   });
 
+  it('orders Coding on a derived estimate only when the chain accepts estimates', () => {
+    const derived = (value: number): Record<ScoreMetric, ScoreCell> => ({ ...scores(40), coding: cell(value, 'derived') });
+    const members = () => [
+      // The better proven route, with no coding score at all.
+      member('c/unscored', { scores: scores(40), evidence: evidence([100, 99]) }),
+      member('c/estimated', { scores: derived(70), evidence: evidence([100, 90]) }),
+    ];
+    expect(order(rankChain(input('Coding', members())))).toEqual(['c/unscored', 'c/estimated']);
+    expect(order(rankChain(input('Coding', members(), { minimums: { ...NO_MINS, acceptEstimated: true } }))))
+      .toEqual(['c/estimated', 'c/unscored']);
+  });
+
   it('honours a pin over everything else', () => {
     const plan = rankChain(input('Apex', [
       member('a/best', { scores: scores(50) }),

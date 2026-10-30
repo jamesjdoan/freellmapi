@@ -7,6 +7,9 @@ import { matchAaModel, type AaCandidate } from './analysis-match.js';
 import { getModelGroups } from './model-groups.js';
 import type { TokenEfficiency } from '@freellmapi/shared/types.js';
 import { aaTokenEstimates, loadBenchResults, resolveTokenEfficiency } from './token-efficiency.js';
+import { AaFetchError, fetchAaCatalogue, type AaRow, type CapabilityMetric, type FetchOptions } from './analysis-fetch.js';
+import { SCORING_VERSION_SETTING, archiveCoverage, getScoringVersion, loadAaScoring, type AaScoring, type AaSourced } from './aa-scoring.js';
+import type { AaEstimate } from './aa-derive.js';
 
 // Artificial Analysis benchmark data, cached locally and mapped to our models.
 //
@@ -15,22 +18,32 @@ import { aaTokenEstimates, loadBenchResults, resolveTokenEfficiency } from './to
 // "is Kimi K3 actually better at coding than GPT-OSS 120B" — nothing in this
 // database has ever measured that. Artificial Analysis has.
 //
-// The free endpoint is used deliberately, not the Pro one: it carries the three
-// headline indices, which is the whole question here, and it accepts a key of
-// any tier. Reaching for `/language/models` instead would 403 every Free key
-// for data this feature does not use.
+// We use the free endpoint (/language/models/free) for every tier. Why, and
+// the rest of the upstream contract, are in services/analysis-fetch.ts.
+// Which number each index cell shows, and which version it belongs to, is
+// decided in services/aa-scoring.ts.
 //
 // Their terms require visible attribution wherever the data is shown. The
 // Compare Models panel carries it; do not remove it.
 
-const AA_BASE = 'https://artificialanalysis.ai/api/v2';
-
 // settings keys
 const SETTING_KEY = 'aa_api_key_encrypted'; // JSON { encrypted, iv, authTag }
+/** Last SUCCESSFUL publish. The snapshot on screen is this old. */
 const SETTING_LAST_SYNC = 'aa_last_sync_ms';
+/** Last attempt of any outcome. Later than the last sync means it failed. */
+const SETTING_LAST_ATTEMPT = 'aa_last_attempt_ms';
 const SETTING_LAST_ERROR = 'aa_last_error';
+/** The ACCOUNT tier AA reported (X-AA-Tier). */
 const SETTING_TIER = 'aa_tier';
+/** The RESPONSE shape actually received. A Pro key on /free gets 'free'. */
+const SETTING_SHAPE = 'aa_response_shape';
+const SETTING_PROMPT_TYPE = 'aa_prompt_type';
+/** Index version of the published snapshot, e.g. 'v5.0'. */
+const SETTING_SNAPSHOT_VERSION = 'aa_snapshot_version';
+const SETTING_TOTAL_PAGES = 'aa_total_pages';
 const SETTING_RATE = 'aa_rate_limit'; // JSON { limit, remaining, resetAt }
+/** Set from a 429 that told us when to come back. No request before then. */
+const SETTING_NEXT_ALLOWED = 'aa_next_allowed_ms';
 
 /**
  * The key is encrypted at rest, unlike `premium_license_key` beside it in
@@ -46,8 +59,10 @@ export function setAnalysisKey(key: string): void {
 
 export function clearAnalysisKey(): void {
   const db = getDb();
-  db.prepare('DELETE FROM settings WHERE key IN (?, ?, ?, ?)')
-    .run(SETTING_KEY, SETTING_TIER, SETTING_RATE, SETTING_LAST_ERROR);
+  // The quota and tier belong to the account the key was on; a replacement key
+  // may be on another one.
+  db.prepare('DELETE FROM settings WHERE key IN (?, ?, ?, ?, ?, ?)')
+    .run(SETTING_KEY, SETTING_TIER, SETTING_RATE, SETTING_LAST_ERROR, SETTING_NEXT_ALLOWED, SETTING_SHAPE);
 }
 
 export function getAnalysisKey(): string | null {
@@ -69,65 +84,69 @@ export interface AnalysisStatus {
   /** True when a key is stored but will not decrypt — a changed
    *  ENCRYPTION_KEY, which is a different problem from having no key. */
   unreadable: boolean;
+  /** The account's tier as AA reports it. Not the same thing as how rich the
+   *  data is: see responseShape. */
   tier: string | null;
+  /** The response shape actually received ('free' | 'pro'). */
+  responseShape: string | null;
+  /** Prompt basis of the performance medians; null when AA does not state it. */
+  promptType: string | null;
+  /** When the snapshot on screen was published: the last SUCCESSFUL refresh. */
   lastSyncMs: number | null;
+  lastAttemptMs: number | null;
   lastError: string | null;
+  /** The latest refresh failed, so the data on screen is the snapshot from
+   *  lastSyncMs, kept because a partial one was refused. */
+  stale: boolean;
+  /** A 429 told us when to come back; no request is sent before then. */
+  nextAllowedAt: string | null;
   rateLimit: { limit: number | null; remaining: number | null; resetAt: string | null } | null;
   /** Cached rows and how many of our models are linked. */
   cachedModels: number;
   linkedModels: number;
+  /** Intelligence Index version of what AA publishes now. */
   indexVersion: string | null;
+  /** The version every ranking, grade and chain minimum reads. Differs from
+   *  indexVersion until the operator moves it. */
+  scoringVersion: string | null;
+  /** Archived scores per index version. */
+  archive: { version: string; intelligence: number; coding: number; agentic: number }[];
+  totalPages: number | null;
 }
 
 export function getAnalysisStatus(db: Db = getDb()): AnalysisStatus {
   const stored = getSetting(SETTING_KEY);
   const rate = getSetting(SETTING_RATE);
   const lastSync = getSetting(SETTING_LAST_SYNC);
+  const lastAttempt = getSetting(SETTING_LAST_ATTEMPT);
+  const lastError = getSetting(SETTING_LAST_ERROR) ?? null;
+  const nextAllowed = Number(getSetting(SETTING_NEXT_ALLOWED) ?? 0);
+  const pages = getSetting(SETTING_TOTAL_PAGES);
   const cached = (db.prepare('SELECT COUNT(*) AS c FROM aa_model').get() as { c: number }).c;
   const linked = (db.prepare('SELECT COUNT(*) AS c FROM aa_model_link WHERE aa_slug IS NOT NULL')
     .get() as { c: number }).c;
-  const version = (db.prepare('SELECT index_version FROM aa_model WHERE index_version IS NOT NULL LIMIT 1')
-    .get() as { index_version: string } | undefined)?.index_version ?? null;
+  const version = getSetting(SETTING_SNAPSHOT_VERSION)
+    ?? (db.prepare('SELECT index_version FROM aa_model WHERE index_version IS NOT NULL LIMIT 1')
+      .get() as { index_version: string } | undefined)?.index_version ?? null;
   return {
     configured: Boolean(stored),
     unreadable: Boolean(stored) && getAnalysisKey() === null,
     tier: getSetting(SETTING_TIER) ?? null,
+    responseShape: getSetting(SETTING_SHAPE) ?? null,
+    promptType: getSetting(SETTING_PROMPT_TYPE) ?? null,
     lastSyncMs: lastSync ? Number(lastSync) : null,
-    lastError: getSetting(SETTING_LAST_ERROR) ?? null,
+    lastAttemptMs: lastAttempt ? Number(lastAttempt) : null,
+    lastError,
+    stale: lastError != null && cached > 0,
+    nextAllowedAt: nextAllowed > Date.now() ? new Date(nextAllowed).toISOString() : null,
     rateLimit: rate ? JSON.parse(rate) : null,
     cachedModels: cached,
     linkedModels: linked,
     indexVersion: version,
+    scoringVersion: getScoringVersion(),
+    archive: archiveCoverage(db),
+    totalPages: pages ? Number(pages) : null,
   };
-}
-
-interface FreeModel {
-  slug: string;
-  name: string;
-  release_date: string | null;
-  model_creator?: { name?: string } | null;
-  evaluations?: {
-    artificial_analysis_intelligence_index?: number | null;
-    artificial_analysis_coding_index?: number | null;
-    artificial_analysis_agentic_index?: number | null;
-  } | null;
-  pricing?: { price_1m_input_tokens?: number | null; price_1m_output_tokens?: number | null } | null;
-  /** AA's own measured cost of running one task of their intelligence-index
-   *  evaluation on this model. A real spend over a fixed workload — which is
-   *  why it is used in preference to blending the per-million prices here, a
-   *  blend being a choice of token mix that reorders their published ranking. */
-  artificial_analysis_intelligence_index_cost?: { cost_per_task?: { total_cost?: number | null } | null } | null;
-  performance?: {
-    median_output_tokens_per_second?: number | null;
-    median_time_to_first_token_seconds?: number | null;
-  } | null;
-}
-
-interface FreeResponse {
-  tier?: string;
-  intelligence_index_version?: number;
-  pagination?: { page: number; total_pages: number; has_more?: boolean };
-  data?: FreeModel[];
 }
 
 export interface SyncResult {
@@ -139,63 +158,105 @@ export interface SyncResult {
 }
 
 /**
- * Refetch every page and rebuild the cache.
+ * Fetch every page, then publish them as one snapshot.
  *
- * The rate limit is a fixed 100 requests per 24h on the Free tier, shared
- * across the whole organisation — so this is manual, never scheduled. A poller
- * would spend the operator's daily quota on data that changes weekly.
+ * Manual, never scheduled. The quota is a fixed 100 requests per 24 hours on
+ * the Free tier, shared by every key on the account, and a refresh costs one
+ * request per page (4 on 2026-10-30). A poller would spend that quota on data
+ * that changes weekly.
+ *
+ * Nothing is written until the whole catalogue has arrived and passed
+ * validation. A failed page, malformed data, or a version or page count that
+ * changes mid-refresh leaves the previous snapshot untouched, and the status
+ * reports it as stale.
  */
-export async function syncAnalysis(db: Db = getDb()): Promise<SyncResult> {
+export async function syncAnalysis(db: Db = getDb(), opts: FetchOptions = {}): Promise<SyncResult> {
+  const now = opts.now ?? Date.now;
+  const fail = (error: string): SyncResult => ({ ok: false, fetched: 0, linked: 0, unmatched: 0, error });
   const key = getAnalysisKey();
   if (!key) {
-    const stored = getSetting(SETTING_KEY);
-    return {
-      ok: false, fetched: 0, linked: 0, unmatched: 0,
-      error: stored
-        ? 'The stored key could not be decrypted — ENCRYPTION_KEY has changed since it was saved.'
-        : 'No Artificial Analysis key configured.',
-    };
+    return fail(getSetting(SETTING_KEY)
+      ? 'The stored key could not be decrypted — ENCRYPTION_KEY has changed since it was saved.'
+      : 'No Artificial Analysis key configured.');
   }
 
-  const models: FreeModel[] = [];
-  let version: string | null = null;
-  try {
-    let page = 1;
-    // Bounded: a runaway `has_more` must not spend the whole daily quota in a
-    // loop. Their catalogue is a few hundred models at a few dozen per page.
-    for (; page <= 20; page++) {
-      const res = await fetch(`${AA_BASE}/language/models/free?page=${page}`, {
-        headers: { 'x-api-key': key },
-        signal: AbortSignal.timeout(30_000),
-      });
-      recordRateLimit(res);
-      if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        throw new Error(describeFailure(res.status, body));
-      }
-      const payload = await res.json() as FreeResponse;
-      if (payload.tier) setSetting(SETTING_TIER, payload.tier);
-      if (payload.intelligence_index_version != null) {
-        version = `v${payload.intelligence_index_version}`;
-      }
-      models.push(...(payload.data ?? []));
-      const pag = payload.pagination;
-      const more = pag?.has_more ?? (pag ? pag.page < pag.total_pages : false);
-      if (!more) break;
+  // Refuse before spending anything when the quota cannot cover a full
+  // refresh. A refresh that gets 3 of 4 pages publishes nothing.
+  const nextAllowed = Number(getSetting(SETTING_NEXT_ALLOWED) ?? 0);
+  if (nextAllowed > now()) {
+    return fail(`Artificial Analysis asked us to wait until ${new Date(nextAllowed).toISOString()}. No request was sent.`);
+  }
+  const rate = getSetting(SETTING_RATE);
+  if (rate) {
+    const { remaining, resetAt } = JSON.parse(rate) as { remaining: number | null; resetAt: string | null };
+    const pages = Number(getSetting(SETTING_TOTAL_PAGES) ?? 1);
+    if (remaining != null && resetAt && Date.parse(resetAt) > now() && remaining < pages) {
+      return fail(`Only ${remaining} request${remaining === 1 ? '' : 's'} left before ${resetAt}, and a refresh needs ${pages}. No request was sent.`);
     }
+  }
+
+  setSetting(SETTING_LAST_ATTEMPT, String(now()));
+  let snapshot;
+  try {
+    snapshot = await fetchAaCatalogue(key, {
+      ...opts,
+      onResponse: res => {
+        recordRateLimit(res);
+        const tier = res.headers.get('x-aa-tier');
+        if (tier) setSetting(SETTING_TIER, tier);
+        opts.onResponse?.(res);
+      },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setSetting(SETTING_LAST_ERROR, message);
-    return { ok: false, fetched: 0, linked: 0, unmatched: 0, error: message };
+    if (error instanceof AaFetchError && error.kind === 'rate' && error.retryAtMs != null) {
+      setSetting(SETTING_NEXT_ALLOWED, String(error.retryAtMs));
+    }
+    return fail(message);
   }
 
+  const fetchedAt = new Date(now()).toISOString().slice(0, 19).replace('T', ' ');
+  publishSnapshot(db, snapshot.rows, {
+    version: snapshot.indexVersion, fetchedAt, promptType: snapshot.promptType, shape: snapshot.responseShape,
+  });
+  setSetting(SETTING_LAST_SYNC, String(now()));
+  if (snapshot.tier) setSetting(SETTING_TIER, snapshot.tier);
+  setSetting(SETTING_SHAPE, snapshot.responseShape);
+  if (snapshot.promptType) setSetting(SETTING_PROMPT_TYPE, snapshot.promptType);
+  else db.prepare('DELETE FROM settings WHERE key = ?').run(SETTING_PROMPT_TYPE);
+  setSetting(SETTING_SNAPSHOT_VERSION, snapshot.indexVersion);
+  setSetting(SETTING_TOTAL_PAGES, String(snapshot.totalPages));
+  // The first snapshot an install ever takes pins the scale. After that, a
+  // new upstream version changes no ranking until the operator moves the pin.
+  if (getScoringVersion() == null) setSetting(SCORING_VERSION_SETTING, snapshot.indexVersion);
+  db.prepare('DELETE FROM settings WHERE key IN (?, ?)').run(SETTING_LAST_ERROR, SETTING_NEXT_ALLOWED);
+
+  const { linked, unmatched } = relinkAll(db);
+  return { ok: true, fetched: snapshot.rows.length, linked, unmatched };
+}
+
+/**
+ * Replace the mirror with one complete snapshot, in one transaction.
+ *
+ * Also appends one aa_measurement row per model and records every non-null
+ * index score in aa_score_archive under the snapshot's version. The archive is
+ * never pruned, so a score AA stops publishing is not lost when it goes.
+ */
+function publishSnapshot(
+  db: Db, rows: AaRow[], meta: { version: string; fetchedAt: string; promptType: string | null; shape: string },
+): void {
+  const columns = `slug, name, creator, release_date, intelligence_index, coding_index, agentic_index,
+    price_1m_input, price_1m_output, index_cost_per_task, median_output_tokens_per_second,
+    median_time_to_first_token_seconds, median_time_to_first_answer_token_seconds,
+    finance_index, strategy_ops_index, legal_index, healthcare_index, engineering_index, economics_index,
+    prompt_type, response_shape, index_version, fetched_at`;
+  const values = `@slug, @name, @creator, @releaseDate, @intelligence, @coding, @agentic,
+    @priceIn, @priceOut, @indexCostPerTask, @tps, @ttft, @ttfa,
+    @finance, @strategyOps, @legal, @healthcare, @engineering, @economics,
+    @promptType, @shape, @version, @fetchedAt`;
   const upsert = db.prepare(`
-    INSERT INTO aa_model (slug, name, creator, release_date, intelligence_index, coding_index,
-                          agentic_index, price_1m_input, price_1m_output, index_cost_per_task,
-                          median_output_tokens_per_second, median_time_to_first_token_seconds,
-                          index_version, fetched_at)
-    VALUES (@slug, @name, @creator, @releaseDate, @intelligence, @coding, @agentic,
-            @priceIn, @priceOut, @indexCostPerTask, @tps, @ttft, @version, @fetchedAt)
+    INSERT INTO aa_model (${columns}) VALUES (${values})
     ON CONFLICT(slug) DO UPDATE SET
       name = excluded.name, creator = excluded.creator, release_date = excluded.release_date,
       intelligence_index = excluded.intelligence_index, coding_index = excluded.coding_index,
@@ -203,70 +264,61 @@ export async function syncAnalysis(db: Db = getDb()): Promise<SyncResult> {
       price_1m_output = excluded.price_1m_output, index_cost_per_task = excluded.index_cost_per_task,
       median_output_tokens_per_second = excluded.median_output_tokens_per_second,
       median_time_to_first_token_seconds = excluded.median_time_to_first_token_seconds,
+      median_time_to_first_answer_token_seconds = excluded.median_time_to_first_answer_token_seconds,
+      finance_index = excluded.finance_index, strategy_ops_index = excluded.strategy_ops_index,
+      legal_index = excluded.legal_index, healthcare_index = excluded.healthcare_index,
+      engineering_index = excluded.engineering_index, economics_index = excluded.economics_index,
+      prompt_type = excluded.prompt_type, response_shape = excluded.response_shape,
       index_version = excluded.index_version, fetched_at = excluded.fetched_at
   `);
-
-  // Append-only history beside the in-place cache (migration 20260925_000001):
-  // one row per slug per sync, sharing one timestamp so a sync reads as one
-  // snapshot. aa_model keeps serving "latest" to every existing reader.
+  // Append-only history beside the in-place mirror (migration 20260925_000001).
+  // Every row from one sync shares one timestamp, so a sync reads as one snapshot.
   const record = db.prepare(`
     INSERT OR IGNORE INTO aa_measurement (
-      slug, index_version, fetched_at, intelligence_index, coding_index, agentic_index,
-      median_output_tokens_per_second, median_time_to_first_token_seconds, index_cost_per_task
-    ) VALUES (@slug, @version, @fetchedAt, @intelligence, @coding, @agentic, @tps, @ttft, @indexCostPerTask)
+      slug, intelligence_index, coding_index, agentic_index, index_cost_per_task,
+      median_output_tokens_per_second, median_time_to_first_token_seconds,
+      median_time_to_first_answer_token_seconds,
+      finance_index, strategy_ops_index, legal_index, healthcare_index, engineering_index, economics_index,
+      prompt_type, response_shape, index_version, fetched_at
+    ) VALUES (
+      @slug, @intelligence, @coding, @agentic, @indexCostPerTask, @tps, @ttft, @ttfa,
+      @finance, @strategyOps, @legal, @healthcare, @engineering, @economics,
+      @promptType, @shape, @version, @fetchedAt
+    )
   `);
-  const fetchedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  const archive = db.prepare(`
+    INSERT INTO aa_score_archive (slug, metric, index_version, value, measured_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(slug, metric, index_version) DO UPDATE SET
+      value = excluded.value, measured_at = excluded.measured_at
+  `);
 
   db.transaction(() => {
-    for (const m of models) {
-      if (!m.slug) continue;
-      const measurement = {
-        slug: m.slug,
-        name: m.name ?? m.slug,
-        creator: m.model_creator?.name ?? null,
-        releaseDate: m.release_date ?? null,
-        intelligence: m.evaluations?.artificial_analysis_intelligence_index ?? null,
-        coding: m.evaluations?.artificial_analysis_coding_index ?? null,
-        agentic: m.evaluations?.artificial_analysis_agentic_index ?? null,
-        priceIn: m.pricing?.price_1m_input_tokens ?? null,
-        priceOut: m.pricing?.price_1m_output_tokens ?? null,
-        indexCostPerTask: m.artificial_analysis_intelligence_index_cost?.cost_per_task?.total_cost ?? null,
-        tps: m.performance?.median_output_tokens_per_second ?? null,
-        ttft: m.performance?.median_time_to_first_token_seconds ?? null,
-        version,
-        fetchedAt,
+    for (const m of rows) {
+      const params = {
+        slug: m.slug, name: m.name, creator: m.creator, releaseDate: m.releaseDate,
+        intelligence: m.intelligence, coding: m.coding, agentic: m.agentic,
+        priceIn: m.priceIn, priceOut: m.priceOut, indexCostPerTask: m.indexCostPerTask,
+        tps: m.tps, ttft: m.ttft, ttfa: m.ttfa,
+        ...m.capabilities,
+        promptType: meta.promptType, shape: meta.shape, version: meta.version, fetchedAt: meta.fetchedAt,
       };
-      upsert.run(measurement);
-      record.run(measurement);
+      upsert.run(params);
+      record.run(params);
+      for (const [metric, value] of [
+        ['intelligence', m.intelligence], ['coding', m.coding], ['agentic', m.agentic],
+        ['index_cost_per_task', m.indexCostPerTask],
+      ] as const) {
+        if (value != null) archive.run(m.slug, metric, meta.version, value, meta.fetchedAt);
+      }
     }
-    // Slugs that vanished upstream: the cache is a mirror, so a stale row would
-    // keep serving scores AA has withdrawn. Links to them survive - see
-    // relinkAll, which reports them as unresolved rather than deleting the
+    // Slugs that vanished upstream: the mirror follows AA, so a withdrawn model
+    // stops showing scores. Its archive rows and our links to it are kept;
+    // relinkAll reports the links as unresolved instead of deleting the
     // operator's mapping.
-    if (models.length > 0) {
-      const keep = models.map(m => m.slug).filter(Boolean);
-      const placeholders = keep.map(() => '?').join(',');
-      db.prepare(`DELETE FROM aa_model WHERE slug NOT IN (${placeholders})`).run(...keep);
-    }
+    const keep = rows.map(m => m.slug);
+    db.prepare(`DELETE FROM aa_model WHERE slug NOT IN (${keep.map(() => '?').join(',')})`).run(...keep);
   })();
-
-  setSetting(SETTING_LAST_SYNC, String(Date.now()));
-  const db2 = getDb();
-  db2.prepare('DELETE FROM settings WHERE key = ?').run(SETTING_LAST_ERROR);
-
-  const { linked, unmatched } = relinkAll(db);
-  return { ok: true, fetched: models.length, linked, unmatched };
-}
-
-function describeFailure(status: number, body: string): string {
-  // Their documented status meanings, said plainly - "403" alone sends the
-  // operator to the docs to learn they are on the wrong tier.
-  switch (status) {
-    case 401: return 'Artificial Analysis rejected the key (401). Check it in API key management.';
-    case 403: return 'The key is valid but its tier does not cover this endpoint (403).';
-    case 429: return 'Daily rate limit exhausted (429). The quota resets on a fixed 24-hour window.';
-    default: return `Artificial Analysis returned ${status}${body ? `: ${body.slice(0, 200)}` : ''}`;
-  }
 }
 
 function recordRateLimit(res: Response): void {
@@ -281,6 +333,23 @@ function recordRateLimit(res: Response): void {
     // knowledge of which unit it arrived in.
     resetAt: reset ? new Date(Number(reset) * 1000).toISOString() : null,
   }));
+}
+
+/**
+ * Move the scale every ranking reads to another Intelligence Index version.
+ *
+ * Only to a version we hold scores for. Chain minimums are NOT rescaled: they
+ * were set on the old scale, and inventing a conversion would be inventing
+ * thresholds. The operator re-reads them after the switch.
+ */
+export function setScoringVersion(version: string, db: Db = getDb()): boolean {
+  const known = db.prepare(`
+    SELECT 1 FROM aa_score_archive WHERE index_version = ? AND metric = 'intelligence'
+    UNION SELECT 1 FROM aa_model WHERE index_version = ?
+  `).get(version, version);
+  if (!known) return false;
+  setSetting(SCORING_VERSION_SETTING, version);
+  return true;
 }
 
 /**
@@ -426,16 +495,33 @@ export interface CompareRow {
     slug: string;
     name: string;
     creator: string | null;
+    /** The three index values every ranking reads (services/aa-scoring.ts):
+     *  intelligence under the pinned scoring version, coding and agentic as
+     *  last published. `scoreSources` says which version each one is from,
+     *  and whether it is archived. */
     intelligenceIndex: number | null;
     codingIndex: number | null;
     agenticIndex: number | null;
+    scoreSources: Record<ScoreMetric, ScoreSource>;
+    /** What AA publishes NOW for intelligence, and under which version. Can
+     *  differ from intelligenceIndex while the pin is on an older version. */
+    currentIntelligenceIndex: number | null;
+    currentIndexVersion: string | null;
+    /** AA's six capability indices (Free shape since 2026-10-29). Shown for
+     *  reference only; no chain or grade reads them. */
+    capabilities: Record<CapabilityMetric, number | null>;
     price1mInput: number | null;
     price1mOutput: number | null;
     /** AA's measured USD cost of one task of their index evaluation. Null where
-     *  they publish none — which is not the same as free. */
+     *  they publish none — which is not the same as free. Read under the
+     *  scoring version, like intelligence: it is the cost of that version's
+     *  workload. */
     indexCostPerTask: number | null;
     medianOutputTokensPerSecond: number | null;
     medianTimeToFirstTokenSeconds: number | null;
+    medianTimeToFirstAnswerTokenSeconds: number | null;
+    /** Prompt basis of the medians, when AA states one. */
+    promptType: string | null;
   } | null;
   link: {
     /** 'proxy' is a stand-in for a model the upstream does not publish: the
@@ -456,7 +542,17 @@ export interface CompareRow {
 export type ScoreMetric = 'intelligence' | 'coding' | 'agentic';
 export const SCORE_METRICS: readonly ScoreMetric[] = ['intelligence', 'coding', 'agentic'];
 export type EntryProvenance = 'family' | 'approximated' | 'tested';
-export type ScoreProvenance = 'measured' | EntryProvenance;
+/** 'archived': AA published this value but no longer does. It is either under
+ *  an older index version than AA's current one, or a metric AA has retired. */
+export type ScoreProvenance = 'measured' | 'archived' | 'derived' | EntryProvenance;
+
+export interface ScoreSource {
+  version: string | null;
+  asOf: string | null;
+  archived: boolean;
+  /** A derived estimate for a metric AA left empty (services/aa-derive.ts). */
+  estimate?: AaEstimate | null;
+}
 
 export interface ScoreCell {
   /** The number every table prints, sorts and grades on. */
@@ -467,6 +563,12 @@ export interface ScoreCell {
   entry: { value: number; provenance: EntryProvenance; enteredAt: string; superseded: boolean } | null;
   /** False when the value is a measurement: a typed score never replaces one. */
   editable: boolean;
+  /** Index version an AA value belongs to. Absent for typed scores. */
+  version?: string | null;
+  /** When AA published an archived value. */
+  asOf?: string | null;
+  /** How a 'derived' value was estimated: its input, fit size and error. */
+  estimate?: AaEstimate | null;
 }
 
 interface BenchmarkEntry { value: number; provenance: EntryProvenance; enteredAt: string }
@@ -512,17 +614,38 @@ function typedFor(entries: TypedEntries, platform: string, modelId: string, slug
  * One metric for one route. A measurement wins and supersedes any typed score;
  * otherwise the typed score; otherwise a proxy's borrowed figure, which is a
  * related model's number (D2); otherwise nothing.
+ *
+ * An ARCHIVED AA value ranks as a measurement: it is AA's own measurement of
+ * this model, and it held that place before AA stopped publishing it. A typed
+ * score it superseded stays superseded, so no grade changes when a metric is
+ * retired. It is labelled 'archived' with its version and date so it never
+ * reads as current.
+ *
+ * A DERIVED estimate (services/aa-derive.ts) comes last, after every typed
+ * score, and stays editable: the operator's own number always wins over the
+ * fitted one.
  */
-export function resolveScore(aaValue: number | null, proxy: boolean, entry: BenchmarkEntry | undefined): ScoreCell {
+export function resolveScore(
+  aaValue: number | null, proxy: boolean, entry: BenchmarkEntry | undefined,
+  source: ScoreSource | null = null,
+): ScoreCell {
   const measured = aaValue != null && !proxy;
   const kept = entry ? { value: entry.value, provenance: entry.provenance, enteredAt: entry.enteredAt, superseded: measured } : null;
-  if (measured) return { value: aaValue, provenance: 'measured', entry: kept, editable: false };
+  const origin = source && aaValue != null ? { version: source.version, asOf: source.asOf } : {};
+  if (measured) {
+    return { value: aaValue, provenance: source?.archived ? 'archived' : 'measured', entry: kept, editable: false, ...origin };
+  }
   if (entry) return { value: entry.value, provenance: entry.provenance, entry: kept, editable: true };
-  if (aaValue != null) return { value: aaValue, provenance: 'family', entry: null, editable: true };
+  if (aaValue != null) return { value: aaValue, provenance: 'family', entry: null, editable: true, ...origin };
+  // Last resort, and only for a model's OWN link: a proxy already borrows a
+  // stand-in's figures, and an estimate on top of that is twice removed.
+  if (!proxy && source?.estimate) {
+    return { value: source.estimate.value, provenance: 'derived', entry: null, editable: true, version: source.estimate.targetVersion, estimate: source.estimate };
+  }
   return { value: null, provenance: null, entry: null, editable: true };
 }
 
-const PROVENANCE_RANK: Record<ScoreProvenance, number> = { measured: 0, tested: 1, family: 2, approximated: 3 };
+const PROVENANCE_RANK: Record<ScoreProvenance, number> = { measured: 0, archived: 1, tested: 2, family: 3, approximated: 4, derived: 5 };
 
 /** A group's cell: the strongest member evidence, members' own order breaking ties. */
 export function groupScore(cells: ScoreCell[]): ScoreCell {
@@ -552,9 +675,12 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
            m.supports_tools, m.supports_vision, m.intelligence_rank, m.speed_rank,
            l.aa_slug, l.source AS link_source, l.match_reason,
            l.proxy_delta_intelligence, l.proxy_delta_coding, l.proxy_delta_agentic, l.proxy_delta_speed,
-           a.slug AS aa_present, a.name AS aa_name, a.creator, a.intelligence_index,
-           a.coding_index, a.agentic_index, a.price_1m_input, a.price_1m_output, a.index_cost_per_task,
+           a.slug AS aa_present, a.name AS aa_name, a.creator, a.index_version AS aa_version,
+           a.intelligence_index, a.price_1m_input, a.price_1m_output,
            a.median_output_tokens_per_second, a.median_time_to_first_token_seconds,
+           a.median_time_to_first_answer_token_seconds, a.prompt_type AS aa_prompt_type,
+           a.finance_index, a.strategy_ops_index, a.legal_index, a.healthcare_index,
+           a.engineering_index, a.economics_index,
            n.note, n.recheck_at AS note_recheck_at, n.updated_at AS note_updated_at,
            e.expires_at AS expires_at, e.label AS expires_label,
            -- Name AND position in one concat. Two separate GROUP_CONCATs would
@@ -652,19 +778,21 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
     return upstreamOff.has(k) ? { kind: 'upstream' } : { kind: 'switched' };
   };
 
-  const catalogue = db.prepare(`
-    SELECT slug, name, creator, intelligence_index
-      FROM aa_model
-     ORDER BY intelligence_index IS NULL, intelligence_index DESC, name
-  `).all() as { slug: string; name: string; creator: string | null; intelligence_index: number | null }[];
+  const scoring = loadAaScoring(db);
+  // Picker order: strongest first on the scale every ranking uses, so the
+  // picker agrees with the tables.
+  const catalogue = (db.prepare('SELECT slug, name, creator FROM aa_model').all() as { slug: string; name: string; creator: string | null }[])
+    .map(c => ({ ...c, intelligenceIndex: scoring.get(c.slug)?.intelligence.value ?? null }))
+    .sort((x, y) => (x.intelligenceIndex == null ? 1 : 0) - (y.intelligenceIndex == null ? 1 : 0)
+      || (y.intelligenceIndex ?? 0) - (x.intelligenceIndex ?? 0) || x.name.localeCompare(y.name));
 
   const entries = loadBenchmarkEntries(db);
-  const AA_COLUMN: Record<ScoreMetric, string> = { intelligence: 'intelligence_index', coding: 'coding_index', agentic: 'agentic_index' };
   const scoresOf = (r: Record<string, unknown>): Record<ScoreMetric, ScoreCell> => {
     const typed = typedFor(entries, String(r.platform), String(r.model_id), r.aa_slug);
     const proxy = r.link_source === 'proxy';
+    const s = r.aa_present ? scoring.get(String(r.aa_slug)) : undefined;
     return Object.fromEntries(SCORE_METRICS.map(metric => [metric, resolveScore(
-      r.aa_present ? nudge(numberOrNull(r[AA_COLUMN[metric]]), r, metric) : null, proxy, typed[metric],
+      s ? nudge(s[metric].value, r, metric) : null, proxy, typed[metric], s ? sourceOf(s[metric]) : null,
     )])) as Record<ScoreMetric, ScoreCell>;
   };
 
@@ -718,24 +846,7 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
       },
       scores: scoresOf(r),
       tokenEfficiency: tokenEfficiencyOf(r),
-      analysis: r.aa_present
-        ? {
-          slug: String(r.aa_slug),
-          name: String(r.aa_name),
-          creator: r.creator == null ? null : String(r.creator),
-          // The adjustment is applied HERE, not in the UI, so every table sorts
-          // on the number it prints. Only a proxy carries one; on a measurement
-          // it would be editing the measurement.
-          intelligenceIndex: nudge(numberOrNull(r.intelligence_index), r, 'intelligence'),
-          codingIndex: nudge(numberOrNull(r.coding_index), r, 'coding'),
-          agenticIndex: nudge(numberOrNull(r.agentic_index), r, 'agentic'),
-          price1mInput: numberOrNull(r.price_1m_input),
-          price1mOutput: numberOrNull(r.price_1m_output),
-          indexCostPerTask: numberOrNull(r.index_cost_per_task),
-          medianOutputTokensPerSecond: nudge(numberOrNull(r.median_output_tokens_per_second), r, 'speed'),
-          medianTimeToFirstTokenSeconds: numberOrNull(r.median_time_to_first_token_seconds),
-        }
-        : null,
+      analysis: r.aa_present ? buildAnalysis(r, scoring.get(String(r.aa_slug))) : null,
       link: r.link_source
         ? {
           slug: r.aa_slug == null ? null : String(r.aa_slug),
@@ -753,9 +864,7 @@ export function getComparePayload(db: Db = getDb()): ComparePayload {
         }
         : null,
     })),
-    catalogue: catalogue.map(c => ({
-      slug: c.slug, name: c.name, creator: c.creator, intelligenceIndex: c.intelligence_index,
-    })),
+    catalogue,
     status: getAnalysisStatus(db),
   };
 }
@@ -764,6 +873,52 @@ function numberOrNull(value: unknown): number | null {
   // NULL is "not measured" in their data and must never become 0 here: a model
   // with no agentic score would plot as the worst instead of as absent.
   return value == null ? null : Number(value);
+}
+
+function sourceOf(s: AaSourced): ScoreSource {
+  return { version: s.version, asOf: s.asOf, archived: s.archived, estimate: s.estimate ?? null };
+}
+
+/**
+ * The `analysis` block for one aa_model row (aliased as the Compare query
+ * aliases it: aa_slug, aa_name, aa_version, aa_prompt_type). `r` may carry a
+ * link's proxy deltas. The adjustment is applied HERE, not in the UI, so every
+ * table sorts on the number it prints. Only a proxy carries one; on a
+ * measurement it would be editing the measurement.
+ */
+function buildAnalysis(r: Record<string, unknown>, s: AaScoring | undefined): NonNullable<CompareRow['analysis']> {
+  const none: AaSourced = { value: null, version: null, asOf: null, archived: false };
+  const scored = s ?? { intelligence: none, coding: none, agentic: none, costPerTask: none };
+  return {
+    slug: String(r.aa_slug),
+    name: String(r.aa_name),
+    creator: r.creator == null ? null : String(r.creator),
+    intelligenceIndex: nudge(scored.intelligence.value, r, 'intelligence'),
+    codingIndex: nudge(scored.coding.value, r, 'coding'),
+    agenticIndex: nudge(scored.agentic.value, r, 'agentic'),
+    scoreSources: {
+      intelligence: sourceOf(scored.intelligence),
+      coding: sourceOf(scored.coding),
+      agentic: sourceOf(scored.agentic),
+    },
+    currentIntelligenceIndex: numberOrNull(r.intelligence_index),
+    currentIndexVersion: r.aa_version == null ? null : String(r.aa_version),
+    capabilities: {
+      finance: numberOrNull(r.finance_index),
+      strategyOps: numberOrNull(r.strategy_ops_index),
+      legal: numberOrNull(r.legal_index),
+      healthcare: numberOrNull(r.healthcare_index),
+      engineering: numberOrNull(r.engineering_index),
+      economics: numberOrNull(r.economics_index),
+    },
+    price1mInput: numberOrNull(r.price_1m_input),
+    price1mOutput: numberOrNull(r.price_1m_output),
+    indexCostPerTask: scored.costPerTask.value,
+    medianOutputTokensPerSecond: nudge(numberOrNull(r.median_output_tokens_per_second), r, 'speed'),
+    medianTimeToFirstTokenSeconds: numberOrNull(r.median_time_to_first_token_seconds),
+    medianTimeToFirstAnswerTokenSeconds: numberOrNull(r.median_time_to_first_answer_token_seconds),
+    promptType: r.aa_prompt_type == null ? null : String(r.aa_prompt_type),
+  };
 }
 
 export interface CompareGroup {
@@ -862,8 +1017,9 @@ export function getReferenceGroups(db: Db = getDb()): CompareGroup[] {
     return y - x || (a.analysis?.slug ?? '').localeCompare(b.analysis?.slug ?? '');
   };
   const aaEstimates = aaTokenEstimates(db);
+  const scoring = loadAaScoring(db);
   return getReferenceSlugs().flatMap(slug => {
-    const analysis = lookupAa(db, slug);
+    const analysis = lookupAa(db, slug, scoring);
     if (!analysis) return [];
     const estimate = aaEstimates.get(slug);
     return [{
@@ -874,9 +1030,9 @@ export function getReferenceGroups(db: Db = getDb()): CompareGroup[] {
       members: [],
       analysis,
       // A baseline we do not serve: nothing to type a score against.
-      scores: Object.fromEntries(([
-        ['intelligence', analysis.intelligenceIndex], ['coding', analysis.codingIndex], ['agentic', analysis.agenticIndex],
-      ] as const).map(([metric, value]) => [metric, { ...resolveScore(value, false, undefined), editable: false }])) as Record<ScoreMetric, ScoreCell>,
+      scores: Object.fromEntries(SCORE_METRICS.map(metric => [metric, {
+        ...resolveScore(analysis[`${metric}Index`], false, undefined, analysis.scoreSources[metric]), editable: false,
+      }])) as Record<ScoreMetric, ScoreCell>,
       // A baseline we do not serve still has an AA estimate: the rank is a
       // fact about the model, and the yardstick has to be readable on the
       // same scale as the models it is read against.
@@ -990,27 +1146,17 @@ export function nudge(value: number | null, row: Record<string, unknown>, metric
 /** One speed step, as a fraction of the proxy's own figure. */
 const SPEED_STEP = 0.15;
 
-export function lookupAa(db: Db, slug: string): CompareRow['analysis'] {
+/** One AA model as Compare shows it. Pass `scoring` when calling in a loop. */
+export function lookupAa(db: Db, slug: string, scoring?: Map<string, AaScoring>): CompareRow['analysis'] {
   const r = db.prepare(`
-    SELECT slug, name, creator, intelligence_index, coding_index, agentic_index,
-           price_1m_input, price_1m_output, index_cost_per_task, median_output_tokens_per_second,
-           median_time_to_first_token_seconds
+    SELECT slug AS aa_slug, name AS aa_name, creator, index_version AS aa_version, prompt_type AS aa_prompt_type,
+           intelligence_index, price_1m_input, price_1m_output, median_output_tokens_per_second,
+           median_time_to_first_token_seconds, median_time_to_first_answer_token_seconds,
+           finance_index, strategy_ops_index, legal_index, healthcare_index, engineering_index, economics_index
       FROM aa_model WHERE slug = ?
   `).get(slug) as Record<string, unknown> | undefined;
   if (!r) return null;
-  return {
-    slug: String(r.slug),
-    name: String(r.name),
-    creator: r.creator == null ? null : String(r.creator),
-    intelligenceIndex: numberOrNull(r.intelligence_index),
-    codingIndex: numberOrNull(r.coding_index),
-    agenticIndex: numberOrNull(r.agentic_index),
-    price1mInput: numberOrNull(r.price_1m_input),
-    price1mOutput: numberOrNull(r.price_1m_output),
-    indexCostPerTask: numberOrNull(r.index_cost_per_task),
-    medianOutputTokensPerSecond: numberOrNull(r.median_output_tokens_per_second),
-    medianTimeToFirstTokenSeconds: numberOrNull(r.median_time_to_first_token_seconds),
-  };
+  return buildAnalysis(r, (scoring ?? loadAaScoring(db)).get(slug));
 }
 
 /**
@@ -1112,23 +1258,25 @@ export interface AdjustedScores {
 export function getAdjustedScores(db: Db = getDb()): Map<string, AdjustedScores> {
   const rows = db.prepare(`
     SELECT l.platform, l.model_id, l.source, l.aa_slug,
-           a.name, a.intelligence_index, a.coding_index, a.agentic_index,
-           a.median_output_tokens_per_second,
+           a.name, a.median_output_tokens_per_second,
            l.proxy_delta_intelligence, l.proxy_delta_coding, l.proxy_delta_agentic, l.proxy_delta_speed
       FROM aa_model_link l JOIN aa_model a ON a.slug = l.aa_slug
   `).all() as Record<string, unknown>[];
   const entries = loadBenchmarkEntries(db);
+  const scoring = loadAaScoring(db);
 
   const out = new Map<string, AdjustedScores>();
   const put = (platform: string, modelId: string, r: Record<string, unknown> | null) => {
     const source = r == null ? null : r.source === 'manual' || r.source === 'proxy' ? r.source : 'auto' as const;
     const linkRow: Record<string, unknown> | null = r == null ? null : { ...r, link_source: source };
     const typed = typedFor(entries, platform, modelId, r?.aa_slug);
-    const cell = (metric: ScoreMetric, column: string) =>
-      resolveScore(linkRow ? nudge(numberOrNull(linkRow[column]), linkRow, metric) : null, source === 'proxy', typed[metric]);
-    const intelligence = cell('intelligence', 'intelligence_index');
-    const coding = cell('coding', 'coding_index');
-    const agentic = cell('agentic', 'agentic_index');
+    const s = linkRow ? scoring.get(String(linkRow.aa_slug)) : undefined;
+    const cell = (metric: ScoreMetric) => resolveScore(
+      s && linkRow ? nudge(s[metric].value, linkRow, metric) : null, source === 'proxy', typed[metric], s ? sourceOf(s[metric]) : null,
+    );
+    const intelligence = cell('intelligence');
+    const coding = cell('coding');
+    const agentic = cell('agentic');
     out.set(`${platform}:${modelId}`, {
       intelligence: intelligence.value,
       coding: coding.value,
@@ -1155,15 +1303,19 @@ export function unknownRoutes(routes: { platform: string; modelId: string }[], d
   return routes.filter(r => !exists.get(r.platform, r.modelId));
 }
 
-/** Routes that already carry an AA measurement for `metric`; a typed score
- *  never replaces one (ADR D4). */
+/** Routes whose `metric` already shows an AA value, current or archived; a
+ *  typed score never replaces one (ADR D4). Proxies excluded: their figure is
+ *  borrowed, so typing over it is allowed. */
 export function measuredRoutes(routes: { platform: string; modelId: string }[], metric: ScoreMetric, db: Db = getDb()): { platform: string; modelId: string }[] {
-  const column = { intelligence: 'intelligence_index', coding: 'coding_index', agentic: 'agentic_index' }[metric];
-  const measured = db.prepare(`
-    SELECT 1 FROM aa_model_link l JOIN aa_model a ON a.slug = l.aa_slug
-     WHERE l.platform = ? AND l.model_id = ? AND l.source != 'proxy' AND a.${column} IS NOT NULL
+  const scoring = loadAaScoring(db);
+  const link = db.prepare(`
+    SELECT l.aa_slug FROM aa_model_link l
+     WHERE l.platform = ? AND l.model_id = ? AND l.source != 'proxy' AND l.aa_slug IS NOT NULL
   `);
-  return routes.filter(r => measured.get(r.platform, r.modelId));
+  return routes.filter(r => {
+    const hit = link.get(r.platform, r.modelId) as { aa_slug: string } | undefined;
+    return hit != null && scoring.get(hit.aa_slug)?.[metric].value != null;
+  });
 }
 
 export function setBenchmarkEntry(

@@ -75,6 +75,15 @@ describe('sortValue', () => {
     expect(sortValue(e, 'price')).toBeNull()
   })
 
+  it('sorts capability scores and keeps missing values last in both directions', () => {
+    const high = entry('High', { capabilities: { finance: 80, strategyOps: null, legal: null, healthcare: null, engineering: null, economics: null } })
+    const low = entry('Low', { capabilities: { finance: 20, strategyOps: null, legal: null, healthcare: null, engineering: null, economics: null } })
+    const missing = entry('Missing', { capabilities: { finance: null, strategyOps: null, legal: null, healthcare: null, engineering: null, economics: null } })
+    expect(sortValue(high, 'capabilityFinance')).toBe(80)
+    expect(sortEntries([missing, low, high], 'capabilityFinance', 'asc').map(e => e.name)).toEqual(['Low', 'High', 'Missing'])
+    expect(sortEntries([missing, high, low], 'capabilityFinance', 'desc').map(e => e.name)).toEqual(['High', 'Low', 'Missing'])
+  })
+
   it('treats a genuine zero price as a value, not a blank', () => {
     // Free routes really do cost 0, and must sort ahead of paid ones rather
     // than sinking with the unmeasured.

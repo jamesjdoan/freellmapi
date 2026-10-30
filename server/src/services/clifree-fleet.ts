@@ -17,6 +17,7 @@ import type { Db } from '../db/types.js';
 import type { CompareGroup } from './analysis.js';
 import { lookupAa, nudge, resolveScore, setManualLink } from './analysis.js';
 import { aaTokenEstimates, resolveTokenEfficiency } from './token-efficiency.js';
+import { loadAaScoring, type AaScoring } from './aa-scoring.js';
 
 /** One route as a reporting machine observed it. */
 export type FleetRoute = {
@@ -356,11 +357,12 @@ export function getFleetGroups(db: Db): CompareGroup[] {
     else byBenchmark.set(key, [s]);
   }
   const aaEstimates = aaTokenEstimates(db);
+  const scoring = loadAaScoring(db);
 
   return [...byBenchmark.entries()].map(([key, group]) => {
     const first = group[0];
     const proxy = proxied.get(first.spec);
-    const borrowed = first.benchmarkSlug ? lookupAa(db, first.benchmarkSlug) : null;
+    const borrowed = first.benchmarkSlug ? lookupAa(db, first.benchmarkSlug, scoring) : null;
     // The operator's nudges, applied by the same function Keys and Compare use.
     const analysis = borrowed && proxy
       ? {
@@ -388,11 +390,10 @@ export function getFleetGroups(db: Db): CompareGroup[] {
       members: [],
       analysis,
       // Fleet rows are reference-only: scored from their link, never typed.
-      scores: Object.fromEntries(([
-        ['intelligence', analysis?.intelligenceIndex ?? null],
-        ['coding', analysis?.codingIndex ?? null],
-        ['agentic', analysis?.agenticIndex ?? null],
-      ] as const).map(([metric, value]) => [metric, { ...resolveScore(value, Boolean(proxy), undefined), editable: false }])) as CompareGroup['scores'],
+      scores: Object.fromEntries((['intelligence', 'coding', 'agentic'] as const).map(metric => [metric, {
+        ...resolveScore(analysis?.[`${metric}Index`] ?? null, Boolean(proxy), undefined, analysis?.scoreSources[metric] ?? null),
+        editable: false,
+      }])) as CompareGroup['scores'],
       tokenEfficiency,
       analysisSource: analysis ? ('own' as const) : null,
       conflicted: false,
@@ -492,12 +493,14 @@ function makePricer(db: Db): { slugBySpec: Map<string, string | null>; rateFor: 
 
   // One lookup per distinct benchmark, not per usage row.
   const priced = new Map<string, Rate | null>();
+  let scoring: Map<string, AaScoring> | undefined;
   const rateFor = (spec: string): Rate | null => {
     const slug = slugBySpec.get(spec);
     if (!slug) return null;
     const cached = priced.get(slug);
     if (cached !== undefined) return cached;
-    const aa = lookupAa(db, slug);
+    scoring ??= loadAaScoring(db);
+    const aa = lookupAa(db, slug, scoring);
     // Both halves required: pricing only one side would undercount every
     // route asymmetrically and still look like a real number.
     const rate = aa && aa.price1mInput != null && aa.price1mOutput != null

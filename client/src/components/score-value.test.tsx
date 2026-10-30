@@ -92,6 +92,23 @@ describe('EditableScore', () => {
     expect(container.querySelector('.tone-x')).not.toBeNull()
   })
 
+  it('marks an archived score with its version and date, and offers no way to type over it', () => {
+    render(<EditableScore cell={cell({ value: 46, provenance: 'archived', editable: false, version: 'v4.3', asOf: '2026-10-26' })} metric="intelligence" routes={routes} />)
+    expect(container.querySelector('span.italic')?.textContent).toContain('v4.3')
+    expect(container.querySelector('[title]')!.getAttribute('title')).toContain('2026-10-26')
+    expect(container.querySelector('button')).toBeNull()
+  })
+
+  it('marks a derived estimate with its error and lets the operator type over it', () => {
+    render(<EditableScore cell={cell({
+      value: 53.1, provenance: 'derived', editable: true, version: 'v4.3',
+      estimate: { value: 53.1, basis: { kind: 'intelligence', version: 'v4.3' }, basisValue: 30, n: 261, error: 8, r: 0.94, extrapolated: false, targetVersion: 'v4.3' },
+    })} metric="coding" routes={routes} />)
+    expect(container.querySelector('span.italic')?.textContent).toContain('8')
+    expect(container.querySelector('[title*="261"]')).not.toBeNull()
+    expect(container.querySelector('button')).not.toBeNull()
+  })
+
   it('keeps a superseded entry visible as a note on the measurement that replaced it', () => {
     render(<EditableScore cell={cell({
       value: 31, provenance: 'measured', editable: false,

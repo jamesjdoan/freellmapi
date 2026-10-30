@@ -21,6 +21,7 @@ import {
   clearBenchmarkEntry,
   unknownRoutes,
   measuredRoutes,
+  setScoringVersion,
 } from '../services/analysis.js';
 import {
   benchPassportSchema,
@@ -87,6 +88,24 @@ analysisRouter.delete('/key', (_req: Request, res: Response) => {
 analysisRouter.post('/sync', async (_req: Request, res: Response) => {
   const result = await syncAnalysis();
   res.status(result.ok ? 200 : 502).json(result);
+});
+
+/**
+ * Move the Intelligence Index version every ranking, grade and chain minimum
+ * reads. An operator decision, never automatic: chain minimums are on the old
+ * scale and are not converted.
+ */
+analysisRouter.put('/scoring-version', (req: Request, res: Response) => {
+  const parsed = z.object({ version: z.string().regex(/^v\d+(\.\d+)*$/, 'Expected a version such as v5.0') }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.errors.map(e => e.message).join(', ') } });
+    return;
+  }
+  if (!setScoringVersion(parsed.data.version)) {
+    res.status(404).json({ error: { message: `No scores are held for ${parsed.data.version}.` } });
+    return;
+  }
+  res.json(getAnalysisStatus());
 });
 
 /** Re-run the matcher without spending a request on the upstream API. */
@@ -258,7 +277,7 @@ analysisRouter.put('/score', (req: Request, res: Response) => {
   const measured = measuredRoutes(routes, metric);
   if (measured.length > 0) {
     res.status(409).json({ error: {
-      message: `Already measured, so a typed ${metric} score would never show: ${measured.map(r => `${r.platform}/${r.modelId}`).join(', ')}`,
+      message: `Artificial Analysis already scores this (current or archived), so a typed ${metric} score would never show: ${measured.map(r => `${r.platform}/${r.modelId}`).join(', ')}`,
       type: 'invalid_request_error',
     } });
     return;

@@ -107,8 +107,12 @@ async function benchOne(spec: string, args: Args): Promise<Passport | null> {
   });
 
   const row = getComparePayload(db).rows.find(r => r.platform === platform && r.modelId === modelId)!;
+  // The version and date of the intelligence score the passport grades on,
+  // which can be an archived one (services/aa-scoring.ts), not just whatever
+  // AA publishes today.
+  const scored = row.analysis?.scoreSources.intelligence;
   const aaMeta = row.analysis
-    ? db.prepare('SELECT index_version, fetched_at FROM aa_model WHERE slug = ?').get(row.analysis.slug) as { index_version: string | null; fetched_at: string | null } | undefined
+    ? { index_version: scored?.version ?? null, fetched_at: scored?.asOf ?? null }
     : undefined;
   const passport = buildPassport(run, {
     platform, modelId, displayName: model.display_name, contextWindow: model.context_window,

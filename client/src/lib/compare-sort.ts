@@ -12,6 +12,7 @@ import { compareTokenEfficiency } from './token-efficiency'
 export type SortKey =
   | 'name' | 'routes' | 'chains'
   | 'intelligenceIndex' | 'codingIndex' | 'agenticIndex'
+  | 'capabilityFinance' | 'capabilityStrategyOps' | 'capabilityLegal' | 'capabilityHealthcare' | 'capabilityEngineering' | 'capabilityEconomics'
   | 'speed' | 'latency' | 'price' | 'context' | 'ourRank'
   | 'tokensPerTask'
 
@@ -23,6 +24,10 @@ export interface SortableEntry {
     medianOutputTokensPerSecond: number | null
     medianTimeToFirstTokenSeconds: number | null
     price1mOutput: number | null
+    capabilities?: {
+      finance: number | null; strategyOps: number | null; legal: number | null;
+      healthcare: number | null; engineering: number | null; economics: number | null;
+    }
   } | null
   /** The index columns sort on the printed score, typed or measured. */
   scores: Record<'intelligence' | 'coding' | 'agentic', { value: number | null }>
@@ -43,6 +48,12 @@ export function sortValue(entry: SortableEntry, key: SortKey): number | string |
     case 'speed': return a?.medianOutputTokensPerSecond ?? null
     case 'latency': return a?.medianTimeToFirstTokenSeconds ?? null
     case 'price': return a?.price1mOutput ?? null
+    case 'capabilityFinance': return a?.capabilities?.finance ?? null
+    case 'capabilityStrategyOps': return a?.capabilities?.strategyOps ?? null
+    case 'capabilityLegal': return a?.capabilities?.legal ?? null
+    case 'capabilityHealthcare': return a?.capabilities?.healthcare ?? null
+    case 'capabilityEngineering': return a?.capabilities?.engineering ?? null
+    case 'capabilityEconomics': return a?.capabilities?.economics ?? null
     case 'context': {
       const max = entry.members.reduce((m, r) => Math.max(m, r.contextWindow ?? 0), 0)
       return max === 0 ? null : max

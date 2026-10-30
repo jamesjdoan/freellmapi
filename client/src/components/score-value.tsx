@@ -22,17 +22,44 @@ const METRIC_LABEL_KEY: Record<ScoreMetric, string> = {
 
 /** The number and its note. `toneClass` is the chain-minimum tone, which a
  *  measurement keeps; a non-measured score takes its provenance colour. */
-export function ScoreValue({ cell, toneClass, suffix }: { cell: ScoreCell; toneClass?: string; suffix?: ReactNode }) {
+export function ScoreValue({ cell, toneClass, suffix, title }: { cell: ScoreCell; toneClass?: string; suffix?: ReactNode; title?: string }) {
   const { t } = useI18n()
   if (cell.value == null) return <span className="text-muted-foreground">–</span>
   const colour = provenanceClass(cell.provenance)
   const superseded = cell.entry?.superseded
     ? t('scoreProvenance.superseded', { value: cell.entry.value.toFixed(1), provenance: t(PROVENANCE_LABEL_KEY[cell.entry.provenance]) })
     : undefined
+  const archivedTitle = cell.provenance === 'archived'
+    ? t('scoreProvenance.archivedTitle', { version: cell.version ?? '', asOf: cell.asOf ?? '' })
+    : undefined
+  const estimate = cell.provenance === 'derived' ? cell.estimate : null
+  const derivedTitle = estimate
+    ? [
+      t('scoreProvenance.derivedTitle', {
+        basis: estimate.basis.kind === 'intelligence'
+          ? t('scoreProvenance.basisIntelligence', { version: estimate.basis.version })
+          : t(`compare.cap${estimate.basis.capability[0].toUpperCase()}${estimate.basis.capability.slice(1)}`),
+        basisValue: estimate.basisValue.toFixed(1),
+        n: estimate.n,
+        error: estimate.error.toFixed(1),
+        scale: estimate.targetVersion ?? '',
+      }),
+      estimate.extrapolated ? t('scoreProvenance.derivedExtrapolated') : '',
+    ].filter(Boolean).join(' ')
+    : undefined
+  const combinedTitle = [archivedTitle, derivedTitle, superseded, title].filter(Boolean).join('\n') || undefined
   return (
-    <span className={`inline-flex flex-col items-end ${colour ?? toneClass ?? ''}`} title={superseded}>
+    <span className={`inline-flex flex-col items-end ${colour ?? toneClass ?? ''}`} title={combinedTitle}>
       <span>{cell.value.toFixed(1)}{suffix}</span>
-      {colour && cell.provenance && cell.provenance !== 'measured' && (
+      {cell.provenance === 'archived' && (
+        <span className="text-[10px] italic leading-none">{t('scoreProvenance.archivedNote', { version: cell.version ?? '' })}</span>
+      )}
+      {estimate && (
+        <span className="text-[10px] italic leading-none">
+          {t('scoreProvenance.derivedNote', { error: estimate.error.toFixed(0) })}{estimate.extrapolated ? '*' : ''}
+        </span>
+      )}
+      {colour && cell.provenance && cell.provenance !== 'measured' && cell.provenance !== 'archived' && cell.provenance !== 'derived' && (
         <span className="text-[10px] italic leading-none">{t(PROVENANCE_LABEL_KEY[cell.provenance])}</span>
       )}
     </span>
@@ -62,27 +89,29 @@ export function NoToolsMark({ scope }: { scope: 'route' | 'model' }) {
  * a typed score opens the same form to change or clear it. A measurement, a
  * proxy's borrowed figure and a superseded entry print read-only.
  */
-export function EditableScore({ cell, metric, routes, toneClass, suffix }: {
+export function EditableScore({ cell, metric, routes, toneClass, suffix, title }: {
   cell: ScoreCell
   metric: ScoreMetric
   /** Routes the score is written to; only those without a measurement. */
   routes: { platform: string; modelId: string }[]
   toneClass?: string
   suffix?: ReactNode
+  title?: string
 }) {
   const { t } = useI18n()
   const typed = cell.entry != null && !cell.entry.superseded && cell.value != null && cell.provenance === cell.entry.provenance
   // `typed-benchmark-scores` off: the entry affordance goes — the cell prints
   // plain, and a saved typed score keeps displaying like any other number.
   const typedOn = useExtensionEnabled('typed-benchmark-scores')
-  const canEnter = typedOn && cell.editable && routes.length > 0 && (cell.value == null || typed)
-  if (!canEnter) return <ScoreValue cell={cell} toneClass={toneClass} suffix={suffix} />
+  // A derived estimate can always be typed over: the operator's number wins.
+  const canEnter = typedOn && cell.editable && routes.length > 0 && (cell.value == null || typed || cell.provenance === 'derived')
+  if (!canEnter) return <ScoreValue cell={cell} toneClass={toneClass} suffix={suffix} title={title} />
   const label = t('scoreProvenance.enter', { metric: t(METRIC_LABEL_KEY[metric]) })
   return (
     <ScoreEntryPopover cell={cell} metric={metric} routes={routes} label={label}>
       {cell.value == null
         ? <Plus aria-hidden className="size-3 text-muted-foreground/50 group-hover/score:text-muted-foreground" />
-        : <ScoreValue cell={cell} toneClass={toneClass} suffix={suffix} />}
+        : <ScoreValue cell={cell} toneClass={toneClass} suffix={suffix} title={title} />}
     </ScoreEntryPopover>
   )
 }

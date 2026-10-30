@@ -156,7 +156,7 @@ export function judgeMetric(key: string, cell: ScoreCell, min: number, opts: Min
   if (cell.value == null) {
     return { result: 'unknown', reason: `${key}: no published or typed score (minimum ${min})`, measured };
   }
-  if ((cell.provenance === 'family' || cell.provenance === 'approximated') && !opts.acceptEstimated) {
+  if ((cell.provenance === 'family' || cell.provenance === 'approximated' || cell.provenance === 'derived') && !opts.acceptEstimated) {
     return { result: 'unknown', reason: `${key}: ${cell.value} is ${cell.provenance}; chain does not accept estimates`, measured };
   }
   if (cell.value >= min) {
@@ -268,9 +268,11 @@ export function recommendRoles(p: Pick<Passport, 'internal' | 'route' | 'publish
         reasons.push(`${metric}: no published score (needs ${min}); internal ${internal.value ?? '—'}/100 is supporting evidence only`);
         continue;
       }
-      if (cell.provenance === 'measured') {
-        if (cell.value < min) return { target: role, status: 'not qualified' as const, reasons: [...reasons, `${metric}: AA ${cell.value} below ${min}`] };
-        reasons.push(`${metric}: AA ${cell.value} meets ${min}`);
+      if (cell.provenance === 'measured' || cell.provenance === 'archived') {
+        if (cell.value < min) return { target: role, status: 'not qualified' as const, reasons: [...reasons, `${metric}: AA ${cell.value}${archivedNote(cell)} below ${min}`] };
+        reasons.push(`${metric}: AA ${cell.value}${archivedNote(cell)} meets ${min}`);
+        // AA no longer publishes this figure, so nothing fresh confirms it.
+        if (cell.provenance === 'archived') provisional = true;
       } else {
         provisional = true;
         // An estimate below the bar can neither qualify the role nor rule it
@@ -301,6 +303,11 @@ export function recommendRoles(p: Pick<Passport, 'internal' | 'route' | 'publish
     if (support.length > 0) return { target: role, status: 'provisional' as const, reasons };
     return { target: role, status: provisional ? 'provisional' as const : 'qualified' as const, reasons };
   });
+}
+
+/** " (archived v4.3, 2026-10-26)" for an archived cell, '' otherwise. */
+function archivedNote(cell: ScoreCell): string {
+  return cell.provenance === 'archived' ? ` (archived ${cell.version ?? 'version unknown'}${cell.asOf ? `, ${cell.asOf.slice(0, 10)}` : ''})` : '';
 }
 
 // ── Assembly ────────────────────────────────────────────────────────────────
@@ -376,7 +383,10 @@ export function buildPassport(run: RunResult, route: RouteInfo, published: Publi
 }
 
 const fmt = (v: number | null | undefined) => (v == null ? '—' : String(v));
-const cellText = (c: ScoreCell) => (c.value == null ? '— (unknown)' : `${c.value} (${c.provenance})`);
+const cellText = (c: ScoreCell) => (c.value == null ? '— (unknown)'
+  : c.provenance === 'archived' ? `${c.value}${archivedNote(c)}`
+  : c.provenance === 'derived' && c.estimate ? `${c.value} (derived ±${c.estimate.error}, ${c.estimate.n} models)`
+  : `${c.value} (${c.provenance})`);
 
 export function renderMarkdown(p: Passport): string {
   const s = p.internal.scenarios;

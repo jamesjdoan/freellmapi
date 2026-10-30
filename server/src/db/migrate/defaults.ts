@@ -96,6 +96,7 @@ import * as defaultChainProfile from '../migrations/20261021_000001_default_chai
 import * as extraTierOverflow from '../migrations/20261022_000001_extra_tier_overflow.js';
 import * as modelExpiry from '../migrations/20261022_000002_model_expiry.js';
 import * as routeProbesAndChainArrange from '../migrations/20261026_000001_route_probes_and_chain_arrange.js';
+import * as aaV2CapabilitiesAndScoreArchive from '../migrations/20261030_000001_aa_v2_capabilities_and_score_archive.js';
 import * as removeAurayProvider from '../migrations/20261019_000001_remove_auray_provider.js';
 import * as keyLastHealthyAt from '../migrations/20261020_000001_key_last_healthy_at.js';
 
@@ -188,6 +189,7 @@ export const DEFAULT_CHAIN_PROFILE_FILENAME = '20261021_000001_default_chain_pro
 export const EXTRA_TIER_OVERFLOW_FILENAME = '20261022_000001_extra_tier_overflow.ts';
 export const MODEL_EXPIRY_FILENAME = '20261022_000002_model_expiry.ts';
 export const ROUTE_PROBES_AND_CHAIN_ARRANGE_FILENAME = '20261026_000001_route_probes_and_chain_arrange.ts';
+export const AA_V2_CAPABILITIES_AND_SCORE_ARCHIVE_FILENAME = '20261030_000001_aa_v2_capabilities_and_score_archive.ts';
 export const REMOVE_AURAY_PROVIDER_FILENAME = '20261019_000001_remove_auray_provider.ts';
 export const KEY_LAST_HEALTHY_AT_FILENAME = '20261020_000001_key_last_healthy_at.ts';
 
@@ -295,4 +297,5 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: EXTRA_TIER_OVERFLOW_FILENAME, module: extraTierOverflow },
   { filename: MODEL_EXPIRY_FILENAME, module: modelExpiry },
   { filename: ROUTE_PROBES_AND_CHAIN_ARRANGE_FILENAME, module: routeProbesAndChainArrange },
+  { filename: AA_V2_CAPABILITIES_AND_SCORE_ARCHIVE_FILENAME, module: aaV2CapabilitiesAndScoreArchive },
 ];
