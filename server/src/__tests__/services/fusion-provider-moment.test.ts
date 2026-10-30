@@ -101,4 +101,20 @@ describe('provider-moment attribution in the fusion retry path (#1347)', () => {
     // assert instead that the log row was NOT tagged as a provider moment.
     expect(lastLogRow()).toEqual({ status: 'error', failure_attribution: null });
   });
+
+  it('learns an unnamed size rejection for a fusion panel without benching its key', async () => {
+    const { route } = fakeRoute(Object.assign(new Error('This request is too large for a free tier'), { status: 400 }));
+    const db = getDb();
+    db.prepare(`
+      INSERT INTO models (id, platform, model_id, display_name, context_window,
+                          intelligence_rank, speed_rank, size_label, monthly_token_budget, enabled)
+      VALUES (?, ?, ?, ?, 200000, 50, 50, 'Large', '', 1)
+    `).run(route.modelDbId, route.platform, route.modelId, route.displayName);
+    const result = await runModelCall(() => route, MESSAGES, {}, 10000, 1);
+    expect(result.failure).toBe('context_too_large');
+    expect(db.prepare('SELECT context_window FROM models WHERE id = ?').get(route.modelDbId))
+      .toEqual({ context_window: 9000 });
+    expect(db.prepare('SELECT key_id FROM rate_limit_cooldowns WHERE key_id = ?').get(route.keyId)).toBeUndefined();
+    expect(penaltyFor(route.modelDbId)).toBeUndefined();
+  });
 });

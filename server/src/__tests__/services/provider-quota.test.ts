@@ -76,6 +76,17 @@ describe('provider-quota: pool inference', () => {
     expect(inferQuotaPoolKey('openrouter', 'meta-llama/llama-3.1-8b-instruct:free')).toBe('openrouter::free');
     expect(inferQuotaPoolKey('openrouter', 'qwen/qwen3:free')).toBe('openrouter::free');
     expect(inferQuotaPoolKey('openrouter', 'openai/gpt-4o')).toBe('openrouter::account');
+    expect(inferQuotaPoolKey('kiosapi', 'llama')).toBe('kiosapi::daily-free');
+    expect(inferQuotaPoolKey('kiosapi', 'qwen')).toBe(inferQuotaPoolKey('kiosapi', 'llama'));
+    expect(inferQuotaPoolKey('plugsky', 'chat-model')).toBe('plugsky::fair-use');
+    expect(inferQuotaPoolKey('plugsky', 'plugsky-flux', 'https://plugsky.com/v1/images/generations'))
+      .toBe('plugsky::monthly-image');
+    expect(inferQuotaPoolKey('plugsky', 'dall-e-3', 'https://plugsky.com/v1/images/generations'))
+      .toBe(inferQuotaPoolKey('plugsky', 'plugsky-flux', 'https://plugsky.com/v1/images/generations'));
+    expect(inferQuotaPoolKey('kenari', 'qwen3-8-omni-flash:free')).toBe('kenari::daily-free');
+    expect(inferQuotaPoolKey('kenari', 'another-model:free')).toBe('kenari::daily-free');
+    expect(inferQuotaPoolKey('halx', 'THX-01')).toBe('halx::ip-shared');
+    expect(inferQuotaPoolKey('aisense', 'clef')).toBe(inferQuotaPoolKey('aisense', 'nimble'));
     expect(inferQuotaPoolKey('huggingface', 'openai/gpt-oss-120b')).toBe('huggingface::router');
     expect(inferQuotaPoolKey('custom', 'remote-model', 'https://relay.example/v1')).toBe('custom::remote-model');
     // AnyAPI's 100K tokens/day is one account-wide budget, so every model on

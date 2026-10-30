@@ -27,6 +27,14 @@ import { installProcessSafetyNet } from '../../server/src/lib/process-safety-net
 import { installLogRedaction } from '../../server/src/lib/log-redaction.js';
 import { desktopSessionToken } from '../../server/src/services/auth.js';
 import { NodeScheduler } from '../../server/src/lib/scheduler.js';
+import { loadExtensionState } from '../../server/src/services/extension-state.js';
+import { startZenGateWatch } from '../../server/src/services/clifree-gate-watch.js';
+import { startBurnRecoveryPoller } from '../../server/src/services/quota-burn.js';
+import { startProviderUsagePolling } from '../../server/src/services/provider-usage-api.js';
+import { startRadeonPressurePolling } from '../../server/src/services/radeon-pressure.js';
+import { startRouteProbe } from '../../server/src/services/route-probe.js';
+import { startChainArrange } from '../../server/src/services/chain-arrange.js';
+import { startUnlimitedPriceCheck } from '../../server/src/services/unlimited-models.js';
 
 export { getDb, getUnifiedApiKey, isAutoUpdateCheckEnabled };
 
@@ -83,12 +91,9 @@ export function trustSystemCertificates(tlsModule: Pick<typeof tls, 'getCACertif
   }
 }
 
-// This function mirrors the boot sequence of server/src/index.ts — every
-// startup step index.ts performs has to be repeated here by hand (#949), and
-// __tests__/server-host-boot.test.ts cross-checks this list against the
-// index.ts source so the next step added there fails a desktop test instead
-// of silently never running (that is exactly how startBackupScheduler was
-// missed: the Backups page saved a schedule that never fired).
+// The standalone server and this embedder share services but not an entrypoint.
+// Load saved extension enablement before constructing the app, then start the
+// same provider, quota and chain jobs after the listener is ready.
 //
 // Deliberately NOT mirrored, because they are env-driven and the packaged app
 // inherits no shell environment:
@@ -130,6 +135,7 @@ export async function startServer(opts: StartOptions): Promise<ServerHandle> {
   // 0.0.0.0, and a remote viewer must still enter the password.
   process.env.FREEAPI_DESKTOP = '1';
   initDb(opts.dbPath);
+  loadExtensionState();
   // One sweep at boot, while the DB is quiet — expired cooldown rows are only
   // collected lazily per route and would otherwise accumulate forever.
   const expiredCooldowns = cleanupExpiredCooldowns();
@@ -152,12 +158,19 @@ export async function startServer(opts: StartOptions): Promise<ServerHandle> {
   // mirror server/src/index.ts. Without it both calls receive `undefined` and
   // throw "reading 'every'" on the first scheduler.every() during boot.
   const scheduler = new NodeScheduler();
+  startZenGateWatch(scheduler);
   startHealthChecker(scheduler);
   startCatalogSync(scheduler);
   startCooldownProbe(scheduler);
+  startBurnRecoveryPoller(scheduler);
+  startProviderUsagePolling(scheduler);
+  startRadeonPressurePolling(scheduler);
   startModelProbe(scheduler);
+  startRouteProbe(scheduler);
+  startChainArrange(scheduler);
   startBackupScheduler(scheduler);
   startCustomModelSync(getDb(), scheduler);
+  startUnlimitedPriceCheck();
   startBuiltinModelDiscovery(getDb(), scheduler);
   // Post-sleep recovery — the menu-bar app on a laptop is the canonical
   // lid-close case: flush pooled sockets and force-re-probe every key so the

@@ -262,9 +262,9 @@ function mergeCallFailure(current: CallFailure | undefined, next: CallFailure): 
 // model for this request and learn the ceiling the provider reported so the
 // router sizes it out before the next oversized dispatch, but never cool it
 // down or penalize it (#1479).
-function noteContextTooLarge(route: RouteResult, err: any, skipModels: Set<number>): void {
+function noteContextTooLarge(route: RouteResult, err: { message?: string }, skipModels: Set<number>, estimatedTokens: number): void {
   learnLimitFromError(route.modelDbId, err);
-  learnContextWindowFromError(route.modelDbId, err);
+  learnContextWindowFromError(route.modelDbId, err, estimatedTokens);
   skipModels.add(route.modelDbId);
 }
 
@@ -366,7 +366,7 @@ export async function runModelCall(
       failure = mergeCallFailure(failure, classifyCallFailure(err));
 
       if (isContextTooLargeError(err)) {
-        noteContextTooLarge(route, err, skipModels);
+        noteContextTooLarge(route, err, skipModels, estimatedTokens);
         continue;
       }
       if (isRetryableError(err)) {
@@ -476,7 +476,7 @@ async function runJudgeStreaming(
         break;
       }
       if (isContextTooLargeError(err)) {
-        noteContextTooLarge(route, err, skipModels);
+        noteContextTooLarge(route, err, skipModels, estimatedTokens);
         continue;
       }
       if (isRetryableError(err)) {

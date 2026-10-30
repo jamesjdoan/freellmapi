@@ -264,6 +264,11 @@ export function resolveQuotaPolicy(
   // Providers added by upstream v0.13.7 (#1441 Plugsky, #1455 Inferbase and
   // SimpleLLM). Pool NAMES and shared scope are upstream's; nothing readable
   // reports their allowance yet, so accounting stays unknown rather than asserted.
+  // Plugsky images have a monthly grant distinct from chat's allowance.
+  // Endpoint is the provider URL, not a modality label.
+  if (platform === 'plugsky' && /\/images?\//i.test(endpoint ?? '')) {
+    return policy('plugsky::monthly-image', 'shared_pool', 'unknown', [], 'unknown', 'month');
+  }
   if (platform === 'plugsky') return policy('plugsky::fair-use', 'shared_pool', 'unknown', [], 'unknown');
   if (platform === 'inferbase') return policy('inferbase::managed-free', 'shared_pool', 'unknown', [], 'unknown');
   if (platform === 'simplellm') return policy('simplellm::free', 'shared_pool', 'unknown', [], 'unknown');
@@ -281,6 +286,15 @@ export function resolveQuotaPolicy(
   // renewable daily quota (providers/kenari.ts). Without this each model read
   // as its own pool and the account looked N times larger than it is.
   if (platform === 'kenari') return policy('kenari::daily-free', 'shared_pool', 'unknown', [], 'unknown');
+  // KiosAPI's documented free tier is a single 50-request daily account
+  // allowance across all named free chat routes.
+  if (platform === 'kiosapi') return policy('kiosapi::daily-free', 'shared_pool', 'unknown', [], 'unknown', 'day');
+  // Keyless decision services use IP-based shared quotas (HAL-X: 200/min;
+  // AI SENSE: 1000/day and 60/min across models). IP is not represented by
+  // resolver scope, so retain shared provider pools without asserting limits.
+  if (platform === 'halx') return policy('halx::ip-shared', 'shared_pool', 'unknown', [], 'unknown');
+  if (platform === 'aisense') return policy('aisense::ip-shared', 'shared_pool', 'unknown', [], 'unknown');
+  if (platform === 'blockrun') return policy('blockrun::account', 'account', 'unknown', [], 'unknown');
   // AI Horde: anonymous requests share one queue priority (the 0000000000 key),
   // so they pool together; a registered key has its own kudos priority but we
   // still bucket per-platform here.

@@ -46,6 +46,34 @@ export function isMoonshotEndpoint(baseUrl: string): boolean {
   return MOONSHOT_HOST_SUFFIXES.some((d) => host === d || host.endsWith(`.${d}`));
 }
 
+/** Hosts that ARE OpenCode's Zen gateway (opencode.ai and subdomains — the Go
+ * tier serves `https://opencode.ai/zen/go/v1`). */
+const OPENCODE_HOST_SUFFIXES = ['opencode.ai'];
+
+/**
+ * Whether a base URL points at OpenCode's gateway. Since 2026-09-05 OpenCode Go
+ * rejects every chat request that lacks `x-opencode-session` with a 400, while
+ * `GET /models` answers without it — so a key passes the health check and then
+ * silently fails over on every completion (#1639). Gated on the endpoint host,
+ * the same way isMoonshotEndpoint gates the `partial` flag.
+ */
+export function isOpencodeEndpoint(baseUrl: string): boolean {
+  let host: string;
+  try {
+    host = new URL(baseUrl).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  return OPENCODE_HOST_SUFFIXES.some((d) => host === d || host.endsWith(`.${d}`));
+}
+
+/** Hash a conversation identity (or credential fallback) into the stable UUID
+ * OpenCode requires. Neither credentials nor raw session keys reach the wire. */
+function stableSessionUuid(identity: string): string {
+  const hex = createHash('sha256').update(identity).digest('hex').slice(0, 32);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
 /**
  * Some free-tier upstreams (notably Pollinations) answer HTTP 200 but put an
  * out-of-credits / top-up notice in the assistant message instead of returning
@@ -195,6 +223,15 @@ export class OpenAICompatProvider extends BaseProvider {
     if (this.forceSingleToolCall && options?.tools && options.tools.length > 0) return false;
     return options?.parallel_tool_calls;
   }
+
+  /** OpenCode requires a session on both its built-in and custom URL routes.
+   * Keep conversations separate when the caller names one; otherwise pin
+   * session-less requests per credential, as upstream does. */
+  private sessionHeaders(apiKey: string, options?: CompletionOptions): Record<string, string> {
+    if (!isOpencodeEndpoint(this.baseUrl)) return {};
+    return { 'x-opencode-session': stableSessionUuid(options?.sessionKey ?? `key:${apiKey}`) };
+  }
+
 
   /** Some providers (Groq especially) reject a model's tool call with a 400
    * `tool_use_failed` when the model emitted it as inline DIALECT TEXT
@@ -362,34 +399,6 @@ export class OpenAICompatProvider extends BaseProvider {
     return sanitized;
   }
 
-  /**
-   * Per-request headers a provider documents but that are not part of the
-   * OpenAI wire format. Today only OpenCode Zen: `x-opencode-session` pins a
-   * conversation to one upstream so its prompt cache is reused, and Console
-   * REJECTS a request without one.
-   *
-   * Sent for every OpenCode call, with or without a conversation. It used to
-   * depend on the caller supplying a sessionKey, so anything with no
-   * conversation — a health probe, a chain walk, a bare auto: request — was
-   * refused with 400 MissingSessionID, whose message reads "OpenCode's free
-   * tier can only be used in OpenCode". That is account gating in every word
-   * and a missing header in fact, which is how healthy routes came to be
-   * recorded as dead. Verified 2026-09-14 on ling-3.0-flash-fin-free: bare
-   * 400, session-only 200, and an `opencode/1.0.0` User-Agent changes nothing
-   * either way — the header is the whole gate.
-   *
-   * The fallback id is per credential, so session-less calls still land on one
-   * upstream and keep the cache benefit instead of scattering per request.
-   *
-   * The id is hashed rather than passed through: our session key can contain a
-   * raw first-user-message hash plus a strategy suffix, and neither belongs on
-   * the wire nor is guaranteed to be header-safe.
-   */
-  private sessionHeaders(apiKey: string, options?: CompletionOptions): Record<string, string> {
-    if (this.platform !== 'opencode') return {};
-    const key = options?.sessionKey ?? `key:${apiKey}`;
-    return { 'x-opencode-session': createHash('sha256').update(key).digest('hex').slice(0, 32) };
-  }
 
   async chatCompletion(
     apiKey: string,

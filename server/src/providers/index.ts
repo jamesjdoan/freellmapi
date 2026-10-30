@@ -9,6 +9,7 @@ import { FirecrawlProvider } from './firecrawl.js';
 import { LinkupProvider } from './linkup.js';
 import { ParallelProvider } from './parallel.js';
 import { KeenableProvider } from './keenable.js';
+import { KeylessDecisionProvider } from './decision-only.js';
 import { CloudflareProvider } from './cloudflare.js';
 import { AIHordeProvider } from './aihorde.js';
 import { ModelScopeProvider } from './modelscope.js';
@@ -18,6 +19,7 @@ import { SailProvider } from './sail.js';
 import { AclideProvider } from './aclide.js';
 import { SpekaProvider } from './speka.js';
 import { KenariProvider } from './kenari.js';
+import { KiosAPIProvider } from './kiosapi.js';
 import { TyphoonProvider } from './typhoon.js';
 import { PlugskyProvider } from './plugsky.js';
 import { InferbaseProvider } from './inferbase.js';
@@ -57,6 +59,8 @@ function register(provider: BaseProvider) {
 // cold start; the default 15s false-flags them as broken. 60s covers the
 // bulk; per-call overrides via CompletionOptions.timeoutMs still win.
 register(new GoogleProvider({ timeoutMs: 60_000 }));
+register(new KeylessDecisionProvider('halx', 'HAL-X'));
+register(new KeylessDecisionProvider('aisense', 'AI SENSE'));
 
 // Groq - OpenAI-compatible
 register(new OpenAICompatProvider({
@@ -82,6 +86,7 @@ register(new SailProvider());
 register(new AclideProvider());
 register(new SpekaProvider());
 register(new KenariProvider());
+register(new KiosAPIProvider());
 register(new TyphoonProvider());
 register(new PlugskyProvider());
 register(new InferbaseProvider());

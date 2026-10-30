@@ -8,15 +8,15 @@ The Imperium provider-routing work is maintained as a bolt-on branch. It is not 
 | --- | --- |
 | Upstream remote | `https://github.com/tashfeenahmed/freellmapi.git` (`origin`) |
 | Fork remote | `https://github.com/jamesjdoan/freellmapi.git` (`fork`) |
-| Upstream base | `v0.16.9` (`26484157`), taken by merge. Previous: `v0.16.3` (`f76b5528`) |
-| Extension branch | `docs/freellm-assert-start-on-redeploy` — carries the whole extension, on `v0.16.9` |
+| Upstream base | `v0.16.12` (`36826e7c`), taken by merge; previously `v0.16.10` |
+| Extension branch | `docs/freellm-assert-start-on-redeploy` — carries the whole extension on v0.16.12; not yet deployed |
 | Publishable subset | `codex/provider-routing-controls` — an ancestor of the above, still on the `v0.9.4` base |
 | Extension worktree | `/Users/jamesdoan/Code/Instrumenta/worktrees/freellmapi-provider-routing` (holds the `codex/…` subset, not the live branch) |
 | Compose deployment | `/Users/jamesdoan/Code/Instrumenta/freellmapi` — confirmed from the live container's `com.docker.compose.project.working_dir` label, not from this table |
-| Live image | `ghcr.io/tashfeenahmed/freellmapi:latest` (`482ea005`), built locally from the extension checkout and tagged with the upstream name |
-| Local Docker image | `jamesjdoan/freellmapi:provider-routing` — built, but not what the running container uses |
+| Live image | `ghcr.io/tashfeenahmed/freellmapi:latest` (`cc564fdb`), the local `main-20261030-113637` build from `514076fe` (v0.16.10 plus AA migration) |
+| Local Docker image | `jamesjdoan/freellmapi:provider-routing` — deployment alias for the locally built extension |
 | Persistent volume | `freellmapi_freellmapi-data` |
-| Compose override | none in the deployment directory; the stock `docker-compose.yml` is used as-is |
+| Compose override | `docker-compose.override.yml`, included by the running container; retains the NVIDIA request timeout |
 | Vestigial clone | `freellmapi/` — an upstream `main` checkout whose directory basename gives it the **same** Compose project name, so `docker compose` run there targets this same container and volume. Its `.env` is a symlink to the deployment `.env` so the two can never hold different keys again. |
 
 The stock `docker-compose.yml`, deployment `.env`, encryption key and named data volume remain unchanged by an image rebuild.

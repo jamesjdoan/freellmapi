@@ -58,7 +58,7 @@ describe('OpenAICompatProvider', () => {
       // header and 200 with it. Dropping it silently kills every free Zen route.
       const seen = captureHeaders();
       await zen().chatCompletion('k', [{ role: 'user', content: 'hi' }], 'big-pickle', { sessionKey: 'conversation-1' });
-      expect(seen[0]['x-opencode-session']).toMatch(/^[0-9a-f]{32}$/);
+      expect(seen[0]['x-opencode-session']).toMatch(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/);
     });
 
     it('still sends one when the caller has no conversation to name', async () => {
@@ -73,7 +73,7 @@ describe('OpenAICompatProvider', () => {
       // the whole gate, so it can never be conditional.
       const seen = captureHeaders();
       await zen().chatCompletion('k', [{ role: 'user', content: 'hi' }], 'big-pickle');
-      expect(seen[0]['x-opencode-session']).toMatch(/^[0-9a-f]{32}$/);
+      expect(seen[0]['x-opencode-session']).toMatch(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/);
     });
 
     it('pins session-less calls for one credential to one id, and separates two keys', async () => {
@@ -99,7 +99,7 @@ describe('OpenAICompatProvider', () => {
       await zen().chatCompletion('sk-secret-credential', [{ role: 'user', content: 'hi' }], 'big-pickle');
       // Authorization carries it by definition; the session id must not.
       expect(seen[0]['x-opencode-session']).not.toContain('sk-secret-credential');
-      expect(seen[0]['x-opencode-session']).toMatch(/^[0-9a-f]{32}$/);
+      expect(seen[0]['x-opencode-session']).toMatch(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/);
     });
 
     it('keeps one conversation on one id, and separates two', async () => {
@@ -131,7 +131,7 @@ describe('OpenAICompatProvider', () => {
       const seen = captureHeaders();
       const stream = zen().streamChatCompletion('k', [{ role: 'user', content: 'hi' }], 'big-pickle');
       await stream.next().catch(() => undefined);
-      expect(seen[0]?.['x-opencode-session']).toMatch(/^[0-9a-f]{32}$/);
+      expect(seen[0]?.['x-opencode-session']).toMatch(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/);
     });
 
     it('sends nothing for a provider that does not document the header', async () => {
@@ -1383,5 +1383,85 @@ describe('pinned tool_choice retry on custom endpoints (#1548)', () => {
     const bodies = upstream(badRequest);
     await expect(groq.chatCompletion('k', messages, 'm', { tools: [moveNote], tool_choice: pinned })).rejects.toThrow('Groq API error 400');
     expect(bodies).toHaveLength(1);
+  });
+});
+
+describe('OpenCode session header (#1639)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function upstream() {
+    return vi.spyOn(global, 'fetch').mockImplementation(async (_url, init) => {
+      (global as any).__lastHeaders = (init as any).headers;
+      return {
+        ok: true,
+        json: () => Promise.resolve({
+          id: 'x', object: 'chat.completion', created: 1, model: 'm',
+          choices: [{ index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+        }),
+      } as any;
+    });
+  }
+
+  it('carries a stable x-opencode-session on chat completions', async () => {
+    const zen = new OpenAICompatProvider({ platform: 'custom', name: 'OpenCode Go', baseUrl: 'https://opencode.ai/zen/go/v1' });
+    const spy = upstream();
+    await zen.chatCompletion('k', [{ role: 'user', content: 'hi' }], 'glm-5.3');
+    const first = (global as any).__lastHeaders['x-opencode-session'];
+    expect(first).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    await zen.chatCompletion('k', [{ role: 'user', content: 'hi again' }], 'glm-5.3');
+    expect((global as any).__lastHeaders['x-opencode-session']).toBe(first);
+    expect(spy).toHaveBeenCalled();
+  });
+
+  it('derives a different session per credential, stably', async () => {
+    const zen = new OpenAICompatProvider({ platform: 'custom', name: 'OpenCode Go', baseUrl: 'https://opencode.ai/zen/go/v1' });
+    upstream();
+    await zen.chatCompletion('key-one', [{ role: 'user', content: 'hi' }], 'm');
+    const one = (global as any).__lastHeaders['x-opencode-session'];
+    await zen.chatCompletion('key-two', [{ role: 'user', content: 'hi' }], 'm');
+    const two = (global as any).__lastHeaders['x-opencode-session'];
+    expect(one).not.toBe(two);
+    const zen2 = new OpenAICompatProvider({ platform: 'custom', name: 'OpenCode Go', baseUrl: 'https://opencode.ai/zen/go/v1' });
+    await zen2.chatCompletion('key-one', [{ role: 'user', content: 'hi' }], 'm');
+    expect((global as any).__lastHeaders['x-opencode-session']).toBe(one);
+  });
+
+  it('carries the header on the streaming path too, and stays off other endpoints', async () => {
+    const frames = ['data: {"id":"x","object":"chat.completion.chunk","created":1,"model":"m","choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\n', 'data: [DONE]\n\n'];
+    const encoder = new TextEncoder();
+    vi.spyOn(global, 'fetch').mockImplementation(async (_url, init) => {
+      (global as any).__lastHeaders = (init as any).headers;
+      const stream = new ReadableStream<Uint8Array>({ start(c) { for (const f of frames) c.enqueue(encoder.encode(f)); c.close(); } });
+      return {
+        ok: true, body: stream, headers: new Headers(),
+        json: () => Promise.resolve({
+          id: 'x', object: 'chat.completion', created: 1, model: 'm',
+          choices: [{ index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+        }),
+      } as any;
+    });
+    const zen = new OpenAICompatProvider({ platform: 'custom', name: 'OpenCode Go', baseUrl: 'https://zen.opencode.ai/v1' });
+    for await (const _chunk of zen.streamChatCompletion('k', [{ role: 'user', content: 'hi' }], 'm')) { /* drain */ }
+    expect((global as any).__lastHeaders['x-opencode-session']).toMatch(/^[0-9a-f-]{36}$/);
+
+    const groq = new OpenAICompatProvider({ platform: 'groq', name: 'Groq', baseUrl: 'https://api.groq.com/openai/v1' });
+    await groq.chatCompletion('k', [{ role: 'user', content: 'hi' }], 'm');
+    expect((global as any).__lastHeaders['x-opencode-session']).toBeUndefined();
+  });
+
+  it('does not send the header on the models health check, which opencode answers without it', async () => {
+    const zen = new OpenAICompatProvider({ platform: 'custom', name: 'OpenCode Go', baseUrl: 'https://opencode.ai/zen/go/v1' });
+    vi.spyOn(global, 'fetch').mockImplementation(async (_url, init) => {
+      (global as any).__lastHeaders = (init as any).headers;
+      return { ok: true, status: 200, headers: new Headers(), json: () => Promise.resolve({ data: [] }) } as any;
+    });
+    await zen.validateKey?.('k');
+    if ((global as any).__lastHeaders) {
+      expect((global as any).__lastHeaders['x-opencode-session']).toBeUndefined();
+    }
   });
 });

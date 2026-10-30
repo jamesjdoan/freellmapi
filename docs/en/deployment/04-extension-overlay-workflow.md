@@ -55,12 +55,17 @@ it.
 1. **Read both sides first.** `git log --oneline v<old>..v<new>` and
    `git diff --stat v<old> v<new>`. Look for features that duplicate ours before
    resolving anything — see "Deference" below.
-2. **Fast-forward `main`** to the new tag.
-3. **Tag the current tree** `imperium/pre-<version>-recovery`.
-4. **Re-apply the overlay in a worktree**, never in the deployment checkout:
-   `git rebase --rebase-merges --onto v<new> v<old> <overlay-branch>`.
-5. **Resolve inside the overlay.** Conflicts arrive grouped by subsystem. Apply
-   the resolution rules below.
+2. **Keep upstream `main` pristine.** Resolve the release **tag**, not
+   `origin/main`, which may contain unreleased work.
+3. **Record the current tip** as the rollback revision; create an
+   `imperium/pre-<version>-recovery` tag when publishing the upgrade is approved.
+4. **Merge the release tag onto the extension branch** with
+   `git merge --no-ff --no-commit v<new>`. Commit only after review and approval.
+   The branch has carried merge resolutions since v0.11.0: do not rebase or
+   replay them, which risks silently dropping migration registrations.
+5. **Resolve by subsystem.** Classify each overlap under the rules below, even
+   when Git reports a clean merge: two same-named methods added in different
+   locations can merge cleanly and still fail compilation.
 6. **Regenerate locales rather than merging them.** `node
    scripts/apply-translations.mjs --fill-english` from `client/`, then
    `npm run check:i18n`. Never hand-merge a locale JSON conflict.
