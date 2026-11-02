@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-03 — Dual Intelligence scores pushed and deployed (`6e660ded`)
+
+- Committed the approved display change as `6e660ded` and pushed it to `fork/docs/freellm-assert-start-on-redeploy`. The change was already on the maintained extension branch, so no separate branch merge was needed. Upstream `main` was not changed. Unrelated `.compressa/ledger.jsonl` and `docs/chain-and-omp-guide.html` changes were excluded.
+- Full client verification passed: 96 files / 734 tests and 60 locales / 2,329 keys. The first run under this process's `en-US` locale hit the existing day-first assertion in `stamp.test.ts`; the unchanged test and full suite pass under `LANG=en_AU.UTF-8 LC_ALL=en_AU.UTF-8`. The earlier production build and rendered-table checks also passed.
+- `./scripts/deploy.sh` built `jamesjdoan/freellmapi:main-20261103-074555` (`9222771c`), stopped the service, archived the existing volume to `backups/freellmapi-data-20261103-074555.tar.gz`, and recreated it on `freellmapi_freellmapi-data`. Independent gzip validation passed. Finished with `docker compose up -d && docker compose ps`: healthy, published at `127.0.0.1:3001`. The running image digest equals the newly built image.
+- Authenticated live verification: `/v1/models` 200 with 592 entries; analysis/grouped 200 with 581 groups; Extensions 200 with 53 entries. Served `/assets/index-vItQWnib.js` contains the new version labels and teal score display. Rankings remain v4.3 and AA's published version remains v5.0. A real `auto:fast-lane` completion returned 200 via `google/gemini-3.1-flash-lite`, content `OK.`. The temporary dashboard verification session was removed.
+- All 19 stored keys decrypt. Immediate pre/post hashes match for keys/scopes/enablement, chain membership/order, model overrides and archived scores; scoring-version and chain-minimum settings match. Rollback image: `jamesjdoan/freellmapi:provider-routing-before-20261103-074555` (`7bbfc55b`). No AA refresh or scoring-version switch was requested or performed.
+
 ## 2026-11-03 — Compare shows both Intelligence Index versions (local, not deployed)
 
 - The Intelligence cell now labels the pinned score as `v4.3 · ranking` and shows AA's current `v5.0 · current` score beneath it in teal when the versions differ. Missing scores remain absent, and the current score is read-only. Version labels follow the saved/published versions rather than hardcoding either one.
