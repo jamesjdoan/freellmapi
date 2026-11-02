@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-03 — Session wrap
+
+- Added this session's dated JD-STUDIO block to `config/handoff.md`: local OMP picker configuration and its 89-choice ACP verification, the deployed dual-version AA display, validation evidence, rollback assets and remaining UI/membership-refresh limits. Preserved every older session block verbatim; no consolidation.
+- Appended OMP catalogue-versus-ACP scope, canonical-id mapping, protocol-default task settings and the locale-sensitive client test to `docs/GOTCHAS.md`. Codex has no auto-memory sink under the invoked skill, so no personal memory store was changed.
+- Feature/deployment commits remain pushed through `c35bde7c`; wrap documents are local. No additional production change, inference, AA refresh, scoring-version switch, commit or push during wrap-up. Unrelated `.compressa/ledger.jsonl` and `docs/chain-and-omp-guide.html` remain untouched.
+
+
 ## 2026-11-03 — Dual Intelligence scores pushed and deployed (`6e660ded`)
 
 - Committed the approved display change as `6e660ded` and pushed it to `fork/docs/freellm-assert-start-on-redeploy`. The change was already on the maintained extension branch, so no separate branch merge was needed. Upstream `main` was not changed. Unrelated `.compressa/ledger.jsonl` and `docs/chain-and-omp-guide.html` changes were excluded.
