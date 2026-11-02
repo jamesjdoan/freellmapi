@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-03 — Compare shows both Intelligence Index versions (local, not deployed)
+
+- The Intelligence cell now labels the pinned score as `v4.3 · ranking` and shows AA's current `v5.0 · current` score beneath it in teal when the versions differ. Missing scores remain absent, and the current score is read-only. Version labels follow the saved/published versions rather than hardcoding either one.
+- Existing score provenance, typed-entry controls, Coding/Agentic labels, sorting, chart values and chain thresholds retain their existing behavior. The current-score tooltip identifies the mapped AA benchmark and explains that different versions use different scales.
+- Added four English strings and filled them into all other locales with `node scripts/apply-translations.mjs --fill-english` from `client/`.
+- Validation: 18 existing score/sort tests passed; client production build passed; i18n passed for 60 locales and 2,329 keys. Rendered the actual Compare page with three live-database score samples and independently inspected its DOM: both versions occupy one cell, current values are teal/read-only, missing old/new values stay absent, and order follows the pinned scores. No AA refresh, scoring-version switch, commit, push or deployment.
+
 ## 2026-10-30 — Session wrap
 
 - Prepended this session's verified deployment/handoff block to `config/handoff.md` without changing older blocks: `acc1d825` pushed/deployed, live image, rollback assets, checks, limitations and the remaining documentation-only commit/push approval.

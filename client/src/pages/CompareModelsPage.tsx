@@ -1120,6 +1120,9 @@ export default function CompareModelsPage() {
               <TableBody>
                 {entries.map(g => {
                   const solo = g.members.length === 1 ? g.members[0] : null
+                  const rankingVersion = status?.scoringVersion ?? g.scores.intelligence.version
+                  const currentVersion = g.analysis?.currentIndexVersion
+                  const showCurrentIntelligence = currentVersion != null && currentVersion !== rankingVersion
                   return (
                     <TableRow key={entryKey(g)} className={`group/row ${g.reference && !isFleet(g) ? (vendorTint(g.name, g.analysis?.creator) || 'bg-sky-500/5') : unallocated(g) ? HATCH : ''}`}>
                       <TableCell>
@@ -1287,27 +1290,39 @@ export default function CompareModelsPage() {
                           people actually rank models in. */}
                       {(['intelligence', 'coding', 'agentic'] as const).map(metric => (
                         <TableCell key={metric} className="text-right tabular-nums">
-                          <EditableScore
-                            cell={g.scores[metric]}
-                            title={metric === 'intelligence' && g.analysis?.scoreSources?.intelligence?.archived && g.analysis.currentIntelligenceIndex != null
-                              ? t('compare.currentIntelligenceTooltip', { version: g.analysis.currentIndexVersion ?? '', value: g.analysis.currentIntelligenceIndex.toFixed(1) })
-                              : undefined}
-                            metric={metric}
-                            // A typed score goes to every route of the model that has
-                            // no measurement of its own; a baseline takes none.
-                            routes={g.reference ? [] : g.members
-                              .filter(m => m.scores[metric].editable)
-                              .map(m => ({ platform: m.platform, modelId: m.modelId }))}
-                            toneClass={tone(metric === 'intelligence' ? 'general' : metric, g.scores[metric].value)}
-                            // Tools are a route fact, so the mark only shows when NO
-                            // route of this model offers them; one that does is the
-                            // one a tool-requiring chain would take.
-                            suffix={<>
-                              <DeltaMark delta={proxyDeltaOf(g, metric)} />
-                              {metric === 'agentic' && !g.reference && g.scores.agentic.value != null && g.members.length > 0
-                                && g.members.every(m => !m.supportsTools) && <NoToolsMark scope="model" />}
-                            </>}
-                          />
+                          <div className="inline-flex flex-col items-end gap-1.5">
+                            <EditableScore
+                              cell={g.scores[metric]}
+                              versionLabel={metric === 'intelligence' && rankingVersion
+                                ? t('compare.rankingScoreLabel', { version: rankingVersion }) : undefined}
+                              metric={metric}
+                              // A typed score goes to every route of the model that has
+                              // no measurement of its own; a baseline takes none.
+                              routes={g.reference ? [] : g.members
+                                .filter(m => m.scores[metric].editable)
+                                .map(m => ({ platform: m.platform, modelId: m.modelId }))}
+                              toneClass={tone(metric === 'intelligence' ? 'general' : metric, g.scores[metric].value)}
+                              // Tools are a route fact, so the mark only shows when NO
+                              // route of this model offers them; one that does is the
+                              // one a tool-requiring chain would take.
+                              suffix={<>
+                                <DeltaMark delta={proxyDeltaOf(g, metric)} />
+                                {metric === 'agentic' && !g.reference && g.scores.agentic.value != null && g.members.length > 0
+                                  && g.members.every(m => !m.supportsTools) && <NoToolsMark scope="model" />}
+                              </>}
+                            />
+                            {metric === 'intelligence' && showCurrentIntelligence && (
+                              <span
+                                className="inline-flex flex-col items-end text-teal-700 dark:text-teal-400"
+                                title={g.analysis?.currentIntelligenceIndex == null
+                                  ? t('compare.currentScoreMissing', { version: currentVersion, name: g.analysis?.name ?? g.name })
+                                  : t('compare.currentScoreHint', { name: g.analysis.name, version: rankingVersion ?? '' })}
+                              >
+                                <span>{stat(g.analysis?.currentIntelligenceIndex, 1)}</span>
+                                <span className="text-[10px] leading-none">{t('compare.currentScoreLabel', { version: currentVersion })}</span>
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                       ))}
                       {showCapabilities && CAPABILITIES.map(c => (

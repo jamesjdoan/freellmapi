@@ -22,9 +22,15 @@ const METRIC_LABEL_KEY: Record<ScoreMetric, string> = {
 
 /** The number and its note. `toneClass` is the chain-minimum tone, which a
  *  measurement keeps; a non-measured score takes its provenance colour. */
-export function ScoreValue({ cell, toneClass, suffix, title }: { cell: ScoreCell; toneClass?: string; suffix?: ReactNode; title?: string }) {
+export function ScoreValue({ cell, toneClass, suffix, title, versionLabel }: { cell: ScoreCell; toneClass?: string; suffix?: ReactNode; title?: string; versionLabel?: string }) {
   const { t } = useI18n()
-  if (cell.value == null) return <span className="text-muted-foreground">–</span>
+  if (cell.value == null && !versionLabel) return <span className="text-muted-foreground">–</span>
+  if (cell.value == null) return (
+    <span className="inline-flex flex-col items-end text-muted-foreground">
+      <span>–</span>
+      {versionLabel && <span className="text-[10px] leading-none">{versionLabel}</span>}
+    </span>
+  )
   const colour = provenanceClass(cell.provenance)
   const superseded = cell.entry?.superseded
     ? t('scoreProvenance.superseded', { value: cell.entry.value.toFixed(1), provenance: t(PROVENANCE_LABEL_KEY[cell.entry.provenance]) })
@@ -51,8 +57,8 @@ export function ScoreValue({ cell, toneClass, suffix, title }: { cell: ScoreCell
   return (
     <span className={`inline-flex flex-col items-end ${colour ?? toneClass ?? ''}`} title={combinedTitle}>
       <span>{cell.value.toFixed(1)}{suffix}</span>
-      {cell.provenance === 'archived' && (
-        <span className="text-[10px] italic leading-none">{t('scoreProvenance.archivedNote', { version: cell.version ?? '' })}</span>
+      {(versionLabel || cell.provenance === 'archived') && (
+        <span className="text-[10px] italic leading-none">{versionLabel ?? t('scoreProvenance.archivedNote', { version: cell.version ?? '' })}</span>
       )}
       {estimate && (
         <span className="text-[10px] italic leading-none">
@@ -89,7 +95,7 @@ export function NoToolsMark({ scope }: { scope: 'route' | 'model' }) {
  * a typed score opens the same form to change or clear it. A measurement, a
  * proxy's borrowed figure and a superseded entry print read-only.
  */
-export function EditableScore({ cell, metric, routes, toneClass, suffix, title }: {
+export function EditableScore({ cell, metric, routes, toneClass, suffix, title, versionLabel }: {
   cell: ScoreCell
   metric: ScoreMetric
   /** Routes the score is written to; only those without a measurement. */
@@ -97,6 +103,7 @@ export function EditableScore({ cell, metric, routes, toneClass, suffix, title }
   toneClass?: string
   suffix?: ReactNode
   title?: string
+  versionLabel?: string
 }) {
   const { t } = useI18n()
   const typed = cell.entry != null && !cell.entry.superseded && cell.value != null && cell.provenance === cell.entry.provenance
@@ -105,13 +112,18 @@ export function EditableScore({ cell, metric, routes, toneClass, suffix, title }
   const typedOn = useExtensionEnabled('typed-benchmark-scores')
   // A derived estimate can always be typed over: the operator's number wins.
   const canEnter = typedOn && cell.editable && routes.length > 0 && (cell.value == null || typed || cell.provenance === 'derived')
-  if (!canEnter) return <ScoreValue cell={cell} toneClass={toneClass} suffix={suffix} title={title} />
+  if (!canEnter) return <ScoreValue cell={cell} toneClass={toneClass} suffix={suffix} title={title} versionLabel={versionLabel} />
   const label = t('scoreProvenance.enter', { metric: t(METRIC_LABEL_KEY[metric]) })
   return (
     <ScoreEntryPopover cell={cell} metric={metric} routes={routes} label={label}>
       {cell.value == null
-        ? <Plus aria-hidden className="size-3 text-muted-foreground/50 group-hover/score:text-muted-foreground" />
-        : <ScoreValue cell={cell} toneClass={toneClass} suffix={suffix} title={title} />}
+        ? versionLabel
+          ? <span className="inline-flex flex-col items-end gap-0.5 text-muted-foreground">
+              <Plus aria-hidden className="size-3 text-muted-foreground/50 group-hover/score:text-muted-foreground" />
+              <span className="text-[10px] leading-none">{versionLabel}</span>
+            </span>
+          : <Plus aria-hidden className="size-3 text-muted-foreground/50 group-hover/score:text-muted-foreground" />
+        : <ScoreValue cell={cell} toneClass={toneClass} suffix={suffix} title={title} versionLabel={versionLabel} />}
     </ScoreEntryPopover>
   )
 }

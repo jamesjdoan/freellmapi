@@ -1907,7 +1907,11 @@
     "capEngineering": "Engineering",
     "capEconomics": "Economics",
     "firstAnswer": "first answer {seconds}s",
-    "currentIntelligenceTooltip": "AA {version}: {value}"
+    "currentIntelligenceTooltip": "AA {version}: {value}",
+    "rankingScoreLabel": "{version} · ranking",
+    "currentScoreLabel": "{version} · current",
+    "currentScoreHint": "Current AA score for {name}. Reference only; rankings use {version}. Different index versions use different scales.",
+    "currentScoreMissing": "AA has not published an Intelligence Index {version} score for {name}."
   },
   "catalogue": {
     "changesTitle": "Catalogue changes",
